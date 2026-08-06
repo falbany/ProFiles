@@ -144,70 +144,60 @@ columns:
     priority: 10
 
 # ============================================================================
-# HOOKS — execution hooks around file launches.
+# HOOKS — step-based workflows for file launches.
 # ============================================================================
-# Run external commands BEFORE, AFTER, INSTEAD OF, or to ABORT a file launch,
-# or pause for user CONFIRMATION. Keys are file extensions (normalized to
-# lower-case with a leading dot). Values are YAML lists of hook entries; each
-# entry has:
-#   when      "before" | "confirm" | "abort" | "instead" | "after"
-#             (default "before") — see PHASES below.
-#   command   for "before"/"abort"/"instead"/"after": the command template
-#             (tokens substituted at runtime).
-#             for "confirm": the MESSAGE shown to the user (tokens too).
-#   requires_success  bool, default true — see FAILURE HANDLING below.
+# Execute a sequence of steps before, instead of, or after a file launch.
+# Keys are GLOB PATTERNS (exact name, wildcard, or extension).
+# The most specific pattern matches (e.g., `special.mttl` wins over `*.mttl`).
 #
-# PHASES — synchronous hooks run TOP-TO-BOTTOM in list order; `after` hooks
-# are always deferred to the end and run only when the pipeline resolves to
-# CONTINUE. A hook resolving to ABORT or SKIP stops the pipeline early.
-#   before   run synchronously just before the OS launch; failure is subject
-#            to `failmode` / `requires_success`.
-#   confirm  pause and prompt the user (Yes/No) before continuing; `command`
-#            is the message shown. Yes -> CONTINUE; No, cancel, or error ->
-#            ABORT. In the GUI a dialog box is shown; headless (CLI) prompts
-#            on the terminal as `Launch Confirmation: <message> [y/N]: `.
-#   abort    run synchronously; non-zero exit -> ALWAYS ABORT (regardless of
-#            `failmode`); exit 0 -> continue.
-#   instead  replace the OS launch; exit 0 -> SUCCESS, no OS launch (SKIP);
-#            non-zero -> falls back to `failmode`.
-#   after    run asynchronously after a successful launch; never blocks and
-#            never times out.
+# Patterns supported:
+#   *             star (any characters) — e.g., `*.pdf`, `report_*.pdf`
+#   ?             single character — e.g., `test?.txt`
+#   .ext          shorthand for `*.ext` — e.g., `.mttl`
+#   filename.ext  exact match — e.g., `manual.pdf`
 #
-# Available tokens (substituted in the command or confirmation message):
-#   {{path}}     absolute file path                    {{dir}}      parent directory
-#   {{name}}     file name (with extension)            {{ext}}      extension (e.g. ".mttx")
-#   {{cwd}}      current working directory             {{date}}     today's date (ISO)
-#   {{hostname}} local hostname
-# Unknown tokens are preserved verbatim.
+# Steps within an entry are YAML objects with:
+#   action      "notify" | "run" | "run_after" | "replace" | "check"
+#               (required) — see ACTIONS below.
+#   content     the command template or notification message (tokens supported).
+#   ask         string, optional — a yes/skip/no confirmation message.
+#               (Yes -> run step; Skip -> proceed to NEXT step; No -> ABORT).
+#   wait        bool, default true — wait for command completion.
+#   on_failure  "stop" | "warn" | "continue" (default "stop").
 #
-# FAILURE HANDLING (non-zero exit on a blocking hook):
-#   requires_success: true (default) -> the outcome follows `failmode`
-#     ("abort" -> stop the launch, "skip" -> stop without OS launch,
-#      "warn" -> log and continue). false -> the failure is logged and the
-#     pipeline continues regardless.
-#   An `abort`-phase hook ALWAYS returns ABORT regardless of failmode.
-# failmode: "warn" | "abort" | "skip" — what to do when a `before` or
-#   `instead` hook fails (non-zero exit):
-#     "warn"  -> log a warning, continue to the OS launch
-#     "abort" -> fail the launch (FAILED status)
-#     "skip"  -> succeed without the OS launch
-# timeout: wall-clock seconds for blocking hooks (before / instead / abort);
-#   `confirm` is a user prompt (no subprocess) and `after` hooks are spawned
-#   asynchronously, so neither ever times out.
+# ACTIONS:
+#   notify      Show a message to the user. Supports simple Markdown (**bold**,
+#               *italic*, # heading).
+#   run         Execute a shell command.
+#   run_after   Spawn a command in the background (asynchronous).
+#   replace     Execute a command instead of the standard OS launch. If a
+#               workflow reaches a 'replace' step, the OS launch is SKIPPED.
+#   check       Execute a command and check return code.
+#
+# TOKENS (substituted at runtime):
+#   {path}       absolute file path                    {dir}   parent directory
+#   {filename}   file name (with extension)            {ext}   extension (e.g. ".mttl")
+#   {stem}       file name without extension
+#
+# failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
+# timeout: seconds for blocking steps.
 # ============================================================================
 hooks:
   failmode: warn           # "warn" | "abort" | "skip"
   timeout: 30
   entries:
     # ".mttl":
-    #   - when: before
-    #     command: "logger.exe --file {{path}}"
-    #   - when: confirm
-    #     command: "Launch {{name}}?"
-    #   - when: after
-    #     command: "notifier.exe --name {{name}}"
+    #   - action: notify
+    #     content: "# Launching {filename}\\nPreparing environment..."
+    #   - action: run
+    #     content: "prepare.exe --file {path}"
+    #     ask: "Run preparation script?"
+    #   - action: replace
+    #     content: "special_launcher.exe {path}"
+    #     ask: "Use special launcher instead of OS default?"
     # ".pdf":
-    #   - command: "SumatraPDF.exe -reuse-instance {{path}}"
+    #   - action: run_after
+    #     content: "logger.exe --opened {filename}"
 
 # ============================================================================
 # CONFIGS — named configurations. Each may `extends` another config.

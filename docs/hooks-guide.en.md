@@ -1,123 +1,112 @@
-# Launch Hooks — Reference
+# Launch Workflows — Reference
 
 > 🏠 **[Documentation Home](./README.md)** |
 > 📦 **[Installation](./installation-guide.en.md)** |
 > ⚙️ **[Configuration](./configuration-profile.en.md)** |
-> 🔧 **Hooks** |
+> 🔧 **Workflows** |
 > 📊 **[Dynamic Columns](./dynamic-columns-guide.md)** |
 > 🚀 **[Advanced Guide](./advanced/advanced-guide.en.md)**
 
 ---
 
-Launch hooks let you run arbitrary commands around every file launch. The pipeline lives in
-`src/profiles/core/environment/execution.py` and is invoked by `launch_selected_file` in
-`actions.py`. Hooks are configured per-extension in the `[HOOKS]` section of the
-`.profiles` INI file.
+Launch workflows let you run a sequence of actions around every file launch. The engine lives in
+`src/profiles/core/environment/workflow.py` and is invoked by `launch_selected_file` in
+`actions.py`. Workflows are configured in the `hooks` section of your `.profiles` configuration.
 
-## Overview
+## YAML Syntax
 
-- **When** – before the OS association is executed, after it returns, or instead of it.
-- **Phases** – `before`, `after`, `instead`, `abort`.
-- **Outcome** – the pipeline returns a `HookOutcome` (`CONTINUE`, `SKIP`, `ABORT`).
-- **Scope** – hooks apply to the normalized extension key (`.png`, `.pdf`, …).
+Workflows use a step-based YAML structure. Each entry in `hooks.entries` is a glob pattern
+supporting wildcards (`*`, `?`) and extension shorthands.
 
-The hook string may omit a phase; the default is `before`. Multiple hooks are comma‑
-separated; commas inside double quotes are ignored.
-
-## Quick Start
-
-```ini
-[HOOKS]
-.mttl = before|echo "Launching {path}" , after|logger "Launched {path}"
+```yaml
+hooks:
+  failmode: warn           # warn | abort | skip
+  timeout: 30              # seconds
+  entries:
+    "*.mttl":
+      - action: notify
+        content: "# Launching {filename}\\nPreparing environment..."
+      - action: run
+        content: "prepare_env.exe --file {path}"
+        ask: "Run preparation script?"
+      - action: replace
+        content: "special_launcher.exe {path}"
+        ask: "Use special launcher instead of OS default?"
+    
+    "special.mttl":
+      - action: notify
+        content: "**Special** processing for this file."
 ```
 
-- `before` prints a message, aborts on non‑zero exit according to `launch_hook_failmode`.
-- `after` runs asynchronously after the OS launch.
+## Pattern Specificity
 
-## Hook Phases
+When multiple patterns match a filename, ProFiles selects the **most specific** one:
+1. **Exact match** (e.g., `manual.pdf`) wins over wildcards.
+2. **Question mark patterns** (e.g., `test?.txt`) win over star patterns.
+3. **Star patterns** (e.g., `report_*.pdf`) win over extension shorthands.
+4. **Extension shorthands** (e.g., `.pdf`) are the least specific.
 
-| Phase    | When it runs                               | Return‑code handling                             |
-| -------- | ------------------------------------------ | ------------------------------------------------ |
-| before   | Immediately before the OS launch.          | `0` → continue. non‑zero → mapped by _failmode_. |
-| confirm  | Immediately before `before` hooks.         | User Yes/No → `CONTINUE` or `ABORT`.             |
-| after    | After a successful OS launch (or `SKIP`).  | Spawned via `subprocess.Popen`; never blocks.    |
-| instead  | Replaces the OS launch.                    | `0` → `SKIP`. non‑zero → mapped by _failmode_.   |
-| abort    | Forces the pipeline to abort regardless.   | `0` → `CONTINUE`. non‑zero → always `ABORT`.     |
+## Workflow Actions
 
-**Examples**
+| Action      | Description                               | Blocking | Failure Handling             |
+| ----------- | ----------------------------------------- | -------- | ---------------------------- |
+| `notify`    | Show a Markdown message to the user.      | Optional | Never fails.                 |
+| `run`       | Execute a shell command.                  | Yes      | Subject to `on_failure`.     |
+| `run_after` | Spawn a background command.               | No       | Never blocks/stops workflow. |
+| `replace`   | Execute command instead of OS launch.     | Yes      | Skips standard OS launch.    |
+| `check`     | Execute command and check return code.    | Yes      | Subject to `on_failure`.     |
 
-```ini
-[HOOKS]
-.pdf = before|/usr/bin/evince {path} , instead|myviewer --file {path}
-.exe = confirm|Run this file? , before|check_safety.sh {path}
-.mttl = abort|test -f {path} && echo "OK"
-```
+## Confirmation Guards (ask)
 
-## Sequential Hook Chaining
+Any step can be guarded by an `ask` prompt. This displays a **Yes/Skip/No** dialog:
+- **Yes**: Executes the current step and continues.
+- **Skip**: Skips the current step and proceeds to the **next** step.
+- **No**: Aborts the entire workflow (and the file launch).
 
-Hooks can be chained so that each hook depends on the previous one succeeding. When a hook fails, the pipeline's behavior depends on `launch_hook_failmode` and the hook's requirement level.
+## Rich Notifications (Markdown)
 
-### Syntax
-
-```ini
-[HOOKS]
-.exe = step1|validate.sh {path}, step2|backup.sh {path}, step3|launch.sh {path}
-```
-
-Each entry is executed in order. By default, every hook is considered "required". If a hook fails (non-zero exit code) and `launch_hook_failmode` is set to `abort`, the pipeline stops immediately and the launch is aborted.
-
-### Execution Policy
-
-1. **Required Hook** (default): If it fails, the pipeline obeys `launch_hook_failmode`. If failmode is `abort`, the entire launch is cancelled.
-2. **Sequential Dependency**: If a hook fails and results in an `ABORT` outcome, subsequent hooks in the list are skipped.
-
-## Confirmation Hooks
-
-Confirmation hooks pause the pipeline and wait for user approval before continuing. They work in both GUI and headless modes.
-
-### Syntax
-
-```ini
-[HOOKS]
-.exe = confirm|⚠️ Execute {name} ? , before|run.sh {path}
-```
-
-### Behavior
-
-- **GUI mode**: Displays a Yes/No dialog box.
-- **Headless mode**: Prompts the user in the terminal (e.g., `Confirmation: ⚠️ Execute file.txt ? [y/N]: `).
-- **Yes**: The pipeline continues to the next hook.
-- **No / Cancel**: The pipeline resolves to `ABORT`, and the launch is cancelled.
-
-Confirmation hooks are always synchronous and typically run before any other logic to ensure the user is aware of the impending action.
+The `notify` action supports a subset of Markdown for clear communication:
+- `# Heading`
+- `**Bold text**`
+- `*Italic text*`
+- `` `Code snippets` ``
+- `\\n` for new lines
 
 ## Token Substitution
 
-The template engine replaces the following placeholders before the command is split:
+The following placeholders are substituted at runtime:
 
 | Token        | Value                             |
 | ------------ | --------------------------------- |
 | `{path}`     | Absolute file path                |
 | `{dir}`      | Parent directory of the file      |
-| `{name}`     | Filename with extension           |
-| `{cwd}`      | Current working directory         |
+| `{filename}` | Filename with extension           |
+| `{stem}`     | Filename without extension        |
 | `{ext}`      | Extension (including leading dot) |
-| `{date}`     | ISO‑8601 date (e.g. `2026-07-31`) |
-| `{hostname}` | Hostname of the local machine     |
 
-Unknown tokens stay untouched.
+---
 
-**Illustration** (file `/prod/run1/ST_PRO_V2026.7.mttl` on host `build‑01`):
+## Migration from INI/Legacy Hooks
 
+The new workflow engine replaces the legacy INI `[HOOKS]` section. Existing hook strings
+must be converted to the YAML step structure.
+
+**Legacy INI:**
 ```ini
 [HOOKS]
-.mttl = before|echo "{name} from {dir} on {hostname} ({date})"
+.mttl = before|echo "{path}" , instead|special_run {path}
 ```
 
-Expands to:
-
+**New YAML:**
+```yaml
+hooks:
+  entries:
+    ".mttl":
+      - action: run
+        content: "echo {path}"
+      - action: replace
+        content: "special_run {path}"
 ```
-echo "ST_PRO_V2026.7.mttl from /prod/run1 on build-01 (2026-07-31)"
 ```
 
 ## Failmode Semantics
