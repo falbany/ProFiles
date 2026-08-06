@@ -175,7 +175,7 @@ def launch_selected_file(
 
         if selected_pattern and selected_pattern in config.launch_hooks:
             steps = list(config.launch_hooks[selected_pattern])
-            workflow_outcome = run_workflow(steps, file_path)
+            workflow_outcome = run_workflow(steps, file_path, logger=logger)
 
             if workflow_outcome == WorkflowOutcome.ABORT:
                 if logger is not None:
