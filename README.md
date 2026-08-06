@@ -91,7 +91,7 @@ python -m profiles
 ```
 * **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives.
 * **Shortcuts**: `Ctrl+F` (focus filter), `F5` (refresh), `Ctrl+Shift+L` (toggle theme).
-* **Language**: The GUI chrome is bilingual (English / French). Use the language button in the status bar to switch on the fly, or set `language = en` / `language = fr` in `[LAUNCHER]`.
+* **Language**: The GUI chrome is bilingual (English / French). Use the language button in the status bar to switch on the fly, or set `language: en` / `language: fr` in the `defaults` section.
 
 ### CLI / Headless Mode
 ```bash
@@ -107,24 +107,63 @@ ProFiles --config "/path/to/.profiles"
 
 ## 🛠 Configuration
 
-ProFiles is driven by a `.profiles` INI file, walking up the filesystem tree to locate it.
+ProFiles is driven by a `.profiles` **YAML** file, walking up the filesystem tree to locate it.
 
-```ini
-[LAUNCHER]
-title = MyWorkspace
-theme = auto
-columns = File, Version, Size
-column_widths = 500, 150, 100
-extensions = All, .txt, .py, .md
-dynamic_columns = Device:r"Device_(\w+)", Version:r"_V(.+)"
-search_exclude_dirs = __pycache__, node_modules, .venv
-search_exclude_files = *backup*, ~$*, *.tmp
+```yaml
+# ProFiles Configuration — YAML Format
+version: 1
 
-[CONFIGURATION_1]
-pc_hostname = WORKSTATION-01
-directory = Z:/Projects/Engineering
-row_colors = PROD:#1565C0, DEV:#E65100
-search_exclude_files = *draft*, *.bak
+# Global defaults inherited by all configurations
+defaults:
+  title: "MyWorkspace"
+  theme: light
+  language: en
+  search_dir: "C:/Users/YourName/Workspace"
+  recursive_search: false
+  extensions: [All, .lnk, .pdf]
+  filters: ["", ST_PRO, ST_ENG]
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#E65100"
+  search_exclude_dirs: [.git, __pycache__, node_modules, .venv, tmp]
+  search_exclude_files: [*backup*, ~$*, *.tmp]
+  verbose: INFO
+  scan_metrics: false
+
+# Dynamic columns extracted from filenames
+columns:
+  File:
+    width: 600
+    expression: ".*"
+    group: 0
+    priority: 100
+  Version:
+    width: 100
+    expression: "[-_]V(\\d+(?:\\.\\d+)*)"
+    group: 1
+    priority: 10
+
+# Machine-specific configurations
+configs:
+  base:
+    pc_hostname: All
+    pc_name: Generic
+    directory: "C:/Users/YourName/Workspace"
+    
+  production:
+    extends: base
+    pc_hostname: WORKSTATION-01
+    pc_name: Production Station
+    directory: "Z:/Projects/Engineering"
+    extensions: [.pdf, .docx, .lnk, .xlsx]
+    filters: [tmp, dev, prod]
+    row_colors:
+      - pattern: PROD
+        color: "#1565C0"
+      - pattern: DEV
+        color: "#E65100"
 ```
 *See [Configuration Reference](./docs/configuration-profile.en.md) and [Dynamic Columns Guide](./docs/dynamic-columns-guide.md).*
 

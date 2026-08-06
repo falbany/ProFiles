@@ -12,9 +12,7 @@
 
 ## Vue d'ensemble
 
-Le fichier `.profiles` est un fichier de configuration INI qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires jusqu'à **5 niveaux de profondeur**. Le premier fichier trouvé est utilisé.
-
-**Important** : La recherche est limitée à 5 niveaux de sous-répertoires pour maintenir de bonnes performances sur les arborescences de fichiers volumineuses.
+Le fichier `.profiles` est un fichier de configuration au format **YAML** qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires. Le premier fichier trouvé est utilisé.
 
 Si aucun fichier `.profiles` n'est trouvé :
 - En mode GUI : ProFiles propose de créer un fichier de configuration par défaut
@@ -40,16 +38,19 @@ Créez un fichier nommé `.profiles` dans votre répertoire de travail et copiez
 
 ## Structure du fichier
 
-Le fichier utilise le format INI standard avec des sections et des clés. Toutes les clés de section sont **insensibles à la casse**.
+Le fichier utilise le format **YAML** avec des clés hiérarchiques. Toutes les clés sont **insensibles à la casse**.
 
-### Sections disponibles
+### Clés de niveau supérieur
 
-- `[LAUNCHER]` — Configuration globale
-- `[CONFIGURATION_N]` — Configurations par machine (N = 1, 2, 3, ...)
+- `version` — Version du schéma de configuration (actuellement `1`)
+- `defaults` — Configuration globale héritée par toutes les configurations spécifiques aux machines
+- `columns` — Définitions des colonnes dynamiques pour l'extraction de métadonnées des noms de fichiers
+- `hooks` — Hooks d'exécution pour les lancements de fichiers (before/after/confirm/abort/instead)
+- `configs` — Configurations spécifiques aux machines (dictionnaire nommé)
 
 ---
 
-## Section `[LAUNCHER]` — Configuration globale
+## Section `defaults` — Configuration globale
 
 Cette section définit les paramètres par défaut applicables à toutes les machines.
 
@@ -58,42 +59,48 @@ Cette section définit les paramètres par défaut applicables à toutes les mac
 | Clé                   | Type               | Valeur par défaut    | Description                                                                 |
 | --------------------- | ------------------ | -------------------- | --------------------------------------------------------------------------- |
 | `title`               | string             | `""`                 | Titre personnalisé ajouté à la fenêtre principale                           |
-| `gui_auto_launch`     | bool               | `Vrai`               | Afficher l'interface graphique lors de `python -m profiles`               |
-| `close_after_execute` | bool               | `Faux`               | Fermer la fenêtre après un lancement réussi                                 |
+| `gui_auto_launch`     | bool               | `true`               | Afficher l'interface graphique lors de `python -m profiles`               |
+| `close_after_execute` | bool               | `false`              | Fermer la fenêtre après un lancement réussi                                 |
 | `theme`               | enum               | `"light"`            | Thème d'interface : `"light"` ou `"dark"` (Material Design 3)               |
 | `language`            | enum               | `"en"`               | Langue de l'interface : `"en"` (anglais) ou `"fr"` (français) ; basculable via le bouton langue de la barre de statut (cycle en → fr → en) |
-| `search_dir`          | absolute path      | `""`                 | Répertoire de recherche par défaut pour le champ Directory                  |
-| `recursive_search`    | bool               | `Faux`               | État initial de la case à cocher Recursive                                  |
-| `columns`             | csv string         | `"File, Version"`    | En-têtes des colonnes Treeview (la première est réservée au nom de fichier) |
-| `column_widths`       | csv int            | `"600, 150"`         | Largeurs en pixels, DOIT correspondre au nombre de `columns`                |
-| `extensions`          | csv string         | `"All, .lnk"`        | Présélections du combobox Extension (remplies par `[CONFIGURATION_N]`)      |
-| `filters`             | csv string         | `", ST_PRO, ST_ENG"` | Présélections du combobox Filter ("" = tous les fichiers)                   |
-| `row_colors`          | csv "PATTERN:#HEX" | `""`                 | Règles de coloration génériques appliquées à TOUS les configurations        |
-| `search_exclude_dirs` | csv glob-pattern  | `".git"`             | Noms de répertoires (motifs glob insensibles à la casse) ignorés lors du scan récursif. Prend en charge les jokers `*`, `?`, `[seq]` (`*tmp`, `node_modules`, `Debug*`, etc.) |
-| `search_exclude_files` | csv glob-pattern | `""`                 | Noms de fichiers (motifs glob insensibles à la casse) ignorés lors du scan. S'applique aux scans récursifs ET non récursifs. Même syntaxe de jokers que `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Les motifs `[CONFIGURATION_N].search_exclude_files` sont AJOUTÉS. |
+| `search_dir`          | string             | `""`                 | Répertoire de recherche par défaut pour le champ Directory                  |
+| `recursive_search`    | bool               | `false`              | État initial de la case à cocher Recursive                                  |
+| `extensions`          | array of strings   | `[All, .lnk]`        | Présélections du combobox Extension (remplies par `configs`)      |
+| `filters`             | array of strings   | `["", ST_PRO, ST_ENG]` | Présélections du combobox Filter ("" = tous les fichiers)                   |
+| `row_colors`          | array of objects   | `[]`                 | Règles de coloration génériques appliquées à TOUS les configurations. Chaque objet a `pattern` (string) et `color` (#RRGGBB)        |
+| `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Noms de répertoires (motifs glob insensibles à la casse) ignorés lors du scan récursif. Prend en charge les jokers `*`, `?`, `[seq]` (`*tmp`, `node_modules`, `Debug*`, etc.) |
+| `search_exclude_files` | array of strings | `[]`                 | Noms de fichiers (motifs glob insensibles à la casse) ignorés lors du scan. S'applique aux scans récursifs ET non récursifs. Même syntaxe de jokers que `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Les motifs par configuration sont AJOUTÉS. |
+| `verbose`             | enum               | `"INFO"`             | Verbosité du logging : `"DEBUG"` | `"INFO"` | `"WARNING"` | `"ERROR"` | `"CRITICAL"` |
+| `scan_metrics`        | bool               | `false`              | Journaliser les métriques de performance après chaque scan                   |
 
 ### Valeurs booléennes acceptées
 
-- Français : `Vrai` / `Faux`
-- Anglais : `true` / `false` / `yes` / `no` / `1` / `0` / `on` / `off`
+YAML standard : `true` / `false` / `yes` / `no` / `1` / `0` / `on` / `off`
 
-### Exemple de configuration `[LAUNCHER]`
+### Exemple de configuration `defaults`
 
-```ini
-[LAUNCHER]
-title = Mon Projet
-gui_auto_launch = Vrai
-close_after_execute = Faux
-theme = dark
-search_dir = /chemin/vers/repertoire/production
-recursive_search = Vrai
-columns = File, Version, Classification
-column_widths = 600, 150, 100
-extensions = All, .lnk, .pdf, .docx
-filters = , ST_PRO, ST_ENG, DEV
-row_colors = PROD:#1565C0, DEV:#757575, TMP:#BAC015
-search_exclude_dirs = .git, tmp, Obsolete, Debug
-search_exclude_files = *backup*, ~$*, *.tmp
+```yaml
+defaults:
+  title: "Mon Projet"
+  gui_auto_launch: true
+  close_after_execute: false
+  theme: dark
+  language: en
+  search_dir: "C:/Users/YourName/Workspace"
+  recursive_search: true
+  extensions: [All, .lnk, .pdf, .docx]
+  filters: ["", ST_PRO, ST_ENG, DEV]
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
+    - pattern: TMP
+      color: "#BAC015"
+  search_exclude_dirs: [.git, tmp, Obsolete, Debug, __pycache__, node_modules]
+  search_exclude_files: [*backup*, ~$*, *.tmp]
+  verbose: INFO
+  scan_metrics: false
 ```
 
 ### Exclusion par Glob (`search_exclude_dirs` / `search_exclude_files`)
@@ -105,51 +112,60 @@ Les deux clés acceptent des motifs glob insensibles à la casse avec les jokers
 | `search_exclude_dirs` | Noms de répertoires ignorés lors du scan **récursif** | `.git` | `node_modules`, `Debug*`, `*tmp` |
 | `search_exclude_files` | Noms de fichiers Ignés lors du scan (**récursif et non récursif**) | `""` | `*backup*`, `~$*`, `*.tmp` |
 
-**Ajout par configuration** : `search_exclude_files` dans une section `[CONFIGURATION_N]` est AJOUTÉ à la liste de base `[LAUNCHER]` — les deux jeux de motifs s'appliquent pour cette configuration. L'exclusion de répertoires (`search_exclude_dirs`) est globale uniquement.
+**Ajout par configuration** : `search_exclude_files` dans une section `configs` est AJOUTÉ à la liste de base `defaults.search_exclude_files` — les deux jeux de motifs s'appliquent pour cette configuration. L'exclusion de répertoires (`search_exclude_dirs`) est globale uniquement.
 
 ---
 
-## Sections `[CONFIGURATION_N]` — Configurations par machine
+## Section `configs` — Configurations par machine
 
-Ces sections définissent des paramètres spécifiques à chaque machine. Les sections sont numérotées séquentiellement (CONFIGURATION_1, CONFIGURATION_2, ...).
+Cette section est un dictionnaire où chaque clé est une configuration nommée. ProFiles sélectionne la configuration dont le `pc_hostname` correspond au nom d'hôte local (correspondance exacte, insensible à la casse).
 
-ProFiles sélectionne la section dont le `pc_hostname` correspond au nom d'hôte local (correspondance exacte, insensible à la casse).
+Une configuration avec `pc_hostname: All` agit comme un piège universel — placez-la **DERNIÈRE** pour qu'elle ne masque pas les noms d'hôte spécifiques.
 
-Une section avec `pc_hostname = All` agit comme un piège universel — placez-la **DERNIÈRE** pour qu'elle ne masque pas les noms d'hôte spécifiques.
+Les configurations peuvent `extend` une autre configuration pour hériter des paramètres. Les listes sont fusionnées : éléments locaux d'abord, puis éléments hérités non déjà présents.
 
 ### Paramètres
 
 | Clé           | Type               | Obligatoire | Description                                                            |
 | ------------- | ------------------ | ----------- | ---------------------------------------------------------------------- |
+| `extends`     | string             | Non         | Nom d'une autre configuration à hériter                                |
+| `pc_hostname` | string             | Oui*        | Nom d'hôte local ciblé par cette config (*sauf si `All`)               |
 | `pc_ip`       | string             | Non         | Label IP affiché (NON utilisé pour la correspondance)                  |
-| `pc_hostname` | string             | Oui*        | Nom d'hôte local ciblé par cette section (*sauf si `All`)              |
 | `pc_name`     | string             | Non         | Label convivial (journaux, statut)                                     |
-| `directory`   | absolute path      | Non         | Répertoire de production scanné pour cette machine                     |
-| `extensions`  | csv string         | Non         | Présélections Extension par station (remplace `[LAUNCHER].extensions`) |
-| `filters`     | csv string         | Non         | Présélections Filter par station (remplace `[LAUNCHER].filters`)       |
-| `row_colors`  | csv "PATTERN:#HEX" | Non         | Règles de coloration spécifiques à la configuration                    |
-| `search_exclude_files` | csv glob-pattern | Non         | Motifs d'exclusion de fichiers par station. AJOUTÉS à `[LAUNCHER].search_exclude_files`. Même syntaxe de jokers. |
+| `directory`   | string             | Non         | Répertoire de production scanné pour cette machine                     |
+| `extensions`  | array of strings   | Non         | Présélections Extension par station (remplace `defaults.extensions`)   |
+| `filters`     | array of strings   | Non         | Présélections Filter par station (remplace `defaults.filters`)         |
+| `row_colors`  | array of objects   | Non         | Règles de coloration spécifiques à la configuration. AJOUTÉES à `defaults.row_colors` et vérifiées en premier |
+| `search_exclude_files` | array of strings | Non | Motifs d'exclusion de fichiers par station. AJOUTÉS à `defaults.search_exclude_files`. Même syntaxe de jokers. |
 
 ### Exemple de configuration par machine
 
-```ini
-[CONFIGURATION_1]
-pc_hostname = POSTE-TRAVAIL-01
-pc_name = Station Production
-pc_ip = 192.168.1.100
-directory = /chemin/vers/production/station1
-extensions = .pdf, .docx, .lnk, .xlsx
-filters = , tmp, dev, prod
-row_colors = PROD:#1565C0, DEV:#757575
-search_exclude_files = *brouillon*, *.bak
+```yaml
+configs:
+  base:
+    pc_hostname: All
+    pc_name: Generic
+    directory: "C:/Users/YourName/Workspace"
+    extensions: [All, .lnk]
+    filters: ["", ST_PRO]
+    row_colors:
+      - pattern: SPECIFIC
+        color: "#FF0000"
 
-[CONFIGURATION_2]
-pc_hostname = All
-pc_name = Generic
-directory = /chemin/vers/production
-extensions = .lnk
-filters = , ST_PRO
-row_colors =
+  production:
+    extends: base
+    pc_hostname: POSTE-TRAVAIL-01
+    pc_name: Station Production
+    pc_ip: 192.168.1.100
+    directory: "Z:/Projects/Engineering/station1"
+    extensions: [.pdf, .docx, .lnk, .xlsx]
+    filters: [tmp, dev, prod]
+    row_colors:
+      - pattern: PROD
+        color: "#1565C0"
+      - pattern: DEV
+        color: "#757575"
+    search_exclude_files: [*brouillon*, *.bak]
 ```
 
 ---
