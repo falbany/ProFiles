@@ -57,11 +57,21 @@ class ColumnMapping(BaseModel):
 
 
 class HookEntry(BaseModel):
-    """A single launch hook entry."""
+    """A single launch hook entry (legacy phase-based)."""
 
     when: Literal["before", "after", "instead", "abort", "confirm"] = "before"
     command: str = ""
     requires_success: bool = True
+
+
+class WorkflowStepSchema(BaseModel):
+    """A single workflow step (new step-based model)."""
+
+    action: Literal["notify", "run", "run_after", "replace", "check"]
+    content: str
+    ask: str | None = None
+    wait: bool = True
+    on_failure: Literal["stop", "warn", "continue"] = "stop"
 
 
 class HooksConfig(BaseModel):
