@@ -64,13 +64,14 @@ def run_workflow(
 
         # Handle 'ask' confirmation guard if present
         if step.ask:
+            ask_content = _substitute_variables(step.ask, file_path)
             choice: Literal["yes", "skip", "no"]
             if user_choice is not None:
                 choice = user_choice
             elif ask_callback is not None:
-                choice = ask_callback(step.ask)
+                choice = ask_callback(ask_content)
             else:
-                choice = confirm_dialog_3way(step.ask, headless=headless)
+                choice = confirm_dialog_3way(ask_content, headless=headless)
 
             if choice == "no":
                 if logger is not None:
