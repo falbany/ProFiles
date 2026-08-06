@@ -83,6 +83,7 @@ The following placeholders are substituted at runtime:
 | `{{filename}}` | Filename with extension           |
 | `{{stem}}`     | Filename without extension        |
 | `{{ext}}`      | Extension (including leading dot) |
+| `{{content}}`  | The `content` string of the current step (useful in `ask` prompts) |
 
 ---
 

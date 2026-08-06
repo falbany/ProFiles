@@ -83,6 +83,7 @@ Les variables suivantes sont substituées au moment de l'exécution :
 | `{{filename}}` | Nom du fichier avec extension     |
 | `{{stem}}`     | Nom du fichier sans extension     |
 | `{{ext}}`      | Extension (incluant le point)     |
+| `{{content}}`  | La chaîne `content` de l'étape courante (utile pour `ask`) |
 
 ---
 

@@ -177,7 +177,7 @@ columns:
 # TOKENS (substituted at runtime):
 #   {{path}}       absolute file path                    {{dir}}   parent directory
 #   {{filename}}   file name (with extension)            {{ext}}   extension (e.g. ".mttl")
-#   {{stem}}       file name without extension
+#   {{stem}}       file name without extension           {{content}} step content (useful in 'ask')
 #
 # failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
 # timeout: seconds for blocking steps.
