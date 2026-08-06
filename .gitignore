@@ -277,6 +277,9 @@ $RECYCLE.BIN/
 .profiles*
 *.log
 *superpowers/
+!docs/superpowers/
+!docs/superpowers/specs/
+!docs/superpowers/plans/
 
 
 # Git worktrees (isolated workspaces)
