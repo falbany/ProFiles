@@ -57,10 +57,10 @@ class TestConfigReader:
         conf = _write_yaml(
             tmp_path / ".profiles",
             "hooks:\n  failmode: abort\n  timeout: 10\n"
-            "  entries:\n    '.mttl':\n      - when: before\n        command: 'x {{path}}'\n",
+            "  entries:\n    '.mttl':\n      - action: run\n        content: 'x {{path}}'\n",
         )
         config = ConfigReader(conf).load()
         assert config.launch_hook_failmode == "abort"
         assert config.launch_hook_timeout == 10
         assert ".mttl" in config.launch_hooks
-        assert config.launch_hooks[".mttl"][0].template == "x {{path}}"
+        assert config.launch_hooks[".mttl"][0].content == "x {{path}}"

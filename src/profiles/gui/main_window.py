@@ -1345,28 +1345,22 @@ class MainWindow:
             self._logger.error("Failed to create config file: %s", exc)
 
     def _restart_application(self) -> None:
-        """Restart the application with the same arguments."""
+        """Restart the application using the module entry point."""
 
         self._logger.info("Restarting application...")
 
         # Destroy the current window
         self._root.destroy()
 
-        # Get the current Python executable and script
+        # Get the current Python executable
         python_executable = sys.executable
-        script_path = Path(__file__).parent.parent.parent / "ProFiles.pyw"
 
-        if not script_path.exists():
-            # Fallback: try to find the entry point
-            script_path = Path.cwd() / "ProFiles.pyw"
-
-        # Launch a new instance
+        # Launch a new instance via module entry point
         try:
-            subprocess.Popen([str(python_executable), str(script_path)])
+            subprocess.Popen([str(python_executable), "-m", "profiles"])
             self._logger.info(
-                "New instance launched: %s %s",
+                "New instance launched via module: %s -m profiles",
                 python_executable,
-                script_path,
             )
         except OSError as exc:
             self._logger.error("Failed to restart application: %s", exc)
