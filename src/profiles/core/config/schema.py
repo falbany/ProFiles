@@ -57,11 +57,21 @@ class ColumnMapping(BaseModel):
 
 
 class HookEntry(BaseModel):
-    """A single launch hook entry."""
+    """A single launch hook entry (legacy phase-based)."""
 
     when: Literal["before", "after", "instead", "abort", "confirm"] = "before"
     command: str = ""
     requires_success: bool = True
+
+
+class WorkflowStepSchema(BaseModel):
+    """A single workflow step (new step-based model)."""
+
+    action: Literal["notify", "run", "run_after", "replace", "check"]
+    content: str
+    ask: str | None = None
+    wait: bool = True
+    on_failure: Literal["stop", "warn", "continue"] = "stop"
 
 
 class HooksConfig(BaseModel):
@@ -71,11 +81,11 @@ class HooksConfig(BaseModel):
     timeout: int = 30
     # YAML ``entries:`` with only comments under it parses as None;
     # coerce to empty dict so the template works out-of-the-box.
-    entries: dict[str, list[HookEntry]] = Field(default_factory=dict)
+    entries: dict[str, list[WorkflowStepSchema]] = Field(default_factory=dict)
 
     @field_validator("entries", mode="before")
     @classmethod
-    def _none_to_dict(cls, value: object) -> dict[str, list[HookEntry]]:
+    def _none_to_dict(cls, value: object) -> dict[str, list[WorkflowStepSchema]]:
         return value or {}
 
 

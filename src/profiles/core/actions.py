@@ -14,7 +14,8 @@ from pathlib import Path
 
 from profiles.core.config.models import AppConfig
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
-from profiles.core.environment.execution import HookOutcome, run_hooks_for_file
+from profiles.core.environment.matcher import select_most_specific_pattern
+from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 from profiles.core.processing.file_classifier import ensure_trailing_separator
 from profiles.utils.file_utils import launch_file, launch_file_with_args, open_with_default_app
 
@@ -169,26 +170,32 @@ def launch_selected_file(
         )
 
     if config is not None:
-        outcome = run_hooks_for_file(file_path, config, logger=logger)
-        if outcome is HookOutcome.ABORT:
-            if logger is not None:
-                logger.error("Launch aborted by a launch hook: %s", file_path)
-            return ActionResult(
-                status=ActionStatus.FAILED,
-                message=f"Launch aborted by a launch hook.\n\nFile: {file_path}",
-                path=file_path,
-            )
-        if outcome is HookOutcome.SKIP:
-            if logger is not None:
-                logger.info(
-                    "Launched %s (OS launch replaced by 'instead' hook)",
-                    file_path,
+        patterns = list(config.launch_hooks.keys())
+        selected_pattern = select_most_specific_pattern(patterns, filename)
+
+        if selected_pattern and selected_pattern in config.launch_hooks:
+            steps = list(config.launch_hooks[selected_pattern])
+            workflow_outcome = run_workflow(steps, file_path, logger=logger)
+
+            if workflow_outcome == WorkflowOutcome.ABORT:
+                if logger is not None:
+                    logger.error("Launch aborted by a launch hook: %s", file_path)
+                return ActionResult(
+                    status=ActionStatus.FAILED,
+                    message=f"Launch aborted by a launch hook.\n\nFile: {file_path}",
+                    path=file_path,
                 )
-            return ActionResult(
-                status=ActionStatus.SUCCESS,
-                message=f"Launched {file_path} (OS launch replaced by 'instead' hook)",
-                path=file_path,
-            )
+            if workflow_outcome == WorkflowOutcome.SKIP_LAUNCH:
+                if logger is not None:
+                    logger.info(
+                        "Launched %s (OS launch replaced/skipped by workflow step)",
+                        file_path,
+                    )
+                return ActionResult(
+                    status=ActionStatus.SUCCESS,
+                    message=f"Launched {file_path} (OS launch handled by workflow)",
+                    path=file_path,
+                )
 
     launched = _launch_with_args(file_path, args) if args else launch_file(file_path)
 

@@ -11,7 +11,7 @@ internal exception messages stay English.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "fr")
 
@@ -108,9 +108,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "search.search_btn": "\U0001f50d Rechercher",
         "search.search_btn.tooltip": "Scanner le répertoire sélectionné",
         "search.ext_label": "Extension :",
-        "search.ext.tooltip": "Filtrer par extension : AND (espace), OR, NOT (-), exact (\"...\")",
+        "search.ext.tooltip": 'Filtrer par extension : AND (espace), OR, NOT (-), exact ("...")',
         "search.filter_label": "Filtre :",
-        "search.filter.tooltip": "Filtrer : AND (espace), OR, NOT (-), exact (\"...\")",
+        "search.filter.tooltip": 'Filtrer : AND (espace), OR, NOT (-), exact ("...")',
         "status.config": "\u2699 Config",
         "status.config.tooltip": "Ouvrir le fichier de configuration",
         "status.refresh": "\U0001f504 Actualiser",

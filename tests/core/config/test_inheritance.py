@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from profiles.core.config.inheritance import resolve_configs
-from profiles.core.config.schema import AppConfigYaml, ConfigError, MachineConfig
+from profiles.core.config.schema import AppConfigYaml, ConfigError
 
 
 def _cfg(**kwargs) -> AppConfigYaml:

@@ -127,6 +127,7 @@ class TestRunHooksForFile:
         )
 
         assert result is HookOutcome.CONTINUE
+
     @patch("profiles.core.environment.execution.confirm_dialog")
     def test_confirmation_hook_success(self, mock_confirm: MagicMock) -> None:
         """User confirms -> returns CONTINUE."""
@@ -177,6 +178,7 @@ class TestRunHooksForFile:
 
         assert result is HookOutcome.CONTINUE
         assert mock_run.call_count == 2
+
     @patch("profiles.core.environment.execution.spawn_background_hook")
     @patch("profiles.core.environment.execution.run_blocking_hook")
     def test_before_nonzero_with_abort_returns_abort(
@@ -336,9 +338,7 @@ class TestTokenSubstitution:
 
     def test_cwd_and_date_and_hostname_tokens(self) -> None:
         """{cwd}, {date} and {hostname} are substituted with runtime values."""
-        result = _substitute_tokens(
-            "{cwd}|{date}|{hostname}", Path("/tmp/foo.mttx")
-        )
+        result = _substitute_tokens("{cwd}|{date}|{hostname}", Path("/tmp/foo.mttx"))
         parts = result.split("|")
         assert parts[0] == str(Path.cwd().resolve())
         assert len(parts[1]) == 10  # ISO date yyyy-mm-dd
@@ -414,9 +414,7 @@ class TestSpawnBackgroundHook:
         spawn_background_hook("denied-bin", Path("/tmp/x.mttx"))
 
     @patch("profiles.core.environment.execution.subprocess.Popen")
-    def test_unbalanced_quotes_propagate_value_error(
-        self, mock_popen: MagicMock
-    ) -> None:
+    def test_unbalanced_quotes_propagate_value_error(self, mock_popen: MagicMock) -> None:
         """A ValueError from shlex is not swallowed by Popen handling."""
         with pytest.raises(ValueError):
             spawn_background_hook('echo "oops', Path("/tmp/x.mttx"))

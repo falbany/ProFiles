@@ -147,9 +147,7 @@ class TestScanDirectory:
         """exclude_files filters out matching files in non-recursive scans."""
         (tmp_path / "keep.mttl").write_text("", encoding="utf-8")
         (tmp_path / "backup.mttl").write_text("", encoding="utf-8")
-        files = scan_directory(
-            tmp_path, extension="mttl", exclude_files=("*backup*",)
-        )
+        files = scan_directory(tmp_path, extension="mttl", exclude_files=("*backup*",))
         names = {f.name for f in files}
         assert names == {"keep.mttl"}
 
@@ -157,22 +155,16 @@ class TestScanDirectory:
         """exclude_files works with extension='All'."""
         (tmp_path / "keep.mttl").write_text("", encoding="utf-8")
         (tmp_path / "skip.tmp").write_text("", encoding="utf-8")
-        files = scan_directory(
-            tmp_path, extension="All", exclude_files=("*.tmp",)
-        )
+        files = scan_directory(tmp_path, extension="All", exclude_files=("*.tmp",))
         names = {f.name for f in files}
         assert names == {"keep.mttl"}
 
-    def test_non_recursive_exclude_files_wildcard_case_insensitive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_recursive_exclude_files_wildcard_case_insensitive(self, tmp_path: Path) -> None:
         """Pattern *BACKUP* matches backup, Backup, etc."""
         (tmp_path / "keep.mttl").write_text("", encoding="utf-8")
         (tmp_path / "Backup.mttl").write_text("", encoding="utf-8")
         (tmp_path / "data_BACKUP.mttl").write_text("", encoding="utf-8")
-        files = scan_directory(
-            tmp_path, extension="mttl", exclude_files=("*BACKUP*",)
-        )
+        files = scan_directory(tmp_path, extension="mttl", exclude_files=("*BACKUP*",))
         names = {f.name for f in files}
         assert names == {"keep.mttl"}
 

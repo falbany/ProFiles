@@ -1,127 +1,136 @@
-# Hooks de Lancement — Référence
+# Workflows de Lancement — Référence
 
 > 🏠 **[Accueil Documentation](./README.md)** |
 > 📦 **[Installation](./installation-guide.fr.md)** |
 > ⚙️ **[Configuration](./configuration-profile.fr.md)** |
-> 🔧 **Hooks** |
+> 🔧 **Workflows** |
 > 📊 **[Colonnes Dynamiques](./dynamic-columns-guide.md)** |
 > 🚀 **[Guide Avancé](./advanced/guide-avance.fr.md)**
 
 ---
 
-Les hooks de lancement vous permettent d'exécuter des commandes arbitraires autour de chaque lancement de fichier. Le pipeline se trouve dans `src/profiles/core/environment/execution.py` et est invoqué par `launch_selected_file` dans `actions.py`. Les hooks sont configurés par extension dans la section `[HOOKS]` du fichier `.profiles`.
+Les workflows de lancement vous permettent d'exécuter une séquence d'actions autour de chaque lancement de fichier. Le moteur se trouve dans
+`src/profiles/core/environment/workflow.py` et est invoqué par `launch_selected_file` dans
+`actions.py`. Les workflows sont configurés dans la section `hooks` de votre configuration `.profiles`.
 
-## Aperçu
+## Syntaxe YAML
 
-- **Quand** – avant que l'association OS ne soit exécutée, après son retour, ou à sa place.
-- **Phases** – `before`, `confirm`, `after`, `instead`, `abort`.
-- **Résultat** – le pipeline retourne un `HookOutcome` (`CONTINUE`, `SKIP`, `ABORT`).
-- **Portée** – les hooks s'appliquent à la clé d'extension normalisée (`.png`, `.pdf`, …).
+Les workflows utilisent une structure YAML par étapes. Chaque entrée dans `hooks.entries` est un motif glob
+supportant les jokers (`*`, `?`) et les raccourcis d'extension.
 
-La chaîne de caractères du hook peut omettre une phase ; la phase par défaut est `before`. Plusieurs hooks sont séparés par des virgules ; les virgules à l'intérieur de guillemets doubles sont ignorées.
-
-## Démarrage Rapide
-
-```ini
-[HOOKS]
-.mttl = before|echo "Lancement de {path}" , after|logger "Lancé : {path}"
+```yaml
+hooks:
+  failmode: warn           # warn | abort | skip
+  timeout: 30              # secondes
+  entries:
+    "*.mttl":
+      - action: notify
+        content: "# Lancement de {{filename}}\\nPréparation de l'environnement..."
+      - action: run
+        content: "prepare_env.exe --file {{path}}"
+        ask: "Exécuter le script de préparation ?"
+      - action: replace
+        content: "special_launcher.exe {{path}}"
+        ask: "Utiliser le lanceur spécial au lieu du défaut OS ?"
+    
+    "special.mttl":
+      - action: notify
+        content: "**Traitement spécial** pour ce fichier."
 ```
 
-- `before` affiche un message, s'interrompt en cas de code de sortie non nul selon `launch_hook_failmode`.
-- `after` s'exécute de manière asynchrone après le lancement OS.
+## Spécificité des Motifs (Patterns)
 
-## Phases de Hook
+Lorsque plusieurs motifs correspondent à un nom de fichier, ProFiles sélectionne le **plus spécifique** :
+1. **Correspondance exacte** (ex: `manual.pdf`) gagne sur les jokers.
+2. **Motifs avec point d'interrogation** (ex: `test?.txt`) gagnent sur les motifs avec étoile.
+3. **Motifs avec étoile** (ex: `report_*.pdf`) gagnent sur les raccourcis d'extension.
+4. **Raccourcis d'extension** (ex: `.pdf`) sont les moins spécifiques.
 
-| Phase    | Quand s'exécute-t-il                        | Gestion du code de retour                        |
-| -------- | ------------------------------------------- | ------------------------------------------------ |
-| before   | Immédiatement avant le lancement OS.        | `0` → continuer. non‑nul → mappé par _failmode_. |
-| confirm  | Immédiatement avant les hooks `before`.     | Oui/Non utilisateur → `CONTINUE` ou `ABORT`.     |
-| after    | Après un lancement OS réussi (ou `SKIP`).   | Lancé via `subprocess.Popen` ; ne bloque jamais. |
-| instead  | Remplace le lancement OS.                   | `0` → `SKIP`. non‑nul → mappé par _failmode_.    |
-| abort    | Force l'interruption du pipeline quoi qu'il arrive. | `0` → `CONTINUE`. non‑nul → toujours `ABORT`.    |
+## Actions de Workflow
 
-**Exemples**
+| Action      | Description                               | Bloquant | Gestion des Échecs           |
+| ----------- | ----------------------------------------- | -------- | ---------------------------- |
+| `notify`    | Affiche un message Markdown à l'utilisateur. | Optionnel | N'échoue jamais.             |
+| `run`       | Exécute une commande shell.                | Oui      | Soumis à `on_failure`.       |
+| `run_after` | Lance une commande en arrière-plan.      | Non      | Ne bloque/n'arrête jamais.   |
+| `replace`   | Exécute une commande à la place de l'OS.  | Oui      | Ignore le lancement OS standard. |
+| `check`     | Exécute une commande et vérifie son code. | Oui      | Soumis à `on_failure`.       |
 
-```ini
-[HOOKS]
-.pdf = before|/usr/bin/evince {path} , instead|myviewer --file {path}
-.exe = confirm|Exécuter ce fichier ? , before|check_safety.sh {path}
-.mttl = abort|test -f {path} && echo "OK"
-```
+## Gardes de Confirmation (ask)
 
-## Enchaînement de Hooks Séquentiels
+Chaque étape peut être protégée par une invite `ask`. Cela affiche un dialogue **Oui/Passer/Non** :
+- **Oui** : Exécute l'étape actuelle et continue.
+- **Passer** (Skip) : Ignore l'étape actuelle et passe à la **suivante**.
+- **Non** : Interrompt tout le workflow (et le lancement du fichier).
 
-Les hooks peuvent être enchaînés de sorte que chaque hook dépende du succès du précédent. Lorsqu'un hook échoue, le comportement du pipeline dépend de `launch_hook_failmode` et du niveau d'exigence du hook.
+## Notifications Riches (Markdown)
 
-### Syntaxe
-
-```ini
-[HOOKS]
-.exe = step1|validate.sh {path}, step2|backup.sh {path}, step3|launch.sh {path}
-```
-
-Chaque entrée est exécutée dans l'ordre. Par défaut, chaque hook est considéré comme "requis". Si un hook échoue (code de sortie non nul) et que `launch_hook_failmode` est réglé sur `abort`, le pipeline s'arrête immédiatement et le lancement est annulé.
-
-### Politique d'Exécution
-
-1. **Hook Requis** (par défaut) : S'il échoue, le pipeline obéit à `launch_hook_failmode`. Si failmode est `abort`, tout le lancement est annulé.
-2. **Dépendance Séquentielle** : Si un hook échoue et entraîne un résultat `ABORT`, les hooks suivants dans la liste sont ignorés.
-
-## Hooks de Confirmation
-
-Les hooks de confirmation mettent le pipeline en pause et attendent l'approbation de l'utilisateur avant de continuer. Ils fonctionnent à la fois en mode GUI et en mode console (headless).
-
-### Syntaxe
-
-```ini
-[HOOKS]
-.exe = confirm|⚠️ Exécuter {name} ? , before|run.sh {path}
-```
-
-### Comportement
-
-- **Mode GUI** : Affiche une boîte de dialogue Oui/Non.
-- **Mode Console** : Invite l'utilisateur dans le terminal (ex: `Confirmation: ⚠️ Exécuter file.txt ? [y/N]: `).
-- **Oui** : Le pipeline continue vers le hook suivant.
-- **No / Annuler** : Le pipeline se résout en `ABORT`, et le lancement est annulé.
-
-Les hooks de confirmation sont toujours synchrones et s'exécutent généralement avant toute autre logique pour s'assurer que l'utilisateur est conscient de l'action imminente.
+L'action `notify` supporte un sous-ensemble de Markdown pour une communication claire :
+- `# Titre`
+- `**Texte en gras**`
+- `*Texte en italique*`
+- `` `Extraits de code` ``
+- `\\n` pour les nouvelles lignes
 
 ## Substitution de Jetons (Tokens)
 
-Le moteur de template remplace les jetons suivants avant que la commande ne soit découpée :
+Les variables suivantes sont substituées au moment de l'exécution :
 
 | Jeton        | Valeur                            |
 | ------------ | --------------------------------- |
-| `{path}`     | Chemin absolu du fichier          |
-| `{dir}`      | Dossier parent du fichier         |
-| `{name}`     | Nom du fichier avec extension     |
-| `{cwd}`      | Dossier de travail actuel         |
-| `{ext}`      | Extension (incluant le point)     |
-| `{date}`     | Date ISO‑8601 (ex: `2026-07-31`)  |
-| `{hostname}` | Nom d'hôte de la machine locale   |
+| `{{path}}`     | Chemin absolu du fichier          |
+| `{{dir}}`      | Dossier parent du fichier         |
+| `{{filename}}` | Nom du fichier avec extension     |
+| `{{stem}}`     | Nom du fichier sans extension     |
+| `{{ext}}`      | Extension (incluant le point)     |
+| `{{content}}`  | La chaîne `content` de l'étape courante (utile pour `ask`) |
 
-Les jetons inconnus restent inchangés.
+---
 
-## Sémantique du Mode d'Échec (Failmode)
+## Migration depuis les Hooks INI/Hérités
 
-`launch_hook_failmode` régit les sorties non nulles (y compris les délais d'attente) pour les phases *bloquantes*.
+Le nouveau moteur de workflow remplace l'ancienne section INI `[HOOKS]`. Les chaînes de hooks existantes
+doivent être converties vers la structure YAML par étapes.
 
-| Failmode | Phase   | Code retour `0` | Code retour != `0` | `HookOutcome` résultant     |
-| -------- | ------- | --------------- | ------------------ | --------------------------- |
-| warn     | before  | continuer       | avertissement + continuer | `CONTINUE`                  |
-| warn     | instead | ignorer         | avertissement + continuer | `CONTINUE` (le lancement OS s'exécute) |
-| abort    | before  | continuer       | interruption + échec | `ABORT`                     |
-| abort    | instead | ignorer         | interruption + échec | `ABORT`                     |
-| skip     | before  | continuer       | ignorer + succès    | `SKIP`                      |
-| skip     | instead | ignorer         | ignorer + échec      | `SKIP`                      |
+**Ancien INI :**
+```ini
+[HOOKS]
+.mttl = before|echo "{path}" , instead|special_run {path}
+```
 
-*La phase `abort` produit toujours `ABORT` quel que soit le mode d'échec.*
+**Nouveau YAML :**
+```yaml
+hooks:
+  entries:
+    ".mttl":
+      - action: run
+        content: "echo {{path}}"
+      - action: replace
+        content: "special_run {{path}}"
+```
 
-## Comportement en cas de Délai d'Attente (Timeout)
+## Sémantique du Failmode
 
-`launch_hook_timeout` (par défaut 30 s) s'applique aux hooks `before`, `instead` et `abort`. Un `subprocess.TimeoutExpired` est converti en `TimeoutError` puis traité comme une sortie non nulle – le mode d'échec configuré décide du résultat.
+`launch_hook_failmode` régit les sorties non nulles pour les étapes de workflow.
 
-## Hooks `after` Asynchrones
+- **warn**: Avertit l'utilisateur pendant l'exécution, mais passe à l'étape suivante.
+- **abort**: Annule l'exécution du workflow et arrête les opérations de fichier ultérieures.
+- **continue**: Supprime les erreurs et avance avec les étapes du workflow.
 
-Les hooks `after` sont lancés via `subprocess.Popen`. Les flux de sortie sont redirigés vers `DEVNULL`. Les erreurs telles que `FileNotFoundError` sont supprimées – un hook mal configuré ne fait jamais planter l'appelant.
+## Comportement du Délai d'Attente (Timeout)
+
+`launch_hook_timeout` (par défaut 30 s) s'applique aux étapes bloquantes. Un délai d'attente de commande compte comme une sortie non nulle et déclenche le mode d'échec configuré (`on_failure` / `failmode`).
+
+## Dépannage
+
+1. **Le Hook ne s'exécute jamais** – spécificité glob ou incohérence. Le moteur attribue automatiquement un score plus élevé aux motifs comme `special.mttl` qu'à `*.mttl`.
+2. **L'espace réservé de la variable reste littéral** – vérifiez l'orthographe. Les variables sont développées à l'exécution (ex: `{{filename}}`, `{{path}}`).
+3. **Le dialogue de notification ne s'affiche pas** – en mode sans tête ou si Tkinter est manquant, le moteur imprime automatiquement le texte de la notification sur la sortie standard à la place.
+
+---
+
+_Document généré le 06-08-2026._
+
+---
+
+_Fin de référence._

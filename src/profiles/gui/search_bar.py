@@ -108,7 +108,6 @@ class SearchBar:
         self._build()
         register(self._apply_text)
 
-
     def _build(self) -> None:
         """Build the search bar widgets."""
         self._search_frame = ttk.Frame(self._parent)
@@ -190,7 +189,8 @@ class SearchBar:
         )
         self._recursive_check.pack(side=tk.LEFT, padx=(0, 12))
         self._recursive_tooltip = ToolTip(
-            self._recursive_check, t("search.recursive.tooltip"),
+            self._recursive_check,
+            t("search.recursive.tooltip"),
         )
 
         self._search_btn = ttk.Button(
