@@ -84,7 +84,7 @@ defaults:
   title: ""
   gui_auto_launch: true
   close_after_execute: false
-  theme: light            # "light" or "dark" or "auto"
+  theme: auto            # "light" or "dark" or "auto"
   language: en            # "en" or "fr"
   search_dir: '{cwd}'
   recursive_search: false

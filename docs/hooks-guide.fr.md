@@ -25,12 +25,12 @@ hooks:
   entries:
     "*.mttl":
       - action: notify
-        content: "# Lancement de {filename}\\nPréparation de l'environnement..."
+        content: "# Lancement de {{filename}}\\nPréparation de l'environnement..."
       - action: run
-        content: "prepare_env.exe --file {path}"
+        content: "prepare_env.exe --file {{path}}"
         ask: "Exécuter le script de préparation ?"
       - action: replace
-        content: "special_launcher.exe {path}"
+        content: "special_launcher.exe {{path}}"
         ask: "Utiliser le lanceur spécial au lieu du défaut OS ?"
     
     "special.mttl":
@@ -78,11 +78,11 @@ Les variables suivantes sont substituées au moment de l'exécution :
 
 | Jeton        | Valeur                            |
 | ------------ | --------------------------------- |
-| `{path}`     | Chemin absolu du fichier          |
-| `{dir}`      | Dossier parent du fichier         |
-| `{filename}` | Nom du fichier avec extension     |
-| `{stem}`     | Nom du fichier sans extension     |
-| `{ext}`      | Extension (incluant le point)     |
+| `{{path}}`     | Chemin absolu du fichier          |
+| `{{dir}}`      | Dossier parent du fichier         |
+| `{{filename}}` | Nom du fichier avec extension     |
+| `{{stem}}`     | Nom du fichier sans extension     |
+| `{{ext}}`      | Extension (incluant le point)     |
 
 ---
 
@@ -103,6 +103,33 @@ hooks:
   entries:
     ".mttl":
       - action: run
-        content: "echo {path}"
+        content: "echo {{path}}"
       - action: replace
-        content: "special_run {path}"
+        content: "special_run {{path}}"
+```
+
+## Sémantique du Failmode
+
+`launch_hook_failmode` régit les sorties non nulles pour les étapes de workflow.
+
+- **warn**: Avertit l'utilisateur pendant l'exécution, mais passe à l'étape suivante.
+- **abort**: Annule l'exécution du workflow et arrête les opérations de fichier ultérieures.
+- **continue**: Supprime les erreurs et avance avec les étapes du workflow.
+
+## Comportement du Délai d'Attente (Timeout)
+
+`launch_hook_timeout` (par défaut 30 s) s'applique aux étapes bloquantes. Un délai d'attente de commande compte comme une sortie non nulle et déclenche le mode d'échec configuré (`on_failure` / `failmode`).
+
+## Dépannage
+
+1. **Le Hook ne s'exécute jamais** – spécificité glob ou incohérence. Le moteur attribue automatiquement un score plus élevé aux motifs comme `special.mttl` qu'à `*.mttl`.
+2. **L'espace réservé de la variable reste littéral** – vérifiez l'orthographe. Les variables sont développées à l'exécution (ex: `{{filename}}`, `{{path}}`).
+3. **Le dialogue de notification ne s'affiche pas** – en mode sans tête ou si Tkinter est manquant, le moteur imprime automatiquement le texte de la notification sur la sortie standard à la place.
+
+---
+
+_Document généré le 06-08-2026._
+
+---
+
+_Fin de référence._

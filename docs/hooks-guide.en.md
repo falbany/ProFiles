@@ -25,12 +25,12 @@ hooks:
   entries:
     "*.mttl":
       - action: notify
-        content: "# Launching {filename}\\nPreparing environment..."
+        content: "# Launching {{filename}}\\nPreparing environment..."
       - action: run
-        content: "prepare_env.exe --file {path}"
+        content: "prepare_env.exe --file {{path}}"
         ask: "Run preparation script?"
       - action: replace
-        content: "special_launcher.exe {path}"
+        content: "special_launcher.exe {{path}}"
         ask: "Use special launcher instead of OS default?"
     
     "special.mttl":
@@ -78,11 +78,11 @@ The following placeholders are substituted at runtime:
 
 | Token        | Value                             |
 | ------------ | --------------------------------- |
-| `{path}`     | Absolute file path                |
-| `{dir}`      | Parent directory of the file      |
-| `{filename}` | Filename with extension           |
-| `{stem}`     | Filename without extension        |
-| `{ext}`      | Extension (including leading dot) |
+| `{{path}}`     | Absolute file path                |
+| `{{dir}}`      | Parent directory of the file      |
+| `{{filename}}` | Filename with extension           |
+| `{{stem}}`     | Filename without extension        |
+| `{{ext}}`      | Extension (including leading dot) |
 
 ---
 
@@ -103,198 +103,33 @@ hooks:
   entries:
     ".mttl":
       - action: run
-        content: "echo {path}"
+        content: "echo {{path}}"
       - action: replace
-        content: "special_run {path}"
-```
+        content: "special_run {{path}}"
 ```
 
 ## Failmode Semantics
 
-`launch_hook_failmode` governs non‑zero exits (including timeouts) for _blocking_ phases.
+`launch_hook_failmode` governs non‑zero exits for workflow steps.
 
-| Failmode | Phase   | Return code `0` | Return code != `0` | Resulting `HookOutcome`     | `ActionResult.message` sample              |
-| -------- | ------- | --------------- | ------------------ | --------------------------- | ------------------------------------------ |
-| warn     | before  | continue        | warn + continue    | `CONTINUE`                  | `"Hook warning, continue"`                 |
-| warn     | instead | skip            | warn + continue    | `CONTINUE` (OS launch runs) |
-| abort    | before  | continue        | abort + fail       | `ABORT`                     | `"aborted by a launch hook"`               |
-| abort    | instead | skip            | abort + fail       | `ABORT`                     | `"aborted by a launch hook"`               |
-| skip     | before  | continue        | skip + success     | `SKIP`                      | `"(OS launch replaced by 'instead' hook)"` |
-| skip     | instead | skip            | skip + fail        | `SKIP`                      | `"(OS launch replaced by 'instead' hook)"` |
-
-*The `abort` phase always yields `ABORT` regardless of *failmode\*.
+- **warn**: Warn the user during execution, but proceed to the next step.
+- **abort**: Cancel the workflow execution and halt subsequent file operations.
+- **continue**: Suppress errors and advance with workflow steps.
 
 ## Timeout Behavior
 
-`launch_hook_timeout` (default 30 s) applies to `before`, `instead` and `abort`
-hooks. A `subprocess.TimeoutExpired` is converted to a `TimeoutError` and then
-treated like a non‑zero exit – the configured _failmode_ decides the outcome.
-
-```python
-# Example: 5‑second timeout for a long‑running pre‑launch script
-.mttl = before|sleep 60 && echo done
-launch_hook_timeout = 5
-launch_hook_failmode = abort
-```
-
-Result: the hook times out, logs a warning, and the launch aborts.
-
-## Asynchronous `after` Hooks
-
-`after` hooks fire via `subprocess.Popen`. Platform specifics:
-
-- **Windows** – `creationflags=CREATE_NEW_PROCESS_GROUP|DETACHED_PROCESS`
-- **POSIX** – `start_new_session=True`
-
-Output streams are redirected to `DEVNULL`. Errors such as `FileNotFoundError`
-are suppressed – a mis‑configured hook never crashes the caller.
-
-## Quoting & CSV Splitting
-
-The parser walks the raw value character by character, tracking a simple
-`inside_quote` flag. Commas outside quotes split entries; commas inside double
-quotes are kept.
-
-**Path with comma**
-
-```ini
-.pdf = before|"C:\Program Files\My, Viewer\viewer.exe" "{path}"
-```
-
-**Multi‑argument command**
-
-```ini
-.sh = before|/bin/bash -c "echo start && sleep 1 && echo end"
-```
-
-Both parse correctly because the inner commas are quoted.
-
-## Complete Examples
-
-### 1. Log every `.mttl` launch with a timestamp
-
-```ini
-[HOOKS]
-.mttl = before|logger "{date} launch {path}" , after|logger "{date} finished {path}"
-launch_hook_failmode = warn
-```
-
-### 2. Replace the default PDF viewer
-
-```ini
-[HOOKS]
-.pdf = instead|"/usr/local/bin/custom-pdfviewer" "{path}" , after|logger "PDF opened {path}"
-launch_hook_failmode = abort
-```
-
-### 3. Abort `.exe` launch unless an approval flag exists
-
-```ini
-[HOOKS]
-.exe = abort|test -f "{dir}/.launch_allowed" && echo OK
-launch_hook_failmode = abort
-```
-
-When the flag file is missing the hook returns non‑zero, the pipeline aborts and the UI shows an error dialog.
-
-### 4. Cleanup after temporary files
-
-```ini
-[HOOKS]
-.tmp = after|/usr/bin/rm -f "{path}"
-launch_hook_failmode = warn
-```
-
-The removal runs in the background after the OS opens the file (if any).
-
-## Platform Notes
-
-- **Windows** – `creationflags` combine `CREATE_NEW_PROCESS_GROUP` (`0x00000200`) and
-  `DETACHED_PROCESS` (`0x00000008`).
-- **POSIX** – `start_new_session=True` detaches the child from the parent’s process group.
-- **Token splitting** – `shlex.split` uses POSIX rules on macOS/Linux and the native
-  Windows lexer on Windows. Unbalanced quotes raise `ValueError` which is propagated
-  as a hook failure.
-- **GUI** – `launch_selected_file` shows a modal `messagebox.showerror` when the
-  outcome is `ABORT`. In headless mode the error is returned via `ActionResult`.
+`launch_hook_timeout` (default 30 s) applies to blocking steps. A command timeout counts as a non-zero exit and triggers the configured failure mode (`on_failure` / `failmode`).
 
 ## Troubleshooting
 
-1. **Hook never runs** – extension key mismatch. Keys are normalized to lower‑case
-   with a leading dot. `.PDF` and `pdf` both become `.pdf`.
-2. **Comma splits incorrectly** – missing surrounding double quotes around the
-   path that contains a comma.
-3. **Timeout too short** – long‑running scripts exceed `launch_hook_timeout`. Increase the value or move the work to an `after` hook.
-4. **GUI shows no error** – `abort` hooks always abort, but the GUI only displays
-   an error if `launch_hook_failmode` is `abort`. Use `warn` to see warnings in the log.
-5. **After hook never seen** – the pipeline short‑circuits with `ABORT` or `SKIP` before the `after` phase. Ensure the outcome is `CONTINUE`.
-6. **Token not substituted** – misspelled token name; unknown tokens stay verbatim.
-7. **Hook command not found** – `spawn_background_hook` swallows `FileNotFoundError` for `after` hooks; `before`/`instead` will raise a non‑zero exit.
-
-## See Also
-
-- [Configuration – ProFiles](./configuration-pylaunch.en.md)
-- Source module: `src/profiles/core/environment/execution.py`
+1. **Hook never runs** – glob specificity or mismatch. The engine automatically scores patterns like `special.mttl` higher than `*.mttl`.
+2. **Variable placeholder stays literal** – verify spelling. The variables are runtime expanded (e.g. `{{filename}}`, `{{path}}`).
+3. **Notify dialog does not pop up** – in headless mode or if Tkinter is missing, the engine automatically prints the notification text to standard output instead.
 
 ---
 
-### Implementation Details (optional)
-
-The parser in `parse_hook_entries` walks the raw string once, yielding a
-`list[HookSpec]`. `HookSpec` stores `when` (phase) and the raw `template`. The
-`when` value is lower‑cased and trimmed; unknown phases default to `before`.
-
-The token substitution uses a plain dictionary lookup – no regex substitution –
-so it is deterministic and fast (O(N) over the template length). The
-substitution happens **before** `shlex.split`, allowing the user to embed spaces
-in arguments via quoting.
-
-`run_blocking_hook` executes the command with `subprocess.run(..., check=False)`
-and captures `stdout`/`stderr`. The captured output is discarded; only the return
-code matters. Errors from `shlex.split` (unbalanced quotes) raise `ValueError`
-which surfaces as a non‑zero exit and is handled by the failmode logic.
-
-`spawn_background_hook` deliberately swallows `FileNotFoundError` and generic
-`OSError` to avoid crashing the launch pipeline. Errors are logged at _WARN_
-level, matching the behaviour of the original implementation.
-
-The `HookOutcome` enum maps directly to the `ActionResult` contract used by the
-GUI and headless callers:
-
-- `CONTINUE` – proceed to OS launch (or finish if no launch is needed).
-- `SKIP` – treat as a successful launch; the GUI reports _SUCCESS_ with a note.
-- `ABORT` – surface an error dialog in the GUI; headless callers receive a
-  failed `ActionResult` with the message `"aborted by a launch hook"`.
-
-The design intentionally keeps the hook pipeline side‑effect free except for the
-commands themselves – no mutable global state is touched, enabling safe unit
-testing. The test suite (`tests/test_launch_hooks.py`) exercises each phase,
-failmode combination, and timeout scenario.
-
----
-
-**Future enhancements** may include:
-
-- Support for environment variable expansion (`${VAR}`) in templates.
-- A built‑in `log` phase that writes to the application log without spawning a
-  subprocess.
-- Conditional hooks based on custom predicates (e.g., only on specific hostnames).
-
-These can be added without breaking the existing contract; the parser will
-ignore unknown keys and treat them as plain text.
-
----
-
-_Document generated on 2026-08-02._
+_Document generated on 2026-08-06._
 
 ---
 
 _End of reference._
-
-Generated by the PyLaunch documentation system.
-
----
-
-_This document is versioned with the codebase and updated alongside each release._
-
-<!-- End of file -->
