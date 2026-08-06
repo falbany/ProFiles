@@ -1,8 +1,10 @@
 """Tests for config reader integration with workflow steps."""
 
 from unittest.mock import MagicMock
+
 from profiles.core.config.models import AppConfig, WorkflowStep
 from profiles.core.config.reader import ConfigReader
+
 
 def test_apply_workflow_steps(tmp_path):
     reader = ConfigReader(config_path=tmp_path / "config.yaml")

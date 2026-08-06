@@ -6,7 +6,6 @@ both GUI and headless modes. No Tkinter imports at module level.
 
 from __future__ import annotations
 
-import sys
 from typing import Literal
 
 

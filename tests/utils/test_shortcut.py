@@ -12,7 +12,9 @@ from profiles.utils import shortcut
 class TestGetDesktopPath:
     """get_desktop_path() platform resolution."""
 
-    def test_windows_uses_registry_path(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_windows_uses_registry_path(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """On Windows the API-resolved desktop path wins when it exists."""
         monkeypatch.setattr(shortcut.platform, "system", lambda: "Windows")
         desktop = tmp_path / "Desktop"
@@ -44,7 +46,9 @@ class TestGetDesktopPath:
         monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
         assert shortcut.get_desktop_path() == desktop
 
-    def test_macos_fallback_to_documents(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_macos_fallback_to_documents(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """macOS falls back to ~/Documents/Desktop when ~/Desktop is absent."""
         monkeypatch.setattr(shortcut.platform, "system", lambda: "Darwin")
         home = tmp_path / "home"
@@ -102,8 +106,8 @@ class TestGetWindowsDesktop:
             def SHGetFolderPathW(self, *args):  # noqa: N802
                 return 0
 
-        import types
         import sys
+        import types
 
         fake_ctypes = types.SimpleNamespace(
             wintypes=FakeWintypes,
@@ -131,8 +135,8 @@ class TestGetWindowsDesktop:
             def SHGetFolderPathW(self, *args):  # noqa: N802
                 return 1  # failure
 
-        import types
         import sys
+        import types
 
         fake_ctypes = types.SimpleNamespace(
             wintypes=FakeWintypes,
@@ -156,8 +160,8 @@ class TestGetWindowsDesktop:
             def SHGetFolderPathW(self, *args):  # noqa: N802
                 return 1
 
-        import types
         import sys
+        import types
 
         fake_ctypes = types.SimpleNamespace(
             wintypes=FakeWintypes,

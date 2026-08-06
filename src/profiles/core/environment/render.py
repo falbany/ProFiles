@@ -6,13 +6,17 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+
 @dataclass(frozen=True)
 class TextSegment:
     """A segment of text with an associated formatting style."""
+
     text: str
     style: Literal["normal", "bold", "italic", "heading", "code"] = "normal"
 
+
 RenderTree = list[TextSegment]
+
 
 def render_text(text: str, headless: bool = False) -> str | RenderTree:
     """Render escape sequences and Markdown subset.
@@ -37,6 +41,7 @@ def render_text(text: str, headless: bool = False) -> str | RenderTree:
 
     return _parse_markdown(text)
 
+
 def _strip_markdown(text: str) -> str:
     """Remove Markdown syntax for headless mode."""
     text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
@@ -44,6 +49,7 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"\*(.+?)\*", r"\1", text)
     text = re.sub(r"`(.+?)`", r"\1", text)
     return text
+
 
 def _parse_markdown(text: str) -> RenderTree:
     """Parse Markdown string into structured RenderTree."""
@@ -64,6 +70,7 @@ def _parse_markdown(text: str) -> RenderTree:
 
     return segments
 
+
 def _parse_inline_formatting(line: str, segments: RenderTree) -> None:
     """Parse inline formatting (**bold**, *italic*, `code`) for a single line."""
     if not line:
@@ -83,5 +90,6 @@ def _parse_inline_formatting(line: str, segments: RenderTree) -> None:
             segments.append(TextSegment(text=part[1:-1], style="code"))
         else:
             segments.append(TextSegment(text=part, style="normal"))
+
 
 __all__ = ["TextSegment", "RenderTree", "render_text"]

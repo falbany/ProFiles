@@ -46,6 +46,7 @@
 * **Glob Exclusion**: Skip noisy directories (e.g., `node_modules`, `.venv`) and filter out files matching glob patterns (e.g., `*backup*`, `~$*`).
 
 ### 🚀 Execute & Automate
+* **Launch Workflows (Hooks)**: Intercept file launches with powerful step-based YAML workflows. Run background scripts, display Markdown notifications, or completely replace the OS default launcher.
 * **One-Click Launch**: Native OS execution (Windows `os.startfile`, macOS `open`, Linux `xdg-open`).
 * **Custom CLI Arguments**: Right-click to launch with custom arguments, remembered per row.
 * **Headless Mode**: Trigger file launches via CLI for CI/CD or scripts.
@@ -165,7 +166,7 @@ configs:
       - pattern: DEV
         color: "#E65100"
 ```
-*See [Configuration Reference](./docs/configuration-profile.en.md) and [Dynamic Columns Guide](./docs/dynamic-columns-guide.md).*
+*See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/dynamic-columns-guide.md), and [Launch Workflows Guide](./docs/hooks-guide.en.md).*
 
 ## 🏗 Architecture
 

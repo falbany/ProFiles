@@ -144,7 +144,8 @@ class StatusBar:
             )
             self._shortcuts_btn.pack(side=tk.LEFT, padx=(0, 4))
             self._shortcuts_tooltip = ToolTip(
-                self._shortcuts_btn, t("status.shortcuts.tooltip"),
+                self._shortcuts_btn,
+                t("status.shortcuts.tooltip"),
             )
         else:
             self._shortcuts_tooltip = None
@@ -170,7 +171,8 @@ class StatusBar:
             )
             self._language_btn.pack(side=tk.LEFT, padx=(0, 12))
             self._language_tooltip = ToolTip(
-                self._language_btn, t("status.language.tooltip"),
+                self._language_btn,
+                t("status.language.tooltip"),
             )
         else:
             self._language_tooltip = None
@@ -243,7 +245,8 @@ class StatusBar:
         )
         self._dir_status_label.pack(side=tk.RIGHT, padx=(10, 10))
         self._dir_status_tooltip = ToolTip(
-            self._dir_status_label, t("status.dir_status.tooltip"),
+            self._dir_status_label,
+            t("status.dir_status.tooltip"),
         )
 
     # ----------------------------------------------------------------

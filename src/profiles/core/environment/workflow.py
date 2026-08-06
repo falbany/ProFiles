@@ -2,25 +2,29 @@
 
 from __future__ import annotations
 
-import subprocess
 import logging
+import subprocess
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.interactions import confirm_dialog_3way
 from profiles.core.environment.message_dialog import show_notify_dialog
-from profiles.core.environment.render import render_text
+
 
 class WorkflowOutcome(Enum):
     """Result of workflow execution."""
-    CONTINUE = "continue"        # Proceed to standard OS launch
+
+    CONTINUE = "continue"  # Proceed to standard OS launch
     SKIP_LAUNCH = "skip_launch"  # Workflow completed, skip OS launch
-    ABORT = "abort"              # Workflow aborted by user or error
+    ABORT = "abort"  # Workflow aborted by user or error
+
 
 AskCallback = Callable[[str], Literal["yes", "skip", "no"]]
 NotifyCallback = Callable[[str, bool], None]
+
 
 def run_workflow(
     steps: list[WorkflowStep],
@@ -95,6 +99,7 @@ def run_workflow(
 
     return WorkflowOutcome.CONTINUE
 
+
 def _execute_step(
     step: WorkflowStep,
     file_path: Path | None,
@@ -153,7 +158,10 @@ def _execute_step(
 
     return None
 
-def _substitute_variables(template: str, file_path: Path | None, *, action_content: str | None = None) -> str:
+
+def _substitute_variables(
+    template: str, file_path: Path | None, *, action_content: str | None = None
+) -> str:
     """Substitute variables in step content string."""
     res = template
     if action_content is not None:
@@ -168,6 +176,7 @@ def _substitute_variables(template: str, file_path: Path | None, *, action_conte
     res = res.replace("{stem}", file_path.stem)
     res = res.replace("{ext}", file_path.suffix)
     return res
+
 
 def _run_command(command: str, wait: bool, *, logger: logging.Logger | None = None) -> bool:
     """Run shell command."""
@@ -186,5 +195,6 @@ def _run_command(command: str, wait: bool, *, logger: logging.Logger | None = No
         if logger is not None:
             logger.error("Command execution failed: %s", e)
         return False
+
 
 __all__ = ["WorkflowOutcome", "run_workflow"]

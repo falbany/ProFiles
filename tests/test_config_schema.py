@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+
 from profiles.core.config.schema import WorkflowStepSchema
 
 
@@ -10,7 +11,7 @@ def test_workflow_step_schema_valid():
         "content": "echo {path}",
         "ask": "Confirm?",
         "wait": True,
-        "on_failure": "stop"
+        "on_failure": "stop",
     }
     step = WorkflowStepSchema(**data)
     assert step.action == "run"

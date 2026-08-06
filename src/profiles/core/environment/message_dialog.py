@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from profiles.core.environment.render import render_text
 
+
 def show_notify_dialog(
     content: str,
     title: str = "Message",
@@ -61,5 +62,6 @@ def show_notify_dialog(
         rendered = render_text(content, headless=True)
         if isinstance(rendered, str):
             print(f"[{title}] {rendered}")
+
 
 __all__ = ["show_notify_dialog"]

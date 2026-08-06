@@ -15,7 +15,6 @@ from profiles.core.config.io.yaml_io import read_yaml
 from profiles.core.config.models import (
     AppConfig,
     ColumnConfiguration,
-    HookSpec,
     MachineConfiguration,
     WorkflowStep,
 )

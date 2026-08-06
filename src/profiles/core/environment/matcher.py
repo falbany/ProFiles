@@ -17,11 +17,12 @@ which hook config applies to a given file (e.g. ``*.mttl`` vs ``toto.mttl``).
 from __future__ import annotations
 
 import fnmatch
-from typing import Iterable
+from collections.abc import Iterable
 
 _SPECIFICITY_EXACT = 3
 _SPECIFICITY_QUESTION = 2
 _SPECIFICITY_STAR = 1
+
 
 def _normalize_pattern(pattern: str) -> str:
     """Normalize extension-only patterns (``.pdf`` → ``*.pdf``).
@@ -34,6 +35,7 @@ def _normalize_pattern(pattern: str) -> str:
         return "*" + pattern
     return pattern
 
+
 def _pattern_specificity(pattern: str) -> tuple[int, int]:
     """Return specificity score (higher = more specific).
 
@@ -42,18 +44,19 @@ def _pattern_specificity(pattern: str) -> tuple[int, int]:
     """
     has_star = "*" in pattern
     has_question = "?" in pattern
-    
+
     # Calculate non-wildcard literal length
     literal_len = len(pattern.replace("*", "").replace("?", ""))
-    
+
     if not has_star and not has_question:
         tier = _SPECIFICITY_EXACT
     elif has_question and not has_star:
         tier = _SPECIFICITY_QUESTION
     else:
         tier = _SPECIFICITY_STAR
-        
+
     return (tier, literal_len)
+
 
 def select_most_specific_pattern(
     patterns: Iterable[str],
@@ -81,6 +84,7 @@ def select_most_specific_pattern(
         return None
 
     return max(matches, key=lambda p: _pattern_specificity(_normalize_pattern(p)))
+
 
 __all__ = [
     "select_most_specific_pattern",
