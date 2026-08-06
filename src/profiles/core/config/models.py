@@ -8,9 +8,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from profiles import __version__ as _pkg_version
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
+
+
+@dataclass(frozen=True)
+class WorkflowStep:
+    """A single step in a launch workflow.
+
+    Attributes:
+        action: The type of action — one of ``"notify"``, ``"run"``,
+            ``"run_after"``, ``"replace"``, ``"check"``.
+        content: Command template or text content (depending on action).
+        ask: Optional confirmation message. If present, user must confirm
+            before the action executes.
+        wait: Whether to block execution until this step completes.
+            Default: True.
+        on_failure: Behavior when step fails — one of ``"stop"``, ``"warn"``,
+            ``"continue"``. Default: "stop".
+    """
+
+    action: Literal["notify", "run", "run_after", "replace", "check"]
+    content: str
+    ask: str | None = None
+    wait: bool = True
+    on_failure: Literal["stop", "warn", "continue"] = "stop"
 
 
 @dataclass(frozen=True)
