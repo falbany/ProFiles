@@ -10,6 +10,7 @@ from typing import Callable, Literal
 
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.interactions import confirm_dialog_3way
+from profiles.core.environment.message_dialog import show_notify_dialog
 from profiles.core.environment.render import render_text
 
 class WorkflowOutcome(Enum):
@@ -108,9 +109,7 @@ def _execute_step(
         if notify_callback is not None:
             notify_callback(content, step.wait)
         else:
-            rendered = render_text(content, headless=headless)
-            if isinstance(rendered, str):
-                print(rendered)
+            show_notify_dialog(content, blocking=step.wait, headless=headless)
             if logger is not None:
                 logger.debug("Displayed notify dialog (headless=%s): %s", headless, content)
         return None
