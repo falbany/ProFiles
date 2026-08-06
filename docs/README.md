@@ -4,7 +4,7 @@
 > 📦 **[Installation](./installation-guide.en.md)** | 
 > ⚙️ **[Configuration](./configuration-profile.en.md)** | 
 > 🔧 **[Hooks](./hooks-guide.en.md)** | 
-> 📊 **[Dynamic Columns](./dynamic-columns-guide.md)** | 
+> 📊 **[Dynamic Columns](./columns-guide.en.md)** | 
 > ⚡ **[Performance Metrics](./performance-metrics-guide.md)** | 
 > 🚀 **[Advanced Guide](./advanced/advanced-guide.en.md)**
 
@@ -55,13 +55,13 @@ Covers headless automation, programmatic API usage, custom front-ends (CLI/Web),
   - Production, Development, Multi-site combinations
   - Selection guide and examples
 
-- **Technical Guide** (English): [Dynamic Column Configuration](./dynamic-columns-guide.md)
+- **Technical Guide** (English): [Dynamic Column Configuration](./columns-guide.en.md)
   - Architecture and data flow
   - Column construction logic
   - Runtime extraction process
   - GUI integration details
 
-- **Usage Guide** (French): [Guide d'utilisation des colonnes dynamiques](./dynamic-columns-usage.md)
+- **Usage Guide** (French): [Guide d'utilisation des colonnes dynamiques](./columns-guide.fr.md)
   - Extract device names, project codes, versions, etc.
   - Configure extraction rules without coding
   - Customize column widths and default values

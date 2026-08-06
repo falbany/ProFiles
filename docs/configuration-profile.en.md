@@ -4,7 +4,7 @@
 > 📦 **[Installation](./installation-guide.en.md)** | 
 > ⚙️ **Configuration** | 
 > 🔧 **[Hooks](./hooks-guide.en.md)** | 
-> 📊 **[Dynamic Columns](./dynamic-columns-guide.md)** | 
+> 📊 **[Dynamic Columns](./columns-guide.en.md)** | 
 > 🚀 **[Advanced Guide](./advanced/advanced-guide.en.md)** | 
 > 🇫🇷 **[Version Française](./configuration-profile.fr.md)**
 
@@ -233,12 +233,21 @@ row_colors = PATTERN1:#HEX1, PATTERN2:#HEX2, ...
 
 ### Example
 
-```ini
-[LAUNCHER]
-row_colors = PROD:#1565C0, DEV:#757575
+```yaml
+defaults:
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
 
-[CONFIGURATION_1]
-row_colors = SPECIFIC:#FF0000, PROD:#00FF00
+configs:
+  configuration_1:
+    row_colors:
+      - pattern: SPECIFIC
+        color: "#FF0000"
+      - pattern: PROD
+        color: "#00FF00"
 ```
 
 In this example:
@@ -271,74 +280,109 @@ python -m profiles --init
 
 ### Complete Multi-Machine Setup
 
-```ini
-[LAUNCHER]
-title = Production Launch System
-gui_auto_launch = true
-close_after_execute = false
-theme = dark
-search_dir = /path/to/production/root
-recursive_search = true
-columns = File, Version, Classification, Date
-column_widths = 500, 120, 150, 100
-extensions = All, .lnk, .pdf, .docx, .xlsx
-filters = , ST_PRO, ST_ENG, DEV, TMP
-row_colors = PROD:#1565C0, DEV:#757575, TMP:#BAC015, TEST:#FF6F00
-search_exclude_dirs = .git, tmp, Obsolete, Debug, Backup
+```yaml
+defaults:
+  title: Production Launch System
+  gui_auto_launch: true
+  close_after_execute: false
+  theme: dark
+  search_dir: /path/to/production/root
+  recursive_search: true
+  columns: File, Version, Classification, Date
+  column_widths: 500, 120, 150, 100
+  extensions: [All, .lnk, .pdf, .docx, .xlsx]
+  filters: ["", ST_PRO, ST_ENG, DEV, TMP]
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
+    - pattern: TMP
+      color: "#BAC015"
+    - pattern: TEST
+      color: "#FF6F00"
+  search_exclude_dirs: [.git, tmp, Obsolete, Debug, Backup]
 
-[CONFIGURATION_1]
-pc_hostname = WORKSTATION-PROD-01
-pc_name = Production Station 1
-pc_ip = 192.168.1.101
-directory = /path/to/production/station1
-extensions = .lnk, .pdf
-filters = , prod, specific
-row_colors = CRITICAL:#B71C1C, PROD:#0D47A1
+configs:
+  configuration_1:
+    pc_hostname: WORKSTATION-PROD-01
+    pc_name: Production Station 1
+    pc_ip: 192.168.1.101
+    directory: /path/to/production/station1
+    extensions: [.lnk, .pdf]
+    filters: ["", prod, specific]
+    row_colors:
+      - pattern: CRITICAL
+        color: "#B71C1C"
+      - pattern: PROD
+        color: "#0D47A1"
 
-[CONFIGURATION_2]
-pc_hostname = WORKSTATION-ENG-05
-pc_name = Engineering Workstation
-pc_ip = 192.168.1.105
-directory = /path/to/engineering/tests
-extensions = .lnk, .txt, .log
-filters = , dev, test, debug
-row_colors = DEV:#4A148C, TEST:#E65100, DEBUG:#006064
+  configuration_2:
+    pc_hostname: WORKSTATION-ENG-05
+    pc_name: Engineering Workstation
+    pc_ip: 192.168.1.105
+    directory: /path/to/engineering/tests
+    extensions: [.lnk, .txt, .log]
+    filters: ["", dev, test, debug]
+    row_colors:
+      - pattern: DEV
+        color: "#4A148C"
+      - pattern: TEST
+        color: "#E65100"
+      - pattern: DEBUG
+        color: "#006064"
 
-[CONFIGURATION_3]
-pc_hostname = All
-pc_name = Default Configuration
-directory = /path/to/production
-extensions = .lnk
-filters = , ST_PRO
-row_colors =
+  configuration_3:
+    pc_hostname: All
+    pc_name: Default Configuration
+    directory: /path/to/production
+    extensions: [.lnk]
+    filters: ["", ST_PRO]
+    row_colors: []
 ```
 
 ### Minimal Production Setup
 
-```ini
-[LAUNCHER]
-theme = dark
-row_colors = PROD:#1565C0
+```yaml
+defaults:
+  theme: dark
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
 
-[CONFIGURATION_1]
-pc_hostname = All
-directory = /path/to/production
-extensions = .lnk
+configs:
+  configuration_1:
+    pc_hostname: All
+    directory: /path/to/production
+    extensions: [.lnk]
 ```
 
 ### Development Environment with Color Coding
 
-```ini
-[LAUNCHER]
-theme = light
-row_colors = DEV:#757575, TEST:#FF6F00, TMP:#BAC015
+```yaml
+defaults:
+  theme: light
+  row_colors:
+    - pattern: DEV
+      color: "#757575"
+    - pattern: TEST
+      color: "#FF6F00"
+    - pattern: TMP
+      color: "#BAC015"
 
-[CONFIGURATION_1]
-pc_hostname = All
-directory = /path/to/development/project
-extensions = .lnk, .py, .sh
-filters = , dev, test, tmp
-row_colors = FEATURE:#2E7D32, BUG:#C62828, REFACTOR:#6A1B9A
+configs:
+  configuration_1:
+    pc_hostname: All
+    directory: /path/to/development/project
+    extensions: [.lnk, .py, .sh]
+    filters: ["", dev, test, tmp]
+    row_colors:
+      - pattern: FEATURE
+        color: "#2E7D32"
+      - pattern: BUG
+        color: "#C62828"
+      - pattern: REFACTOR
+        color: "#6A1B9A"
 ```
 
 ---
@@ -347,16 +391,16 @@ row_colors = FEATURE:#2E7D32, BUG:#C62828, REFACTOR:#6A1B9A
 
 ### Complex Search Expressions
 
-```ini
+```yaml
 # Find production files, exclude backups, include specific version
-extensions = .lnk
-filters = Prod -backup +V2026.7
+  extensions: [.lnk]
+  filters: [Prod -backup +V2026.7]
 
 # Multiple alternatives with exact phrases
-filters = "Production Program" OR "Test Suite" -deprecated
+  filters: ["Production Program" OR "Test Suite" -deprecated]
 
 # Combine AND and OR logic
-filters = (Prod OR Dev) -tmp "V2026.*"
+  filters: [(Prod OR Dev) -tmp "V2026.*"]
 ```
 
 ### Operator Precedence Examples
@@ -386,12 +430,21 @@ filters = (Prod OR Dev) -tmp "V2026.*"
 
 ### Priority Resolution Example
 
-```ini
-[LAUNCHER]
-row_colors = PROD:#1565C0, DEV:#757575
+```yaml
+defaults:
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
 
-[CONFIGURATION_1]
-row_colors = PROD:#0D47A1, SPECIFIC:#FF0000
+configs:
+  configuration_1:
+    row_colors:
+      - pattern: PROD
+        color: "#0D47A1"
+      - pattern: SPECIFIC
+        color: "#FF0000"
 ```
 
 **Resolution order for file `PROD_test.lnk`:**
@@ -437,14 +490,26 @@ python -m profiles --config C:\path\to\.profiles
 
 **Solution**:
 
-```ini
+```yaml
 # ✅ CORRECT format
-row_colors = PROD:#1565C0, DEV:#757575
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
 
 # ❌ WRONG formats (will be ignored)
-row_colors = PROD:#1565C, DEV:#75757  # Too short
-row_colors = PROD:1565C0, DEV:757575  # Missing #
-row_colors = PROD = #1565C0           # Wrong separator
+  row_colors:
+    - pattern: PROD
+      color: "#1565C"
+    - pattern: DEV
+      color: "#75757  # Too short"
+  row_colors:
+    - pattern: PROD
+      color: "1565C0"
+    - pattern: DEV
+      color: "757575  # Missing #"
+  row_colors:
 ```
 
 ### Issue: Extensions not matching
@@ -459,15 +524,15 @@ row_colors = PROD = #1565C0           # Wrong separator
 
 **Solution**:
 
-```ini
+```yaml
 # Match .lnk files (both .lnk and .LNK)
-extensions = All, .lnk, .LNK  # All equivalent
+  extensions: [All, .lnk, .LNK  # All equivalent]
 
 # Match multiple extensions
-extensions = All, .lnk, .pdf, .docx, .xlsx
+  extensions: [All, .lnk, .pdf, .docx, .xlsx]
 
 # To match ALL files regardless of extension
-extensions = All
+  extensions: [All]
 ```
 
 ### Issue: Recursive search too slow
@@ -476,13 +541,13 @@ extensions = All
 
 **Solution**:
 
-```ini
-[LAUNCHER]
+```yaml
+defaults:
 # Exclude common large directories
-search_exclude_dirs = .git, node_modules, __pycache__, bin, obj, Debug, Release, tmp
+  search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj, Debug, Release, tmp]
 
 # Or disable recursive search for initial scan
-recursive_search = false
+  recursive_search: false
 ```
 
 ---
@@ -493,20 +558,20 @@ recursive_search = false
 
 1. **Exclude unnecessary directories**:
 
-   ```ini
-   search_exclude_dirs = .git, node_modules, __pycache__, bin, obj
-   ```
+   ```yaml
+  search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj]
+```
 
 2. **Limit file extensions**:
 
-   ```ini
-   extensions = .lnk, .pdf  # Only scan these types
-   ```
+```yaml
+  extensions: [.lnk, .pdf  # Only scan these types]
+```
 
 3. **Use specific search directory**:
-   ```ini
-   search_dir = /path/to/production/specific_folder  # Narrower scope
-   ```
+```yaml
+  search_dir: /path/to/production/specific_folder  # Narrower scope
+```
 
 ### Memory Optimization
 
@@ -515,31 +580,6 @@ For very large directories (>10,000 files):
 - Disable recursive search initially
 - Use filter patterns to narrow results
 - Consider splitting into multiple configuration sections
-
----
-
-## Migration Guide
-
-### From Old Configuration Format
-
-If you have an older configuration format, migrate as follows:
-
-```ini
-; OLD FORMAT (deprecated)
-[MAIN]
-path = /path/to/production
-ext = .lnk, .pdf
-
-; NEW FORMAT
-[LAUNCHER]
-search_dir = /path/to/production
-extensions = All, .lnk, .pdf
-
-[CONFIGURATION_1]
-pc_hostname = All
-directory = /path/to/production
-extensions = .lnk, .pdf
-```
 
 ---
 
@@ -566,7 +606,7 @@ A: Delete `.profiles` or run `python -m profiles --init` to regenerate.
 
 ### Version 1.0 (Current)
 
-- Full INI-format configuration support
+- Full YAML-format configuration support
 - Per-machine `[CONFIGURATION_N]` sections
 - Row coloring with pattern matching
 - Advanced search operators (-, +, OR, quotes)

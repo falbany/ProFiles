@@ -166,7 +166,7 @@ configs:
       - pattern: DEV
         color: "#E65100"
 ```
-*See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/dynamic-columns-guide.md), and [Launch Workflows Guide](./docs/hooks-guide.en.md).*
+*See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/columns-guide.en.md), and [Launch Workflows Guide](./docs/hooks-guide.en.md).*
 
 ## 🏗 Architecture
 

@@ -3,7 +3,7 @@
 > 🏠 **[Documentation Home](./README.md)** | 
 > ⚙️ **[Configuration](./configuration-pylaunch.en.md)** | 
 > 🔧 **[Hooks](./hooks-guide.en.md)** | 
-> 📊 **[Dynamic Columns](./dynamic-columns-guide.md)**
+> 📊 **[Dynamic Columns](./columns-guide.en.md)**
 
 ---
 

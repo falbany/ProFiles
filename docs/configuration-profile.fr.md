@@ -4,7 +4,7 @@
 > 📦 **[Installation](./installation-guide.fr.md)** |
 > ⚙️ **Configuration** |
 > 🔧 **[Hooks](./hooks-guide.en.md)** |
-> 📊 **[Colonnes Dynamiques](./dynamic-columns-usage.md)** |
+> 📊 **[Colonnes Dynamiques](./columns-guide.fr.md)** |
 > 🚀 **[Guide Avancé](./advanced/guide-avance.fr.md)** |
 > 🇬🇧 **[English Version](./configuration-profile.en.md)**
 
@@ -230,12 +230,21 @@ row_colors = PATTERN1:#HEX1, PATTERN2:#HEX2, ...
 
 ### Exemple
 
-```ini
-[LAUNCHER]
-row_colors = PROD:#1565C0, DEV:#757575
+```yaml
+defaults:
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
 
-[CONFIGURATION_1]
-row_colors = SPECIFIC:#FF0000, PROD:#00FF00
+configs:
+  configuration_1:
+    row_colors:
+      - pattern: SPECIFIC
+        color: "#FF0000"
+      - pattern: PROD
+        color: "#00FF00"
 ```
 
 Dans cet exemple :
@@ -267,74 +276,109 @@ python -m profiles --init
 
 ### Configuration Multi-Machine Complète
 
-```ini
-[LAUNCHER]
-title = Système de Lancement Production
-gui_auto_launch = Vrai
-close_after_execute = Faux
-theme = dark
-search_dir = /chemin/vers/racine/production
-recursive_search = Vrai
-columns = File, Version, Classification, Date
-column_widths = 500, 120, 150, 100
-extensions = All, .lnk, .pdf, .docx, .xlsx
-filters = , ST_PRO, ST_ENG, DEV, TMP
-row_colors = PROD:#1565C0, DEV:#757575, TMP:#BAC015, TEST:#FF6F00
-search_exclude_dirs = .git, tmp, Obsolete, Debug, Backup
+```yaml
+defaults:
+  title: Système de Lancement Production
+  gui_auto_launch: true
+  close_after_execute: false
+  theme: dark
+  search_dir: /chemin/vers/racine/production
+  recursive_search: true
+  columns: File, Version, Classification, Date
+  column_widths: 500, 120, 150, 100
+  extensions: [All, .lnk, .pdf, .docx, .xlsx]
+  filters: [, ST_PRO, ST_ENG, DEV, TMP]
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
+    - pattern: TMP
+      color: "#BAC015"
+    - pattern: TEST
+      color: "#FF6F00"
+  search_exclude_dirs: [.git, tmp, Obsolete, Debug, Backup]
 
-[CONFIGURATION_1]
-pc_hostname = POSTE-TRAVAIL-PROD-01
-pc_name = Station Production 1
-pc_ip = 192.168.1.101
-directory = /chemin/vers/production/station1
-extensions = .lnk, .pdf
-filters = , prod, specific
-row_colors = CRITICAL:#B71C1C, PROD:#0D47A1
+configs:
+  configuration_1:
+    pc_hostname: POSTE-TRAVAIL-PROD-01
+    pc_name: Station Production 1
+    pc_ip: 192.168.1.101
+    directory: /chemin/vers/production/station1
+    extensions: [.lnk, .pdf]
+    filters: [, prod, specific]
+    row_colors:
+      - pattern: CRITICAL
+        color: "#B71C1C"
+      - pattern: PROD
+        color: "#0D47A1"
 
-[CONFIGURATION_2]
-pc_hostname = POSTE-TRAVAIL-ING-05
-pc_name = Poste Ingénierie
-pc_ip = 192.168.1.105
-directory = /chemin/vers/ingenierie/tests
-extensions = .lnk, .txt, .log
-filters = , dev, test, debug
-row_colors = DEV:#4A148C, TEST:#E65100, DEBUG:#006064
+  configuration_2:
+    pc_hostname: POSTE-TRAVAIL-ING-05
+    pc_name: Poste Ingénierie
+    pc_ip: 192.168.1.105
+    directory: /chemin/vers/ingenierie/tests
+    extensions: [.lnk, .txt, .log]
+    filters: [, dev, test, debug]
+    row_colors:
+      - pattern: DEV
+        color: "#4A148C"
+      - pattern: TEST
+        color: "#E65100"
+      - pattern: DEBUG
+        color: "#006064"
 
-[CONFIGURATION_3]
-pc_hostname = All
-pc_name = Configuration par défaut
-directory = /chemin/vers/production
-extensions = .lnk
-filters = , ST_PRO
-row_colors =
+  configuration_3:
+    pc_hostname: All
+    pc_name: Configuration par défaut
+    directory: /chemin/vers/production
+    extensions: [.lnk]
+    filters: [, ST_PRO]
+    row_colors: []
 ```
 
 ### Configuration Production Minimale
 
-```ini
-[LAUNCHER]
-theme = dark
-row_colors = PROD:#1565C0
+```yaml
+defaults:
+  theme: dark
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
 
-[CONFIGURATION_1]
-pc_hostname = All
-directory = /chemin/vers/production
-extensions = .lnk
+configs:
+  configuration_1:
+    pc_hostname: All
+    directory: /chemin/vers/production
+    extensions: [.lnk]
 ```
 
 ### Environnement Développement avec Codage Couleur
 
-```ini
-[LAUNCHER]
-theme = light
-row_colors = DEV:#757575, TEST:#FF6F00, TMP:#BAC015
+```yaml
+defaults:
+  theme: light
+  row_colors:
+    - pattern: DEV
+      color: "#757575"
+    - pattern: TEST
+      color: "#FF6F00"
+    - pattern: TMP
+      color: "#BAC015"
 
-[CONFIGURATION_1]
-pc_hostname = All
-directory = /chemin/vers/projet/development
-extensions = .lnk, .py, .sh
-filters = , dev, test, tmp
-row_colors = FEATURE:#2E7D32, BUG:#C62828, REFACTOR:#6A1B9A
+configs:
+  configuration_1:
+    pc_hostname: All
+    directory: /chemin/vers/projet/development
+    extensions: [.lnk, .py, .sh]
+    filters: [, dev, test, tmp]
+    row_colors:
+      - pattern: FEATURE
+        color: "#2E7D32"
+      - pattern: BUG
+        color: "#C62828"
+      - pattern: REFACTOR
+        color: "#6A1B9A"
 ```
 
 ---
@@ -343,16 +387,16 @@ row_colors = FEATURE:#2E7D32, BUG:#C62828, REFACTOR:#6A1B9A
 
 ### Expressions de Recherche Complexes
 
-```ini
+```yaml
 # Trouver fichiers production, exclure sauvegardes, inclure version spécifique
-extensions = .lnk
-filters = Prod -backup +V2026.7
+  extensions: [.lnk]
+  filters: [Prod -backup +V2026.7]
 
 # Alternatives multiples avec phrases exactes
-filters = "Programme Production" OR "Suite Test" -obsolète
+  filters: ["Programme Production" OR "Suite Test" -obsolète]
 
 # Combiner logique AND et OR
-filters = (Prod OR Dev) -tmp "V2026.*"
+  filters: [(Prod OR Dev) -tmp "V2026.*"]
 ```
 
 ### Exemples de Précedence des Opérateurs
@@ -382,12 +426,21 @@ filters = (Prod OR Dev) -tmp "V2026.*"
 
 ### Exemple de Résolution de Priorité
 
-```ini
-[LAUNCHER]
-row_colors = PROD:#1565C0, DEV:#757575
+```yaml
+defaults:
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
 
-[CONFIGURATION_1]
-row_colors = PROD:#0D47A1, SPECIFIC:#FF0000
+configs:
+  configuration_1:
+    row_colors:
+      - pattern: PROD
+        color: "#0D47A1"
+      - pattern: SPECIFIC
+        color: "#FF0000"
 ```
 
 **Ordre de résolution pour le fichier `PROD_test.lnk` :**
@@ -428,14 +481,26 @@ python -m profiles --config C:\chemin\vers\.profiles
 3. Vérifier la priorité : Les règles par configuration remplacent les règles globales
 
 **Solution** :
-```ini
+```yaml
 # ✅ Format CORRECT
-row_colors = PROD:#1565C0, DEV:#757575
+  row_colors:
+    - pattern: PROD
+      color: "#1565C0"
+    - pattern: DEV
+      color: "#757575"
 
 # ❌ Formats INCORRECTS (seront ignorés)
-row_colors = PROD:#1565C, DEV:#75757  # Trop court
-row_colors = PROD:1565C0, DEV:757575  # # manquant
-row_colors = PROD = #1565C0           # Mauvais séparateur
+  row_colors:
+    - pattern: PROD
+      color: "#1565C"
+    - pattern: DEV
+      color: "#75757  # Trop court"
+  row_colors:
+    - pattern: PROD
+      color: "1565C0"
+    - pattern: DEV
+      color: "757575  # # manquant"
+  row_colors:
 ```
 
 ### Problème : Extensions non correspondantes
@@ -448,15 +513,15 @@ row_colors = PROD = #1565C0           # Mauvais séparateur
 3. L'option "All" affiche tous les types de fichiers
 
 **Solution** :
-```ini
+```yaml
 # Correspondre les fichiers .lnk (both .lnk et .LNK)
-extensions = All, .lnk, .LNK  # Tous équivalents
+  extensions: [All, .lnk, .LNK  # Tous équivalents]
 
 # Correspondre plusieurs extensions
-extensions = All, .lnk, .pdf, .docx, .xlsx
+  extensions: [All, .lnk, .pdf, .docx, .xlsx]
 
 # Pour correspondre TOUS les fichiers quelle que soit l'extension
-extensions = All
+  extensions: [All]
 ```
 
 ### Problème : Scan récursif trop lent
@@ -464,13 +529,13 @@ extensions = All
 **Symptômes** : Le scan prend beaucoup de temps sur les arborescences de répertoires volumineux.
 
 **Solution** :
-```ini
-[LAUNCHER]
+```yaml
+defaults:
 # Exclure les répertoires courants volumineux
-search_exclude_dirs = .git, node_modules, __pycache__, bin, obj, Debug, Release, tmp
+  search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj, Debug, Release, tmp]
 
 # Ou désactiver le scan récursif pour le scan initial
-recursive_search = Faux
+  recursive_search: false
 ```
 
 ---
@@ -480,19 +545,19 @@ recursive_search = Faux
 ### Optimiser la Vitesse de Scan
 
 1. **Exclure les répertoires inutiles** :
-   ```ini
-   search_exclude_dirs = .git, node_modules, __pycache__, bin, obj
-   ```
+   ```yaml
+  search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj]
+```
 
 2. **Limiter les extensions de fichiers** :
-   ```ini
-   extensions = .lnk, .pdf  # Scanner uniquement ces types
-   ```
+```yaml
+  extensions: [.lnk, .pdf  # Scanner uniquement ces types]
+```
 
 3. **Utiliser un répertoire de recherche spécifique** :
-   ```ini
-   search_dir = /chemin/vers/production/dossier_specifique  # Portée plus étroite
-   ```
+```yaml
+  search_dir: /chemin/vers/production/dossier_specifique  # Portée plus étroite
+```
 
 ### Optimisation Mémoire
 
@@ -500,31 +565,6 @@ Pour les très grands répertoires (>10 000 fichiers) :
 - Désactiver le scan récursif initialement
 - Utiliser des motifs de filtre pour réduire les résultats
 - Envisager de diviser en plusieurs sections de configuration
-
----
-
-## Guide de Migration
-
-### Depuis l'Ancien Format de Configuration
-
-Si vous avez un ancien format de configuration, migrez comme suit :
-
-```ini
-; ANCIEN FORMAT (obsolète)
-[MAIN]
-path = /chemin/vers/production
-ext = .lnk, .pdf
-
-; NOUVEAU FORMAT
-[LAUNCHER]
-search_dir = /chemin/vers/production
-extensions = All, .lnk, .pdf
-
-[CONFIGURATION_1]
-pc_hostname = All
-directory = /chemin/vers/production
-extensions = .lnk, .pdf
-```
 
 ---
 
@@ -550,7 +590,7 @@ R : Supprimez `.profiles` ou exécutez `python -m profiles --init` pour régén�
 ## Journal des Modifications
 
 ### Version 1.0 (Actuelle)
-- Prise en charge complète de la configuration au format INI
+- Prise en charge complète de la configuration au format YAML
 - Sections `[CONFIGURATION_N]` par machine
 - Coloration des lignes avec correspondance de motifs
 - Opérateurs de recherche avancés (-, +, OR, guillemets)

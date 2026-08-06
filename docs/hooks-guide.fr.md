@@ -4,7 +4,7 @@
 > 📦 **[Installation](./installation-guide.fr.md)** |
 > ⚙️ **[Configuration](./configuration-profile.fr.md)** |
 > 🔧 **Workflows** |
-> 📊 **[Colonnes Dynamiques](./dynamic-columns-guide.md)** |
+> 📊 **[Colonnes Dynamiques](./columns-guide.en.md)** |
 > 🚀 **[Guide Avancé](./advanced/guide-avance.fr.md)**
 
 ---

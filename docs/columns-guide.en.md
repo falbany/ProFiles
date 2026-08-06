@@ -44,12 +44,13 @@ ProFiles now supports **dynamic column extraction** via dedicated `[COLUMN_<Name
 
 ### Example 1: Extract Version Number
 
-```ini
-[COLUMN_Version]
-width = 100
-expression = _V([^\\/]+)
-group = 1
-priority = 20
+```yaml
+columns:
+  Version:
+    width: 100
+    expression: '_V([^\\/]+)'
+    group: 1
+    priority: 20
 ```
 
 **Files:**
@@ -58,12 +59,13 @@ priority = 20
 
 ### Example 2: Extract Environment Type
 
-```ini
-[COLUMN_Type]
-width = 70
-expression = (PRO|ENG|DEV|TMP|DEBUG)
-group = 1
-priority = 15
+```yaml
+columns:
+  Type:
+    width: 70
+    expression: '(PRO|ENG|DEV|TMP|DEBUG)'
+    group: 1
+    priority: 15
 ```
 
 **Files:**
@@ -72,12 +74,13 @@ priority = 15
 
 ### Example 3: Extract Device ID
 
-```ini
-[COLUMN_DeviceID]
-width = 100
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 20
+```yaml
+columns:
+  DeviceID:
+    width: 100
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
+    priority: 20
 ```
 
 **Files:**
@@ -86,12 +89,13 @@ priority = 20
 
 ### Example 4: Last Match Priority (from end)
 
-```ini
-[COLUMN_Type]
-width = 70
-expression = (PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))
-group = 1
-priority = 15
+```yaml
+columns:
+  Type:
+    width: 70
+    expression: '(PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))'
+    group: 1
+    priority: 15
 ```
 
 **Files:**
@@ -103,63 +107,65 @@ priority = 15
 ## Common Configurations
 
 ### Production Setup
-```ini
-[COLUMN_File]
-width = 60
-expression = .*
-group = 0
-priority = 100
+```yaml
+columns:
+  File:
+    width: 60
+    expression: '.*'
+    group: 0
+    priority: 100
 
-[COLUMN_Type]
-width = 70
-expression = (PRO|ENG|DEV|TMP)(?!.*(PRO|ENG|DEV|TMP))
-group = 1
-priority = 15
+  Type:
+    width: 70
+    expression: '(PRO|ENG|DEV|TMP)(?!.*(PRO|ENG|DEV|TMP))'
+    group: 1
+    priority: 15
 
-[COLUMN_Version]
-width = 120
-expression = _V([^-]+-Rel[^\\/]+)
-group = 1
-priority = 20
+  Version:
+    width: 120
+    expression: '_V([^-]+-Rel[^\\/]+)'
+    group: 1
+    priority: 20
 
-[COLUMN_Site]
-width = 100
-expression = (LOUVAIN|PESSAC|ULIS)
-group = 1
-priority = 14
+  Site:
+    width: 100
+    expression: '(LOUVAIN|PESSAC|ULIS)'
+    group: 1
+    priority: 14
 ```
 
 ### Development Setup
-```ini
-[COLUMN_File]
-width = 60
-expression = .*
-group = 0
-priority = 100
+```yaml
+columns:
+  File:
+    width: 60
+    expression: '.*'
+    group: 0
+    priority: 100
 
-[COLUMN_Project]
-width = 100
-expression = (PROJ|DEV|MTT)
-group = 1
-priority = 25
+  Project:
+    width: 100
+    expression: '(PROJ|DEV|MTT)'
+    group: 1
+    priority: 25
 
-[COLUMN_VersionNum]
-width = 60
-expression = _V(\d+)
-group = 1
-priority = 20
+  VersionNum:
+    width: 60
+    expression: '_V(\d+)'
+    group: 1
+    priority: 20
 
-[COLUMN_Build]
-width = 70
-expression = build(\d+)
-group = 1
-priority = 9
+  Build:
+    width: 70
+    expression: 'build(\d+)'
+    group: 1
+    priority: 9
 
-[COLUMN_Commit]
-width = 90
-expression = _g([a-f0-9]{7})
-group = 2
-priority = 7
+  Commit:
+    width: 90
+    expression: '_g([a-f0-9]{7})'
+    group: 2
+    priority: 7
 ```
 
 ---
@@ -483,35 +489,37 @@ def _on_refresh(self) -> None:
 
 ### 1. Choose Appropriate Priorities
 
-```ini
+```yaml
+columns:
 # High priority (100) for File column
-[COLUMN_File]
-priority = 100
+  File:
+    priority: 100
 
 # Medium priority (20-30) for versions, projects
-[COLUMN_Version]
-priority = 20
+  Version:
+    priority: 20
 
-[COLUMN_Project]
-priority = 25
+  Project:
+    priority: 25
 
 # Lower priority (5-15) for environments, types
-[COLUMN_Type]
-priority = 15
+  Type:
+    priority: 15
 
-[COLUMN_Environment]
-priority = 10
+  Environment:
+    priority: 10
 ```
 
 ### 2. Use Default Values
 
-```ini
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 20
-default = Unknown  # Prevents empty cells
+```yaml
+columns:
+  Device:
+    width: 120
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
+    priority: 20
+    default: "Unknown  # Prevents empty cells"
 ```
 
 ### 3. Test Your Patterns
@@ -529,15 +537,16 @@ if match:
 
 ### 4. Optimize Column Widths
 
-```ini
-[COLUMN_File]
-width = 400  # Long paths
+```yaml
+columns:
+  File:
+    width: 400  # Long paths
 
-[COLUMN_Version]
-width = 120  # Medium length
+  Version:
+    width: 120  # Medium length
 
-[COLUMN_Type]
-width = 70   # Short codes
+  Type:
+    width: 70   # Short codes
 ```
 
 ---
@@ -570,12 +579,13 @@ width = 70   # Short codes
 **Cause:** `[COLUMN_File]` defined but pattern doesn't match
 
 **Solution:**
-```ini
-[COLUMN_File]
-width = 600
-expression = .*
-group = 0
-priority = 100
+```yaml
+columns:
+  File:
+    width: 600
+    expression: '.*'
+    group: 0
+    priority: 100
 ```
 
 Or remove `[COLUMN_File]` section to use default behavior.
@@ -585,61 +595,71 @@ Or remove `[COLUMN_File]` section to use default behavior.
 ## Related Documentation
 
 - **[Column Library Guide](./column-library.md)** - 50+ ready-to-use column configurations
-- **[Usage Guide (French)](./dynamic-columns-usage.md)** - Guide d'utilisation en français
+- **[Usage Guide (French)](./columns-guide.fr.md)** - Guide d'utilisation en français
 - **[Advanced Guide](./advanced/advanced-guide.en.md)** - Advanced patterns and techniques
 
 ---
 
 ## Example Complete Configuration
 
-```ini
-[LAUNCHER]
-title = MuTool Project Launcher
-gui_auto_launch = Vrai
-close_after_execute = Faux
-theme = light
-search_dir = \\st-pes-mtp\MuTEST\03-Production\01-Programmes
-recursive_search = Vrai
-extensions = mttl OR mttx -backup, mttl, mttx, All, .lnk
-filters = , ST_PRO, ST_ENG, LOUVAIN, PESSAC, ULIS
-search_exclude_dirs = .*, .git, __pycache__, bin, obj, tmp, Obsolete, Debug
-row_colors = TMP:#757575
+```yaml
+defaults:
+  title: MuTool Project Launcher
+  gui_auto_launch: true
+  close_after_execute: false
+  theme: light
+  search_dir: \\st-pes-mtp\MuTEST\03-Production\01-Programmes
+  recursive_search: true
+  extensions: [mttl OR mttx -backup, mttl, mttx, All, .lnk]
+  filters: [, ST_PRO, ST_ENG, LOUVAIN, PESSAC, ULIS]
+  search_exclude_dirs: [.*, .git, __pycache__, bin, obj, tmp, Obsolete, Debug]
+  row_colors:
+    - pattern: TMP
+      color: "#757575"
 
-[COLUMN_File]
-width = 60
-expression = .*
-group = 0
-priority = 100
+columns:
+  File:
+  width: 60
+  expression: '.*'
+  group: 0
+  priority: 100
 
-[COLUMN_FileName]
-width = 200
-expression = ([^/\\]+)\.[^.]+$
-group = 1
-priority = 90
+  FileName:
+  width: 200
+  expression: '([^/\\]+)\.[^.]+$'
+  group: 1
+  priority: 90
 
-[COLUMN_Type]
-width = 70
-expression = (PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))
-group = 1
-priority = 15
+  Type:
+  width: 70
+  expression: '(PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))'
+  group: 1
+  priority: 15
 
-[COLUMN_Version]
-width = 120
-expression = _V([^-]+-Rel[^\\/]+)
-group = 1
-priority = 20
+  Version:
+  width: 120
+  expression: '_V([^-]+-Rel[^\\/]+)'
+  group: 1
+  priority: 20
 
-[COLUMN_Site]
-width = 100
-expression = (LOUVAIN|PESSAC|ULIS)
-group = 1
-priority = 14
+  Site:
+  width: 100
+  expression: '(LOUVAIN|PESSAC|ULIS)'
+  group: 1
+  priority: 14
 
-[CONFIGURATION_1]
-pc_hostname = All
-pc_name = This machine
-directory = \\st-pes-mtp\MuTEST\03-Production\01-Programmes
-extensions =
-filters = -tmp
-row_colors = ST_DEV:#C01565, ST_ENG:#C01565, ST_PRO:#1565C0
+configs:
+  configuration_1:
+    pc_hostname: All
+    pc_name: This machine
+    directory: \\st-pes-mtp\MuTEST\03-Production\01-Programmes
+    extensions: []
+    filters: [-tmp]
+    row_colors:
+      - pattern: ST_DEV
+        color: "#C01565"
+      - pattern: ST_ENG
+        color: "#C01565"
+      - pattern: ST_PRO
+        color: "#1565C0"
 ```

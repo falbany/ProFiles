@@ -50,19 +50,20 @@ Cela crée un fichier de démarrage avec des exemples commentés.
 
 Pour chaque colonne personnalisée, ajoutez une section dans `.profiles` :
 
-```ini
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 5
-default = Inconnu
+```yaml
+columns:
+  Device:
+    width: 120
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
+    priority: 5
+    default: "Inconnu"
 
-[COLUMN_Version]
-width = 150
-expression = _V(.+)
-group = 1
-priority = 10
+  Version:
+    width: 150
+    expression: '_V(.+)'
+    group: 1
+    priority: 10
 ```
 
 ### Étape 3 : Redémarrer ou Rafraîchir
@@ -96,12 +97,13 @@ ST_PRO_Device_XYZ789_V02.mttl
 ```
 
 **Configuration :**
-```ini
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 5
+```yaml
+columns:
+  Device:
+    width: 120
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
+    priority: 5
 ```
 
 **Résultat :**
@@ -119,12 +121,13 @@ DEV_Simulator_XY123_V03.mttl
 ```
 
 **Configuration :**
-```ini
-[COLUMN_Project]
-width = 100
-expression = (PROJ|DEV|ST_PRO)
-group = 1
-priority = 8
+```yaml
+columns:
+  Project:
+    width: 100
+    expression: '(PROJ|DEV|ST_PRO)'
+    group: 1
+    priority: 8
 ```
 
 **Résultat :**
@@ -143,12 +146,13 @@ Device_TEST_Test_V03.mttl
 ```
 
 **Configuration :**
-```ini
-[COLUMN_Environment]
-width = 100
-expression = (Prod|Dev|Test)
-group = 1
-priority = 6
+```yaml
+columns:
+  Environment:
+    width: 100
+    expression: '(Prod|Dev|Test)'
+    group: 1
+    priority: 6
 ```
 
 **Résultat :**
@@ -161,19 +165,20 @@ priority = 6
 
 Pour séparer le chemin complet du nom de fichier :
 
-```ini
-[COLUMN_Path]
-width = 200
-expression = (.+[\\/])
-group = 1
-priority = 5
-default = .
+```yaml
+columns:
+  Path:
+    width: 200
+    expression: '(.+[\\/])'
+    group: 1
+    priority: 5
+    default: "."
 
-[COLUMN_FileName]
-width = 150
-expression = ([^/\\]+)$
-group = 1
-priority = 5
+  FileName:
+    width: 150
+    expression: '([^/\\]+)$'
+    group: 1
+    priority: 5
 ```
 
 **Pour un fichier :** `C:/Git/Project/src/file.mttl`
@@ -189,21 +194,23 @@ priority = 5
 Par défaut, la colonne "File" affiche le chemin complet. Vous pouvez la personnaliser :
 
 **Afficher seulement le nom de fichier (sans le chemin) :**
-```ini
-[COLUMN_File]
-width = 300
-expression = ([^/\\]+)$
-group = 1
-priority = 100
+```yaml
+columns:
+  File:
+    width: 300
+    expression: '([^/\\]+)$'
+    group: 1
+    priority: 100
 ```
 
 **Afficher le nom sans l'extension :**
-```ini
-[COLUMN_File]
-width = 300
-expression = ([^/\\]+)\.[^.]+$
-group = 1
-priority = 100
+```yaml
+columns:
+  File:
+    width: 300
+    expression: '([^/\\]+)\.[^.]+$'
+    group: 1
+    priority: 100
 ```
 
 ---
@@ -254,18 +261,19 @@ Le paramètre `priority` contrôle l'ordre d'extraction :
 
 ### Exemple de Priorités
 
-```ini
-[COLUMN_File]
-priority = 100      # Toujours en premier
+```yaml
+columns:
+  File:
+    priority: 100      # Toujours en premier
 
-[COLUMN_Project]
-priority = 15       # Projets avant périphériques
+  Project:
+    priority: 15       # Projets avant périphériques
 
-[COLUMN_Device]
-priority = 10       # Périphériques avant environnement
+  Device:
+    priority: 10       # Périphériques avant environnement
 
-[COLUMN_Environment]
-priority = 5        # Environnement en dernier
+  Environment:
+    priority: 5        # Environnement en dernier
 ```
 
 ---
@@ -277,36 +285,37 @@ priority = 5        # Environnement en dernier
 **Fichier :** `PROJ_Device_ABC123_Prod_V01_2024.mttl`
 
 **Configuration :**
-```ini
-[COLUMN_Project]
-width = 100
-expression = (PROJ\|DEV\|ST_PRO)
-group = 1
-priority = 15
+```yaml
+columns:
+  Project:
+    width: 100
+    expression: '(PROJ\|DEV\|ST_PRO)'
+    group: 1
+    priority: 15
 
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 10
+  Device:
+    width: 120
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
+    priority: 10
 
-[COLUMN_Environment]
-width = 100
-expression = (Prod\|Dev\|Test)
-group = 1
-priority = 8
+  Environment:
+    width: 100
+    expression: '(Prod\|Dev\|Test)'
+    group: 1
+    priority: 8
 
-[COLUMN_Version]
-width = 100
-expression = _V(\d+)
-group = 1
-priority = 6
+  Version:
+    width: 100
+    expression: '_V(\d+)'
+    group: 1
+    priority: 6
 
-[COLUMN_Year]
-width = 80
-expression = (\d{4})
-group = 1
-priority = 4
+  Year:
+    width: 80
+    expression: '(\d{4})'
+    group: 1
+    priority: 4
 ```
 
 **Résultat :**
@@ -320,13 +329,14 @@ priority = 4
 
 Pour éviter les cellules vides :
 
-```ini
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 5
-default = Non spécifié
+```yaml
+columns:
+  Device:
+    width: 120
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
+    priority: 5
+    default: "Non spécifié"
 ```
 
 Si le pattern ne matche pas, la cellule affiche "Non spécifié".
@@ -337,12 +347,13 @@ Si le pattern ne matche pas, la cellule affiche "Non spécifié".
 
 Pour matcher plusieurs formats :
 
-```ini
-[COLUMN_Environment]
-width = 100
-expression = (Prod\|Dev\|Test\|ST_PRO\|DEV)
-group = 1
-priority = 6
+```yaml
+columns:
+  Environment:
+    width: 100
+    expression: '(Prod\|Dev\|Test\|ST_PRO\|DEV)'
+    group: 1
+    priority: 6
 ```
 
 Matche : `Prod`, `Dev`, `Test`, `ST_PRO`, ou `DEV`.
@@ -370,12 +381,13 @@ Matche : `Prod`, `Dev`, `Test`, `ST_PRO`, ou `DEV`.
 **Cause :** Vous avez défini `[COLUMN_File]` mais l'expression ne matche pas.
 
 **Solution :**
-```ini
-[COLUMN_File]
-width = 600
-expression = .*
-group = 0
-priority = 100
+```yaml
+columns:
+  File:
+    width: 600
+    expression: '.*'
+    group: 0
+    priority: 100
 ```
 
 Ou supprimez la section `[COLUMN_File]` pour revenir au comportement par défaut (chemin complet).
@@ -406,27 +418,29 @@ La colonne "File" est toujours en premier. Les autres colonnes suivent dans l'or
 
 ### 1. Nommez Clair et Précis
 
-```ini
+```yaml
+columns:
 # ✅ BON
-[COLUMN_DeviceCode]
-[COLUMN_ProjectName]
-[COLUMN_BuildVersion]
+  DeviceCode:
+  ProjectName:
+  BuildVersion:
 
 # ❌ ÉVITEZ
-[COLUMN_Col1]
-[COLUMN_X]
+  Col1:
+  X:
 ```
 
 ### 2. Documentez Vos Patterns
 
 Ajoutez des commentaires dans votre `.profiles` :
 
-```ini
+```yaml
+columns:
 # Extraire le code appareil après "Device_"
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
+  Device:
+    width: 120
+    expression: 'Device_([A-Z0-9]+)'
+    group: 1
 ```
 
 ### 3. Testez Avant Déploiement
@@ -449,15 +463,16 @@ git commit -m "Add dynamic column configuration"
 
 ### 5. Utilisez des Largeurs Appropriées
 
-```ini
-[COLUMN_File]
-width = 400          # Chemins longs
+```yaml
+columns:
+  File:
+    width: 400          # Chemins longs
 
-[COLUMN_Device]
-width = 120          # Codes courts
+  Device:
+    width: 120          # Codes courts
 
-[COLUMN_Project]
-width = 80           # Abréviations
+  Project:
+    width: 80           # Abréviations
 ```
 
 ---
@@ -474,13 +489,14 @@ width = 80           # Abréviations
 
 ### Ajouter une Nouvelle Colonne
 
-```ini
+```yaml
+columns:
 # Ajoutez cette section à la fin du fichier
-[COLUMN_NewColumn]
-width = 150
-expression = YOUR_PATTERN_HERE
-group = 1
-priority = 5
+  NewColumn:
+    width: 150
+    expression: 'YOUR_PATTERN_HERE'
+    group: 1
+    priority: 5
 ```
 
 ### Supprimer une Colonne
@@ -513,13 +529,14 @@ Pour gagner du temps, consultez le **[Column Library Guide](./column-library.md)
 - ✅ Combinaisons courantes pour différents cas d'usage
 
 **Exemple rapide :**
-```ini
+```yaml
+columns:
 # Copiez-collez depuis column-library.md
-[COLUMN_Version]
-width = 100
-expression = _V([^\\/]+)
-group = 1
-priority = 20
+  Version:
+    width: 100
+    expression: '_V([^\\/]+)'
+    group: 1
+    priority: 20
 ```
 
 ---
@@ -528,64 +545,66 @@ priority = 20
 
 Voici un fichier `.profiles` complet avec plusieurs colonnes dynamiques :
 
-```ini
-[LAUNCHER]
-title = ProFiles - Projet X
-gui_auto_launch = False
-search_dir = .
-extensions = .mttl, .exe, .dll
-filters = Prod, Dev, Test
+```yaml
+defaults:
+  title: ProFiles - Projet X
+  gui_auto_launch: false
+  search_dir: .
+  extensions: [.mttl, .exe, .dll]
+  filters: [Prod, Dev, Test]
 
-[COLUMN_Path]
-width = 200
-expression = (.+[\\/])
-group = 1
-priority = 5
-default = .
+columns:
+  Path:
+  width: 200
+  expression: '(.+[\\/])'
+  group: 1
+  priority: 5
+  default: "."
 
-[COLUMN_FileName]
-width = 250
-expression = ([^/\\]+)$
-group = 1
-priority = 5
+  FileName:
+  width: 250
+  expression: '([^/\\]+)$'
+  group: 1
+  priority: 5
 
-[COLUMN_Project]
-width = 100
-expression = (PROJ\|DEV\|ST_PRO)
-group = 1
-priority = 15
+  Project:
+  width: 100
+  expression: '(PROJ\|DEV\|ST_PRO)'
+  group: 1
+  priority: 15
 
-[COLUMN_Device]
-width = 120
-expression = Device_([A-Z0-9]+)
-group = 1
-priority = 10
+  Device:
+  width: 120
+  expression: 'Device_([A-Z0-9]+)'
+  group: 1
+  priority: 10
 
-[COLUMN_Environment]
-width = 100
-expression = (Prod\|Dev\|Test)
-group = 1
-priority = 8
+  Environment:
+  width: 100
+  expression: '(Prod\|Dev\|Test)'
+  group: 1
+  priority: 8
 
-[COLUMN_Version]
-width = 120
-expression = _V(\d+\.\d+\.\d+)
-group = 1
-priority = 6
+  Version:
+  width: 120
+  expression: '_V(\d+\.\d+\.\d+)'
+  group: 1
+  priority: 6
 
-[COLUMN_Year]
-width = 80
-expression = (\d{4})
-group = 1
-priority = 4
+  Year:
+  width: 80
+  expression: '(\d{4})'
+  group: 1
+  priority: 4
 
-[CONFIGURATION_1]
-pc_hostname = All
-pc_name = Toutes les machines
-directory = .
-extensions = .mttl, .exe, .dll
-filters = Prod, Dev, Test
-row_colors =
+configs:
+  configuration_1:
+    pc_hostname: All
+    pc_name: Toutes les machines
+    directory: .
+    extensions: [.mttl, .exe, .dll]
+    filters: [Prod, Dev, Test]
+    row_colors: []
 ```
 
 ---

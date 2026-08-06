@@ -770,8 +770,8 @@ SITE_C_Program_TMP_V03.mttl
 
 ## 🔗 Ressources Complémentaires
 
-- [Guide d'Utilisation : Colonnes Dynamiques](./dynamic-columns-usage.md)
-- [Guide Technique : Architecture des Colonnes](./dynamic-columns-guide.md)
+- [Guide d'Utilisation : Colonnes Dynamiques](./columns-guide.fr.md)
+- [Guide Technique : Architecture des Colonnes](./columns-guide.en.md)
 - [Guide Avancé : Expressions Régulières](./advanced/advanced-guide.en.md)
 
 ---

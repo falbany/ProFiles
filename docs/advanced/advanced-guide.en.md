@@ -4,7 +4,7 @@
 > 📦 **[Installation](../installation-guide.en.md)** |
 > ⚙️ **[Configuration](../configuration-profile.en.md)** |
 > 🔧 **[Hooks](../hooks-guide.en.md)** |
-> 📊 **[Dynamic Columns](../dynamic-columns-guide.md)** |
+> 📊 **[Dynamic Columns](../columns-guide.en.md)** |
 > 🚀 **Advanced Guide** |
 > 🇫🇷 **[Version Française](./guide-avance.fr.md)**
 
