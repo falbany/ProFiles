@@ -64,7 +64,7 @@ def run_workflow(
 
         # Handle 'ask' confirmation guard if present
         if step.ask:
-            ask_content = _substitute_variables(step.ask, file_path)
+            ask_content = _substitute_variables(step.ask, file_path, action_content=step.content)
             choice: Literal["yes", "skip", "no"]
             if user_choice is not None:
                 choice = user_choice
@@ -153,12 +153,16 @@ def _execute_step(
 
     return None
 
-def _substitute_variables(template: str, file_path: Path | None) -> str:
+def _substitute_variables(template: str, file_path: Path | None, *, action_content: str | None = None) -> str:
     """Substitute variables in step content string."""
-    if not file_path:
-        return template
+    res = template
+    if action_content is not None:
+        res = res.replace("{content}", action_content)
 
-    res = template.replace("{path}", str(file_path))
+    if not file_path:
+        return res
+
+    res = res.replace("{path}", str(file_path))
     res = res.replace("{filename}", file_path.name)
     res = res.replace("{dir}", str(file_path.parent))
     res = res.replace("{stem}", file_path.stem)
