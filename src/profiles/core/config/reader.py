@@ -17,6 +17,7 @@ from profiles.core.config.models import (
     ColumnConfiguration,
     HookSpec,
     MachineConfiguration,
+    WorkflowStep,
 )
 from profiles.core.config.schema import AppConfigYaml
 from profiles.core.config.service import (
@@ -152,12 +153,14 @@ class ConfigReader:
         """Populate *config* from ``schema.hooks``."""
         config.launch_hook_failmode = schema.hooks.failmode
         config.launch_hook_timeout = schema.hooks.timeout
-        for ext, entries in schema.hooks.entries.items():
-            config.launch_hooks[ext] = tuple(
-                HookSpec(
-                    when=entry.when,
-                    template=entry.command,
-                    requires_success=entry.requires_success,
+        for pattern, entries in schema.hooks.entries.items():
+            config.launch_hooks[pattern] = tuple(
+                WorkflowStep(
+                    action=entry.action,
+                    content=entry.content,
+                    ask=entry.ask,
+                    wait=entry.wait,
+                    on_failure=entry.on_failure,
                 )
                 for entry in entries
             )
