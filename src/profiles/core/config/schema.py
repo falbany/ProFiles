@@ -81,11 +81,11 @@ class HooksConfig(BaseModel):
     timeout: int = 30
     # YAML ``entries:`` with only comments under it parses as None;
     # coerce to empty dict so the template works out-of-the-box.
-    entries: dict[str, list[HookEntry]] = Field(default_factory=dict)
+    entries: dict[str, list[WorkflowStepSchema]] = Field(default_factory=dict)
 
     @field_validator("entries", mode="before")
     @classmethod
-    def _none_to_dict(cls, value: object) -> dict[str, list[HookEntry]]:
+    def _none_to_dict(cls, value: object) -> dict[str, list[WorkflowStepSchema]]:
         return value or {}
 
 
