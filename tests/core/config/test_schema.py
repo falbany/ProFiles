@@ -48,7 +48,7 @@ class TestDefaults:
         d = Defaults()
         assert d.extensions == ["All", ".lnk"]
         assert d.filters == ["", "ST_PRO", "ST_ENG"]
-        assert d.theme == "light"
+        assert d.theme == "auto"
         assert d.verbose == "INFO"
 
 

@@ -117,19 +117,19 @@ defaults:
 columns:
   File:
     width: 600
-    expression: ".*"
+    expression: '.*'
     group: 0
     priority: 100
     default: ""
   Path:
     width: 200
-    expression: "(.+[\\\\/])"
+    expression: '(.+[\\\\/])'
     group: 1
     priority: 40
     default: "."
   FileName:
     width: 150
-    expression: "([^/\\\\]+)$"
+    expression: '([^/\\\\]+)$'
     group: 1
     priority: 30
   Type:
@@ -139,7 +139,7 @@ columns:
     priority: 20
   Version:
     width: 100
-    expression: "[-_]V(\\\\d+(?:\\\\.\\\\d+)*)(?=[^\\\\/]*\\\\.[a-zA-Z0-9]+$)"
+    expression: '[-_]V(\\\\d+(?:\\\\.\\\\d+)*)(?=[^\\\\/]*\\\\.[a-zA-Z0-9]+$)'
     group: 1
     priority: 10
 
@@ -175,9 +175,9 @@ columns:
 #   check       Execute a command and check return code.
 #
 # TOKENS (substituted at runtime):
-#   {path}       absolute file path                    {dir}   parent directory
-#   {filename}   file name (with extension)            {ext}   extension (e.g. ".mttl")
-#   {stem}       file name without extension
+#   {{path}}       absolute file path                    {{dir}}   parent directory
+#   {{filename}}   file name (with extension)            {{ext}}   extension (e.g. ".mttl")
+#   {{stem}}       file name without extension
 #
 # failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
 # timeout: seconds for blocking steps.
@@ -188,16 +188,16 @@ hooks:
   entries:
     # ".mttl":
     #   - action: notify
-    #     content: "# Launching {filename}\\nPreparing environment..."
+    #     content: "# Launching {{filename}}\\nPreparing environment..."
     #   - action: run
-    #     content: "prepare.exe --file {path}"
+    #     content: "prepare.exe --file {{path}}"
     #     ask: "Run preparation script?"
     #   - action: replace
-    #     content: "special_launcher.exe {path}"
+    #     content: "special_launcher.exe {{path}}"
     #     ask: "Use special launcher instead of OS default?"
     # ".pdf":
     #   - action: run_after
-    #     content: "logger.exe --opened {filename}"
+    #     content: "logger.exe --opened {{filename}}"
 
 # ============================================================================
 # CONFIGS — named configurations. Each may `extends` another config.
