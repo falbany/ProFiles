@@ -1,0 +1,244 @@
+"""Column extraction rules for ProFiles.
+
+Provides dynamic column configuration via regex patterns extracted from
+filenames. Supports custom columns beyond the default File and Version.
+
+Usage:
+    from profiles.core.processing.column_extractor import ColumnExtractor, ColumnRule
+
+    extractor = ColumnExtractor()
+    extractor.add_rule("Device", r"Device_(\\w+)")
+    extractor.add_rule("Version", r"_V(.+)", priority=10)
+
+    filename = "ST_PRO_Device_ABC123_V01-Rel6.2.1.mttl"
+    values = extractor.extract_all(filename)
+    # {"File": "ST_PRO_Device_ABC123_V01-Rel6.2.1.mttl", "Device": "ABC123", "Version": "01-Rel6.2.1"}
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass
+from typing import ClassVar
+
+_logger = logging.getLogger("profiles")
+
+
+@dataclass
+class ColumnRule:
+    """A single column extraction rule.
+
+    Attributes:
+        name: Column header name (must match config column_names).
+        pattern: Regex pattern to extract value from filename.
+        group: Regex group index to use (0 = entire match, 1+ = captured group).
+        priority: Extraction priority (higher = processed first).
+        default: Default value if pattern doesn't match.
+    """
+
+    name: str
+    pattern: str
+    group: int = 1
+    priority: int = 0
+    default: str = ""
+
+    # Class-level cache for compiled patterns shared across all instances.
+    # This avoids recompiling the same pattern repeatedly.  Cleared via
+    # :meth:`clear_cache` to support test isolation.
+    _compiled: ClassVar[dict[str, re.Pattern]] = {}
+    _warned: ClassVar[set[str]] = set()  # patterns already logged as invalid
+    _BROKEN_SENTINEL: ClassVar[re.Pattern] = re.compile(r"(?!)")  # never-matching placeholder
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the compiled-pattern cache and warning set.
+
+        Useful in test teardown to prevent state leakage between tests
+        that use malformed regex patterns.
+        """
+        cls._compiled.clear()
+        cls._warned.clear()
+
+    def compiled(self) -> re.Pattern:
+        """Get compiled regex pattern with caching.
+
+        Invalid patterns fall back to a never-matching sentinel after
+        logging a warning once.  This keeps the GUI/caller alive on
+        malformed ``[COLUMN_*]`` expressions instead of crashing the
+        whole scan.
+        """
+        if self.pattern not in ColumnRule._compiled:
+            try:
+                ColumnRule._compiled[self.pattern] = re.compile(self.pattern, re.IGNORECASE)
+            except re.error as exc:
+                if self.pattern not in ColumnRule._warned:
+                    _logger.warning(
+                        "Invalid regex for column %r (%s): %s -- using default value as fallback",
+                        self.name,
+                        self.pattern,
+                        exc,
+                    )
+                    ColumnRule._warned.add(self.pattern)
+                ColumnRule._compiled[self.pattern] = ColumnRule._BROKEN_SENTINEL
+        return ColumnRule._compiled[self.pattern]
+
+    def extract(self, filename: str) -> str:
+        """Extract value from filename using this rule.
+
+        Args:
+            filename: The filename to extract from.
+
+        Returns:
+            Extracted value or default if no match.
+        """
+        match = self.compiled().search(filename)
+        if not match:
+            return self.default
+
+        # Handle group 0 (entire match) or captured groups
+        try:
+            return match.group(self.group) if self.group > 0 else match.group(0)
+        except IndexError:
+            return self.default
+
+
+class ColumnExtractor:
+    """Extracts column values from filenames using configurable rules.
+
+    The extractor keeps an **immutable snapshot** of its rules (a tuple
+    always sorted by priority).  Mutations rebuild the tuple in a single
+    atomic assignment; extraction only ever reads it.  Once built, the
+    extractor can therefore be shared safely across worker threads.
+
+    Example:
+        extractor = ColumnExtractor()
+        extractor.add_rule("File", r"(.+)", group=0, priority=100)
+        extractor.add_rule("Version", r"_V([^_]+)", priority=10)
+        extractor.add_rule("Device", r"Device_([A-Z0-9]+)", priority=5)
+
+        values = extractor.extract_all("ST_PRO_Device_ABC123_V01.mttl")
+        # {"File": "ST_PRO_Device_ABC123_V01.mttl", "Version": "01", "Device": "ABC123"}
+    """
+
+    def __init__(self) -> None:
+        """Initialize the column extractor with no rules."""
+        self._rules: tuple[ColumnRule, ...] = ()
+
+    def add_rule(
+        self, name: str, pattern: str, group: int = 1, priority: int = 0, default: str = ""
+    ) -> None:
+        """Add a column extraction rule.
+
+        Args:
+            name: Column header name.
+            pattern: Regex pattern for extraction.
+            group: Regex group index (0 = entire match, 1+ = captured group).
+            priority: Extraction priority (higher = first).
+            default: Default value if pattern doesn't match.
+        """
+        rule = ColumnRule(
+            name=name, pattern=pattern, group=group, priority=priority, default=default
+        )
+        self._rules = tuple(sorted(self._rules + (rule,), key=lambda r: r.priority, reverse=True))
+
+    def remove_rule(self, name: str) -> bool:
+        """Remove a rule by name.
+
+        Args:
+            name: Column rule name to remove.
+
+        Returns:
+            True if rule was found and removed.
+        """
+        for i, rule in enumerate(self._rules):
+            if rule.name == name:
+                self._rules = self._rules[:i] + self._rules[i + 1 :]
+                return True
+        return False
+
+    def get_rules(self) -> list[ColumnRule]:
+        """Get all rules sorted by priority (highest first).
+
+        Returns:
+            A fresh list copy; mutating it does not affect the extractor.
+        """
+        return list(self._rules)
+
+    def extract_all(self, filename: str, column_names: tuple[str, ...]) -> dict[str, str]:
+        """Extract all column values for a filename.
+
+        Args:
+            filename: The filename to extract values from.
+            column_names: Ordered list of column names to extract.
+
+        Returns:
+            Dictionary mapping column names to extracted values.
+        """
+        result: dict[str, str] = {}
+
+        # Immutable snapshot: safe to read concurrently even if a
+        # mutation reassigns self._rules in another thread.
+        rules = self._rules
+        rules_by_name: dict[str, ColumnRule] = {rule.name: rule for rule in rules}
+
+        for col_name in column_names:
+            if col_name in rules_by_name:
+                # Use configured rule
+                result[col_name] = rules_by_name[col_name].extract(filename)
+            elif col_name == "File":
+                # Special case: File column always returns the full filename
+                result[col_name] = filename
+            else:
+                # Unknown column: empty value
+                result[col_name] = ""
+
+        return result
+
+    def clear_rules(self) -> None:
+        """Remove all extraction rules."""
+        self._rules = ()
+
+
+def load_column_rules_from_config(column_config: str) -> ColumnExtractor:
+    """Load column rules from .profiles COLUMN_DEFINITIONS string.
+
+    Format:
+        name:pattern:group:priority:default,name2:pattern2:group2:priority2:default2
+
+    Example:
+        "File:.*:0:100::Version:_V(.+):1:10::Device:Device_([A-Z0-9]+):1:5::"
+
+    Args:
+        column_config: Comma-separated column definitions.
+
+    Returns:
+        Configured ColumnExtractor instance.
+    """
+    extractor = ColumnExtractor()
+
+    if not column_config.strip():
+        # Default rules if none specified
+        extractor.add_rule("File", r".+", group=0, priority=100)
+        extractor.add_rule("Version", r"_V(.+)", group=1, priority=10)
+        return extractor
+
+    for definition in column_config.split(","):
+        definition = definition.strip()
+        if not definition:
+            continue
+
+        parts = definition.split(":")
+        if len(parts) < 2:
+            continue
+
+        name = parts[0].strip()
+        pattern = parts[1].strip()
+
+        group = int(parts[2]) if len(parts) > 2 and parts[2].strip() else 1
+        priority = int(parts[3]) if len(parts) > 3 and parts[3].strip() else 0
+        default = parts[4].strip() if len(parts) > 4 else ""
+
+        extractor.add_rule(name, pattern, group, priority, default)
+
+    return extractor

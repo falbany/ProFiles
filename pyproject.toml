@@ -1,0 +1,120 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "profiles"
+version = "2026.7.0"
+description = "ProFiles - A modern GUI launcher for production test programs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "sv-ttk>=2.5.0",
+    "darkdetect>=0.8.0",
+    "ruamel.yaml>=0.18.0",
+    "pydantic>=2.0.0",
+]
+license = {text = "MIT"}
+authors = [
+    {name = "Florent ALBANY", email = "florent.albany@gmail.com"},
+]
+keywords = ["launcher", "production", "test", "gui", "tkinter"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: French",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Installation/Setup",
+]
+
+[project.urls]
+Homepage = "https://github.com/falbany/profiles"
+Repository = "https://github.com/falbany/profiles.git"
+
+[project.scripts]
+ProFiles = "profiles.app:main"
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "pylint>=3.0.0",
+    "pytest>=7.0.0",
+    "pytest-mock>=3.0.0",
+    "pytest-cov>=4.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pylint.MASTER]
+init-import = "yes"
+max-line-length = 100
+output-format = "colorized"
+reports = false
+
+[tool.pylint.IMPORTS]
+ignored-classes = ["profiles"]
+
+[tool.pylint.TYPECHECK]
+ignored-modules = ["profiles.utils.shortcut"]
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = "C0114,C0115,C0116,C0301,C0103,R0902,R0903,R0917,W0603,W0718,R0801,R1705,C0415,E0401,E0611"
+# R0903: too-few-public-methods - acceptable for single-purpose classes
+# R0902: too-many-instance-attributes - required for GUI classes
+# R0917: too-many-positional-arguments - constructor needs many params
+# W0603: global-statement - used for module-level singleton pattern
+# W0718: broad-exception-caught - generic catch for GUI robustness
+# R1705: no-else-return - already fixed
+# C0415: import-outside-toplevel - acceptable for dynamic imports
+# E0401: import-error - false positive for dynamic sys.path modifications
+# E0611: no-name-in-module - false positive for dynamic imports
+"good-names" = [
+    "i", "j", "k", "x", "y", "z",
+    "_DEFAULT_LOGGER",
+]
+
+[tool.pylint.DESIGN]
+max-args = 8
+max-attributes = 15
+max-locals = 20
+max-branches = 15
+max-module-lines = 1200
+max-statements = 60
+
+[tool.setuptools.package-data]
+"profiles" = ["py.typed"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "--cov=src/profiles",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=85",
+]

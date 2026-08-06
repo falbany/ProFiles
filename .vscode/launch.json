@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run PyLauncher",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pylauncher",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": true
+        }
+    ]
+}
