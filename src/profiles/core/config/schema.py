@@ -85,7 +85,7 @@ class Defaults(BaseModel):
     title: str = ""
     gui_auto_launch: bool = True
     close_after_execute: bool = False
-    theme: Literal["light", "dark"] = "light"
+    theme: Literal["light", "dark", "auto"] = "auto"
     language: Literal["en", "fr"] = "en"
     search_dir: str = ""
     recursive_search: bool = False
