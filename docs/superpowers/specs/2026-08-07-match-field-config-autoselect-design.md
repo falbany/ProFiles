@@ -88,6 +88,9 @@ class MachineConfiguration:
 ### 3.1 Pattern Evaluation Rules
 - **Regex**: Patterns starting with `re:` use `re.search(pattern[3:], value, re.IGNORECASE)`.
 - **Glob**: All other patterns use `fnmatch.fnmatch(value.lower(), pattern.lower())`.
+- **Cross-Platform Path Normalization**:
+  - Path matching normalizes file separators (`/` and `\`) and expands user home directories (`~`) using `os.path.normpath(os.path.expanduser(...))` to ensure identical behavior on Windows, Linux, and macOS.
+  - Path comparisons use case-insensitive evaluation on Windows/macOS and preserve path format across all OS platform platforms.
 
 ### 3.2 OR-based Criteria Evaluation
 A `MachineConfiguration` matches the environment if **any** non-empty criteria list (`hostname`, `ip`, or `path`) has at least one pattern matching the current environment value.
