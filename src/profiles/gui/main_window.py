@@ -523,8 +523,8 @@ class MainWindow:
 
         # Reset sort state and heading indicators
         self._sort_state.clear()
-        for i, name in enumerate(self._config.column_names):
-            self._tree.heading(i, text=name)
+        for i, header in enumerate(self._config.column_headers):
+            self._tree.heading(i, text=header)
 
         if not directory or not directory_exists(directory):
             self._count_label.config(text="Files: 0")
