@@ -21,11 +21,72 @@ Each column is defined under the `columns:` block with the following parameters:
 
 | Parameter    | Type    | Default                   | Description                                                                            |
 | ------------ | ------- | ------------------------- | -------------------------------------------------------------------------------------- |
-| `width`      | Integer | `150` (or `600` for File) | Width of the column in pixels.                                                         |
-| `expression` | String  | **Required**              | Regular expression pattern containing a capture group to extract the target value.     |
-| `group`      | Integer | `1`                       | The regex capture group index to extract (`0` is full match, `1+` are capture groups). |
+| `name`       | String  | *(falls back to key)*     | Friendly header label displayed in the GUI column heading.                             |
+| `width`      | Integer | `150` (or `600` for File) | Width of the column in pixels (used when `stretch` is `false`).                        |
+| `stretch`    | Boolean | `false`                   | Whether the column stretches to fill available space in the Treeview.                    |
+| `match`      | String  | **Required**              | Built-in keyword (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) or a raw regex pattern. |
+| `transform`  | String  | `None`                    | Replacement pattern with group backreferences. Supports `{group:N}` (e.g. `v{group:1}`) or standard `\g<N>` / `\N` syntax. Falls back to the whole match if omitted. |
 | `priority`   | Integer | `0`                       | Order of extraction evaluation (higher numbers are evaluated first).                   |
-| `default`    | String  | `""`                      | Fallback value displayed if the regex pattern does not match.                          |
+| `default`    | String  | `""`                      | Fallback value displayed if the pattern does not match.                                |
+
+### Transform Backreference Syntax
+
+The `transform` field supports two equivalent backreference syntaxes:
+
+| Syntax       | Example              | Description                          |
+| ------------ | -------------------- | ------------------------------------ |
+| `{group:N}`  | `v{group:1}`         | User-friendly syntax (recommended).    |
+| `\g<N>`      | `v\g<1>`             | Standard Python regex syntax.        |
+| `\N`         | `v\1`                | Shorthand for `\g<N>`.               |
+
+The `{group:N}` syntax is translated to `\g<N>` internally before calling
+`re.Pattern.expand()`, so all three forms are equivalent.
+
+---
+
+## Built-in Pattern Macros
+
+Instead of writing a custom regex, you can use a **built-in keyword** as the
+`match` value. Keywords are matched case-insensitively. If the `match` value
+doesn't match a keyword, it's treated as a raw regex pattern.
+
+| Keyword       | Regex Pattern                                           | Extracts                          |
+| ------------- | ------------------------------------------------------- | --------------------------------- |
+| `version`     | `[-_]V(\d+(?:\.\d+)*)(?=[^\\/]*\.[a-zA-Z0-9]+$)`       | Version number after `_V` or `-V` |
+| `date`        | `(\d{4}[-_]\d{2}[-_]\d{2}\|\d{8})`                      | ISO date or YYYYMMDD              |
+| `git_commit`  | `_g([a-f0-9]{7})`                                       | Short git commit hash             |
+| `type`        | `(PRO\|ENG\|DEV\|TMP\|DEBUG)(?!.*(?:PRO\|ENG\|DEV\|TMP\|DEBUG))` | Last environment type tag       |
+| `filename`    | `([^/\\]+)$`                                            | Filename without directory path   |
+| `extension`   | `\.([^./\\]+)$`                                         | File extension (without dot)      |
+
+### Using Built-in Macros
+
+```yaml
+columns:
+  Version:
+    name: Version
+    width: 100
+    stretch: false
+    match: version           # built-in keyword
+    transform: "{group:1}"
+    priority: 10
+
+  Date:
+    name: Date
+    width: 120
+    stretch: false
+    match: date              # built-in keyword
+    transform: "{group:1}"
+    priority: 15
+
+  Commit:
+    name: Commit
+    width: 100
+    stretch: false
+    match: git_commit        # built-in keyword
+    transform: "{group:1}"
+    priority: 20
+```
 
 ---
 
@@ -45,9 +106,11 @@ Add this to your YAML configuration file:
 ```yaml
 columns:
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 10
     default: "Unknown"
 ```
@@ -59,9 +122,11 @@ Given filenames containing version tags like `_V01-Rel6.2.1`:
 ```yaml
 columns:
   Version:
+    name: Version
     width: 150
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: "{group:1}"
     priority: 20
 ```
 
@@ -77,22 +142,28 @@ defaults:
 
 columns:
   File:
+    name: File
     width: 400
-    expression: ".*"
-    group: 0
+    stretch: true
+    match: ".*"
+    transform: "{group:0}"
     priority: 100
 
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 15
     default: "N/A"
 
   Version:
+    name: Version
     width: 130
-    expression: "_V([^-]+)"
-    group: 1
+    stretch: false
+    match: "_V([^-]+)"
+    transform: "{group:1}"
     priority: 20
     default: "Latest"
 

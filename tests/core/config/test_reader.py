@@ -30,13 +30,18 @@ class TestConfigReader:
     def test_loads_columns(self, tmp_path: Path) -> None:
         conf = _write_yaml(
             tmp_path / ".profiles",
-            "columns:\n  Version:\n    width: 80\n    expression: '[-_]V(\\\\d+)'\n"
-            "    group: 1\n    priority: 10\n",
+            "columns:\n  Version:\n    name: Version Number\n    width: 80\n"
+            "    stretch: false\n    match: '[-_]V(\\d+)'\n    priority: 10\n",
         )
         config = ConfigReader(conf).load()
         assert "Version" in config.columns
         assert config.columns["Version"].width == 80
+        assert config.columns["Version"].match == r"[-_]V(\d+)"
+        assert config.columns["Version"].stretch is False
+        assert config.columns["Version"].name == "Version Number"
         assert config.column_names == ("File", "Version")
+        assert config.column_stretches == (False, False)
+        assert config.column_headers == ("File", "Version Number")
 
     def test_loads_configs_with_inheritance(self, tmp_path: Path) -> None:
         conf = _write_yaml(

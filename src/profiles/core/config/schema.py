@@ -49,9 +49,11 @@ class RowColor(BaseModel):
 class ColumnMapping(BaseModel):
     """A dynamic column definition."""
 
+    name: str | None = None  # User-friendly header display name (falls back to key)
     width: int = 150
-    expression: str = ""
-    group: int = 1
+    stretch: bool = False
+    match: str = ".*"  # Built-in keyword or raw regex
+    transform: str | None = None  # Optional replacement with group backreferences
     priority: int = 0
     default: str = ""
 

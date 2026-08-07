@@ -139,10 +139,11 @@ class ConfigReader:
         """Populate *config* from ``schema.columns``."""
         for name, col in schema.columns.items():
             config.columns[name] = ColumnConfiguration(
-                name=name,
+                name=col.name or name,
                 width=col.width,
-                expression=col.expression,
-                group=col.group,
+                stretch=col.stretch,
+                match=col.match,
+                transform=col.transform,
                 priority=col.priority,
                 default=col.default,
             )
@@ -183,7 +184,12 @@ class ConfigReader:
 
     @staticmethod
     def _build_column_configs(config: AppConfig) -> None:
-        """Materialise ``column_names`` / ``column_widths`` from ``config.columns``."""
+        """Materialise ``column_names`` / ``column_widths`` from ``config.columns``.
+
+        Also builds ``column_stretches`` (Treeview stretch behavior) and
+        ``column_headers`` (friendly display names from ``name``, falling back
+        to the column key).
+        """
         if config.columns:
             has_file_column = "File" in config.columns
             column_list = ["File"]
@@ -199,9 +205,19 @@ class ConfigReader:
                 else (_DEFAULT_FILE_COLUMN_WIDTH if name == "File" else _DEFAULT_COLUMN_WIDTH)
                 for name in column_list
             )
+            config.column_stretches = tuple(
+                config.columns[name].stretch if name in config.columns else False
+                for name in column_list
+            )
+            config.column_headers = tuple(
+                config.columns[name].name or name if name in config.columns else name
+                for name in column_list
+            )
         else:
             config.column_names = ("File",)
             config.column_widths = (_DEFAULT_FILE_COLUMN_WIDTH,)
+            config.column_stretches = (False,)
+            config.column_headers = ("File",)
 
 
 __all__ = ["ConfigReader"]

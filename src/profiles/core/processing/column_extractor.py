@@ -25,23 +25,39 @@ from typing import ClassVar
 _logger = logging.getLogger("profiles")
 
 
+BUILTIN_PATTERNS: dict[str, str] = {
+    "version": r"[-_]V(\d+(?:\.\d+)*)(?=[^\\/]*\.[a-zA-Z0-9]+$)",
+    "date": r"(\d{4}[-_]\d{2}[-_]\d{2}|\d{8})",
+    "git_commit": r"_g([a-f0-9]{7})",
+    "type": r"(PRO|ENG|DEV|TMP|DEBUG)(?!.*(?:PRO|ENG|DEV|TMP|DEBUG))",
+    "filename": r"([^/\\]+)$",
+    "extension": r"\.([^./\\]+)$",
+}
+
+
 @dataclass
 class ColumnRule:
     """A single column extraction rule.
 
     Attributes:
         name: Column header name (must match config column_names).
-        pattern: Regex pattern to extract value from filename.
-        group: Regex group index to use (0 = entire match, 1+ = captured group).
+        match: Built-in keyword (e.g. "version") or raw regex pattern.
+        transform: Optional replacement pattern with group backreferences
+            (e.g. "\\1 (Build \\2)"). If omitted, group 1 is returned when it
+            exists, else the whole match (group 0).
         priority: Extraction priority (higher = processed first).
         default: Default value if pattern doesn't match.
+        group: Legacy explicit group index (0 = entire match, 1+ = captured
+            group). Only consulted when ``transform`` is not set and ``group``
+            differs from the default of 1.
     """
 
     name: str
-    pattern: str
-    group: int = 1
+    match: str
+    transform: str | None = None
     priority: int = 0
     default: str = ""
+    group: int = 1
 
     # Class-level cache for compiled patterns shared across all instances.
     # This avoids recompiling the same pattern repeatedly.  Cleared via
@@ -60,6 +76,13 @@ class ColumnRule:
         cls._compiled.clear()
         cls._warned.clear()
 
+    def _resolve_pattern(self) -> str:
+        """Return the built-in pattern for a keyword, else the raw regex."""
+        pattern_key = self.match.lower()
+        if pattern_key in BUILTIN_PATTERNS:
+            return BUILTIN_PATTERNS[pattern_key]
+        return self.match
+
     def compiled(self) -> re.Pattern:
         """Get compiled regex pattern with caching.
 
@@ -68,38 +91,56 @@ class ColumnRule:
         malformed ``[COLUMN_*]`` expressions instead of crashing the
         whole scan.
         """
-        if self.pattern not in ColumnRule._compiled:
+        pattern = self._resolve_pattern()
+        if pattern not in ColumnRule._compiled:
             try:
-                ColumnRule._compiled[self.pattern] = re.compile(self.pattern, re.IGNORECASE)
+                ColumnRule._compiled[pattern] = re.compile(pattern, re.IGNORECASE)
             except re.error as exc:
-                if self.pattern not in ColumnRule._warned:
+                if pattern not in ColumnRule._warned:
                     _logger.warning(
                         "Invalid regex for column %r (%s): %s -- using default value as fallback",
                         self.name,
-                        self.pattern,
+                        pattern,
                         exc,
                     )
-                    ColumnRule._warned.add(self.pattern)
-                ColumnRule._compiled[self.pattern] = ColumnRule._BROKEN_SENTINEL
-        return ColumnRule._compiled[self.pattern]
+                    ColumnRule._warned.add(pattern)
+                ColumnRule._compiled[pattern] = ColumnRule._BROKEN_SENTINEL
+        return ColumnRule._compiled[pattern]
 
     def extract(self, filename: str) -> str:
-        """Extract value from filename using this rule.
+        """Extract value from filename using match and transform.
+
+        If ``transform`` is set, uses Python's ``match.expand()`` with group
+        backreferences. The ``{group:N}`` syntax is supported as a
+        user-friendly alternative to ``\\g<N>`` — it is translated to
+        ``\\g<N>`` before calling ``expand()``. Otherwise, if the legacy
+        ``group`` index differs from 1, returns that explicit group
+        (0 = full match). Otherwise returns group 1 if it exists, else
+        the whole match (group 0).
 
         Args:
-            filename: The filename to extract from.
+            filename: The filename to extract value from.
 
         Returns:
-            Extracted value or default if no match.
+            Extracted value or default if no match / group is missing.
         """
         match = self.compiled().search(filename)
         if not match:
             return self.default
 
-        # Handle group 0 (entire match) or captured groups
         try:
-            return match.group(self.group) if self.group > 0 else match.group(0)
-        except IndexError:
+            if self.transform:
+                # Translate {group:N} syntax to \g<N> for re.Pattern.expand()
+                transform = re.sub(
+                    r"\{group:(\d+)\}",
+                    lambda m: r"\g<" + m.group(1) + ">",
+                    self.transform,
+                )
+                return match.expand(transform)
+            if self.group != 1:
+                return match.group(0) if self.group == 0 else match.group(self.group)
+            return match.group(1) if match.lastindex and match.lastindex >= 1 else match.group(0)
+        except (IndexError, AttributeError, re.error):
             return self.default
 
 
@@ -126,19 +167,31 @@ class ColumnExtractor:
         self._rules: tuple[ColumnRule, ...] = ()
 
     def add_rule(
-        self, name: str, pattern: str, group: int = 1, priority: int = 0, default: str = ""
+        self,
+        name: str,
+        match: str,
+        transform: str | None = None,
+        priority: int = 0,
+        default: str = "",
+        group: int = 1,
     ) -> None:
         """Add a column extraction rule.
 
         Args:
             name: Column header name.
-            pattern: Regex pattern for extraction.
-            group: Regex group index (0 = entire match, 1+ = captured group).
+            match: Built-in keyword or raw regex pattern.
+            transform: Optional replacement pattern with group backreferences.
             priority: Extraction priority (higher = first).
             default: Default value if pattern doesn't match.
+            group: Legacy explicit group index (0 = full match, 1+ = group).
         """
         rule = ColumnRule(
-            name=name, pattern=pattern, group=group, priority=priority, default=default
+            name=name,
+            match=match,
+            transform=transform,
+            priority=priority,
+            default=default,
+            group=group,
         )
         self._rules = tuple(sorted(self._rules + (rule,), key=lambda r: r.priority, reverse=True))
 
@@ -239,6 +292,6 @@ def load_column_rules_from_config(column_config: str) -> ColumnExtractor:
         priority = int(parts[3]) if len(parts) > 3 and parts[3].strip() else 0
         default = parts[4].strip() if len(parts) > 4 else ""
 
-        extractor.add_rule(name, pattern, group, priority, default)
+        extractor.add_rule(name, pattern, group=group, priority=priority, default=default)
 
     return extractor

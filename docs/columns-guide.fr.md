@@ -21,11 +21,73 @@ Chaque colonne est définie sous la clé `columns:` avec les paramètres suivant
 
 | Paramètre    | Type   | Défaut                     | Description                                                                       |
 | ------------ | ------ | -------------------------- | --------------------------------------------------------------------------------- |
-| `width`      | Entier | `150` (ou `600` pour File) | Largeur de la colonne en pixels.                                                  |
-| `expression` | Chaîne | **Obligatoire**            | Expression régulière contenant un groupe de capture pour extraire la valeur.      |
-| `group`      | Entier | `1`                        | Index du groupe de capture regex (`0` = correspondance complète, `1+` = groupes). |
+| `name`       | Chaîne | *(revient à la clé)*       | Libellé convivial affiché dans l'en-tête de la colonne de l'interface.            |
+| `width`      | Entier | `150` (ou `600` pour File) | Largeur de la colonne en pixels (utilisée quand `stretch` est `false`).           |
+| `stretch`    | Booléen| `false`                    | La colonne s'étire-t-elle pour remplir l'espace disponible dans le Treeview.      |
+| `match`      | Chaîne | **Obligatoire**            | Mot-clé intégré (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) ou expression regex brute. |
+| `transform`  | Chaîne | `None`                     | Modèle de remplacement avec références arrière. Supporte `{group:N}` (ex: `v{group:1}`) ou la syntaxe standard `\g<N>` / `\N`. |
 | `priority`   | Entier | `0`                        | Ordre d'évaluation (les valeurs les plus élevées sont traitées en premier).       |
 | `default`    | Chaîne | `""`                       | Valeur de repli affichée si le motif ne correspond pas.                           |
+
+### Syntaxe des Références Arrière dans transform
+
+Le champ `transform` supporte deux syntaxes équivalentes :
+
+| Syntaxe      | Exemple              | Description                          |
+| ------------ | -------------------- | ------------------------------------ |
+| `{group:N}`  | `v{group:1}`         | Syntaxe conviviale (recommandée).    |
+| `\g<N>`      | `v\g<1>`             | Syntaxe regex Python standard.       |
+| `\N`         | `v\1`                | Forme abrégée de `\g<N>`.            |
+
+La syntaxe `{group:N}` est traduite en `\g<N>` en interne avant l'appel à
+`re.Pattern.expand()`, donc les trois formes sont équivalentes.
+
+---
+
+## Macros de Motifs Intégrés
+
+Au lieu d'écrire une regex personnalisée, vous pouvez utiliser un **mot-clé
+intégré** comme valeur de `match`. Les mots-clés sont comparés sans tenir
+compte de la casse. Si la valeur de `match` ne correspond à aucun mot-clé,
+elle est traitée comme une expression regex brute.
+
+| Mot-clé       | Expression Régulière                                   | Extrait                          |
+| ------------- | ------------------------------------------------------- | --------------------------------- |
+| `version`     | `[-_]V(\d+(?:\.\d+)*)(?=[^\\/]*\.[a-zA-Z0-9]+$)`       | Numéro de version après `_V` ou `-V` |
+| `date`        | `(\d{4}[-_]\d{2}[-_]\d{2}\|\d{8})`                      | Date ISO ou YYYYMMDD              |
+| `git_commit`  | `_g([a-f0-9]{7})`                                       | Hash court de commit git        |
+| `type`        | `(PRO\|ENG\|DEV\|TMP\|DEBUG)(?!.*(?:PRO\|ENG\|DEV\|TMP\|DEBUG))` | Dernier tag de type d'environnement |
+| `filename`    | `([^/\\]+)$`                                            | Nom de fichier sans chemin      |
+| `extension`   | `\.([^./\\]+)$`                                         | Extension (sans le point)       |
+
+### Utilisation des Macros Intégrées
+
+```yaml
+columns:
+  Version:
+    name: Version
+    width: 100
+    stretch: false
+    match: version           # mot-clé intégré
+    transform: "{group:1}"
+    priority: 10
+
+  Date:
+    name: Date
+    width: 120
+    stretch: false
+    match: date              # mot-clé intégré
+    transform: "{group:1}"
+    priority: 15
+
+  Commit:
+    name: Commit
+    width: 100
+    stretch: false
+    match: git_commit        # mot-clé intégré
+    transform: "{group:1}"
+    priority: 20
+```
 
 ---
 
@@ -45,9 +107,11 @@ Ajoutez ceci dans votre fichier `.profiles` au format YAML :
 ```yaml
 columns:
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 10
     default: "Inconnu"
 ```
@@ -59,9 +123,11 @@ Pour extraire la version après `_V` :
 ```yaml
 columns:
   Version:
+    name: Version
     width: 150
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: "{group:1}"
     priority: 20
 ```
 
@@ -77,22 +143,28 @@ defaults:
 
 columns:
   File:
+    name: File
     width: 400
-    expression: ".*"
-    group: 0
+    stretch: true
+    match: ".*"
+    transform: "{group:0}"
     priority: 100
 
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 15
     default: "N/A"
 
   Version:
+    name: Version
     width: 130
-    expression: "_V([^-]+)"
-    group: 1
+    stretch: false
+    match: "_V([^-]+)"
+    transform: "{group:1}"
     priority: 20
     default: "Dernière"
 

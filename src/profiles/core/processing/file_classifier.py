@@ -112,11 +112,11 @@ def _build_column_extractor(
 
     if columns:
         for col_name, col_config in _iter_columns(columns):
-            if col_config.expression:  # Only add if expression is defined
+            if col_config.match:  # Only add if a match pattern is defined
                 extractor.add_rule(
                     col_name,
-                    col_config.expression,
-                    col_config.group,
+                    col_config.match,
+                    col_config.transform,
                     col_config.priority,
                     col_config.default,
                 )

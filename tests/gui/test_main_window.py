@@ -54,7 +54,9 @@ def _make_config(
         extensions=(".mttl",),
         filters=("",),
         column_names=("File", "Version"),
+        column_headers=("File", "Version"),
         column_widths=(600, 150),
+        column_stretches=(True, False),
         recursive_search=False,
         close_after_execute=False,
         theme=theme,
@@ -748,7 +750,9 @@ class TestNoConfigFileMode:
         mock_window = MagicMock()
         mock_window._config = AppConfig()
         mock_window._config.column_names = ("File",)  # Single column default
+        mock_window._config.column_headers = ("File",)
         mock_window._config.column_widths = (600,)
+        mock_window._config.column_stretches = (True,)
         mock_window._current_scan_id = 1
         mock_window._tree_to_path = {}
         mock_window._tree_to_filename = {}
@@ -797,7 +801,9 @@ class TestNoConfigFileMode:
         mock_window = MagicMock()
         mock_window._config = AppConfig()
         mock_window._config.column_names = ("File", "Version")  # Two columns
+        mock_window._config.column_headers = ("File", "Version")
         mock_window._config.column_widths = (400, 150)
+        mock_window._config.column_stretches = (True, False)
         mock_window._current_scan_id = 1
         mock_window._tree_to_path = {}
         mock_window._tree_to_filename = {}
