@@ -119,9 +119,7 @@ class TestGetFileInfoDynamic:
         from profiles.config import ColumnConfiguration
 
         columns = {
-            "Version": ColumnConfiguration(
-                name="Version", width=150, match=r"_V(.+)", priority=10
-            ),
+            "Version": ColumnConfiguration(name="Version", width=150, match=r"_V(.+)", priority=10),
             "Device": ColumnConfiguration(
                 name="Device", width=120, match=r"Device_([A-Z0-9]+)", priority=5
             ),
@@ -143,9 +141,7 @@ class TestGetFileInfoDynamic:
         from profiles.config import ColumnConfiguration
 
         columns = {
-            "Version": ColumnConfiguration(
-                name="Version", width=150, match=r"_V(.+)", priority=10
-            ),
+            "Version": ColumnConfiguration(name="Version", width=150, match=r"_V(.+)", priority=10),
             "Device": ColumnConfiguration(
                 name="Device",
                 width=120,
@@ -181,9 +177,7 @@ class TestGetFileInfoDynamic:
         from profiles.config import ColumnConfiguration
 
         columns = {
-            "Version": ColumnConfiguration(
-                name="Version", width=150, match=r"_V(.+)", priority=10
-            ),
+            "Version": ColumnConfiguration(name="Version", width=150, match=r"_V(.+)", priority=10),
         }
 
         result = get_file_info_dynamic(
@@ -250,9 +244,7 @@ class TestGetFileInfoDynamic:
         from profiles.config import ColumnConfiguration
 
         columns = {
-            "Version": ColumnConfiguration(
-                name="Version", width=150, match=r"_V(.+)", priority=10
-            ),
+            "Version": ColumnConfiguration(name="Version", width=150, match=r"_V(.+)", priority=10),
         }
 
         result = get_file_info_dynamic(

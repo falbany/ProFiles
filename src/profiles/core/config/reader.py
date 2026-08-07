@@ -206,15 +206,11 @@ class ConfigReader:
                 for name in column_list
             )
             config.column_stretches = tuple(
-                config.columns[name].stretch
-                if name in config.columns
-                else False
+                config.columns[name].stretch if name in config.columns else False
                 for name in column_list
             )
             config.column_headers = tuple(
-                config.columns[name].name or name
-                if name in config.columns
-                else name
+                config.columns[name].name or name if name in config.columns else name
                 for name in column_list
             )
         else:

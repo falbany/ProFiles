@@ -13,8 +13,12 @@ def test_build_column_configs_with_stretch_and_headers():
                 name="File", width=600, stretch=True, match=".*", priority=100
             ),
             "Version": ColumnConfiguration(
-                name="Version Number", width=120, stretch=False, match="version",
-                transform="Ver. \\1", priority=20,
+                name="Version Number",
+                width=120,
+                stretch=False,
+                match="version",
+                transform="Ver. \\1",
+                priority=20,
             ),
         },
     )
