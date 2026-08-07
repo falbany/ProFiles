@@ -110,18 +110,44 @@ class Defaults(BaseModel):
     scan_metrics: bool = False
 
 
+
+class MatchCriteriaSchema(BaseModel):
+    """Matcher criteria for machine configuration auto-selection."""
+
+    hostname: list[str] = Field(default_factory=list)
+    ip: list[str] = Field(default_factory=list)
+    path: list[str] = Field(default_factory=list)
+
+    @field_validator("hostname", "ip", "path", mode="before")
+    @classmethod
+    def _coerce_list(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        return []
+
+
 class MachineConfig(BaseModel):
-    """A named configuration block. The name is the dict key in ``configs``."""
+    """A named configuration block in YAML configs dict."""
 
     extends: str | None = None
-    pc_hostname: str = ""
-    pc_ip: str = ""
-    pc_name: str = ""
-    directory: str = ""
+    match: MatchCriteriaSchema = Field(default_factory=MatchCriteriaSchema)
+    scan: list[str] = Field(default_factory=list)
     extensions: list[str] | None = None
     filters: list[str] | None = None
     row_colors: list[RowColor] | None = None
     search_exclude_files: list[str] | None = None
+
+    @field_validator("scan", mode="before")
+    @classmethod
+    def _coerce_scan_list(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        return []
+
 
 
 class AppConfigYaml(BaseModel):

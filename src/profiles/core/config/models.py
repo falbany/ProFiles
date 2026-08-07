@@ -87,15 +87,28 @@ class ColumnConfiguration:
     default: str = ""
 
 
+@dataclass(frozen=True)
+class MatchCriteria:
+    """Auto-selection match criteria for a machine configuration.
+
+    The logic is OR-based: any pattern match in any field is sufficient.
+    - ``hostname``: Glob patterns for the machine's hostname.
+    - ``ip``: Glob patterns for the machine's IP address.
+    - ``path``: Glob patterns for paths that must exist on the filesystem.
+    """
+
+    hostname: tuple[str, ...] = ()
+    ip: tuple[str, ...] = ()
+    path: tuple[str, ...] = ()
+
+
 @dataclass
 class MachineConfiguration:
     """A single ``[CONFIGURATION_N]`` section from ``.profiles``.
 
     Attributes:
-        pc_ip: IP address of the PC running MuTest.
-        pc_hostname: Hostname of the PC.
-        pc_name: Friendly name of the PC.
-        directory: Directory containing test programs for this config.
+        match: Auto-selection criteria based on hostname, IP, or path existence.
+        scan: Directories to scan for test programs.
         extensions: Per-config extension overrides (empty = use ``[LAUNCHER]`` defaults).
         filters: Per-config filter overrides (empty = use ``[LAUNCHER]`` defaults).
         row_colors: Per-config row-coloring rules as ``(pattern, color)`` tuples.
@@ -105,10 +118,8 @@ class MachineConfiguration:
             glob/wildcard). Appended to ``[LAUNCHER].search_exclude_files``.
     """
 
-    pc_ip: str = ""
-    pc_hostname: str = ""
-    pc_name: str = ""
-    directory: str = ""
+    match: MatchCriteria = field(default_factory=MatchCriteria)
+    scan: tuple[str, ...] = ()
     extensions: tuple[str, ...] = ()
     filters: tuple[str, ...] = ()
     row_colors: tuple[tuple[str, str], ...] = ()

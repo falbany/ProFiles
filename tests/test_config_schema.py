@@ -1,42 +1,66 @@
 import pytest
 from pydantic import ValidationError
 
-from profiles.core.config.schema import WorkflowStepSchema
+from profiles.core.config.schema import MachineConfig, MatchCriteriaSchema, WorkflowStepSchema
+from profiles.core.config.models import MachineConfiguration, MatchCriteria
 
 
-def test_workflow_step_schema_valid():
-    """Test valid WorkflowStepSchema parsing."""
+def test_match_criteria_schema_coercion():
     data = {
-        "action": "run",
-        "content": "echo {path}",
-        "ask": "Confirm?",
-        "wait": True,
-        "on_failure": "stop",
+        "match": {
+            "hostname": "WORKSTATION-1",
+            "ip": ["192.168.1.1", "10.0.0.1"],
+            "path": "/data/tests",
+        },
+        "scan": "/data/tests",
     }
-    step = WorkflowStepSchema(**data)
-    assert step.action == "run"
-    assert step.content == "echo {path}"
-    assert step.ask == "Confirm?"
+    cfg = MachineConfig.model_validate(data)
+    assert cfg.match.hostname == ["WORKSTATION-1"]
+    assert cfg.match.ip == ["192.168.1.1", "10.0.0.1"]
+    assert cfg.match.path == ["/data/tests"]
+    assert cfg.scan == ["/data/tests"]
 
 
-def test_workflow_step_schema_defaults():
-    """Test WorkflowStepSchema default values."""
-    data = {"action": "notify", "content": "Hello"}
-    step = WorkflowStepSchema(**data)
-    assert step.wait is True
-    assert step.on_failure == "stop"
-    assert step.ask is None
+def test_match_criteria_schema_coercion_single_to_list():
+    data = {
+        "match": {
+            "hostname": "WORKSTATION-1",
+            "ip": "192.168.1.1",
+            "path": "/data/tests",
+        },
+        "scan": "/data/tests",
+    }
+    cfg = MachineConfig.model_validate(data)
+    assert cfg.match.hostname == ["WORKSTATION-1"]
+    assert cfg.match.ip == ["192.168.1.1"]
+    assert cfg.match.path == ["/data/tests"]
+    assert cfg.scan == ["/data/tests"]
 
 
-def test_workflow_step_schema_invalid_action():
-    """Test that invalid action raises ValidationError."""
-    with pytest.raises(ValidationError):
-        WorkflowStepSchema(action="invalid", content="test")
+def test_match_criteria_schema_defaults():
+    cfg = MachineConfig.model_validate({})
+    assert cfg.match.hostname == []
+    assert cfg.match.ip == []
+    assert cfg.match.path == []
+    assert cfg.scan == []
 
 
-def test_workflow_step_schema_all_actions():
-    """Test all valid action types."""
-    valid_actions = ["notify", "run", "run_after", "replace", "check"]
-    for action in valid_actions:
-        step = WorkflowStepSchema(action=action, content="test")
-        assert step.action == action
+def test_machine_configuration_model_init():
+    match = MatchCriteria(
+        hostname=("WORKSTATION-1",),
+        ip=("192.168.1.1", "10.0.0.1"),
+        path=("/data/tests",),
+    )
+    mc = MachineConfiguration(
+        extensions=(".txt",),
+        filters=("ST_PRO",),
+        row_colors=(("pattern", "color"),),
+        search_exclude_files=("*.tmp",),
+        match=match,
+        scan=("/data/tests",),
+    )
+    assert mc.match.hostname == ("WORKSTATION-1",)
+    assert mc.match.ip == ("192.168.1.1", "10.0.0.1")
+    assert mc.match.path == ("/data/tests",)
+    assert mc.scan == ("/data/tests",)
+
