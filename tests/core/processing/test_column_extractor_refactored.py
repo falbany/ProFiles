@@ -27,6 +27,66 @@ def test_custom_regex_with_group_transform():
     assert rule.extract("Release_Project_ABC_Build_42.exe") == "ABC (Build 42)"
 
 
+def test_transform_group_syntax():
+    """{group:N} syntax is translated to \\g<N> for re.Pattern.expand()."""
+    rule = ColumnRule(
+        name="Device",
+        match=r"Device_([A-Z0-9]+)",
+        transform="{group:1}",
+        priority=10,
+        default="",
+    )
+    assert rule.extract("Device_ABC123") == "ABC123"
+
+
+def test_transform_group0_syntax():
+    """{group:0} returns the full match."""
+    rule = ColumnRule(
+        name="File",
+        match=r".*",
+        transform="{group:0}",
+        priority=100,
+        default="",
+    )
+    assert rule.extract("myfile.txt") == "myfile.txt"
+
+
+def test_transform_group_multi_syntax():
+    """{group:N} with multiple groups in one transform."""
+    rule = ColumnRule(
+        name="Multi",
+        match=r"Project_([A-Z]+)_Build_(\d+)",
+        transform="{group:1} (Build {group:2})",
+        priority=15,
+        default="",
+    )
+    assert rule.extract("Project_ABC_Build_42") == "ABC (Build 42)"
+
+
+def test_transform_backward_compat_g_syntax():
+    """\\g<N> syntax still works alongside {group:N}."""
+    rule = ColumnRule(
+        name="Device",
+        match=r"Device_([A-Z0-9]+)",
+        transform=r"\g<1>",
+        priority=10,
+        default="",
+    )
+    assert rule.extract("Device_ABC123") == "ABC123"
+
+
+def test_transform_backward_compat_backslash_syntax():
+    """\\1 syntax still works alongside {group:N}."""
+    rule = ColumnRule(
+        name="Device",
+        match=r"Device_([A-Z0-9]+)",
+        transform=r"\1",
+        priority=10,
+        default="",
+    )
+    assert rule.extract("Device_ABC123") == "ABC123"
+
+
 def test_transform_default_to_group1():
     """No transform defaults to group 1 when it exists."""
     rule = ColumnRule(name="Version", match=r"V(\d+\.\d+\.\d+)", priority=0, default="")

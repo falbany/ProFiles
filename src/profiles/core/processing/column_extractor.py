@@ -111,9 +111,12 @@ class ColumnRule:
         """Extract value from filename using match and transform.
 
         If ``transform`` is set, uses Python's ``match.expand()`` with group
-        backreferences. Otherwise, if the legacy ``group`` index differs from
-        1, returns that explicit group (0 = full match). Otherwise returns
-        group 1 if it exists, else the whole match (group 0).
+        backreferences. The ``{group:N}`` syntax is supported as a
+        user-friendly alternative to ``\\g<N>`` — it is translated to
+        ``\\g<N>`` before calling ``expand()``. Otherwise, if the legacy
+        ``group`` index differs from 1, returns that explicit group
+        (0 = full match). Otherwise returns group 1 if it exists, else
+        the whole match (group 0).
 
         Args:
             filename: The filename to extract value from.
@@ -127,7 +130,13 @@ class ColumnRule:
 
         try:
             if self.transform:
-                return match.expand(self.transform)
+                # Translate {group:N} syntax to \g<N> for re.Pattern.expand()
+                transform = re.sub(
+                    r"\{group:(\d+)\}",
+                    lambda m: r"\g<" + m.group(1) + ">",
+                    self.transform,
+                )
+                return match.expand(transform)
             if self.group != 1:
                 return match.group(0) if self.group == 0 else match.group(self.group)
             return match.group(1) if match.lastindex and match.lastindex >= 1 else match.group(0)
