@@ -10,44 +10,44 @@ class TestColumnRule:
 
     def test_extract_with_capture_group(self) -> None:
         """Test extraction using capture group 1."""
-        rule = ColumnRule(name="Device", pattern=r"Device_([A-Z0-9]+)", group=1)
+        rule = ColumnRule(name="Device", match=r"Device_([A-Z0-9]+)", group=1)
         result = rule.extract("Device_ABC123_V01.mttl")
         assert result == "ABC123"
 
     def test_extract_with_full_match(self) -> None:
         """Test extraction using full match (group 0)."""
-        rule = ColumnRule(name="File", pattern=r".+", group=0)
+        rule = ColumnRule(name="File", match=r".+", group=0)
         result = rule.extract("test.mttl")
         assert result == "test.mttl"
 
     def test_extract_no_match_returns_default(self) -> None:
         """Test that no match returns default value."""
-        rule = ColumnRule(name="Device", pattern=r"Device_([A-Z0-9]+)", group=1, default="Unknown")
+        rule = ColumnRule(name="Device", match=r"Device_([A-Z0-9]+)", group=1, default="Unknown")
         result = rule.extract("nodeviceatall.mttl")
         assert result == "Unknown"
 
     def test_extract_case_insensitive(self) -> None:
         """Test case-insensitive matching."""
-        rule = ColumnRule(name="Version", pattern=r"_V(.+)", group=1)
+        rule = ColumnRule(name="Version", match=r"_V(.+)", group=1)
         result = rule.extract("test_V01.mttl")
         assert result == "01.mttl"  # Extension not stripped at this level
 
     def test_extract_group_index_error_returns_default(self) -> None:
         """A group index beyond the match returns the default."""
-        rule = ColumnRule(name="Device", pattern=r"Device_([A-Z0-9]+)", group=4, default="X")
+        rule = ColumnRule(name="Device", match=r"Device_([A-Z0-9]+)", group=4, default="X")
         assert rule.extract("Device_ABC123.mttl") == "X"
 
     def test_compiled_cache_reuse(self) -> None:
         """Compiling the same pattern twice reuses the cache."""
         ColumnRule.clear_cache()
-        rule1 = ColumnRule(name="A", pattern=r"A_(.+)")
-        rule2 = ColumnRule(name="B", pattern=r"A_(.+)")
+        rule1 = ColumnRule(name="A", match=r"A_(.+)")
+        rule2 = ColumnRule(name="B", match=r"A_(.+)")
         assert rule1.compiled() is rule2.compiled()
 
     def test_invalid_pattern_logs_once_and_uses_sentinel(self) -> None:
         """A malformed regex falls back to a never-matching sentinel."""
         ColumnRule.clear_cache()
-        rule = ColumnRule(name="Bad", pattern=r"(unclosed")
+        rule = ColumnRule(name="Bad", match=r"(unclosed")
         compiled = rule.compiled()
         assert compiled is ColumnRule._BROKEN_SENTINEL
         # Cached for repeat calls without a re-warning.
@@ -56,7 +56,7 @@ class TestColumnRule:
     def test_default_value_used_when_empty_group_misses(self) -> None:
         """When the whole match bounds are fine but group indexing fails."""
         ColumnRule.clear_cache()
-        rule = ColumnRule(name="Device", pattern=r"([A-Z]+)", group=2, default="D")
+        rule = ColumnRule(name="Device", match=r"([A-Z]+)", group=2, default="D")
         assert rule.extract("ABC123") == "D"
 
 
@@ -139,7 +139,7 @@ class TestLoadColumnRulesFromConfig:
         rules = {r.name: r for r in extractor.get_rules()}
         assert rules["File"].group == 0
         assert rules["File"].priority == 100
-        assert rules["Version"].pattern == r"_V(.+)"
+        assert rules["Version"].match == r"_V(.+)"
         assert rules["Device"].default == "Unknown"
 
     def test_malformed_entries_skipped(self) -> None:
@@ -171,7 +171,7 @@ class TestColumnExtractorImmutability:
         extractor.add_rule("File", r".*", group=0, priority=100)
 
         snapshot = extractor.get_rules()
-        snapshot.append(ColumnRule(name="HACK", pattern=r".*"))
+        snapshot.append(ColumnRule(name="HACK", match=r".*"))
 
         assert [r.name for r in extractor.get_rules()] == ["File"]
 

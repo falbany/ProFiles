@@ -120,10 +120,10 @@ class TestGetFileInfoDynamic:
 
         columns = {
             "Version": ColumnConfiguration(
-                name="Version", width=150, expression=r"_V(.+)", group=1, priority=10
+                name="Version", width=150, match=r"_V(.+)", priority=10
             ),
             "Device": ColumnConfiguration(
-                name="Device", width=120, expression=r"Device_([A-Z0-9]+)", group=1, priority=5
+                name="Device", width=120, match=r"Device_([A-Z0-9]+)", priority=5
             ),
         }
 
@@ -144,13 +144,12 @@ class TestGetFileInfoDynamic:
 
         columns = {
             "Version": ColumnConfiguration(
-                name="Version", width=150, expression=r"_V(.+)", group=1, priority=10
+                name="Version", width=150, match=r"_V(.+)", priority=10
             ),
             "Device": ColumnConfiguration(
                 name="Device",
                 width=120,
-                expression=r"Device_([A-Z0-9]+)",
-                group=1,
+                match=r"Device_([A-Z0-9]+)",
                 priority=5,
                 default="Unknown",
             ),
@@ -183,7 +182,7 @@ class TestGetFileInfoDynamic:
 
         columns = {
             "Version": ColumnConfiguration(
-                name="Version", width=150, expression=r"_V(.+)", group=1, priority=10
+                name="Version", width=150, match=r"_V(.+)", priority=10
             ),
         }
 
@@ -196,12 +195,12 @@ class TestGetFileInfoDynamic:
 
         assert result["Version"] == "01-Rel6.2.1"  # .mttl stripped
 
-    def test_column_without_expression_skipped(self) -> None:
-        """A column config without an expression is not added as a rule."""
+    def test_column_without_match_skipped(self) -> None:
+        """A column config without a match pattern is not added as a rule."""
         from profiles.config import ColumnConfiguration
 
         columns = {
-            "Version": ColumnConfiguration(name="Version", width=150, expression=""),
+            "Version": ColumnConfiguration(name="Version", width=150, match=""),
         }
 
         result = get_file_info_dynamic(
@@ -222,7 +221,7 @@ class TestGetFileInfoDynamic:
 
         columns = {
             "File": ColumnConfiguration(
-                name="File", width=200, expression=r"ST_([A-Z]+)_", group=1, priority=100
+                name="File", width=200, match=r"ST_([A-Z]+)_", priority=100
             ),
         }
 
@@ -252,7 +251,7 @@ class TestGetFileInfoDynamic:
 
         columns = {
             "Version": ColumnConfiguration(
-                name="Version", width=150, expression=r"_V(.+)", group=1, priority=10
+                name="Version", width=150, match=r"_V(.+)", priority=10
             ),
         }
 

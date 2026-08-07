@@ -347,7 +347,7 @@ class TestScannedFileDynamic:
         # '([^/\]+)$' from the buggy starter config — invalid in Python regex
         from profiles.core.processing.column_extractor import ColumnRule
 
-        bad = ColumnRule(name="FileName", pattern=r"([^/\]+)$", group=1, default="?")
+        bad = ColumnRule(name="FileName", match=r"([^/\]+)$", group=1, default="?")
         # Should not raise; should fall back to "?".
         assert bad.extract("foo.txt") == "?"
 

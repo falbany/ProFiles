@@ -158,19 +158,31 @@ class ColumnExtractor:
         self._rules: tuple[ColumnRule, ...] = ()
 
     def add_rule(
-        self, name: str, pattern: str, group: int = 1, priority: int = 0, default: str = ""
+        self,
+        name: str,
+        match: str,
+        transform: str | None = None,
+        priority: int = 0,
+        default: str = "",
+        group: int = 1,
     ) -> None:
         """Add a column extraction rule.
 
         Args:
             name: Column header name.
-            pattern: Regex pattern for extraction.
-            group: Regex group index (0 = entire match, 1+ = captured group).
+            match: Built-in keyword or raw regex pattern.
+            transform: Optional replacement pattern with group backreferences.
             priority: Extraction priority (higher = first).
             default: Default value if pattern doesn't match.
+            group: Legacy explicit group index (0 = full match, 1+ = group).
         """
         rule = ColumnRule(
-            name=name, pattern=pattern, group=group, priority=priority, default=default
+            name=name,
+            match=match,
+            transform=transform,
+            priority=priority,
+            default=default,
+            group=group,
         )
         self._rules = tuple(sorted(self._rules + (rule,), key=lambda r: r.priority, reverse=True))
 
@@ -271,6 +283,6 @@ def load_column_rules_from_config(column_config: str) -> ColumnExtractor:
         priority = int(parts[3]) if len(parts) > 3 and parts[3].strip() else 0
         default = parts[4].strip() if len(parts) > 4 else ""
 
-        extractor.add_rule(name, pattern, group, priority, default)
+        extractor.add_rule(name, pattern, group=group, priority=priority, default=default)
 
     return extractor
