@@ -276,11 +276,11 @@ class MainWindow:
                 self._tree.insert("", tk.END, values=values)
 
         # Update heading indicators
-        for i, name in enumerate(self._config.column_names):
+        for i, header in enumerate(self._config.column_headers):
             arrow = ""
             if i == col_index:
                 arrow = " \u25b2" if not reverse else " \u25bc"
-            self._tree.heading(i, text=name + arrow)
+            self._tree.heading(i, text=header + arrow)
 
     # ----------------------------------------------------------------
     # Theme switching

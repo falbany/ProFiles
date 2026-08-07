@@ -20,7 +20,9 @@ def _make_window_mock() -> MagicMock:
     window._config.title = ""
     window._config.release = "1.0.0"
     window._config.column_names = ["File"]
+    window._config.column_headers = ["File"]
     window._config.column_widths = [100]
+    window._config.column_stretches = [True]
     window._config.close_after_execute = False
     return window
 

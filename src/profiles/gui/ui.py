@@ -140,21 +140,28 @@ class MainWindowUI:
         # Sort state: tracks current sort column and direction
         self.window._sort_state = {}
 
-        # Configure columns with sort-on-click
-        for i, (name, width) in enumerate(
+        # Configure columns with stretch control and sort-on-click
+        for i, (header, width, stretch) in enumerate(
             zip(
-                self.window._config.column_names,
+                self.window._config.column_headers,
                 self.window._config.column_widths,
+                self.window._config.column_stretches,
                 strict=True,
             )
         ):
             self.window._tree.heading(
                 i,
-                text=name,
+                text=header,
                 anchor=tk.W,
                 command=lambda idx=i: self.window._sort_treeview(idx),
             )
-            self.window._tree.column(i, width=width, minwidth=50, anchor=tk.W)
+            self.window._tree.column(
+                i,
+                width=width,
+                minwidth=50,
+                anchor=tk.W,
+                stretch=stretch,  # Apply per-column stretch behavior
+            )
 
         # Scrollbars
         self.window._v_scroll = ttk.Scrollbar(
