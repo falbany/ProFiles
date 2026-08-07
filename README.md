@@ -29,7 +29,7 @@
   - [Desktop Shortcut](#desktop-shortcut)
 - [💻 Usage](#-usage)
   - [GUI Mode](#gui-mode)
-  - [CLI / Headless Mode](#cli--headless-mode)
+  - [CLI / Headless Mode (work in progress)](#cli--headless-mode-work-in-progress)
 - [🛠 Configuration](#-configuration)
 - [🏗 Architecture](#-architecture)
 - [👨‍💻 Development](#-development)
@@ -65,7 +65,7 @@ Requires **Python 3.11+**. Minimal dependencies: `sv-ttk` (Material Design 3 the
 ```bash
 python install.py
 ```
-*Runs an interactive wizard that creates an isolated `.venv` and installs the package.*
+*Runs an interactive wizard that installs the package.*
 
 ### Manual Install
 ```bash
@@ -94,7 +94,7 @@ python -m profiles
 * **Shortcuts**: `Ctrl+F` (focus filter), `F5` (refresh), `Ctrl+Shift+L` (toggle theme).
 * **Language**: The GUI chrome is bilingual (English / French). Use the language button in the status bar to switch on the fly, or set `language: en` / `language: fr` in the `defaults` section.
 
-### CLI / Headless Mode
+### CLI / Headless Mode (work in progress)
 ```bash
 # Launch a specific file directly without GUI
 ProFiles --headless "path/to/script.py"
@@ -165,8 +165,37 @@ configs:
         color: "#1565C0"
       - pattern: DEV
         color: "#E65100"
+
+# Launch workflows — intercept file launches with step-based automation
+hooks:
+  failmode: warn           # warn | abort | skip (behavior on step failure)
+  timeout: 30              # Timeout in seconds for blocking steps
+  entries:
+    "*.mttl":
+      - action: notify
+        content: "# Launching {{filename}}\\n**Preparing environment...**"
+      - action: run
+        content: "prepare_env.exe --file {{path}}"
+        ask: "Run preparation script?"
+        on_failure: stop
+      - action: run_after
+        content: "logger.exe --opened {{filename}}"
+        wait: false
+    
+    "*.exe":
+      - action: notify
+        content: "**Warning** : Executable launch\\nVerify file origin."
+      - action: run
+        content: "antivirus.exe --scan {{path}}"
+        ask: "Scan with antivirus?"
+        on_failure: warn
+      - action: replace
+        content: "sandbox_launcher.exe {{path}}"
+        ask: "Execute in sandbox?"
+        on_failure: stop
 ```
-*See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/columns-guide.en.md), and [Launch Workflows Guide](./docs/hooks-guide.en.md).*
+
+*See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/columns-guide.en.md), and **[Launch Workflows Guide](./docs/hooks-guide.en.md)** for complete workflow automation.*
 
 ## 🏗 Architecture
 
