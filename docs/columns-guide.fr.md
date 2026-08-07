@@ -25,9 +25,22 @@ Chaque colonne est définie sous la clé `columns:` avec les paramètres suivant
 | `width`      | Entier | `150` (ou `600` pour File) | Largeur de la colonne en pixels (utilisée quand `stretch` est `false`).           |
 | `stretch`    | Booléen| `false`                    | La colonne s'étire-t-elle pour remplir l'espace disponible dans le Treeview.      |
 | `match`      | Chaîne | **Obligatoire**            | Mot-clé intégré (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) ou expression regex brute. |
-| `transform`  | Chaîne | `None`                     | Modèle de remplacement avec références arrière `{group:N}` (ex: `v{group:1}`).     |
+| `transform`  | Chaîne | `None`                     | Modèle de remplacement avec références arrière. Supporte `{group:N}` (ex: `v{group:1}`) ou la syntaxe standard `\g<N>` / `\N`. |
 | `priority`   | Entier | `0`                        | Ordre d'évaluation (les valeurs les plus élevées sont traitées en premier).       |
 | `default`    | Chaîne | `""`                       | Valeur de repli affichée si le motif ne correspond pas.                           |
+
+### Syntaxe des Références Arrière dans transform
+
+Le champ `transform` supporte deux syntaxes équivalentes :
+
+| Syntaxe      | Exemple              | Description                          |
+| ------------ | -------------------- | ------------------------------------ |
+| `{group:N}`  | `v{group:1}`         | Syntaxe conviviale (recommandée).    |
+| `\g<N>`      | `v\g<1>`             | Syntaxe regex Python standard.       |
+| `\N`         | `v\1`                | Forme abrégée de `\g<N>`.            |
+
+La syntaxe `{group:N}` est traduite en `\g<N>` en interne avant l'appel à
+`re.Pattern.expand()`, donc les trois formes sont équivalentes.
 
 ---
 

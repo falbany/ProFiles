@@ -25,9 +25,22 @@ Each column is defined under the `columns:` block with the following parameters:
 | `width`      | Integer | `150` (or `600` for File) | Width of the column in pixels (used when `stretch` is `false`).                        |
 | `stretch`    | Boolean | `false`                   | Whether the column stretches to fill available space in the Treeview.                    |
 | `match`      | String  | **Required**              | Built-in keyword (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) or a raw regex pattern. |
-| `transform`  | String  | `None`                    | Replacement pattern with `{group:N}` backreferences (e.g. `v{group:1}`). Falls back to the whole match if omitted. |
+| `transform`  | String  | `None`                    | Replacement pattern with group backreferences. Supports `{group:N}` (e.g. `v{group:1}`) or standard `\g<N>` / `\N` syntax. Falls back to the whole match if omitted. |
 | `priority`   | Integer | `0`                       | Order of extraction evaluation (higher numbers are evaluated first).                   |
 | `default`    | String  | `""`                      | Fallback value displayed if the pattern does not match.                                |
+
+### Transform Backreference Syntax
+
+The `transform` field supports two equivalent backreference syntaxes:
+
+| Syntax       | Example              | Description                          |
+| ------------ | -------------------- | ------------------------------------ |
+| `{group:N}`  | `v{group:1}`         | User-friendly syntax (recommended).    |
+| `\g<N>`      | `v\g<1>`             | Standard Python regex syntax.        |
+| `\N`         | `v\1`                | Shorthand for `\g<N>`.               |
+
+The `{group:N}` syntax is translated to `\g<N>` internally before calling
+`re.Pattern.expand()`, so all three forms are equivalent.
 
 ---
 
