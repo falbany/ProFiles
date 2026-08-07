@@ -15,6 +15,34 @@ Cette bibliothèque fournit des configurations de colonnes **prêtes à l'emploi
 
 ---
 
+## 🧠 Macros de Motifs Intégrés
+
+Au lieu d'écrire une regex personnalisée, utilisez un mot-clé intégré comme valeur de `match`. Les mots-clés sont comparés sans tenir compte de la casse.
+
+| Mot-clé       | Extrait                          |
+| ------------- | --------------------------------- |
+| `version`     | Numéro de version après `_V` ou `-V` |
+| `date`        | Date ISO ou YYYYMMDD              |
+| `git_commit`  | Hash court de commit git        |
+| `type`        | Dernier tag de type d'environnement |
+| `filename`    | Nom de fichier sans chemin      |
+| `extension`   | Extension (sans le point)       |
+
+Exemple :
+
+```yaml
+columns:
+  Version:
+    name: Version
+    width: 100
+    stretch: false
+    match: version           # mot-clé intégré
+    transform: "{group:1}"
+    priority: 10
+```
+
+---
+
 ## 📁 Colonnes de Base
 
 ### Nom de Fichier Complet (avec extension)

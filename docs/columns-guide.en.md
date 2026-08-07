@@ -44,6 +44,52 @@ The `{group:N}` syntax is translated to `\g<N>` internally before calling
 
 ---
 
+## Built-in Pattern Macros
+
+Instead of writing a custom regex, you can use a **built-in keyword** as the
+`match` value. Keywords are matched case-insensitively. If the `match` value
+doesn't match a keyword, it's treated as a raw regex pattern.
+
+| Keyword       | Regex Pattern                                           | Extracts                          |
+| ------------- | ------------------------------------------------------- | --------------------------------- |
+| `version`     | `[-_]V(\d+(?:\.\d+)*)(?=[^\\/]*\.[a-zA-Z0-9]+$)`       | Version number after `_V` or `-V` |
+| `date`        | `(\d{4}[-_]\d{2}[-_]\d{2}\|\d{8})`                      | ISO date or YYYYMMDD              |
+| `git_commit`  | `_g([a-f0-9]{7})`                                       | Short git commit hash             |
+| `type`        | `(PRO\|ENG\|DEV\|TMP\|DEBUG)(?!.*(?:PRO\|ENG\|DEV\|TMP\|DEBUG))` | Last environment type tag       |
+| `filename`    | `([^/\\]+)$`                                            | Filename without directory path   |
+| `extension`   | `\.([^./\\]+)$`                                         | File extension (without dot)      |
+
+### Using Built-in Macros
+
+```yaml
+columns:
+  Version:
+    name: Version
+    width: 100
+    stretch: false
+    match: version           # built-in keyword
+    transform: "{group:1}"
+    priority: 10
+
+  Date:
+    name: Date
+    width: 120
+    stretch: false
+    match: date              # built-in keyword
+    transform: "{group:1}"
+    priority: 15
+
+  Commit:
+    name: Commit
+    width: 100
+    stretch: false
+    match: git_commit        # built-in keyword
+    transform: "{group:1}"
+    priority: 20
+```
+
+---
+
 ## Step-by-Step Examples
 
 ### 1. Extracting Device Codes

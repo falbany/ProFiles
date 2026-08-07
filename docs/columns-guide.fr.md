@@ -44,6 +44,53 @@ La syntaxe `{group:N}` est traduite en `\g<N>` en interne avant l'appel à
 
 ---
 
+## Macros de Motifs Intégrés
+
+Au lieu d'écrire une regex personnalisée, vous pouvez utiliser un **mot-clé
+intégré** comme valeur de `match`. Les mots-clés sont comparés sans tenir
+compte de la casse. Si la valeur de `match` ne correspond à aucun mot-clé,
+elle est traitée comme une expression regex brute.
+
+| Mot-clé       | Expression Régulière                                   | Extrait                          |
+| ------------- | ------------------------------------------------------- | --------------------------------- |
+| `version`     | `[-_]V(\d+(?:\.\d+)*)(?=[^\\/]*\.[a-zA-Z0-9]+$)`       | Numéro de version après `_V` ou `-V` |
+| `date`        | `(\d{4}[-_]\d{2}[-_]\d{2}\|\d{8})`                      | Date ISO ou YYYYMMDD              |
+| `git_commit`  | `_g([a-f0-9]{7})`                                       | Hash court de commit git        |
+| `type`        | `(PRO\|ENG\|DEV\|TMP\|DEBUG)(?!.*(?:PRO\|ENG\|DEV\|TMP\|DEBUG))` | Dernier tag de type d'environnement |
+| `filename`    | `([^/\\]+)$`                                            | Nom de fichier sans chemin      |
+| `extension`   | `\.([^./\\]+)$`                                         | Extension (sans le point)       |
+
+### Utilisation des Macros Intégrées
+
+```yaml
+columns:
+  Version:
+    name: Version
+    width: 100
+    stretch: false
+    match: version           # mot-clé intégré
+    transform: "{group:1}"
+    priority: 10
+
+  Date:
+    name: Date
+    width: 120
+    stretch: false
+    match: date              # mot-clé intégré
+    transform: "{group:1}"
+    priority: 15
+
+  Commit:
+    name: Commit
+    width: 100
+    stretch: false
+    match: git_commit        # mot-clé intégré
+    transform: "{group:1}"
+    priority: 20
+```
+
+---
+
 ## Exemples Pratiques
 
 ### 1. Extraction d'un Code Appareil
