@@ -91,7 +91,7 @@ def _passes_extension_filter(
 
 
 def _scan_and_filter(
-    directory: str,
+    directories: Sequence[str] | str,
     *,
     extension: str = "",
     filter_text: str = "",
@@ -105,7 +105,7 @@ def _scan_and_filter(
     that passes both the extension and keyword filters.
 
     Args:
-        directory: Filesystem path to scan.
+        directories: Filesystem path(s) to scan.
         extension: Extension filter expression (supports operators).
         filter_text: Keyword filter expression (supports operators).
         recursive: Whether to descend into subdirectories.
@@ -114,29 +114,47 @@ def _scan_and_filter(
 
     Yields:
         Tuples of (absolute Path, display path str, full suffix str).
+        When multiple directories are provided, files are deduplicated by their absolute path (so identical files reached via different paths will only be yielded once).
     """
-    files = scan_directory(
-        directory,
-        "",
-        recursive=recursive,
-        exclude_dirs=tuple(exclude_dirs) if exclude_dirs else (),
-        exclude_files=tuple(exclude_files) if exclude_files else (),
-    )
-    base_path = Path(directory)
+    if isinstance(directories, str):
+        directory_list = [directories]
+    else:
+        directory_list = list(directories)
+
     ext_stripped = extension.strip()
+    seen_paths: set[str] = set()
 
-    for file_path in files:
-        full_suffix = "".join(file_path.suffixes)
-
-        if not _passes_extension_filter(full_suffix, extension, ext_stripped):
+    for directory in directory_list:
+        if not directory:
             continue
+        try:
+            base_path = Path(directory)
+            files = scan_directory(
+                directory,
+                "",
+                recursive=recursive,
+                exclude_dirs=tuple(exclude_dirs) if exclude_dirs else (),
+                exclude_files=tuple(exclude_files) if exclude_files else (),
+            )
+            for file_path in files:
+                abs_path = str(file_path.resolve())
+                if abs_path in seen_paths:
+                    continue
+                seen_paths.add(abs_path)
 
-        display_path = _compute_display_path(file_path, base_path)
+                full_suffix = "".join(file_path.suffixes)
 
-        if filter_text and not match_filter(display_path, filter_text):
-            continue
+                if not _passes_extension_filter(full_suffix, extension, ext_stripped):
+                    continue
 
-        yield file_path, display_path, full_suffix
+                display_path = _compute_display_path(file_path, base_path)
+
+                if filter_text and not match_filter(display_path, filter_text):
+                    continue
+
+                yield file_path, display_path, full_suffix
+        except Exception as e:
+            logger.warning(f"Error scanning directory {directory}: {e}")
 
 
 def _compute_display_path(file_path: Path, base_path: Path) -> str:
@@ -207,7 +225,7 @@ def _metrics_enabled(log_metrics: bool, config: AppConfig | None) -> bool:
 
 
 def _run_scan_pipeline(
-    directory: str,
+    directories: Sequence[str] | str,
     *,
     extension: str,
     filter_text: str,
@@ -227,7 +245,7 @@ def _run_scan_pipeline(
     processing paths, and reported through ``ScanMetrics.error_count``.
 
     Args:
-        directory: Filesystem path to scan.
+        directories: Filesystem path(s) to scan.
         extension: Extension filter expression (supports operators).
         filter_text: Keyword filter expression (supports operators).
         recursive: Whether to descend into subdirectories.
@@ -239,7 +257,11 @@ def _run_scan_pipeline(
     Returns:
         Processed results in scan order (failing files are skipped).
     """
-    timer = ScanTimer(directory, recursive) if enable_metrics else None
+    if isinstance(directories, str):
+        first_dir = directories
+    else:
+        first_dir = directories[0] if directories else ""
+    timer = ScanTimer(first_dir, recursive) if enable_metrics and first_dir else None
     timer_cm = timer if timer is not None else contextlib.nullcontext()
 
     with timer_cm:
@@ -249,7 +271,7 @@ def _run_scan_pipeline(
             # Collect all files first (needed for parallel processing)
             files_to_process = list(
                 _scan_and_filter(
-                    directory,
+                    directories,
                     extension=extension,
                     filter_text=filter_text,
                     recursive=recursive,
@@ -337,7 +359,7 @@ def _process_files_parallel(
 
 
 def scan_and_process(
-    directory: str,
+    directories: Sequence[str] | str,
     *,
     extension: str = "",
     filter_text: str = "",
@@ -347,14 +369,14 @@ def scan_and_process(
     log_metrics: bool = False,
     config: AppConfig | None = None,
 ) -> list[ScannedFile]:
-    """Scan *directory*, process each file, apply filters, return matches.
+    """Scan directory(ies), process each file, apply filters, return matches.
 
     Performs the same scanning + filtering pipeline the GUI uses, but
     without any Tkinter dependency.  Callers run this however they like
     (sync in a thread, sync in a subprocess, etc.).
 
     Args:
-        directory: Filesystem path to scan.
+        directories: Filesystem path(s) to scan.
         extension: Extension filter expression (supports operators).
         filter_text: Keyword filter expression (supports operators).
         recursive: Whether to descend into subdirectories.
@@ -368,7 +390,7 @@ def scan_and_process(
         fail per-file processing are logged and skipped).
     """
     return _run_scan_pipeline(
-        directory,
+        directories,
         extension=extension,
         filter_text=filter_text,
         recursive=recursive,
@@ -382,7 +404,7 @@ def scan_and_process(
 # pylint: disable=too-many-arguments
 # Public facade mirroring the column config surface; kwargs are additive.
 def scan_and_process_dynamic(
-    directory: str,
+    directories: Sequence[str] | str,
     *,
     extension: str = "",
     filter_text: str = "",
@@ -394,13 +416,13 @@ def scan_and_process_dynamic(
     log_metrics: bool = False,
     config: AppConfig | None = None,
 ) -> list[ScannedFileDynamic]:
-    """Scan directory with dynamic column extraction.
+    """Scan directory(ies) with dynamic column extraction.
 
     Similar to scan_and_process but uses dynamic column extraction rules
     to populate multiple columns based on regex patterns.
 
     Args:
-        directory: Filesystem path to scan.
+        directories: Filesystem path(s) to scan.
         extension: Extension filter expression (supports operators).
         filter_text: Keyword filter expression (supports operators).
         recursive: Whether to descend into subdirectories.
@@ -421,7 +443,7 @@ def scan_and_process_dynamic(
         return _process_file_dynamic(file_path, display_path, extractor, column_names, extension)
 
     return _run_scan_pipeline(
-        directory,
+        directories,
         extension=extension,
         filter_text=filter_text,
         recursive=recursive,

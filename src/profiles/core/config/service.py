@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+from profiles.core.config.matcher import select_active_configuration, matches_machine_config
 from profiles.core.config.models import AppConfig, MachineConfiguration
 
 
@@ -21,7 +22,7 @@ def find_active_config(
     config: AppConfig,
     directory: str,
 ) -> MachineConfiguration | None:
-    """Return the ``MachineConfiguration`` whose directory matches *directory*.
+    """Return the ``MachineConfiguration`` closest to *directory*.
 
     Returns ``None`` when no match is found.
     """
@@ -31,10 +32,17 @@ def find_active_config(
     selected_dir_normalized = str(Path(directory).resolve())
 
     for cfg in config.configurations:
-        if cfg.directory:
-            cfg_dir_normalized = str(Path(cfg.directory).resolve())
-            if selected_dir_normalized == cfg_dir_normalized:
-                return cfg
+        # Match using matcher engine with directory constraint
+        if matches_machine_config(cfg, "", "", selected_dir_normalized):
+            return cfg
+
+    # Fallback to legacy path comparison for compatibility
+    for cfg in config.configurations:
+        if cfg.scan:
+            for scan_path in cfg.scan:
+                cfg_dir_normalized = str(Path(scan_path).resolve())
+                if selected_dir_normalized == cfg_dir_normalized:
+                    return cfg
     return None
 
 
@@ -42,27 +50,18 @@ def find_configuration_by_hostname(
     config: AppConfig,
     hostname: str,
 ) -> MachineConfiguration | None:
-    """Find the machine configuration whose ``pc_hostname`` matches *hostname*.
+    """Find the machine configuration matching *hostname*, IP, or path using MatchCriteria.
 
     Args:
         config: Application configuration to search.
-        hostname: Hostname to match (case-insensitive).
+        hostname: Hostname to match.
 
     Returns:
         The matching :class:`MachineConfiguration`, or the first configuration
         when no exact match is found, or ``None`` when the configuration list
         is empty.
     """
-    hostname_lower = hostname.strip().lower()
-
-    for machine in config.configurations:
-        if machine.pc_hostname.strip().lower() == hostname_lower:
-            return machine
-
-    if config.configurations:
-        return config.configurations[0]
-
-    return None
+    return select_active_configuration(config, hostname, "", "")
 
 
 def _merge_unique(
@@ -106,36 +105,43 @@ def merge_config_overrides(
 
 
 def auto_select_directory(config: AppConfig, hostname: str) -> str:
-    """Return the directory that matches *hostname*, or the best fallback.
+    """Return the directory (the first scanned dir) that matches *hostname*, or the best fallback.
 
     Priority:
-    1. Configuration whose ``pc_hostname`` matches *hostname*.
-    2. First configuration with a non-empty directory.
-    3. ``config.search_dir`` (may be empty).
+    1. Configuration whose `match` criteria matches *hostname*.
+    2. First configuration with a non-empty `scan` items list.
+    3. `config.search_dir` (may be empty).
     """
-    hostname_lower = hostname.lower()
-    for cfg in config.configurations:
-        if cfg.pc_hostname.strip().lower() == hostname_lower and cfg.directory:
-            return cfg.directory
+    active_cfg = select_active_configuration(config, hostname, "", "")
+
+    if active_cfg and active_cfg.scan:
+        return active_cfg.scan[0]
 
     for cfg in config.configurations:
-        if cfg.directory:
-            return cfg.directory
+        if cfg.scan:
+            return cfg.scan[0]
 
     return config.search_dir
 
 
 def get_unique_directories(config: AppConfig) -> list[str]:
-    """Return the list of unique directories from all configurations.
+    """Return the list of unique directories from all combined configurations.
 
     Order is preserved (first occurrence wins).
     """
     seen: set[str] = set()
     result: list[str] = []
+    
+    # Check default search dir
+    if config.search_dir and config.search_dir not in seen:
+        seen.add(config.search_dir)
+        result.append(config.search_dir)
+
     for cfg in config.configurations:
-        if cfg.directory and cfg.directory not in seen:
-            seen.add(cfg.directory)
-            result.append(cfg.directory)
+        for scan_dir in cfg.scan:
+            if scan_dir and scan_dir not in seen:
+                seen.add(scan_dir)
+                result.append(scan_dir)
     return result
 
 
