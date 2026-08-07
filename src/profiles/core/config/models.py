@@ -66,18 +66,23 @@ class ColumnConfiguration:
     """A single ``[COLUMN_<Name>]`` section from ``.profiles``.
 
     Attributes:
-        name: Column name (from section header).
-        width: Column width in pixels.
-        expression: Regex pattern for extraction.
-        group: Regex group to extract (0=full match, 1+=captured group).
+        name: User-friendly header display name (optional; falls back to the
+            config key in the GUI).
+        width: Column width in pixels (used when stretch=False).
+        stretch: Whether the Treeview column should stretch to fill space.
+        match: Built-in keyword (e.g. "version", "date") or raw regex pattern.
+        transform: Optional replacement pattern with group backreferences
+            (e.g. "\\1 (Build \\2)"). If omitted, group 1 is returned when it
+            exists, else the whole match (group 0).
         priority: Extraction priority (higher = processed first).
         default: Default value if pattern doesn't match.
     """
 
     name: str = ""
     width: int = 150
-    expression: str = ""
-    group: int = 1
+    stretch: bool = False
+    match: str = ".*"
+    transform: str | None = None
     priority: int = 0
     default: str = ""
 
@@ -152,6 +157,8 @@ class AppConfig:
     language: str = "en"
     column_names: tuple[str, ...] = ()  # Built from [COLUMN_*] sections
     column_widths: tuple[int, ...] = ()  # Built from [COLUMN_*] sections
+    column_stretches: tuple[bool, ...] = ()  # Built from [COLUMN_*] sections
+    column_headers: tuple[str, ...] = ()  # Display names from ColumnConfiguration.name
     columns: dict[str, ColumnConfiguration] = field(default_factory=dict)
     extensions: tuple[str, ...] = ("All", ".lnk")
     filters: tuple[str, ...] = ("", "ST_PRO", "ST_ENG")

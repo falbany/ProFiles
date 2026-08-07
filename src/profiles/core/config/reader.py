@@ -139,10 +139,11 @@ class ConfigReader:
         """Populate *config* from ``schema.columns``."""
         for name, col in schema.columns.items():
             config.columns[name] = ColumnConfiguration(
-                name=name,
+                name=col.name or name,
                 width=col.width,
-                expression=col.expression,
-                group=col.group,
+                stretch=col.stretch,
+                match=col.match,
+                transform=col.transform,
                 priority=col.priority,
                 default=col.default,
             )
