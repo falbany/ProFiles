@@ -21,11 +21,13 @@ Each column is defined under the `columns:` block with the following parameters:
 
 | Parameter    | Type    | Default                   | Description                                                                            |
 | ------------ | ------- | ------------------------- | -------------------------------------------------------------------------------------- |
-| `width`      | Integer | `150` (or `600` for File) | Width of the column in pixels.                                                         |
-| `expression` | String  | **Required**              | Regular expression pattern containing a capture group to extract the target value.     |
-| `group`      | Integer | `1`                       | The regex capture group index to extract (`0` is full match, `1+` are capture groups). |
+| `name`       | String  | *(falls back to key)*     | Friendly header label displayed in the GUI column heading.                             |
+| `width`      | Integer | `150` (or `600` for File) | Width of the column in pixels (used when `stretch` is `false`).                        |
+| `stretch`    | Boolean | `false`                   | Whether the column stretches to fill available space in the Treeview.                    |
+| `match`      | String  | **Required**              | Built-in keyword (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) or a raw regex pattern. |
+| `transform`  | String  | `None`                    | Replacement pattern with `{group:N}` backreferences (e.g. `v{group:1}`). Falls back to the whole match if omitted. |
 | `priority`   | Integer | `0`                       | Order of extraction evaluation (higher numbers are evaluated first).                   |
-| `default`    | String  | `""`                      | Fallback value displayed if the regex pattern does not match.                          |
+| `default`    | String  | `""`                      | Fallback value displayed if the pattern does not match.                                |
 
 ---
 
@@ -45,9 +47,11 @@ Add this to your YAML configuration file:
 ```yaml
 columns:
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 10
     default: "Unknown"
 ```
@@ -59,9 +63,11 @@ Given filenames containing version tags like `_V01-Rel6.2.1`:
 ```yaml
 columns:
   Version:
+    name: Version
     width: 150
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: "{group:1}"
     priority: 20
 ```
 
@@ -77,22 +83,28 @@ defaults:
 
 columns:
   File:
+    name: File
     width: 400
-    expression: ".*"
-    group: 0
+    stretch: true
+    match: ".*"
+    transform: "{group:0}"
     priority: 100
 
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 15
     default: "N/A"
 
   Version:
+    name: Version
     width: 130
-    expression: "_V([^-]+)"
-    group: 1
+    stretch: false
+    match: "_V([^-]+)"
+    transform: "{group:1}"
     priority: 20
     default: "Latest"
 

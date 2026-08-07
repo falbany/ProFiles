@@ -136,14 +136,18 @@ defaults:
 # Dynamic columns extracted from filenames
 columns:
   File:
+    name: File
     width: 600
-    expression: ".*"
-    group: 0
+    stretch: true
+    match: ".*"
+    transform: "{group:0}"
     priority: 100
   Version:
+    name: Version
     width: 100
-    expression: "[-_]V(\\d+(?:\\.\\d+)*)"
-    group: 1
+    stretch: false
+    match: "[-_]V(\\d+(?:\\.\\d+)*)"
+    transform: "{group:1}"
     priority: 10
 
 # Machine-specific configurations

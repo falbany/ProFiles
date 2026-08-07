@@ -21,9 +21,11 @@ Chaque colonne est définie sous la clé `columns:` avec les paramètres suivant
 
 | Paramètre    | Type   | Défaut                     | Description                                                                       |
 | ------------ | ------ | -------------------------- | --------------------------------------------------------------------------------- |
-| `width`      | Entier | `150` (ou `600` pour File) | Largeur de la colonne en pixels.                                                  |
-| `expression` | Chaîne | **Obligatoire**            | Expression régulière contenant un groupe de capture pour extraire la valeur.      |
-| `group`      | Entier | `1`                        | Index du groupe de capture regex (`0` = correspondance complète, `1+` = groupes). |
+| `name`       | Chaîne | *(revient à la clé)*       | Libellé convivial affiché dans l'en-tête de la colonne de l'interface.            |
+| `width`      | Entier | `150` (ou `600` pour File) | Largeur de la colonne en pixels (utilisée quand `stretch` est `false`).           |
+| `stretch`    | Booléen| `false`                    | La colonne s'étire-t-elle pour remplir l'espace disponible dans le Treeview.      |
+| `match`      | Chaîne | **Obligatoire**            | Mot-clé intégré (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) ou expression regex brute. |
+| `transform`  | Chaîne | `None`                     | Modèle de remplacement avec références arrière `{group:N}` (ex: `v{group:1}`).     |
 | `priority`   | Entier | `0`                        | Ordre d'évaluation (les valeurs les plus élevées sont traitées en premier).       |
 | `default`    | Chaîne | `""`                       | Valeur de repli affichée si le motif ne correspond pas.                           |
 
@@ -45,9 +47,11 @@ Ajoutez ceci dans votre fichier `.profiles` au format YAML :
 ```yaml
 columns:
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 10
     default: "Inconnu"
 ```
@@ -59,9 +63,11 @@ Pour extraire la version après `_V` :
 ```yaml
 columns:
   Version:
+    name: Version
     width: 150
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: "{group:1}"
     priority: 20
 ```
 
@@ -77,22 +83,28 @@ defaults:
 
 columns:
   File:
+    name: File
     width: 400
-    expression: ".*"
-    group: 0
+    stretch: true
+    match: ".*"
+    transform: "{group:0}"
     priority: 100
 
   Device:
+    name: Device
     width: 120
-    expression: "Device_([A-Z0-9]+)"
-    group: 1
+    stretch: false
+    match: "Device_([A-Z0-9]+)"
+    transform: "{group:1}"
     priority: 15
     default: "N/A"
 
   Version:
+    name: Version
     width: 130
-    expression: "_V([^-]+)"
-    group: 1
+    stretch: false
+    match: "_V([^-]+)"
+    transform: "{group:1}"
     priority: 20
     default: "Dernière"
 

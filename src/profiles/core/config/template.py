@@ -102,45 +102,57 @@ defaults:
 
 # ============================================================================
 # COLUMNS — dynamic columns extracted from filenames via regex.
-# Expressions are applied to the FULL FILE PATH, enabling extraction of
+# Patterns are applied to the FULL FILE PATH, enabling extraction of
 # Path, FileName, Directory, and other path components.
 # The "File" column is implicit and always appears first.
 #
 # Keys per column:
-#   width       int     default 150    column width in pixels
-#   expression  regex   required       pattern applied to the full file path
-#   group       int     default 1      regex group to extract (0=full match,
-#                                      1+=captured group)
+#   name        string  optional       friendly header label (falls back to key)
+#   width       int     default 150    column width in pixels (when stretch=false)
+#   stretch     bool    default false  whether the column stretches to fill space
+#   match       string  required       built-in keyword (version, date, git_commit,
+#                                      type, filename, extension) or raw regex
+#   transform   string  optional       replacement pattern with {{group:N}} backrefs
 #   priority    int     default 0      extraction priority (higher = first)
 #   default     string  optional       value used when the pattern doesn't match
 # ============================================================================
 columns:
   File:
+    name: File
     width: 600
-    expression: '.*'
-    group: 0
+    stretch: true
+    match: '.*'
+    transform: '{{group:0}}'
     priority: 100
     default: ""
   Path:
+    name: Path
     width: 200
-    expression: '(.+[\\\\/])'
-    group: 1
+    stretch: false
+    match: '(.+[\\\\/])'
+    transform: '{{group:1}}'
     priority: 40
     default: "."
   FileName:
+    name: FileName
     width: 150
-    expression: '([^/\\\\]+)$'
-    group: 1
+    stretch: false
+    match: '([^/\\\\]+)$'
+    transform: '{{group:1}}'
     priority: 30
   Type:
+    name: Type
     width: 80
-    expression: "(PRO|ENG|DEV|TMP|DEBUG)(?!.*(?:PRO|ENG|DEV|TMP|DEBUG))"
-    group: 1
+    stretch: false
+    match: "(PRO|ENG|DEV|TMP|DEBUG)(?!.*(?:PRO|ENG|DEV|TMP|DEBUG))"
+    transform: '{{group:1}}'
     priority: 20
   Version:
+    name: Version
     width: 100
-    expression: '[-_]V(\\\\d+(?:\\\\.\\\\d+)*)(?=[^\\\\/]*\\\\.[a-zA-Z0-9]+$)'
-    group: 1
+    stretch: false
+    match: '[-_]V(\\\\d+(?:\\\\.\\\\d+)*)(?=[^\\\\/]*\\\\.[a-zA-Z0-9]+$)'
+    transform: '{{group:1}}'
     priority: 10
 
 # ============================================================================

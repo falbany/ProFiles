@@ -21,36 +21,44 @@ Cette bibliothèque fournit des configurations de colonnes **prêtes à l'emploi
 ```yaml
 columns:
   File:
+    name: File
     width: 60
-    expression: '.*'
-    group: 0
+    stretch: false
+    match: '.*'
+    transform: '{group:0}'
     priority: 100
 ```
 
 ### Nom de Fichier (sans extension)
 ```yaml
   FileName:
+    name: FileName
     width: 200
-    expression: '([^/\\]+)\.[^.]+$'
-    group: 1
+    stretch: false
+    match: '([^/\\]+)\.[^.]+$'
+    transform: '{group:1}'
     priority: 100
 ```
 
 ### Extension de Fichier
 ```yaml
   Extension:
+    name: Extension
     width: 80
-    expression: '\.([^.]+)$'
-    group: 1
+    stretch: false
+    match: '\.([^.]+)$'
+    transform: '{group:1}'
     priority: 50
 ```
 
 ### Chemin Complet (répertoire)
 ```yaml
   Path:
+    name: Path
     width: 300
-    expression: '(.+[\\/])'
-    group: 1
+    stretch: false
+    match: '(.+[\\/])'
+    transform: '{group:1}'
     priority: 10
     default: "."
 ```
@@ -58,9 +66,11 @@ columns:
 ### Nom de Fichier Seulement (sans chemin)
 ```yaml
   FileNameOnly:
+    name: FileNameOnly
     width: 250
-    expression: '([^/\\]+)$'
-    group: 1
+    stretch: false
+    match: '([^/\\]+)$'
+    transform: '{group:1}'
     priority: 90
 ```
 
@@ -71,63 +81,77 @@ columns:
 ### Version Simple (_Vxxx)
 ```yaml
   Version:
+    name: Version
     width: 100
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Version Numérique (_V01, _V02, etc.)
 ```yaml
   VersionNum:
+    name: VersionNum
     width: 60
-    expression: '_V(\d+)'
-    group: 1
+    stretch: false
+    match: '_V(\d+)'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Version avec Release (_V01-Rel6.2.1)
 ```yaml
   VersionFull:
+    name: VersionFull
     width: 120
-    expression: '_V([^-]+-Rel[^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^-]+-Rel[^\\/]+)'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Date de Version (_V2026.7 ou _V20260715)
 ```yaml
   VersionDate:
+    name: VersionDate
     width: 100
-    expression: '_V(\d{4}\.?\d{2,4})'
-    group: 1
+    stretch: false
+    match: '_V(\d{4}\.?\d{2,4})'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Numéro de Build
 ```yaml
   Build:
+    name: Build
     width: 70
-    expression: 'build(\d+)'
-    group: 1
+    stretch: false
+    match: 'build(\d+)'
+    transform: '{group:1}'
     priority: 9
 ```
 
 ### Numéro de Révision (_Rev01, _Rev02)
 ```yaml
   Revision:
+    name: Revision
     width: 70
-    expression: '_Rev(\d+)'
-    group: 1
+    stretch: false
+    match: '_Rev(\d+)'
+    transform: '{group:1}'
     priority: 18
 ```
 
 ### Version Semantique (1.2.3)
 ```yaml
   SemVer:
+    name: SemVer
     width: 90
-    expression: '(\d+\.\d+\.\d+)'
-    group: 1
+    stretch: false
+    match: '(\d+\.\d+\.\d+)'
+    transform: '{group:1}'
     priority: 15
 ```
 
@@ -138,54 +162,66 @@ columns:
 ### Type d'Environnement (PRO, DEV, TEST, TMP)
 ```yaml
   Type:
+    name: Type
     width: 70
-    expression: '(PRO|ENG|DEV|TMP|DEBUG|TEST|PROD)'
-    group: 1
+    stretch: false
+    match: '(PRO|ENG|DEV|TMP|DEBUG|TEST|PROD)'
+    transform: '{group:1}'
     priority: 15
 ```
 
 ### Type avec Priorité depuis la Fin (Dernier Match)
 ```yaml
   TypeLast:
+    name: TypeLast
     width: 70
-    expression: '(PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))'
-    group: 1
+    stretch: false
+    match: '(PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))'
+    transform: '{group:1}'
     priority: 15
 ```
 
 ### Statut de Version (Release, Beta, Alpha, RC)
 ```yaml
   Status:
+    name: Status
     width: 80
-    expression: '(Release|Beta|Alpha|RC)'
-    group: 1
+    stretch: false
+    match: '(Release|Beta|Alpha|RC)'
+    transform: '{group:1}'
     priority: 18
 ```
 
 ### Niveau de Qualité (QTY_PRO, QTY_ENG, etc.)
 ```yaml
   QualityLevel:
+    name: QualityLevel
     width: 90
-    expression: '(QTY_PRO|QTY_ENG|QTY_DEV|LOC_A|LOC_B|LOC_C)'
-    group: 1
+    stretch: false
+    match: '(QTY_PRO|QTY_ENG|QTY_DEV|LOC_A|LOC_B|LOC_C)'
+    transform: '{group:1}'
     priority: 12
 ```
 
 ### Environnement (Prod, Dev, Test, Stage)
 ```yaml
   Environment:
+    name: Environment
     width: 90
-    expression: '(Prod|Dev|Test|Stage|Preprod)'
-    group: 1
+    stretch: false
+    match: '(Prod|Dev|Test|Stage|Preprod)'
+    transform: '{group:1}'
     priority: 16
 ```
 
 ### Mode de Debug (Debug, Release, Optimized)
 ```yaml
   BuildMode:
+    name: BuildMode
     width: 80
-    expression: '(Debug|Release|Optimized|Profile)'
-    group: 1
+    stretch: false
+    match: '(Debug|Release|Optimized|Profile)'
+    transform: '{group:1}'
     priority: 17
 ```
 
@@ -196,54 +232,66 @@ columns:
 ### Code Projet
 ```yaml
   Project:
+    name: Project
     width: 100
-    expression: '(PROJ|DEV|PRJ|EMBED|APP)'
-    group: 1
+    stretch: false
+    match: '(PROJ|DEV|PRJ|EMBED|APP)'
+    transform: '{group:1}'
     priority: 25
 ```
 
 ### Nom de Périphérique Complet
 ```yaml
   Device:
+    name: Device
     width: 120
-    expression: 'Device_([A-Za-z0-9_]+)'
-    group: 1
+    stretch: false
+    match: 'Device_([A-Za-z0-9_]+)'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Identifiant Périphérique (ABC123, XYZ789)
 ```yaml
   DeviceID:
+    name: DeviceID
     width: 100
-    expression: 'Device_([A-Z0-9]+)'
-    group: 1
+    stretch: false
+    match: 'Device_([A-Z0-9]+)'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Modèle ou Référence (MOD001A, MOD002B)
 ```yaml
   Model:
+    name: Model
     width: 110
-    expression: '(MOD\d+[A-Z]|DEV\d+|TOOL\d+|SYS\d+)'
-    group: 1
+    stretch: false
+    match: '(MOD\d+[A-Z]|DEV\d+|TOOL\d+|SYS\d+)'
+    transform: '{group:1}'
     priority: 18
 ```
 
 ### Famille de Produit
 ```yaml
   Family:
+    name: Family
     width: 100
-    expression: '(Family_[A-Z0-9]+|Fam_[A-Z]+)'
-    group: 1
+    stretch: false
+    match: '(Family_[A-Z0-9]+|Fam_[A-Z]+)'
+    transform: '{group:1}'
     priority: 22
 ```
 
 ### Code Client
 ```yaml
   Client:
+    name: Client
     width: 90
-    expression: '(Client_[A-Z0-9]+|C_[A-Z]{2,4})'
-    group: 1
+    stretch: false
+    match: '(Client_[A-Z0-9]+|C_[A-Z]{2,4})'
+    transform: '{group:1}'
     priority: 24
 ```
 
@@ -254,36 +302,44 @@ columns:
 ### Site ou Localisation
 ```yaml
   Site:
+    name: Site
     width: 100
-    expression: '(SITE_A|SITE_B|SITE_C|SITE_NORTH|SITE_SOUTH)'
-    group: 1
+    stretch: false
+    match: '(SITE_A|SITE_B|SITE_C|SITE_NORTH|SITE_SOUTH)'
+    transform: '{group:1}'
     priority: 14
 ```
 
 ### Région ou Zone
 ```yaml
   Region:
+    name: Region
     width: 90
-    expression: '(Region_[A-Z]+|Zone_[A-Z0-9]+)'
-    group: 1
+    stretch: false
+    match: '(Region_[A-Z]+|Zone_[A-Z0-9]+)'
+    transform: '{group:1}'
     priority: 13
 ```
 
 ### Pays ou Code Pays
 ```yaml
   Country:
+    name: Country
     width: 70
-    expression: '(FR|DE|EN|ES|IT|JP|CN|US)'
-    group: 1
+    stretch: false
+    match: '(FR|DE|EN|ES|IT|JP|CN|US)'
+    transform: '{group:1}'
     priority: 11
 ```
 
 ### Bureau ou Département
 ```yaml
   Department:
+    name: Department
     width: 110
-    expression: '(DEPT_[A-Z0-9]+|Bureau_[A-Z]+)'
-    group: 1
+    stretch: false
+    match: '(DEPT_[A-Z0-9]+|Bureau_[A-Z]+)'
+    transform: '{group:1}'
     priority: 12
 ```
 
@@ -294,45 +350,55 @@ columns:
 ### Architecture (x32, x64, ARM)
 ```yaml
   Arch:
+    name: Arch
     width: 60
-    expression: '(AMD64|x64|x86|ARM|ARM64)'
-    group: 1
+    stretch: false
+    match: '(AMD64|x64|x86|ARM|ARM64)'
+    transform: '{group:1}'
     priority: 15
 ```
 
 ### Langue ou Locale
 ```yaml
   Language:
+    name: Language
     width: 70
-    expression: '(FR|EN|DE|ES|IT|JA|ZH|RU)'
-    group: 1
+    stretch: false
+    match: '(FR|EN|DE|ES|IT|JA|ZH|RU)'
+    transform: '{group:1}'
     priority: 11
 ```
 
 ### Plateforme (Windows, Linux, Mac)
 ```yaml
   Platform:
+    name: Platform
     width: 80
-    expression: '(Win|Linux|Mac|Android|iOS)'
-    group: 1
+    stretch: false
+    match: '(Win|Linux|Mac|Android|iOS)'
+    transform: '{group:1}'
     priority: 16
 ```
 
 ### Version de Runtime
 ```yaml
   Runtime:
+    name: Runtime
     width: 90
-    expression: '(rt_\d+\.\d+|runtime-\d+\.\d+)'
-    group: 1
+    stretch: false
+    match: '(rt_\d+\.\d+|runtime-\d+\.\d+)'
+    transform: '{group:1}'
     priority: 14
 ```
 
 ### Configuration Spécifique
 ```yaml
   Config:
+    name: Config
     width: 100
-    expression: '(cfg_[A-Z0-9]+|config-[a-z]+)'
-    group: 1
+    stretch: false
+    match: '(cfg_[A-Z0-9]+|config-[a-z]+)'
+    transform: '{group:1}'
     priority: 13
 ```
 
@@ -343,36 +409,44 @@ columns:
 ### Date de Création (YYYY.MM.DD)
 ```yaml
   Date:
+    name: Date
     width: 100
-    expression: '(\d{4}\.\d{2}\.\d{2})'
-    group: 1
+    stretch: false
+    match: '(\d{4}\.\d{2}\.\d{2})'
+    transform: '{group:1}'
     priority: 8
 ```
 
 ### Date ISO (YYYY-MM-DD)
 ```yaml
   DateISO:
+    name: DateISO
     width: 100
-    expression: '(\d{4}-\d{2}-\d{2})'
-    group: 1
+    stretch: false
+    match: '(\d{4}-\d{2}-\d{2})'
+    transform: '{group:1}'
     priority: 8
 ```
 
 ### Timestamp Unix
 ```yaml
   Timestamp:
+    name: Timestamp
     width: 110
-    expression: '_t(\d{10,13})'
-    group: 1
+    stretch: false
+    match: '_t(\d{10,13})'
+    transform: '{group:1}'
     priority: 5
 ```
 
 ### Semaine ISO (YYYY-Www)
 ```yaml
   Week:
+    name: Week
     width: 80
-    expression: '(\d{4}-W\d{2})'
-    group: 1
+    stretch: false
+    match: '(\d{4}-W\d{2})'
+    transform: '{group:1}'
     priority: 7
 ```
 
@@ -383,54 +457,66 @@ columns:
 ### Auteur ou Créateur
 ```yaml
   Author:
+    name: Author
     width: 120
-    expression: 'by_([A-Za-z0-9_]+)'
-    group: 1
+    stretch: false
+    match: 'by_([A-Za-z0-9_]+)'
+    transform: '{group:1}'
     priority: 6
 ```
 
 ### Commit Hash (court - 7 caractères)
 ```yaml
   Commit:
+    name: Commit
     width: 90
-    expression: '_g([a-f0-9]{7})'
-    group: 2
+    stretch: false
+    match: '_g([a-f0-9]{7})'
+    transform: '{group:2}'
     priority: 7
 ```
 
 ### Nom de Branche
 ```yaml
   Branch:
+    name: Branch
     width: 100
-    expression: '_branch_([A-Za-z0-9-_]+)'
-    group: 2
+    stretch: false
+    match: '_branch_([A-Za-z0-9-_]+)'
+    transform: '{group:2}'
     priority: 7
 ```
 
 ### Tag ou Label
 ```yaml
   Tag:
+    name: Tag
     width: 100
-    expression: '\[([A-Z_]+)\]'
-    group: 1
+    stretch: false
+    match: '\[([A-Z_]+)\]'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Numéro de Ticket/Issue
 ```yaml
   Ticket:
+    name: Ticket
     width: 90
-    expression: '(PROJ-\d+|ISSUE-\d+|#\d+)'
-    group: 1
+    stretch: false
+    match: '(PROJ-\d+|ISSUE-\d+|#\d+)'
+    transform: '{group:1}'
     priority: 19
 ```
 
 ### Catégorie
 ```yaml
   Category:
+    name: Category
     width: 100
-    expression: 'cat_([A-Za-z0-9_]+)'
-    group: 1
+    stretch: false
+    match: 'cat_([A-Za-z0-9_]+)'
+    transform: '{group:1}'
     priority: 10
 ```
 
@@ -441,27 +527,33 @@ columns:
 ### Extraction avec Séparateurs Multiples
 ```yaml
   Separator:
+    name: Separator
     width: 100
-    expression: '[._-]([A-Z0-9]+)[._-]'
-    group: 1
+    stretch: false
+    match: '[._-]([A-Z0-9]+)[._-]'
+    transform: '{group:1}'
     priority: 12
 ```
 
 ### Multiple Tags (Premier Match)
 ```yaml
   MultiTag:
+    name: MultiTag
     width: 100
-    expression: '([A-Z]{2,5})_(\d+)'
-    group: 1
+    stretch: false
+    match: '([A-Z]{2,5})_(\d+)'
+    transform: '{group:1}'
     priority: 15
 ```
 
 ### Extraction Conditionnelle avec Default
 ```yaml
   Optional:
+    name: Optional
     width: 100
-    expression: '_opt_([^_]+)_'
-    group: 1
+    stretch: false
+    match: '_opt_([^_]+)_'
+    transform: '{group:1}'
     priority: 5
     default: "Standard"
 ```
@@ -469,27 +561,33 @@ columns:
 ### Version avec Suffixe (_V01-beta, _V01-alpha)
 ```yaml
   VersionWithSuffix:
+    name: VersionWithSuffix
     width: 120
-    expression: '_V(\d+)-?(beta|alpha|rc)?'
-    group: 1
+    stretch: false
+    match: '_V(\d+)-?(beta|alpha|rc)?'
+    transform: '{group:1}'
     priority: 20
 ```
 
 ### Code Mixte (Lettres + Chiffres)
 ```yaml
   Alphanumeric:
+    name: Alphanumeric
     width: 100
-    expression: '([A-Z]{2,4}\d{3,6})'
-    group: 1
+    stretch: false
+    match: '([A-Z]{2,4}\d{3,6})'
+    transform: '{group:1}'
     priority: 16
 ```
 
 ### Extraction depuis la Fin (Priorité Dernière Occurrence)
 ```yaml
   LastOccurrence:
+    name: LastOccurrence
     width: 100
-    expression: '.*?(TAG_[A-Z]+)'
-    group: 1
+    stretch: false
+    match: '.*?(TAG_[A-Z]+)'
+    transform: '{group:1}'
     priority: 10
 ```
 
@@ -508,39 +606,51 @@ defaults:
 
 columns:
   File:
+    name: File
     width: 60
-    expression: '.*'
-    group: 0
+    stretch: false
+    match: '.*'
+    transform: '{group:0}'
     priority: 100
 
   FileName:
+    name: FileName
     width: 200
-    expression: '([^/\\]+)\.[^.]+$'
-    group: 1
+    stretch: false
+    match: '([^/\\]+)\.[^.]+$'
+    transform: '{group:1}'
     priority: 90
 
   Type:
+    name: Type
     width: 70
-    expression: '(PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))'
-    group: 1
+    stretch: false
+    match: '(PRO|ENG|DEV|TMP|DEBUG)(?!.*(PRO|ENG|DEV|TMP|DEBUG))'
+    transform: '{group:1}'
     priority: 15
 
   QualityLevel:
+    name: QualityLevel
     width: 90
-    expression: '(_PRO|_ENG|_DEV)'
-    group: 1
+    stretch: false
+    match: '(_PRO|_ENG|_DEV)'
+    transform: '{group:1}'
     priority: 12
 
   VersionFull:
+    name: VersionFull
     width: 120
-    expression: '_V([^-]+-Rel[^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^-]+-Rel[^\\/]+)'
+    transform: '{group:1}'
     priority: 20
 
   BuildMode:
+    name: BuildMode
     width: 80
-    expression: '(Debug|Release|Optimized)'
-    group: 1
+    stretch: false
+    match: '(Debug|Release|Optimized)'
+    transform: '{group:1}'
     priority: 17
 ```
 
@@ -548,51 +658,67 @@ columns:
 ```yaml
 columns:
   File:
+    name: File
     width: 60
-    expression: '.*'
-    group: 0
+    stretch: false
+    match: '.*'
+    transform: '{group:0}'
     priority: 100
 
   Project:
+    name: Project
     width: 100
-    expression: '(PROJ|DEV|PRJ)'
-    group: 1
+    stretch: false
+    match: '(PROJ|DEV|PRJ)'
+    transform: '{group:1}'
     priority: 25
 
   DeviceID:
+    name: DeviceID
     width: 100
-    expression: 'Device_([A-Z0-9]+)'
-    group: 1
+    stretch: false
+    match: 'Device_([A-Z0-9]+)'
+    transform: '{group:1}'
     priority: 20
 
   VersionNum:
+    name: VersionNum
     width: 60
-    expression: '_V(\d+)'
-    group: 1
+    stretch: false
+    match: '_V(\d+)'
+    transform: '{group:1}'
     priority: 20
 
   Environment:
+    name: Environment
     width: 90
-    expression: '(Prod|Dev|Test|Stage)'
-    group: 1
+    stretch: false
+    match: '(Prod|Dev|Test|Stage)'
+    transform: '{group:1}'
     priority: 16
 
   Build:
+    name: Build
     width: 70
-    expression: 'build(\d+)'
-    group: 1
+    stretch: false
+    match: 'build(\d+)'
+    transform: '{group:1}'
     priority: 9
 
   Arch:
+    name: Arch
     width: 60
-    expression: '(AMD64|x86|ARM)'
-    group: 1
+    stretch: false
+    match: '(AMD64|x86|ARM)'
+    transform: '{group:1}'
     priority: 15
 
   Commit:
+    name: Commit
     width: 90
-    expression: '_g([a-f0-9]{7})'
-    group: 2
+    stretch: false
+    match: '_g([a-f0-9]{7})'
+    transform: '{group:2}'
     priority: 7
 ```
 
@@ -600,33 +726,43 @@ columns:
 ```yaml
 columns:
   File:
+    name: File
     width: 60
-    expression: '.*'
-    group: 0
+    stretch: false
+    match: '.*'
+    transform: '{group:0}'
     priority: 100
 
   Site:
+    name: Site
     width: 100
-    expression: '(SITE_A|SITE_B|SITE_C)'
-    group: 1
+    stretch: false
+    match: '(SITE_A|SITE_B|SITE_C)'
+    transform: '{group:1}'
     priority: 14
 
   Type:
+    name: Type
     width: 70
-    expression: '(PRO|ENG|DEV|TMP)'
-    group: 1
+    stretch: false
+    match: '(PRO|ENG|DEV|TMP)'
+    transform: '{group:1}'
     priority: 15
 
   Version:
+    name: Version
     width: 100
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: '{group:1}'
     priority: 20
 
   QualityLevel:
+    name: QualityLevel
     width: 90
-    expression: '(QTY_PRO|QTY_ENG|QTY_DEV)'
-    group: 1
+    stretch: false
+    match: '(QTY_PRO|QTY_ENG|QTY_DEV)'
+    transform: '{group:1}'
     priority: 12
 ```
 
@@ -634,21 +770,27 @@ columns:
 ```yaml
 columns:
   File:
+    name: File
     width: 60
-    expression: '.*'
-    group: 0
+    stretch: false
+    match: '.*'
+    transform: '{group:0}'
     priority: 100
 
   Version:
+    name: Version
     width: 100
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: '{group:1}'
     priority: 20
 
   Type:
+    name: Type
     width: 70
-    expression: '(PRO|ENG|DEV|TMP)'
-    group: 1
+    stretch: false
+    match: '(PRO|ENG|DEV|TMP)'
+    transform: '{group:1}'
     priority: 15
 ```
 
@@ -656,39 +798,51 @@ columns:
 ```yaml
 columns:
   File:
+    name: File
     width: 60
-    expression: '.*'
-    group: 0
+    stretch: false
+    match: '.*'
+    transform: '{group:0}'
     priority: 100
 
   Project:
+    name: Project
     width: 100
-    expression: '(PROJ|DEV|PRJ)'
-    group: 1
+    stretch: false
+    match: '(PROJ|DEV|PRJ)'
+    transform: '{group:1}'
     priority: 25
 
   Version:
+    name: Version
     width: 100
-    expression: '_V([^\\/]+)'
-    group: 1
+    stretch: false
+    match: '_V([^\\/]+)'
+    transform: '{group:1}'
     priority: 20
 
   Commit:
+    name: Commit
     width: 90
-    expression: '_g([a-f0-9]{7})'
-    group: 2
+    stretch: false
+    match: '_g([a-f0-9]{7})'
+    transform: '{group:2}'
     priority: 7
 
   Branch:
+    name: Branch
     width: 100
-    expression: '_branch_([A-Za-z0-9-_]+)'
-    group: 2
+    stretch: false
+    match: '_branch_([A-Za-z0-9-_]+)'
+    transform: '{group:2}'
     priority: 7
 
   Build:
+    name: Build
     width: 70
-    expression: 'build(\d+)'
-    group: 1
+    stretch: false
+    match: 'build(\d+)'
+    transform: '{group:1}'
     priority: 9
 ```
 
