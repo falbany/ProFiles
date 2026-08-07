@@ -48,6 +48,20 @@ regex patterns:
 
 If `match` does not match a keyword, it is treated as a raw regex pattern.
 
+## Transform Syntax
+
+The `transform` field supports two backreference syntaxes:
+
+| Syntax       | Example              | Description                          |
+| ------------ | -------------------- | ------------------------------------ |
+| `{group:N}`  | `v{group:1}`         | User-friendly syntax (recommended).    |
+| `\g<N>`      | `v\g<1>`             | Standard Python regex syntax.        |
+| `\N`         | `v\1`                | Shorthand for `\g<N>`.               |
+
+The `{group:N}` syntax is translated to `\g<N>` internally before calling
+`re.Pattern.expand()`, so all three forms are equivalent. Use whichever
+you find most readable.
+
 ## Migration
 
 ### YAML Configuration
