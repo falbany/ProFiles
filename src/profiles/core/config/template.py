@@ -219,33 +219,42 @@ hooks:
 # Keys (all optional, except pc_hostname if you want auto-selection):
 #   extends       name of another config to inherit from (lists are merged:
 #                 local items first, then inherited items not already present)
-#   pc_hostname   local hostname this config targets (exact, case-insensitive)
-#                 or "All" for a catch-all
-#   pc_ip         display-only IP label (NOT used for matching)
-#   pc_name       friendly label (logs, status)
-#   directory     production directory scanned for this machine
-#                 ("" = inherits search_dir)
+#   match         auto-selection criteria object (see below)
+#   scan          directory path(s) to scan for this machine (string or list;
+#                 string is auto-coerced to a single-element list)
 #   extensions    per-config Extension presets (overrides defaults)
 #   filters       per-config Filter presets (overrides defaults)
 #   row_colors    per-config row-coloring rules (APPENDED to defaults,
 #                 checked first)
 #   search_exclude_files  per-config file excludes (APPENDED to defaults)
 #
-# row_colors from the config whose `directory` matches the selected
+# match field (OR logic — any match in any field selects this config):
+#   hostname      glob/regex patterns for the machine's hostname
+#   ip            glob/regex patterns for the machine's IP address
+#   path          glob/regex patterns for the current working directory path
+#   Patterns support glob wildcards (* ? [seq]) and regex (prefix with "re:").
+#   Path patterns are cross-platform normalized (backslashes → forward slashes).
+#
+# row_colors from the config whose `scan` path matches the selected
 # directory are applied automatically, even if the hostname doesn't match.
 # ============================================================================
 configs:
   base:
-    pc_name: Generic
-    directory: '{cwd}'
+    match:
+      hostname: ["*"]
+    scan: '{cwd}'
     row_colors:
       - pattern: SPECIFIC
         color: "#FF0000"
 
   # production:
   #   extends: base
-  #   pc_hostname: COMPUTER-1
-  #   pc_ip: 172.16.40.143
+  #   match:
+  #     hostname: ["COMPUTER-1"]
+  #     ip: ["172.16.40.143"]
+  #   scan:
+  #     - "Z:/Projects/Engineering"
+  #     - "Z:/Projects/Shared"
   #   extensions: [.pdf, .docx, .lnk, .xlsx]
   #   filters: [tmp, dev, prod]
 
@@ -260,6 +269,6 @@ configs:
 #   * `row_colors` in `defaults` provide a BASE set of rules; per-config
 #     `row_colors` are APPENDED and have priority (checked first).
 #   * When you change the Directory in the GUI, the row_colors from the
-#     config whose `directory` matches the selected directory are applied
+#     config whose `scan` path matches the selected directory are applied
 #     automatically, even if the hostname doesn't match.
 """

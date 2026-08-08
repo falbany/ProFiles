@@ -53,7 +53,7 @@
 * **File Operations**: Bulk launch, copy path, hash verification (SHA-256), and safe deletion.
 
 ### ⚙️ Auto-Configuration
-* **Zero-Touch Deployment**: Detects hostname to auto-select matching configurations for multi-station setups.
+* **Zero-Touch Deployment**: Detects hostname/IP/path to auto-select matching configurations for multi-station setups.
 * **Visual Formatting**: Rules-based row coloring with automatic contrast adjustment.
 * **No-Config Fallback**: Sensible defaults allow immediate use without a `.profiles` file.
 
@@ -153,15 +153,18 @@ columns:
 # Machine-specific configurations
 configs:
   base:
-    pc_hostname: All
-    pc_name: Generic
-    directory: "C:/Users/YourName/Workspace"
+    match:
+      hostname: ["*"]
+    scan: "C:/Users/YourName/Workspace"
     
   production:
     extends: base
-    pc_hostname: WORKSTATION-01
-    pc_name: Production Station
-    directory: "Z:/Projects/Engineering"
+    match:
+      hostname: ["WORKSTATION-01"]
+      ip: ["192.168.1.100"]
+    scan:
+      - "Z:/Projects/Engineering"
+      - "Z:/Projects/Shared"
     extensions: [.pdf, .docx, .lnk, .xlsx]
     filters: [tmp, dev, prod]
     row_colors:

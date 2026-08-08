@@ -163,11 +163,11 @@ def test_cross_platform_path_handling() -> None:
 
     # Template should use single quotes (safe for all platforms)
     assert "search_dir: '{cwd}'" in STARTER_CONFIG_TEMPLATE
-    assert "directory: '{cwd}'" in STARTER_CONFIG_TEMPLATE
+    assert "scan: '{cwd}'" in STARTER_CONFIG_TEMPLATE
 
     # Double quotes would be unsafe on Windows
     assert 'search_dir: "{cwd}"' not in STARTER_CONFIG_TEMPLATE
-    assert 'directory: "{cwd}"' not in STARTER_CONFIG_TEMPLATE
+    assert 'scan: "{cwd}"' not in STARTER_CONFIG_TEMPLATE
 
 
 if __name__ == "__main__":
