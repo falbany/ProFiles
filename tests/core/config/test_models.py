@@ -48,10 +48,12 @@ class TestAppConfig:
             filters=("prod",),
             search_exclude_dirs=(".git", "__pycache__"),
             search_exclude_files=("*backup*", "~$*"),
-            configurations=[MachineConfiguration(
-                match=MatchCriteria(hostname=("PC1",)),
-                scan=("M:/dir",),
-            )],
+            configurations=[
+                MachineConfiguration(
+                    match=MatchCriteria(hostname=("PC1",)),
+                    scan=("M:/dir",),
+                )
+            ],
             config_path=Path("custom/.profiles"),
         )
         assert config.release == "2025.4.0"

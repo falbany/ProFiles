@@ -4,15 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-from pathlib import Path
-
 from profiles.core.config.models import AppConfig, MachineConfiguration, MatchCriteria
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.service import (
     find_configuration_by_hostname,
-    auto_select_directory,
-    get_unique_directories,
 )
 
 
@@ -76,9 +71,7 @@ class TestFindConfigurationByHostname:
         """Pass an AppConfig directly instead of loading fresh."""
         config = AppConfig(
             configurations=[
-                MachineConfiguration(
-                    match=MatchCriteria(hostname=["PC-X"]), scan=["M:/x"]
-                ),
+                MachineConfiguration(match=MatchCriteria(hostname=["PC-X"]), scan=["M:/x"]),
             ],
         )
         result = find_configuration_by_hostname(config, "PC-X")

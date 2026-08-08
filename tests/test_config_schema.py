@@ -1,8 +1,6 @@
-import pytest
-from pydantic import ValidationError
 
-from profiles.core.config.schema import MachineConfig, MatchCriteriaSchema, WorkflowStepSchema
 from profiles.core.config.models import MachineConfiguration, MatchCriteria
+from profiles.core.config.schema import MachineConfig
 
 
 def test_match_criteria_schema_coercion():
@@ -63,4 +61,3 @@ def test_machine_configuration_model_init():
     assert mc.match.ip == ("192.168.1.1", "10.0.0.1")
     assert mc.match.path == ("/data/tests",)
     assert mc.scan == ("/data/tests",)
-

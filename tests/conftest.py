@@ -9,14 +9,9 @@ if not hasattr(os, "startfile"):
     os.startfile = lambda path: None
 
 from pathlib import Path
-
-import pytest
-
-
 from textwrap import dedent
 
 import pytest
-from pathlib import Path
 
 
 def pytest_configure(config):
@@ -24,6 +19,7 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "requires_tkinter: mark test as requiring Tkinter to be available"
     )
+
 
 @pytest.fixture(scope="function")
 def sample_config_path(tmp_path: Path) -> Path:

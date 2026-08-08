@@ -119,36 +119,49 @@ Both keys accept case-insensitive glob patterns with `*`, `?`, `[seq]` wildcards
 
 ## `configs` Section — Per-Machine Configurations
 
-This section is a dictionary where each key is a named configuration. ProFiles selects the configuration whose `pc_hostname` matches the local hostname (exact match, case-insensitive).
+This section is a dictionary where each key is a named configuration. ProFiles auto-selects the configuration whose `match` criteria matches the local runtime environment (hostname, IP address, or filesystem path).
 
-A configuration with `pc_hostname: All` acts as a catch-all — place it **LAST** so it doesn't shadow specific hostnames.
+Matching uses **OR logic**: if any pattern in any `match` field matches, the configuration is selected. Patterns support glob wildcards (`*`, `?`, `[seq]`) and regex (prefix with `re:`). Matching is case-insensitive.
+
+A configuration with `match.hostname: ["*"]` (or an empty `match` block) acts as a catch-all — place it **LAST** so it doesn't shadow specific hostnames.
 
 Configurations can `extend` another configuration to inherit settings. Lists are merged: local items first, then inherited items not already present.
-
-A configuration with `pc_hostname: All` acts as a catch-all — place it **LAST** so it doesn't shadow specific hostnames.
 
 ### Parameters
 
 | Key           | Type               | Required | Description                                                       |
 | ------------- | ------------------ | -------- | ----------------------------------------------------------------- |
 | `extends`     | string             | No       | Name of another config to inherit from                           |
-| `pc_hostname` | string             | Yes*     | Local hostname targeted by this config (*except if `All`)        |
-| `pc_ip`       | string             | No       | Display-only IP label (NOT used for matching)                    |
-| `pc_name`     | string             | No       | Friendly label (logs, status)                                    |
-| `directory`   | string             | No       | Production directory scanned for this machine                    |
+| `match`       | object             | No       | Auto-selection criteria (see below)                              |
+| `scan`        | string or array    | No       | Directory path(s) to scan for this machine. Single string is auto-coerced to a list. |
 | `extensions`  | array of strings   | No       | Per-station Extension presets (overrides `defaults.extensions`)  |
 | `filters`     | array of strings   | No       | Per-station Filter presets (overrides `defaults.filters`)        |
 | `row_colors`  | array of objects   | No       | Configuration-specific coloring rules. APPENDED to `defaults.row_colors` and checked first |
 | `search_exclude_files` | array of strings | No | Per-station file exclusion patterns. APPENDED to `defaults.search_exclude_files`. Same wildcard syntax. |
+
+### `match` Field
+
+The `match` field is an object with three optional list properties. Any single match in any field is sufficient (OR logic):
+
+| Sub-key   | Type           | Description                                                                 |
+| --------- | -------------- | --------------------------------------------------------------------------- |
+| `hostname` | list of strings | Glob/regex patterns matched against the machine's hostname (case-insensitive) |
+| `ip`       | list of strings | Glob/regex patterns matched against the machine's IP address (case-insensitive) |
+| `path`     | list of strings | Glob/regex patterns matched against the current working directory path (cross-platform normalized) |
+
+**Pattern syntax:**
+- **Glob**: `WORKSTATION-*`, `10.0.0.*`, `/projects/*` — uses `fnmatch` with case-insensitive matching
+- **Regex**: Prefix with `re:` — e.g. `re:^192\.168\.\d+\.\d+$`, `re:^/projects/.*$`
+- **Path normalization**: Paths are normalized via `os.path.normpath` + `os.path.expanduser`, with backslashes converted to forward slashes for cross-platform matching
 
 ### Example Per-Machine Configuration
 
 ```yaml
 configs:
   base:
-    pc_hostname: All
-    pc_name: Generic
-    directory: "C:/Users/YourName/Workspace"
+    match:
+      hostname: ["*"]
+    scan: "C:/Users/YourName/Workspace"
     extensions: [All, .lnk]
     filters: ["", ST_PRO]
     row_colors:
@@ -157,10 +170,13 @@ configs:
 
   production:
     extends: base
-    pc_hostname: WORKSTATION-01
-    pc_name: Production Station
-    pc_ip: 192.168.1.100
-    directory: "Z:/Projects/Engineering/station1"
+    match:
+      hostname: ["WORKSTATION-01", "re:^WORKSTATION-\\d+$"]
+      ip: ["192.168.1.100", "10.0.0.*"]
+      path: ["/projects/engineering", "re:^/data/.*$"]
+    scan:
+      - "Z:/Projects/Engineering/station1"
+      - "Z:/Projects/Shared"
     extensions: [.pdf, .docx, .lnk, .xlsx]
     filters: [tmp, dev, prod]
     row_colors:
@@ -305,10 +321,9 @@ defaults:
 
 configs:
   configuration_1:
-    pc_hostname: WORKSTATION-PROD-01
-    pc_name: Production Station 1
-    pc_ip: 192.168.1.101
-    directory: /path/to/production/station1
+    match:
+      hostname: ["WORKSTATION-PROD-01"]
+    scan: /path/to/production/station1
     extensions: [.lnk, .pdf]
     filters: ["", prod, specific]
     row_colors:
@@ -318,10 +333,9 @@ configs:
         color: "#0D47A1"
 
   configuration_2:
-    pc_hostname: WORKSTATION-ENG-05
-    pc_name: Engineering Workstation
-    pc_ip: 192.168.1.105
-    directory: /path/to/engineering/tests
+    match:
+      hostname: ["WORKSTATION-ENG-05"]
+    scan: /path/to/engineering/tests
     extensions: [.lnk, .txt, .log]
     filters: ["", dev, test, debug]
     row_colors:
@@ -333,9 +347,9 @@ configs:
         color: "#006064"
 
   configuration_3:
-    pc_hostname: All
-    pc_name: Default Configuration
-    directory: /path/to/production
+    match:
+      hostname: ["*"]
+    scan: /path/to/production
     extensions: [.lnk]
     filters: ["", ST_PRO]
     row_colors: []
@@ -352,8 +366,9 @@ defaults:
 
 configs:
   configuration_1:
-    pc_hostname: All
-    directory: /path/to/production
+    match:
+      hostname: ["*"]
+    scan: /path/to/production
     extensions: [.lnk]
 ```
 
@@ -372,8 +387,9 @@ defaults:
 
 configs:
   configuration_1:
-    pc_hostname: All
-    directory: /path/to/development/project
+    match:
+      hostname: ["*"]
+    scan: /path/to/development/project
     extensions: [.lnk, .py, .sh]
     filters: ["", dev, test, tmp]
     row_colors:
@@ -594,8 +610,8 @@ A: Use `--headless` mode: `python -m profiles --headless --config path/.profiles
 **Q: Can I use environment variables?**  
 A: Not currently supported. Use absolute paths or configure per-machine sections.
 
-**Q: What happens if two sections match the hostname?**  
-A: The first matching section (by number) is used. `All` should be last.
+**Q: What happens if two sections match?**  
+A: The first matching section (by order in the `configs` dictionary) is used. The catch-all (`match.hostname: ["*"]`) should be last.
 
 **Q: How do I reset to defaults?**  
 A: Delete `.profiles` or run `python -m profiles --init` to regenerate.

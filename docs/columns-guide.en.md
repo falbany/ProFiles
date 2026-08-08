@@ -169,8 +169,9 @@ columns:
 
 configs:
   configuration_1:
-    pc_hostname: All
-    directory: .
+    match:
+      hostname: ["*"]
+    scan: .
     extensions: [.mttl]
 ```
 

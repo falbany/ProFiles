@@ -118,9 +118,11 @@ Les deux clés acceptent des motifs glob insensibles à la casse avec les jokers
 
 ## Section `configs` — Configurations par machine
 
-Cette section est un dictionnaire où chaque clé est une configuration nommée. ProFiles sélectionne la configuration dont le `pc_hostname` correspond au nom d'hôte local (correspondance exacte, insensible à la casse).
+Cette section est un dictionnaire où chaque clé est une configuration nommée. ProFiles sélectionne automatiquement la configuration dont les critères `match` correspondent à l'environnement d'exécution local (nom d'hôte, adresse IP ou chemin de système de fichiers).
 
-Une configuration avec `pc_hostname: All` agit comme un piège universel — placez-la **DERNIÈRE** pour qu'elle ne masque pas les noms d'hôte spécifiques.
+La correspondance utilise une logique **OU** : si un motif quelconque dans un champ `match` correspond, la configuration est sélectionnée. Les motifs prennent en charge les jokers glob (`*`, `?`, `[seq]`) et les expressions régulières (préfixe `re:`). La correspondance est insensible à la casse.
+
+Une configuration avec `match.hostname: ["*"]` (ou un bloc `match` vide) agit comme un piège universel — placez-la **DERNIÈRE** pour qu'elle ne masque pas les correspondances spécifiques.
 
 Les configurations peuvent `extend` une autre configuration pour hériter des paramètres. Les listes sont fusionnées : éléments locaux d'abord, puis éléments hérités non déjà présents.
 
@@ -129,23 +131,36 @@ Les configurations peuvent `extend` une autre configuration pour hériter des pa
 | Clé           | Type               | Obligatoire | Description                                                            |
 | ------------- | ------------------ | ----------- | ---------------------------------------------------------------------- |
 | `extends`     | string             | Non         | Nom d'une autre configuration à hériter                                |
-| `pc_hostname` | string             | Oui*        | Nom d'hôte local ciblé par cette config (*sauf si `All`)               |
-| `pc_ip`       | string             | Non         | Label IP affiché (NON utilisé pour la correspondance)                  |
-| `pc_name`     | string             | Non         | Label convivial (journaux, statut)                                     |
-| `directory`   | string             | Non         | Répertoire de production scanné pour cette machine                     |
+| `match`       | object             | Non         | Critères de sélection automatique (voir ci-dessous)                   |
+| `scan`        | string ou array    | Non         | Chemin(s) de répertoire à scanner pour cette machine. Une chaîne est automatiquement convertie en liste. |
 | `extensions`  | array of strings   | Non         | Présélections Extension par station (remplace `defaults.extensions`)   |
 | `filters`     | array of strings   | Non         | Présélections Filter par station (remplace `defaults.filters`)         |
 | `row_colors`  | array of objects   | Non         | Règles de coloration spécifiques à la configuration. AJOUTÉES à `defaults.row_colors` et vérifiées en premier |
 | `search_exclude_files` | array of strings | Non | Motifs d'exclusion de fichiers par station. AJOUTÉS à `defaults.search_exclude_files`. Même syntaxe de jokers. |
+
+### Champ `match`
+
+Le champ `match` est un objet avec trois propriétés de liste optionnelles. Une correspondance unique dans n'importe quel champ suffit (logique OU) :
+
+| Sous-clé   | Type           | Description                                                                 |
+| --------- | -------------- | --------------------------------------------------------------------------- |
+| `hostname` | list of strings | Motifs glob/regex correspondant au nom d'hôte de la machine (insensible à la casse) |
+| `ip`       | list of strings | Motifs glob/regex correspondant à l'adresse IP de la machine (insensible à la casse) |
+| `path`     | list of strings | Motifs glob/regex correspondant au chemin du répertoire de travail courant (normalisation multi-plateforme) |
+
+**Syntaxe des motifs :**
+- **Glob** : `WORKSTATION-*`, `10.0.0.*`, `/projects/*` — utilise `fnmatch` avec correspondance insensible à la casse
+- **Regex** : préfixe `re:` — ex. `re:^192\.168\.\d+\.\d+$`, `re:^/projects/.*$`
+- **Normalisation des chemins** : les chemins sont normalisés via `os.path.normpath` + `os.path.expanduser`, avec conversion des antislashs en slashs pour une correspondance multi-plateforme
 
 ### Exemple de configuration par machine
 
 ```yaml
 configs:
   base:
-    pc_hostname: All
-    pc_name: Generic
-    directory: "C:/Users/YourName/Workspace"
+    match:
+      hostname: ["*"]
+    scan: "C:/Users/YourName/Workspace"
     extensions: [All, .lnk]
     filters: ["", ST_PRO]
     row_colors:
@@ -154,10 +169,13 @@ configs:
 
   production:
     extends: base
-    pc_hostname: POSTE-TRAVAIL-01
-    pc_name: Station Production
-    pc_ip: 192.168.1.100
-    directory: "Z:/Projects/Engineering/station1"
+    match:
+      hostname: ["POSTE-TRAVAIL-01", "re:^POSTE-TRAVAIL-\\d+$"]
+      ip: ["192.168.1.100", "10.0.0.*"]
+      path: ["/projects/engineering", "re:^/data/.*$"]
+    scan:
+      - "Z:/Projects/Engineering/station1"
+      - "Z:/Projects/Shared"
     extensions: [.pdf, .docx, .lnk, .xlsx]
     filters: [tmp, dev, prod]
     row_colors:
@@ -301,10 +319,9 @@ defaults:
 
 configs:
   configuration_1:
-    pc_hostname: POSTE-TRAVAIL-PROD-01
-    pc_name: Station Production 1
-    pc_ip: 192.168.1.101
-    directory: /chemin/vers/production/station1
+    match:
+      hostname: ["POSTE-TRAVAIL-PROD-01"]
+    scan: /chemin/vers/production/station1
     extensions: [.lnk, .pdf]
     filters: [, prod, specific]
     row_colors:
@@ -314,10 +331,9 @@ configs:
         color: "#0D47A1"
 
   configuration_2:
-    pc_hostname: POSTE-TRAVAIL-ING-05
-    pc_name: Poste Ingénierie
-    pc_ip: 192.168.1.105
-    directory: /chemin/vers/ingenierie/tests
+    match:
+      hostname: ["POSTE-TRAVAIL-ING-05"]
+    scan: /chemin/vers/ingenierie/tests
     extensions: [.lnk, .txt, .log]
     filters: [, dev, test, debug]
     row_colors:
@@ -329,9 +345,9 @@ configs:
         color: "#006064"
 
   configuration_3:
-    pc_hostname: All
-    pc_name: Configuration par défaut
-    directory: /chemin/vers/production
+    match:
+      hostname: ["*"]
+    scan: /chemin/vers/production
     extensions: [.lnk]
     filters: [, ST_PRO]
     row_colors: []
@@ -348,8 +364,9 @@ defaults:
 
 configs:
   configuration_1:
-    pc_hostname: All
-    directory: /chemin/vers/production
+    match:
+      hostname: ["*"]
+    scan: /chemin/vers/production
     extensions: [.lnk]
 ```
 
@@ -368,8 +385,9 @@ defaults:
 
 configs:
   configuration_1:
-    pc_hostname: All
-    directory: /chemin/vers/projet/development
+    match:
+      hostname: ["*"]
+    scan: /chemin/vers/projet/development
     extensions: [.lnk, .py, .sh]
     filters: [, dev, test, tmp]
     row_colors:
@@ -579,8 +597,8 @@ R : Utilisez le mode `--headless` : `python -m profiles --headless --config chem
 **Q : Puis-je utiliser des variables d'environnement ?**  
 R : Pas actuellement pris en charge. Utilisez des chemins absolus ou configurez des sections par machine.
 
-**Q : Que se passe-t-il si deux sections correspondent au nom d'hôte ?**  
-R : La première section correspondante (par numéro) est utilisée. `All` doit être en dernier.
+**Q : Que se passe-t-il si deux sections correspondent ?**  
+R : La première section correspondante (par ordre dans le dictionnaire `configs`) est utilisée. Le piège universel (`match.hostname: ["*"]`) doit être en dernier.
 
 **Q : Comment réinitialiser aux valeurs par défaut ?**  
 R : Supprimez `.profiles` ou exécutez `python -m profiles --init` pour régénérer.
