@@ -8,7 +8,7 @@ from profiles.config import (
     AppConfig,
     MachineConfiguration,
 )
-from profiles.core.config.models import HookSpec
+from profiles.core.config.models import HookSpec, MatchCriteria
 
 
 class TestAppConfig:
@@ -48,7 +48,10 @@ class TestAppConfig:
             filters=("prod",),
             search_exclude_dirs=(".git", "__pycache__"),
             search_exclude_files=("*backup*", "~$*"),
-            configurations=[MachineConfiguration(pc_hostname="PC1", directory="M:/dir")],
+            configurations=[MachineConfiguration(
+                match=MatchCriteria(hostname=("PC1",)),
+                scan=("M:/dir",),
+            )],
             config_path=Path("custom/.profiles"),
         )
         assert config.release == "2025.4.0"
@@ -56,7 +59,7 @@ class TestAppConfig:
         assert config.close_after_execute is True
         assert config.search_dir == "M:/tests"
         assert config.search_exclude_files == ("*backup*", "~$*")
-        assert config.configurations[0].pc_hostname == "PC1"
+        assert config.configurations[0].match.hostname == ("PC1",)
 
 
 class TestMachineConfiguration:
@@ -64,10 +67,10 @@ class TestMachineConfiguration:
 
     def test_default_values(self) -> None:
         mc = MachineConfiguration()
-        assert mc.pc_ip == ""
-        assert mc.pc_hostname == ""
-        assert mc.pc_name == ""
-        assert mc.directory == ""
+        assert mc.match.hostname == ()
+        assert mc.match.ip == ()
+        assert mc.match.path == ()
+        assert mc.scan == ()
         assert mc.extensions == ()
         assert mc.filters == ()
         assert mc.row_colors == ()

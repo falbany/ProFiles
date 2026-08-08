@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from profiles.core.config.matcher import select_active_configuration, matches_machine_config
+from profiles.core.config.matcher import matches_machine_config, select_active_configuration
 from profiles.core.config.models import AppConfig, MachineConfiguration
 
 
@@ -32,17 +32,8 @@ def find_active_config(
     selected_dir_normalized = str(Path(directory).resolve())
 
     for cfg in config.configurations:
-        # Match using matcher engine with directory constraint
         if matches_machine_config(cfg, "", "", selected_dir_normalized):
             return cfg
-
-    # Fallback to legacy path comparison for compatibility
-    for cfg in config.configurations:
-        if cfg.scan:
-            for scan_path in cfg.scan:
-                cfg_dir_normalized = str(Path(scan_path).resolve())
-                if selected_dir_normalized == cfg_dir_normalized:
-                    return cfg
     return None
 
 
@@ -131,7 +122,7 @@ def get_unique_directories(config: AppConfig) -> list[str]:
     """
     seen: set[str] = set()
     result: list[str] = []
-    
+
     # Check default search dir
     if config.search_dir and config.search_dir not in seen:
         seen.add(config.search_dir)

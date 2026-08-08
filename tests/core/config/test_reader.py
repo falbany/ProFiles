@@ -48,13 +48,13 @@ class TestConfigReader:
             tmp_path / ".profiles",
             "defaults:\n  extensions: [All, .lnk]\n"
             "configs:\n"
-            "  base:\n    directory: /base\n"
-            "  prod:\n    extends: base\n    pc_hostname: PC1\n",
+            "  base:\n    scan: [/base]\n"
+            "  prod:\n    extends: base\n    match:\n      hostname: [PC1]\n",
         )
         config = ConfigReader(conf).load()
         assert len(config.configurations) == 2
-        prod = next(c for c in config.configurations if c.pc_hostname == "PC1")
-        assert prod.directory == "/base"
+        prod = next(c for c in config.configurations if "PC1" in c.match.hostname)
+        assert prod.scan == ("/base",)
         # extensions resolved = defaults merged (no local/inherited extensions)
         assert prod.extensions == ("All", ".lnk")
 

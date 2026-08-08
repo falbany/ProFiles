@@ -11,6 +11,7 @@ from profiles.core.config.schema import (
     Defaults,
     HookEntry,
     MachineConfig,
+    MatchCriteriaSchema,
     RowColor,
 )
 
@@ -59,6 +60,8 @@ class TestAppConfigYaml:
         assert cfg.configs == {}
 
     def test_config_name_is_dict_key(self) -> None:
-        cfg = AppConfigYaml(configs={"prod": MachineConfig(pc_hostname="PC1")})
+        cfg = AppConfigYaml(
+            configs={"prod": MachineConfig(match=MatchCriteriaSchema(hostname=["PC1"]))}
+        )
         assert "prod" in cfg.configs
-        assert cfg.configs["prod"].pc_hostname == "PC1"
+        assert cfg.configs["prod"].match.hostname == ["PC1"]

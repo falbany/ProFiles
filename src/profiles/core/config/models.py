@@ -12,6 +12,7 @@ from typing import Literal
 
 from profiles import __version__ as _pkg_version
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
+from profiles.core.config.schema import MatchCriteriaSchema
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,20 @@ class MachineConfiguration:
     filters: tuple[str, ...] = ()
     row_colors: tuple[tuple[str, str], ...] = ()
     search_exclude_files: tuple[str, ...] = ()
+    name: str | None = None
+
+    def __post_init__(self) -> None:
+        """Coerce list inputs to tuples for consistent immutability."""
+        if isinstance(self.match, MatchCriteriaSchema):
+            self.match = MatchCriteria(
+                hostname=tuple(self.match.hostname),
+                ip=tuple(self.match.ip),
+                path=tuple(self.match.path),
+            )
+        for field_name in ("scan", "extensions", "filters", "row_colors", "search_exclude_files"):
+            value = getattr(self, field_name)
+            if isinstance(value, list):
+                setattr(self, field_name, tuple(value))
 
 
 @dataclass

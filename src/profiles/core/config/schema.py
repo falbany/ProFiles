@@ -110,7 +110,6 @@ class Defaults(BaseModel):
     scan_metrics: bool = False
 
 
-
 class MatchCriteriaSchema(BaseModel):
     """Matcher criteria for machine configuration auto-selection."""
 
@@ -149,7 +148,6 @@ class MachineConfig(BaseModel):
         return []
 
 
-
 class AppConfigYaml(BaseModel):
     """Root of the ``.profiles.yaml`` file."""
 
@@ -168,5 +166,6 @@ __all__ = [
     "HookEntry",
     "HooksConfig",
     "MachineConfig",
+    "MatchCriteriaSchema",
     "RowColor",
 ]

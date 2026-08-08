@@ -25,10 +25,10 @@ class TestResolveConfigs:
     def test_local_overrides_scalar(self) -> None:
         cfg = _cfg(
             defaults={"search_dir": "/default"},
-            configs={"base": {"directory": "/local"}},
+            configs={"base": {"scan": ["/local"]}},
         )
         resolved = resolve_configs(cfg)
-        assert resolved["base"].directory == "/local"
+        assert resolved["base"].scan == ["/local"]
 
     def test_extends_merges_lists(self) -> None:
         cfg = _cfg(
@@ -45,12 +45,12 @@ class TestResolveConfigs:
     def test_extends_inherits_scalar(self) -> None:
         cfg = _cfg(
             configs={
-                "base": {"directory": "/base"},
+                "base": {"scan": ["/base"]},
                 "prod": {"extends": "base"},
             }
         )
         resolved = resolve_configs(cfg)
-        assert resolved["prod"].directory == "/base"
+        assert resolved["prod"].scan == ["/base"]
 
     def test_unknown_extends_raises(self) -> None:
         cfg = _cfg(configs={"prod": {"extends": "ghost"}})

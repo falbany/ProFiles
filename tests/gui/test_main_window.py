@@ -43,7 +43,7 @@ def _make_config(
     # Ensure config file exists to avoid prompt
     config_path = tmp_path / ".profiles"
     if not config_path.exists():
-        config_path.write_text("[LAUNCHER]\nEXTENSION=.mttl\n", encoding="utf-8")
+        config_path.write_text("version: 1\n", encoding="utf-8")
 
     cfg = AppConfig(
         release="0.0.1",
@@ -63,10 +63,8 @@ def _make_config(
         skip_config_prompt=True,
         configurations=[
             MachineConfiguration(
-                pc_ip="",
-                pc_hostname="",
-                pc_name="",
-                directory=str(tmp_path),
+                name="default",
+                scan=(str(tmp_path),),
             ),
         ],
     )

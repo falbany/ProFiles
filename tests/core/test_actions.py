@@ -24,7 +24,7 @@ def _make_config_for_actions(tmp_path: Path) -> AppConfig:
     """Build a minimal AppConfig pointing at *tmp_path*."""
     config_path = tmp_path / ".profiles"
     if not config_path.exists():
-        config_path.write_text("[LAUNCHER]\nEXTENSION=.mttl\n", encoding="utf-8")
+        config_path.write_text("version: 1\n", encoding="utf-8")
     return AppConfig(
         release="0.0.1",
         title="Test",
@@ -43,10 +43,8 @@ def _make_config_for_actions(tmp_path: Path) -> AppConfig:
         skip_config_prompt=True,
         configurations=[
             MachineConfiguration(
-                pc_ip="",
-                pc_hostname="",
-                pc_name="",
-                directory=str(tmp_path),
+                match=MatchCriteria(hostname=["All"]),
+                scan=[str(tmp_path)],
             ),
         ],
     )
@@ -367,7 +365,7 @@ class TestLaunchHooksIntegration:
         assert config.title == ""
         assert config.gui_auto_launch is True
         assert config.configurations
-        assert config.configurations[0].pc_hostname == "All"
+        assert config.configurations[0].match.hostname == ("All",)
 
     def test_failure_on_unwritable_parent(self) -> None:
         """A non-existent parent directory causes FAILED, never raises."""

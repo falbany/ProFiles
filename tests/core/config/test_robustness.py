@@ -136,8 +136,9 @@ def test_config_load_success_logs_info(tmp_path: Path, caplog: pytest.LogCapture
         "  entries: {}\n"
         "configs:\n"
         "  base:\n"
-        "    pc_name: Generic\n"
-        "    directory: /valid/path\n"
+        "    match:\n"
+        "      hostname: [Generic]\n"
+        "    scan: [/valid/path]\n"
         "    row_colors: []\n",
         encoding="utf-8",
     )

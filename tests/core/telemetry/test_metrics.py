@@ -187,11 +187,11 @@ class TestConfigScanMetrics:
         assert config.scan_metrics is False
 
     def test_config_parsing_vrai(self, tmp_path: Path) -> None:
-        """Test ConfigReader parses 'Vrai' as True."""
+        """Test ConfigReader parses 'True' as True."""
         from profiles.core.config.reader import ConfigReader
 
         profiles_file = tmp_path / ".profiles"
-        profiles_file.write_text("[LAUNCHER]\nscan_metrics = Vrai\n")
+        profiles_file.write_text("defaults:\n  scan_metrics: true\n")
 
         reader = ConfigReader(profiles_file)
         config = reader.load()
@@ -199,11 +199,11 @@ class TestConfigScanMetrics:
         assert config.scan_metrics is True
 
     def test_config_parsing_faux(self, tmp_path: Path) -> None:
-        """Test ConfigReader parses 'Faux' as False."""
+        """Test ConfigReader parses 'False' as False."""
         from profiles.core.config.reader import ConfigReader
 
         profiles_file = tmp_path / ".profiles"
-        profiles_file.write_text("[LAUNCHER]\nscan_metrics = Faux\n")
+        profiles_file.write_text("defaults:\n  scan_metrics: false\n")
 
         reader = ConfigReader(profiles_file)
         config = reader.load()
@@ -215,7 +215,7 @@ class TestConfigScanMetrics:
         from profiles.core.config.reader import ConfigReader
 
         profiles_file = tmp_path / ".profiles"
-        profiles_file.write_text("[LAUNCHER]\nscan_metrics = True\n")
+        profiles_file.write_text("defaults:\n  scan_metrics: true\n")
 
         reader = ConfigReader(profiles_file)
         config = reader.load()

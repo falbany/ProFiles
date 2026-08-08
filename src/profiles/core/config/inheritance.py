@@ -12,6 +12,7 @@ from profiles.core.config.schema import (
     ConfigError,
     Defaults,
     MachineConfig,
+    MatchCriteriaSchema,
     RowColor,
 )
 
@@ -68,20 +69,18 @@ def _resolve_machine(
                 return list(inherited or [])
             return _merge_row(inherited or [], local)
         if local_set:
-            return local or inherited
+            return local
         return inherited
 
     return MachineConfig(
         extends=cfg.extends,
-        pc_hostname=pick("pc_hostname") or "",
-        pc_ip=pick("pc_ip") or "",
-        pc_name=pick("pc_name") or "",
-        directory=pick("directory") or "",
-        extensions=_merge_str(defaults.extensions, pick("extensions")),
-        filters=_merge_str(defaults.filters, pick("filters")),
+        match=pick("match") or MatchCriteriaSchema(),
+        scan=list(pick("scan") or []),
+        extensions=tuple(_merge_str(defaults.extensions, pick("extensions"))),
+        filters=tuple(_merge_str(defaults.filters, pick("filters"))),
         row_colors=_merge_row(defaults.row_colors, pick("row_colors")),
-        search_exclude_files=_merge_str(
-            defaults.search_exclude_files, pick("search_exclude_files")
+        search_exclude_files=tuple(
+            _merge_str(defaults.search_exclude_files, pick("search_exclude_files"))
         ),
     )
 

@@ -170,14 +170,12 @@ class ConfigReader:
         resolved = resolve_configs(schema)
         return [
             MachineConfiguration(
-                pc_ip=m.pc_ip,
-                pc_hostname=m.pc_hostname,
-                pc_name=m.pc_name,
-                directory=m.directory,
-                extensions=tuple(m.extensions),
-                filters=tuple(m.filters),
+                match=m.match,
+                scan=m.scan,
+                extensions=m.extensions,
+                filters=m.filters,
                 row_colors=tuple((rc.pattern, rc.color) for rc in m.row_colors),
-                search_exclude_files=tuple(m.search_exclude_files),
+                search_exclude_files=m.search_exclude_files,
             )
             for m in resolved.values()
         ]
