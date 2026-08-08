@@ -128,8 +128,14 @@ class MatchCriteriaSchema(BaseModel):
 
 
 class MachineConfig(BaseModel):
-    """A named configuration block in YAML configs dict."""
+    """A named configuration block in YAML configs dict.
 
+    The ``name`` field defaults to ``None``; the reader fills it in from
+    the dict key (or the YAML ``name:`` key if present) when building
+    :class:`MachineConfiguration`.
+    """
+
+    name: str | None = None
     extends: str | None = None
     match: MatchCriteriaSchema = Field(default_factory=MatchCriteriaSchema)
     scan: list[str] = Field(default_factory=list)

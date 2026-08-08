@@ -343,8 +343,43 @@ class MainWindow:
     # ----------------------------------------------------------------
 
     def _populate_directories(self) -> None:
-        """Populate the directory combobox from configurations."""
-        self._dir_combo["values"] = config_service.get_unique_directories(self._config)
+        """Populate the directory combobox from configurations.
+
+        Each entry is displayed as ``icon label`` where the icon
+        distinguishes config groups (📁) from individual paths (📄).
+        For multi-path config groups, a ``(N paths)`` suffix is appended.
+        """
+        entries = config_service.get_directory_combobox_values(self._config)
+        self._dir_combo["values"] = [self._format_dir_entry(e) for e in entries]
+
+    @staticmethod
+    def _format_dir_entry(entry: config_service.DirectoryEntry) -> str:
+        """Format a DirectoryEntry as a combobox display string."""
+        if entry.icon == "📁" and len(entry.paths) > 1:
+            return f"{entry.icon} {entry.label} ({len(entry.paths)} paths)"
+        return f"{entry.icon} {entry.label}"
+
+    def _resolve_dir_selection(self, label: str) -> list[str]:
+        """Resolve a combobox selection label to the list of scan paths.
+
+        If *label* matches a config display name or a path, returns the
+        corresponding scan paths. Falls back to ``[label]`` when no match
+        is found (treating it as a raw path).
+        """
+        entries = config_service.get_directory_combobox_values(self._config)
+        for entry in entries:
+            if entry.label == label:
+                return entry.paths
+        return [label]
+
+    def _set_dir_selection(self, label: str) -> None:
+        """Set the combobox to the entry matching *label*, or ``label`` itself."""
+        entries = config_service.get_directory_combobox_values(self._config)
+        for entry in entries:
+            if entry.label == label:
+                self._dir_var.set(self._format_dir_entry(entry))
+                return
+        self._dir_var.set(label)
 
     def _populate_extensions(self) -> None:
         """Populate the extension combobox."""
@@ -385,8 +420,6 @@ class MainWindow:
         config_exists = config_path.exists()
 
         if not config_exists:
-            # No config at all — point the Directory field at CWD so the
-            # user has something to scan immediately.
             self._dir_var.set(str(Path.cwd()))
             return
 
@@ -396,22 +429,42 @@ class MainWindow:
             self._dir_var.set(str(Path.cwd()))
             return
 
-        matched_dir = config_service.auto_select_directory(fresh_config, self._hostname)
-        if matched_dir:
-            self._dir_var.set(matched_dir)
+        matched_label = config_service.auto_select_directory(fresh_config, self._hostname)
+        if matched_label:
+            self._set_dir_selection(matched_label)
         else:
-            # Default to CWD so the field is never empty / pointing off-tree.
             self._dir_var.set(str(Path.cwd()))
+
+    def _current_dir_label(self) -> str:
+        """Return the current combobox selection with icon prefix stripped.
+
+        Also strips the ``(N paths)`` count suffix added by
+        ``_format_dir_entry`` for multi-path config groups.
+        """
+        raw = self._dir_var.get()
+        # Strip icon prefix (📁 or 📄) and spaces
+        for prefix in ("📁 ", "📄 "):
+            if raw.startswith(prefix):
+                label = raw[len(prefix) :]
+                break
+        else:
+            label = raw
+        # Strip "(N paths)" suffix from config group entries
+        if label.endswith(")"):
+            idx = label.rfind(" (")
+            if idx != -1:
+                label = label[:idx]
+        return label.strip()
 
     def _find_active_config(self) -> MachineConfiguration | None:
         """Find the configuration matching the currently selected directory."""
-        return config_service.find_active_config(self._config, self._dir_var.get())
+        return config_service.find_active_config(self._config, self._current_dir_label())
 
     def _apply_config_overrides(self) -> None:
         """Merge per-config extensions/filters with the generic [LAUNCHER] defaults."""
         merged_extensions, merged_filters = config_service.merge_config_overrides(
             self._config,
-            self._dir_var.get(),
+            self._current_dir_label(),
         )
 
         self._ext_combo["values"] = merged_extensions
@@ -506,9 +559,12 @@ class MainWindow:
 
     def _refresh_file_list(self) -> None:
         """Scan the selected directory and populate the file list."""
-        directory = self._dir_var.get()
+        directory_label = self._current_dir_label()
         extension = self._ext_var.get()
         filter_text = self._filter_var.get().strip()
+
+        # Resolve the combobox label to scan paths (multiple for configs)
+        scan_paths = self._resolve_dir_selection(directory_label)
 
         # Cancel any ongoing scan/insert by incrementing the ID
         self._current_scan_id += 1
@@ -526,7 +582,8 @@ class MainWindow:
         for i, header in enumerate(self._config.column_headers):
             self._tree.heading(i, text=header)
 
-        if not directory or not directory_exists(directory):
+        # Check that at least one scan path exists
+        if not scan_paths or not any(directory_exists(p) for p in scan_paths):
             self._count_label.config(text="Files: 0")
             self._dir_status_label.config(text="Directory not found")
             self._update_empty_state(True)
@@ -544,7 +601,7 @@ class MainWindow:
             target=self._bg_scan_and_process,
             args=(
                 scan_id,
-                directory,
+                scan_paths,
                 extension,
                 filter_text,
                 bool(self._recursive_var.get()),
@@ -555,28 +612,27 @@ class MainWindow:
     def _bg_scan_and_process(
         self,
         scan_id: int,
-        directory: str,
+        directories: list[str],
         extension: str,
         filter_text: str,
         recursive: bool,
     ) -> None:
-        """Scan directory and process files in a background thread."""
+        """Scan directories and process files in a background thread."""
         try:
             # File exclusion patterns: active config (base + per-config
             # merged by the reader) or the [LAUNCHER] base as fallback.
-            active = config_service.find_active_config(self._config, directory)
+            active = config_service.find_active_config(self._config, self._current_dir_label())
             exclude_files = (
                 active.search_exclude_files
                 if active is not None
                 else self._config.search_exclude_files
             )
 
-            # Single scan path: dynamic column extraction with the
-            # configured column set. With no custom columns the reader
-            # defaults `column_names` to ("File",) and the extractor has
-            # no rules — behaviour identical to the former legacy path.
+            # Multi-directory scan: scanner merges results from all paths,
+            # deduplicating by realpath. The display label is used for
+            # status messages.
             processed_items = scanner.scan_and_process_dynamic(
-                directory,
+                directories,
                 extension=extension,
                 filter_text=filter_text,
                 recursive=recursive,
@@ -591,6 +647,7 @@ class MainWindow:
             if scan_id != self._current_scan_id:
                 return
 
+            display_label = self._current_dir_label()
             # Schedule chunked insertion on the main thread
             with contextlib.suppress(tk.TclError, RuntimeError):
                 self._root.after(
@@ -598,7 +655,7 @@ class MainWindow:
                     self._start_chunked_insert,
                     scan_id,
                     processed_items,
-                    directory,
+                    display_label,
                     filter_text,
                     extension,
                 )
@@ -617,7 +674,7 @@ class MainWindow:
         self,
         scan_id: int,
         items: list[scanner.ScannedFileDynamic],
-        directory: str,
+        display_label: str,
         filter_text: str,
         extension: str,
     ) -> None:
@@ -625,7 +682,7 @@ class MainWindow:
         if scan_id != self._current_scan_id:
             return
 
-        self._insert_chunk(scan_id, items, 0, [], directory, filter_text, extension)
+        self._insert_chunk(scan_id, items, 0, [], display_label, filter_text, extension)
 
     def _insert_chunk(
         self,
@@ -633,7 +690,7 @@ class MainWindow:
         items: list[scanner.ScannedFileDynamic],
         start_idx: int,
         accumulated_files: list[Path],
-        directory: str,
+        display_label: str,
         filter_text: str,
         extension: str,
     ) -> None:
@@ -649,7 +706,7 @@ class MainWindow:
             items: List of scanned files with dynamic column values.
             start_idx: Starting index for this chunk.
             accumulated_files: Accumulated list of file paths.
-            directory: Scanned directory path.
+            display_label: Display label for the scanned directory/config.
             filter_text: Keyword filter used by the scan (for logging).
             extension: Extension expression used by the scan (for logging).
         """
@@ -703,7 +760,7 @@ class MainWindow:
                 items,
                 end_idx,
                 accumulated_files,
-                directory,
+                display_label,
                 filter_text,
                 extension,
             )
@@ -715,11 +772,11 @@ class MainWindow:
             self._flash_count_label()
             self._update_empty_state(count == 0)
             self._dir_status_label.config(
-                text=f"Directory: {directory}" if count > 0 else "No matching files found"
+                text=f"Directory: {display_label}" if count > 0 else "No matching files found"
             )
             self._logger.info(
                 "Scanned directory: %s | Extension: %s | Filter: '%s' | Files found: %d",
-                directory,
+                display_label,
                 extension,
                 filter_text,
                 count,
@@ -760,14 +817,17 @@ class MainWindow:
 
     def _on_directory_double_click(self, _event: tk.Event | None = None) -> None:
         """Handle double-click on directory: open in file explorer."""
-        directory = self._dir_var.get()
-        if directory_exists(directory):
-            open_file_explorer(directory)
-        else:
-            messagebox.showwarning(
-                "Directory Not Found",
-                f"The selected directory does not exist:\n{directory}",
-            )
+        label = self._current_dir_label()
+        paths = self._resolve_dir_selection(label)
+        # Open the first valid path
+        for path in paths:
+            if directory_exists(path):
+                open_file_explorer(path)
+                return
+        messagebox.showwarning(
+            "Directory Not Found",
+            f"The selected directory does not exist:\n{label}",
+        )
 
     def _on_browse(self) -> None:
         """Open a directory picker and refresh the file list."""

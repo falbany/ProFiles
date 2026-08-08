@@ -777,7 +777,7 @@ class TestNoConfigFileMode:
             items=test_items,
             start_idx=0,
             accumulated_files=[],
-            directory=str(tmp_path),
+            display_label=str(tmp_path),
             filter_text="",
             extension=".mttl",
         )
@@ -829,7 +829,7 @@ class TestNoConfigFileMode:
             items=test_items,
             start_idx=0,
             accumulated_files=[],
-            directory=str(tmp_path),
+            display_label=str(tmp_path),
             filter_text="",
             extension=".mttl",
         )

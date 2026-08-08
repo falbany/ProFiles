@@ -170,6 +170,7 @@ class ConfigReader:
         resolved = resolve_configs(schema)
         return [
             MachineConfiguration(
+                name=m.name or name,
                 match=m.match,
                 scan=m.scan,
                 extensions=m.extensions,
@@ -177,7 +178,7 @@ class ConfigReader:
                 row_colors=tuple((rc.pattern, rc.color) for rc in m.row_colors),
                 search_exclude_files=m.search_exclude_files,
             )
-            for m in resolved.values()
+            for name, m in resolved.items()
         ]
 
     @staticmethod

@@ -73,6 +73,7 @@ def _resolve_machine(
         return inherited
 
     return MachineConfig(
+        name=cfg.name,
         extends=cfg.extends,
         match=pick("match") or MatchCriteriaSchema(),
         scan=list(pick("scan") or []),
