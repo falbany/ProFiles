@@ -246,20 +246,19 @@ class MainWindow:
     def _sort_treeview(self, col_index: int) -> None:
         """Sort the treeview rows by *col_index* (0=File, 1=Version).
 
-        Optimized version: batch delete and reinsert for better performance
+        Optimized version: batch delete and reinsert using move for better performance
         with large file lists (1000+ items).
         """
-        children = self._tree.get_children("")
+        children = list(self._tree.get_children(""))
         if not children:
             return
 
-        # Collect all items with their data (values, tags) before sorting
+        # Collect all items with their sort values before sorting
         items_data = []
         for item_id in children:
-            values = self._tree.item(item_id, "values")
-            tags = self._tree.item(item_id, "tags")
-            sort_value = values[col_index].lower() if values[col_index] else ""
-            items_data.append((sort_value, item_id, values, tags))
+            val = self._tree.set(item_id, col_index)
+            sort_val = val.lower() if val else ""
+            items_data.append((sort_val, item_id))
 
         # Determine direction
         reverse = self._sort_state.get(col_index) == "asc"
@@ -268,15 +267,9 @@ class MainWindow:
         # Sort the collected data
         items_data.sort(key=lambda x: x[0], reverse=reverse)
 
-        # Batch delete all items
-        self._tree.delete(*children)
-
-        # Reinsert in sorted order (much faster than move())
-        for _, _, values, tags in items_data:
-            if tags:
-                self._tree.insert("", tk.END, values=values, tags=tags)
-            else:
-                self._tree.insert("", tk.END, values=values)
+        # Batch move/reattach items in sorted order (much faster than delete + insert)
+        for _, item_id in items_data:
+            self._tree.move(item_id, "", tk.END)
 
         # Update heading indicators
         for i, header in enumerate(self._config.column_headers):
@@ -527,10 +520,9 @@ class MainWindow:
                 continue
             self._row_color_rules.append((pattern, tag_name))
 
-        # Build compiled regex pattern cache for faster matching
-        self._row_color_pattern_cache = [
-            (re.compile(re.escape(pattern), re.IGNORECASE), tag_name)
-            for pattern, tag_name in self._row_color_rules
+        # Pre-compute lowercase patterns for fast substring matching during row insertion
+        self._row_color_rules_lower = [
+            (pattern.lower(), tag_name) for pattern, tag_name in self._row_color_rules
         ]
 
         # Always expose a default tag so empty rule lists still produce a
@@ -547,12 +539,13 @@ class MainWindow:
 
     def _row_color_tags_for(self, filename: str) -> tuple[str, ...] | None:
         """Return the first matching row_color tag for *filename*, or None."""
-        if not self._row_color_pattern_cache:
+        if not self._row_color_rules:
             return None
 
-        # Use compiled regex patterns for O(1) matching instead of O(N) substring search
-        for pattern, tag_name in self._row_color_pattern_cache:
-            if pattern.search(filename):
+        # Direct lowercase substring match avoids regex overhead per row during insertion
+        filename_lower = filename.lower()
+        for pattern_lower, tag_name in self._row_color_rules_lower:
+            if pattern_lower in filename_lower:
                 return (tag_name,)
         return None
 
@@ -755,7 +748,9 @@ class MainWindow:
         if scan_id != self._current_scan_id:
             return
 
-        chunk_size = 500  # Increased from 100 for better performance
+        # Adaptive chunk size: render initial 200 items immediately for fast first paint,
+        # then scale up to 1000 items per chunk for fast background completion.
+        chunk_size = 200 if start_idx == 0 else 1000
         end_idx = min(start_idx + chunk_size, len(items))
         column_names = self._config.column_names
 
@@ -1292,7 +1287,13 @@ class MainWindow:
             heading_text = self._tree.heading(col_id, "text")
             max_w = heading_font.measure(heading_text) + 30
 
-            for item in self._tree.get_children():
+            # Optimisation: Sample up to a maximum of 200 items for auto-fit measurement
+            # to prevent UI freeze on large directory trees (O(1) instead of O(N))
+            children = self._tree.get_children()
+            sample_size = min(len(children), 200)
+            items_to_measure = children[:sample_size]
+
+            for item in items_to_measure:
                 val = str(self._tree.set(item, col_idx))
                 w = font.measure(val) + 20
                 if w > max_w:
