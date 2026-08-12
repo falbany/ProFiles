@@ -24,31 +24,37 @@ _IS_MACOS = sys.platform == "darwin"
 _MAX_WORKERS = min(32, (os.cpu_count() or 1) * 2)
 
 
-def _full_suffix(file: Path) -> str:
-    """Get the full compound extension of a file.
+def _full_suffix(file: Path | str) -> str:
+    """Get the full compound extension of a file or filename.
 
     Unlike :attr:`Path.suffix` (which only returns the *last* extension,
     e.g. ``.lnk`` for ``foo.mttx.lnk``), this returns all extension
     parts joined together (e.g. ``.mttx.lnk``).
 
     Args:
-        file: The file path.
+        file: The file path or string filename.
 
     Returns:
         The full compound extension string, including the leading dot.
         Returns ``""`` for files without an extension.
     """
-    return "".join(file.suffixes)
+    if isinstance(file, Path):
+        return "".join(file.suffixes)
+    name = os.path.basename(file)
+    dot_idx = name.find(".")
+    if dot_idx in (-1, 0):
+        return ""
+    return name[dot_idx:]
 
 
-def _matches_extension(file: Path, ext_lower: str) -> bool:
+def _matches_extension(file: Path | str, ext_lower: str) -> bool:
     """Check if a file matches the given extension filter.
 
     Supports compound extensions (e.g. ``.my.pdf``) by comparing
     against the full suffix via :func:`_full_suffix`.
 
     Args:
-        file: The file to check.
+        file: The file path or string filename to check.
         ext_lower: Lowercase extension without leading dot (e.g. 'mttl').
             Empty string or 'all' matches every file.
 
@@ -70,7 +76,7 @@ def _is_excluded(name: str, patterns: tuple[str, ...]) -> bool:
 
 
 def _scan_subtree(
-    root: Path,
+    root: Path | str,
     ext_lower: str,
     exclude_dirs: tuple[str, ...] = (),
     exclude_files: tuple[str, ...] = (),
@@ -96,17 +102,23 @@ def _scan_subtree(
     """
     files: list[Path] = []
     try:
-        for entry in root.iterdir():
-            if entry.is_dir():
-                if not _is_excluded(entry.name, exclude_dirs):
-                    files.extend(_scan_subtree(entry, ext_lower, exclude_dirs, exclude_files))
-                continue
-            if (
-                entry.is_file()
-                and _matches_extension(entry, ext_lower)
-                and not _is_excluded(entry.name, exclude_files)
-            ):
-                files.append(entry)
+        with os.scandir(root) as entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if not _is_excluded(entry.name, exclude_dirs):
+                            files.extend(
+                                _scan_subtree(entry.path, ext_lower, exclude_dirs, exclude_files)
+                            )
+                        continue
+                    if (
+                        entry.is_file(follow_symlinks=False)
+                        and _matches_extension(entry.name, ext_lower)
+                        and not _is_excluded(entry.name, exclude_files)
+                    ):
+                        files.append(Path(entry.path))
+                except (PermissionError, OSError):
+                    pass
     except (PermissionError, OSError):
         pass
     return files
@@ -121,7 +133,7 @@ def scan_directory(
 ) -> list[Path]:
     """Scan a directory for files matching the given extension.
 
-    Non-recursive scans use a single-pass ``iterdir`` / ``glob``.
+    Non-recursive scans use a single-pass ``os.scandir``.
     Recursive scans dispatch each top-level subdirectory to a thread
     pool for parallel I/O on large trees. Directories whose name
     matches any glob pattern in *exclude_dirs* are skipped entirely.
@@ -150,31 +162,44 @@ def scan_directory(
 
     ext_lower = extension.lower().lstrip(".")
 
-    # ── Non-recursive: fast single-pass ──────────────────────────────
+    # ── Non-recursive: fast single-pass via os.scandir ───────────────
     if not recursive:
-        if not ext_lower or ext_lower == "all":
-            files = [f for f in scan_path.iterdir() if f.is_file()]
-        else:
-            files = list(scan_path.glob(f"*.{ext_lower}"))
-        if exclude_files:
-            files = [f for f in files if not _is_excluded(f.name, exclude_files)]
+        files: list[Path] = []
+        try:
+            with os.scandir(scan_path) as entries:
+                for entry in entries:
+                    try:
+                        if (
+                            entry.is_file(follow_symlinks=False)
+                            and _matches_extension(entry.name, ext_lower)
+                            and not _is_excluded(entry.name, exclude_files)
+                        ):
+                            files.append(Path(entry.path))
+                    except (PermissionError, OSError):
+                        pass
+        except (PermissionError, OSError):
+            pass
         return sorted(files)
 
-    # ── Recursive: parallel subtree scanning ─────────────────────────
+    # ── Recursive: parallel subtree scanning via os.scandir ──────────
     # Collect top-level children first (skip excluded directories)
     subdirs: list[Path] = []
     root_files: list[Path] = []
     try:
-        for entry in scan_path.iterdir():
-            if entry.is_dir():
-                if not _is_excluded(entry.name, exclude_dirs):
-                    subdirs.append(entry)
-            elif (
-                entry.is_file()
-                and _matches_extension(entry, ext_lower)
-                and not _is_excluded(entry.name, exclude_files)
-            ):
-                root_files.append(entry)
+        with os.scandir(scan_path) as entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if not _is_excluded(entry.name, exclude_dirs):
+                            subdirs.append(Path(entry.path))
+                    elif (
+                        entry.is_file(follow_symlinks=False)
+                        and _matches_extension(entry.name, ext_lower)
+                        and not _is_excluded(entry.name, exclude_files)
+                    ):
+                        root_files.append(Path(entry.path))
+                except (PermissionError, OSError):
+                    pass
     except (PermissionError, OSError):
         pass
 
