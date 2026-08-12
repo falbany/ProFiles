@@ -20,9 +20,17 @@ from profiles.gui.main_window import MainWindow
 _tk_available = True
 try:
     _root_test = tk.Tk()
-    _root_test.destroy()
+    _root_test.withdraw()
 except (tk.TclError, RuntimeError):
     _tk_available = False
+else:
+    # Keep the probe root ALIVE for the whole session. On macOS (TkAqua),
+    # destroying the first Tk root poisons the window-server state so that
+    # update() on every later root spins forever — but a withdrawn,
+    # never-destroyed session root keeps later roots healthy. Reset the
+    # module default so each MainWindow's own Tk() becomes the default
+    # root again (images/variables then bind to that window's interpreter).
+    tk._default_root = None
 
 needs_tk = pytest.mark.skipif(
     not _tk_available,
@@ -486,7 +494,10 @@ class TestVerifyHash:
         digest = hashlib.sha256(b"hello").hexdigest()
         window.root.clipboard_clear()
         window.root.clipboard_append(digest)
-        window.root.update()
+        # ponytail: update() drains the clipboard grab but blocks forever on
+        # TkAqua when a prior root was destroyed; update_idletasks() flushes
+        # the Tcl queue without the blocking grab.
+        window.root.update_idletasks()
 
         mock_info = mocker.patch("profiles.gui.main_window.messagebox.showinfo")
         mock_error = mocker.patch("profiles.gui.main_window.messagebox.showerror")
@@ -509,7 +520,10 @@ class TestVerifyHash:
         digest = hashlib.md5(b"hello").hexdigest()
         window.root.clipboard_clear()
         window.root.clipboard_append(digest.upper())  # uppercase clipboard
-        window.root.update()
+        # ponytail: update() drains the clipboard grab but blocks forever on
+        # TkAqua when a prior root was destroyed; update_idletasks() flushes
+        # the Tcl queue without the blocking grab.
+        window.root.update_idletasks()
 
         mock_info = mocker.patch("profiles.gui.main_window.messagebox.showinfo")
         window._action_verify_hash(f, "md5")
@@ -527,7 +541,10 @@ class TestVerifyHash:
         f.write_bytes(b"hello")
         window.root.clipboard_clear()
         window.root.clipboard_append("0" * 64)  # wrong hash
-        window.root.update()
+        # ponytail: update() drains the clipboard grab but blocks forever on
+        # TkAqua when a prior root was destroyed; update_idletasks() flushes
+        # the Tcl queue without the blocking grab.
+        window.root.update_idletasks()
 
         mock_error = mocker.patch("profiles.gui.main_window.messagebox.showerror")
         window._action_verify_hash(f, "sha256")
@@ -546,7 +563,10 @@ class TestVerifyHash:
         f = tmp_path / "good.mttl"
         f.write_bytes(b"hello")
         window.root.clipboard_clear()
-        window.root.update()
+        # ponytail: update() drains the clipboard grab but blocks forever on
+        # TkAqua when a prior root was destroyed; update_idletasks() flushes
+        # the Tcl queue without the blocking grab.
+        window.root.update_idletasks()
 
         mock_info = mocker.patch("profiles.gui.main_window.messagebox.showinfo")
         mock_error = mocker.patch("profiles.gui.main_window.messagebox.showerror")

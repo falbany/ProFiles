@@ -189,9 +189,12 @@ class TestGetLinuxDesktop:
         """Common desktop folder names are probed when XDG is unset."""
         monkeypatch.delenv("XDG_DESKTOP_DIR", raising=False)
         home = tmp_path / "home"
-        (home / "desktop").mkdir(parents=True)
+        target = home / "desktop"
+        target.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
-        assert shortcut._get_linux_desktop() == home / "desktop"
+        result = shortcut._get_linux_desktop()
+        assert result is not None
+        assert result.samefile(target)
 
     def test_none_found_returns_none(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """No desktop candidate yields None."""

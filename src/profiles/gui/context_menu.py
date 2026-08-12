@@ -285,7 +285,6 @@ class FileContextMenu:
         """Copy *value* to the system clipboard."""
         self.window._root.clipboard_clear()
         self.window._root.clipboard_append(value)
-        self.window._root.update()
 
     def action_copy_path(self, file_path: Path, *, forward_slashes: bool = False) -> None:
         """Copy the full file path to the clipboard."""

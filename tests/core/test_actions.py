@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -16,8 +17,7 @@ from profiles.core.actions import (
     open_log_file,
     write_starter_config,
 )
-from profiles.core.config.models import HookSpec
-from profiles.core.environment.execution import HookOutcome
+from profiles.core.config.models import MatchCriteria, WorkflowStep
 
 
 def _make_config_for_actions(tmp_path: Path) -> AppConfig:
@@ -197,6 +197,18 @@ class TestWriteStarterConfig:
         assert "configs:" in body
         assert "search_dir" in body or "directory" in body
 
+        # Default search_dir comes from Path.cwd() at write time.
+        assert str(Path.cwd()) in body
+
+        # Round-trip: ConfigReader must parse it without raising.
+        from profiles.config import ConfigReader
+
+        config = ConfigReader(target).load()
+        assert config.title == ""
+        assert config.gui_auto_launch is True
+        assert config.configurations
+        assert config.configurations[0].match.hostname == ("*",)
+
 
 class TestLaunchHooksIntegration:
     """Integration tests for advanced hooks in launch pipeline via launch_selected_file."""
@@ -204,12 +216,15 @@ class TestLaunchHooksIntegration:
     def test_launch_with_confirmation_and_user_confirms(self, mocker, tmp_path: Path) -> None:
         """User confirmation allows the file to be launched."""
         mock_confirm_dialog = mocker.patch(
-            "profiles.core.environment.interactions.confirm_dialog", return_value=True
+            "profiles.core.environment.workflow.confirm_dialog_3way", return_value="yes"
         )
+        mock_notify = mocker.patch("profiles.core.environment.workflow.show_notify_dialog")
         mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
 
         config = _make_config_for_actions(tmp_path)
-        config.launch_hooks = {".mttl": (HookSpec(when="confirm", template="Proceed?"),)}
+        config.launch_hooks = {
+            ".mttl": (WorkflowStep(action="notify", content="Proceed?", ask="Proceed?"),)
+        }
 
         target = tmp_path / "test.mttl"
         target.touch()
@@ -224,84 +239,22 @@ class TestLaunchHooksIntegration:
 
         assert result.status is ActionStatus.SUCCESS
         assert "Launched" in result.message
-        mock_confirm_dialog.assert_called_once_with("Proceed?", title="Launch Confirmation")
+        mock_confirm_dialog.assert_called_once_with("Proceed?", headless=False)
+        mock_notify.assert_called_once_with("Proceed?", blocking=True, headless=False)
         mock_launch_file.assert_called_once_with(target)
 
     def test_launch_with_confirmation_and_user_cancels(self, mocker, tmp_path: Path) -> None:
         """User cancellation prevents file launch and returns FAILED."""
         mock_confirm_dialog = mocker.patch(
-            "profiles.core.environment.interactions.confirm_dialog", return_value=False
+            "profiles.core.environment.workflow.confirm_dialog_3way", return_value="no"
         )
-        mock_launch_file = mocker.patch("profiles.core.actions.launch_file")  # Should not be called
-
-        config = _make_config_for_actions(tmp_path)
-        config.launch_hooks = {".mttl": (HookSpec(when="confirm", template="Proceed?"),)}
-
-        target = tmp_path / "test.mttl"
-        target.touch()
-
-        result = launch_selected_file(
-            directory=str(tmp_path),
-            filename="test.mttl",
-            release="test",
-            username="tester",
-            config=config,
-        )
-
-        assert result.status is ActionStatus.FAILED
-        assert "cancelled by a launch hook" in result.message
-        mock_confirm_dialog.assert_called_once_with("Proceed?", title="Launch Confirmation")
-        mock_launch_file.assert_not_called()
-
-    def test_launch_with_sequential_hooks_all_succeed(self, mocker, tmp_path: Path) -> None:
-        """A chain of successful required hooks allows normal file launch."""
-        mock_blocking_hook = mocker.patch(
-            "profiles.core.environment.execution.run_blocking_hook", return_value=0
-        )
-        mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
-
-        config = _make_config_for_actions(tmp_path)
-        config.launch_hooks = {
-            ".mttl": (
-                HookSpec(when="before", template="hook1.sh", requires_success=True),
-                HookSpec(when="before", template="hook2.sh", requires_success=True),
-            )
-        }
-
-        target = tmp_path / "test.mttl"
-        target.touch()
-
-        result = launch_selected_file(
-            directory=str(tmp_path),
-            filename="test.mttl",
-            release="test",
-            username="tester",
-            config=config,
-        )
-
-        assert result.status is ActionStatus.SUCCESS
-        assert "Launched" in result.message
-        assert mock_blocking_hook.call_count == 2  # Both hooks ran
-        mock_launch_file.assert_called_once_with(target)
-
-    def test_launch_with_sequential_hooks_middle_failure_aborts(
-        self, mocker, tmp_path: Path
-    ) -> None:
-        """A failure in a required hook aborts the launch pipeline."""
-        mock_blocking_hook = mocker.patch(
-            "profiles.core.environment.execution.run_blocking_hook",
-            side_effect=[0, 1],  # Success then failure
-        )
+        mock_notify = mocker.patch("profiles.core.environment.workflow.show_notify_dialog")
         mock_launch_file = mocker.patch("profiles.core.actions.launch_file")  # Should not be called
 
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
-            ".mttl": (
-                HookSpec(when="before", template="hook1.sh", requires_success=True),
-                HookSpec(when="before", template="hook2.sh", requires_success=True),
-            )
+            ".mttl": (WorkflowStep(action="notify", content="Proceed?", ask="Proceed?"),)
         }
-        config.launch_hook_failmode = "abort"
 
         target = tmp_path / "test.mttl"
         target.touch()
@@ -316,24 +269,90 @@ class TestLaunchHooksIntegration:
 
         assert result.status is ActionStatus.FAILED
         assert "aborted by a launch hook" in result.message
-        assert mock_blocking_hook.call_count == 2  # First two hooks ran
+        mock_confirm_dialog.assert_called_once_with("Proceed?", headless=False)
+        mock_notify.assert_not_called()  # Aborted before notify step
         mock_launch_file.assert_not_called()
 
-    def test_launch_with_sequential_hooks_optional_failure_continues(
-        self, mocker, tmp_path: Path
-    ) -> None:
-        """A failure in an optional hook (requires_success=False) allows the pipeline to proceed."""
-        mock_blocking_hook = mocker.patch(
-            "profiles.core.environment.execution.run_blocking_hook",
-            side_effect=[1, 0],  # Failure then success
+    def test_launch_with_sequential_hooks_all_succeed(self, mocker, tmp_path: Path) -> None:
+        """A chain of successful required hooks allows normal file launch."""
+        mock_run_command = mocker.patch(
+            "profiles.core.environment.workflow._run_command", return_value=True
         )
         mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
 
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
             ".mttl": (
-                HookSpec(when="before", template="optional.sh", requires_success=False),
-                HookSpec(when="before", template="required.sh", requires_success=True),
+                WorkflowStep(action="run", content="hook1.sh", on_failure="stop"),
+                WorkflowStep(action="run", content="hook2.sh", on_failure="stop"),
+            )
+        }
+
+        target = tmp_path / "test.mttl"
+        target.touch()
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.SUCCESS
+        assert "Launched" in result.message
+        assert mock_run_command.call_count == 2  # Both hooks ran
+        mock_launch_file.assert_called_once_with(target)
+
+    def test_launch_with_sequential_hooks_middle_failure_aborts(
+        self, mocker, tmp_path: Path
+    ) -> None:
+        """A failure in a required hook aborts the launch pipeline."""
+        mock_run_command = mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=[True, False],  # Success then failure
+        )
+        mock_launch_file = mocker.patch("profiles.core.actions.launch_file")  # Should not be called
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="run", content="hook1.sh", on_failure="stop"),
+                WorkflowStep(action="run", content="hook2.sh", on_failure="stop"),
+            )
+        }
+
+        target = tmp_path / "test.mttl"
+        target.touch()
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.FAILED
+        assert "aborted by a launch hook" in result.message
+        assert mock_run_command.call_count == 2  # First two hooks ran
+        mock_launch_file.assert_not_called()
+
+    def test_launch_with_sequential_hooks_optional_failure_continues(
+        self, mocker, tmp_path: Path
+    ) -> None:
+        """A failure in an optional hook (on_failure=continue) allows the pipeline to proceed."""
+        mock_run_command = mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=[False, True],  # Failure then success
+        )
+        mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="run", content="optional.sh", on_failure="continue"),
+                WorkflowStep(action="run", content="required.sh", on_failure="stop"),
             )
         }
         # Even with failmode=abort, optional failure should not abort pipeline
@@ -352,20 +371,8 @@ class TestLaunchHooksIntegration:
 
         assert result.status is ActionStatus.SUCCESS
         assert "Launched" in result.message
-        assert mock_blocking_hook.call_count == 2  # Both hooks ran
+        assert mock_run_command.call_count == 2  # Both hooks ran
         mock_launch_file.assert_called_once_with(target)
-
-        # Default search_dir comes from Path.cwd() at write time.
-        assert str(Path.cwd()) in body
-
-        # Round-trip: ConfigReader must parse it without raising.
-        from profiles.config import ConfigReader
-
-        config = ConfigReader(target).load()
-        assert config.title == ""
-        assert config.gui_auto_launch is True
-        assert config.configurations
-        assert config.configurations[0].match.hostname == ("All",)
 
     def test_failure_on_unwritable_parent(self) -> None:
         """A non-existent parent directory causes FAILED, never raises."""
@@ -445,10 +452,8 @@ class TestClearFile:
                 assert not target.exists()
         finally:
             # Restore permissions for cleanup
-            try:
+            with contextlib.suppress(OSError):
                 target.chmod(0o644)
-            except OSError:
-                pass
 
 
 class TestLaunchSelectedWithArgs:
@@ -599,24 +604,29 @@ class TestLaunchSelectedWithArgs:
 
 
 class TestLaunchSelectedFileIntegration:
-    """launch_selected_file honors the hook pipeline outcome."""
+    """launch_selected_file honors the workflow outcome."""
 
     @patch("profiles.core.actions.launch_file", return_value=True)
-    @patch("profiles.core.actions.run_hooks_for_file")
+    @patch("profiles.core.actions.run_workflow")
     def test_abort_outcome_returns_failed(
-        self, mock_hooks: MagicMock, _mock_launch: MagicMock, tmp_path: Path
+        self, mock_workflow: MagicMock, _mock_launch: MagicMock, tmp_path: Path
     ) -> None:
         """An ABORT outcome fails the launch without touching the OS."""
-        mock_hooks.return_value = HookOutcome.ABORT
+        from profiles.core.environment.workflow import WorkflowOutcome
+
+        mock_workflow.return_value = WorkflowOutcome.ABORT
         target = tmp_path / "x.mttx"
         target.write_text("")
+
+        config = AppConfig()
+        config.launch_hooks = {"*.mttx": (WorkflowStep(action="run", content="false"),)}
 
         result = launch_selected_file(
             directory=str(tmp_path),
             filename="x.mttx",
             release="test",
             username="tester",
-            config=AppConfig(),
+            config=config,
         )
 
         assert result.status is ActionStatus.FAILED
@@ -624,52 +634,62 @@ class TestLaunchSelectedFileIntegration:
         _mock_launch.assert_not_called()
 
     @patch("profiles.core.actions.launch_file", return_value=True)
-    @patch("profiles.core.actions.run_hooks_for_file")
+    @patch("profiles.core.actions.run_workflow")
     def test_skip_outcome_returns_success_without_os_launch(
-        self, mock_hooks: MagicMock, mock_launch: MagicMock, tmp_path: Path
+        self, mock_workflow: MagicMock, mock_launch: MagicMock, tmp_path: Path
     ) -> None:
         """A SKIP outcome succeeds via the instead hook, no OS launch."""
-        mock_hooks.return_value = HookOutcome.SKIP
+        from profiles.core.environment.workflow import WorkflowOutcome
+
+        mock_workflow.return_value = WorkflowOutcome.SKIP_LAUNCH
         target = tmp_path / "x.mttx"
         target.write_text("")
+
+        config = AppConfig()
+        config.launch_hooks = {"*.mttx": (WorkflowStep(action="replace", content="true"),)}
 
         result = launch_selected_file(
             directory=str(tmp_path),
             filename="x.mttx",
             release="test",
             username="tester",
-            config=AppConfig(),
+            config=config,
         )
 
         assert result.status is ActionStatus.SUCCESS
-        assert "instead" in result.message
+        assert "handled by workflow" in result.message
         mock_launch.assert_not_called()
 
     @patch("profiles.core.actions.launch_file", return_value=True)
-    @patch("profiles.core.actions.run_hooks_for_file")
+    @patch("profiles.core.actions.run_workflow")
     def test_continue_outcome_calls_os_launch(
-        self, mock_hooks: MagicMock, mock_launch: MagicMock, tmp_path: Path
+        self, mock_workflow: MagicMock, mock_launch: MagicMock, tmp_path: Path
     ) -> None:
         """A CONTINUE outcome proceeds to the OS launch."""
-        mock_hooks.return_value = HookOutcome.CONTINUE
+        from profiles.core.environment.workflow import WorkflowOutcome
+
+        mock_workflow.return_value = WorkflowOutcome.CONTINUE
         target = tmp_path / "x.mttx"
         target.write_text("")
+
+        config = AppConfig()
+        config.launch_hooks = {"*.mttx": (WorkflowStep(action="notify", content="hi"),)}
 
         result = launch_selected_file(
             directory=str(tmp_path),
             filename="x.mttx",
             release="test",
             username="tester",
-            config=AppConfig(),
+            config=config,
         )
 
         assert result.status is ActionStatus.SUCCESS
         mock_launch.assert_called_once()
 
     @patch("profiles.core.actions.launch_file", return_value=True)
-    @patch("profiles.core.actions.run_hooks_for_file")
+    @patch("profiles.core.actions.run_workflow")
     def test_no_config_skips_hook_pipeline(
-        self, mock_hooks: MagicMock, mock_launch: MagicMock, tmp_path: Path
+        self, mock_workflow: MagicMock, mock_launch: MagicMock, tmp_path: Path
     ) -> None:
         """Without a config the hook pipeline is skipped entirely."""
         target = tmp_path / "x.mttx"
@@ -683,5 +703,5 @@ class TestLaunchSelectedFileIntegration:
         )
 
         assert result.status is ActionStatus.SUCCESS
-        mock_hooks.assert_not_called()
+        mock_workflow.assert_not_called()
         mock_launch.assert_called_once()

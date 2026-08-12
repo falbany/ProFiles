@@ -50,21 +50,24 @@ def _get_windows_desktop() -> Path | None:
     Returns:
         Path to desktop or None if not found.
     """
-    import ctypes.wintypes
+    try:
+        import ctypes
 
-    csidl_desktop = 0x000C
-    shgfp_type_current = 0
+        csidl_desktop = 0x000C
+        shgfp_type_current = 0
 
-    buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-    result = ctypes.windll.shell32.SHGetFolderPathW(
-        None, csidl_desktop, None, shgfp_type_current, buf
-    )
+        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+        result = ctypes.windll.shell32.SHGetFolderPathW(
+            None, csidl_desktop, None, shgfp_type_current, buf
+        )
 
-    # Check if the API call succeeded
-    if result == 0:
-        desktop_path = Path(buf.value)
-        if desktop_path.exists():
-            return desktop_path
+        # Check if the API call succeeded
+        if result == 0:
+            desktop_path = Path(buf.value)
+            if desktop_path.exists():
+                return desktop_path
+    except (AttributeError, ImportError, TypeError):
+        pass
 
     # Fallback to environment variable
     desktop_env = os.environ.get("USERPROFILE")

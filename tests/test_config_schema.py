@@ -1,4 +1,3 @@
-
 from profiles.core.config.models import MachineConfiguration, MatchCriteria
 from profiles.core.config.schema import MachineConfig
 

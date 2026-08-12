@@ -82,20 +82,16 @@ class TestStatusBarInit:
         assert status_bar._status_frame is not None
         assert isinstance(status_bar._status_frame, ttk.Frame)
 
-    @pytest.mark.skip(reason="Tkinter limitation in test fixtures")
     def test_creates_all_labels(self, status_bar):
         """Verify all label widgets are created."""
-        # This test is skipped due to Tkinter limitations in test fixtures
         assert status_bar._user_label is not None
         assert status_bar._host_label is not None
         assert status_bar._ip_label is not None
         assert status_bar._count_label is not None
         assert status_bar._dir_status_label is not None
 
-    @pytest.mark.skip(reason="Tkinter limitation in test fixtures")
     def test_creates_all_buttons(self, status_bar):
         """Verify all button widgets are created."""
-        # This test is skipped due to Tkinter limitations in test fixtures
         assert status_bar._config_link is not None
         assert status_bar._refresh_btn is not None
         assert status_bar._log_link is not None
@@ -194,10 +190,8 @@ class TestStatusBarTooltips:
         events = status_bar._count_label.bind()
         assert "<Enter>" in events or len(events) > 0
 
-    @pytest.mark.skip(reason="Tkinter limitation in test fixtures")
     def test_dir_status_label_has_tooltip(self, status_bar):
         """Verify directory status label has tooltip bound."""
-        # This test is skipped due to Tkinter limitations in test fixtures
         events = status_bar._dir_status_label.bind()
         assert "<Enter>" in events or len(events) > 0
 

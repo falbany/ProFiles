@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import importlib.resources
 import logging
+import queue
 import re
 import subprocess
 import sys
@@ -131,8 +132,10 @@ class MainWindow:
         self._config = config
         self._logger = logging.getLogger("profiles")
         self._current_scan_id: int = 0
+        self._scan_in_progress: bool = False
         self._filter_timer: str | None = None  # Debounce timer for filter field
         self._ext_timer: str | None = None  # Debounce timer for extension field
+        self._scan_queue: queue.Queue = queue.Queue()
         self._row_color_rules: list[tuple[str, str]] = []
         self._row_color_tag_prefix = "_rowcolor"
         self._tree_to_path: dict[str, Path] = {}  # iid -> filesystem path
@@ -593,10 +596,13 @@ class MainWindow:
         self._dir_status_label.config(text="Scanning...")
         self._count_label.config(text="Files: 0")
         self._root.update_idletasks()
+        self._scan_in_progress = True
         self._root.after(200, self._show_progress)
 
         # Start scanning in a background thread
-        # NOTE: tkinter variables MUST be read on the main thread
+        # NOTE: tkinter variables MUST be read on the main thread, so the
+        # worker only performs pure computation and pushes its result into
+        # _scan_queue; _poll_scan_queue drains it on the main thread.
         threading.Thread(
             target=self._bg_scan_and_process,
             args=(
@@ -605,9 +611,13 @@ class MainWindow:
                 extension,
                 filter_text,
                 bool(self._recursive_var.get()),
+                directory_label,
             ),
             daemon=True,
         ).start()
+        self._root.after(
+            50, self._poll_scan_queue, scan_id, directory_label, filter_text, extension
+        )
 
     def _bg_scan_and_process(
         self,
@@ -616,12 +626,19 @@ class MainWindow:
         extension: str,
         filter_text: str,
         recursive: bool,
+        directory_label: str,
     ) -> None:
-        """Scan directories and process files in a background thread."""
+        """Scan directories and process files in a background thread.
+
+        Runs entirely off the Tk main thread: no widget or Tk variable is
+        touched here. The result (or error) is pushed onto ``_scan_queue``
+        and applied by :meth:`_poll_scan_queue` on the main thread, which
+        keeps Tk calls on a single thread (Tkinter is not thread-safe).
+        """
         try:
             # File exclusion patterns: active config (base + per-config
             # merged by the reader) or the [LAUNCHER] base as fallback.
-            active = config_service.find_active_config(self._config, self._current_dir_label())
+            active = config_service.find_active_config(self._config, directory_label)
             exclude_files = (
                 active.search_exclude_files
                 if active is not None
@@ -647,28 +664,53 @@ class MainWindow:
             if scan_id != self._current_scan_id:
                 return
 
-            display_label = self._current_dir_label()
-            # Schedule chunked insertion on the main thread
-            with contextlib.suppress(tk.TclError, RuntimeError):
-                self._root.after(
-                    0,
-                    self._start_chunked_insert,
-                    scan_id,
-                    processed_items,
-                    display_label,
-                    filter_text,
-                    extension,
-                )
+            self._scan_queue.put(("ok", scan_id, processed_items))
 
         except Exception as exc:
             self._logger.error("Error during background file scan: %s", exc)
-            with contextlib.suppress(tk.TclError, RuntimeError):
-                self._root.after(
-                    0,
-                    lambda: self._dir_status_label.config(text="Scan failed"),
-                )
-            with contextlib.suppress(tk.TclError, RuntimeError):
-                self._root.after(0, self._hide_progress)
+            self._scan_queue.put(("error", scan_id, None))
+
+    def _poll_scan_queue(
+        self,
+        scan_id: int,
+        display_label: str,
+        filter_text: str,
+        extension: str,
+    ) -> None:
+        """Drain a finished scan result on the main thread.
+
+        Called repeatedly via ``after()`` while a background scan is in
+        flight. When the worker pushes a result for *scan_id*, the chunked
+        insertion (which touches the Treeview) is started here, on the
+        main thread. Stale results for superseded scans are discarded.
+        """
+        while True:
+            try:
+                status, queued_scan_id, items = self._scan_queue.get_nowait()
+            except queue.Empty:
+                # Scan still running: keep polling if this scan is still current
+                if scan_id == self._current_scan_id:
+                    self._root.after(
+                        50,
+                        self._poll_scan_queue,
+                        scan_id,
+                        display_label,
+                        filter_text,
+                        extension,
+                    )
+                return
+
+            if queued_scan_id != scan_id:
+                continue  # Result belongs to a superseded scan — discard
+
+            # Result for the scan we are waiting for
+            self._scan_in_progress = False
+            if status == "error":
+                self._dir_status_label.config(text="Scan failed")
+                self._hide_progress()
+            else:
+                self._start_chunked_insert(scan_id, items, display_label, filter_text, extension)
+            return
 
     def _start_chunked_insert(
         self,
@@ -1272,7 +1314,10 @@ class MainWindow:
         if not hasattr(self, "_empty_label"):
             banner_path = Path.cwd() / "img" / "ProFiles_banner.png"
             if banner_path.is_file():
-                self._empty_photo = tk.PhotoImage(file=str(banner_path))
+                # Bind the image to THIS window's interpreter — tk.PhotoImage
+                # defaults to the process-global default root, which breaks
+                # multi-window sessions (each Tk() owns a private interpreter).
+                self._empty_photo = tk.PhotoImage(master=self._root, file=str(banner_path))
                 self._empty_photo = self._empty_photo.subsample(3, 5)
 
                 self._empty_label = tk.Frame(self._list_container)
@@ -1313,15 +1358,23 @@ class MainWindow:
         self._refresh_file_list()
 
     def _show_progress(self) -> None:
-        """Show the indeterminate progressbar and start its animation."""
+        """Show the indeterminate progressbar and start its animation.
+
+        Guarded by ``_scan_in_progress`` so a deferred ``after`` callback
+        cannot start animating a scan that already finished (which would
+        leave a recurring Tcl timer running forever).
+        """
         progress_bar = getattr(self, "_progress_bar", None)
         if progress_bar is None:
+            return
+        if not self._scan_in_progress:
             return
         progress_bar.pack(side=tk.LEFT, padx=(0, 12))
         progress_bar.start(10)
 
     def _hide_progress(self) -> None:
         """Stop the progressbar animation and hide it."""
+        self._scan_in_progress = False
         progress_bar = getattr(self, "_progress_bar", None)
         if progress_bar is None:
             return

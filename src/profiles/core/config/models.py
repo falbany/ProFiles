@@ -167,8 +167,9 @@ class AppConfig:
         configurations: List of MachineConfiguration entries.
         config_path: Path to the .profiles file.
         skip_config_prompt: If True, skip config file creation prompt (for testing).
-        launch_hooks: Per-extension launch hooks keyed by normalised extension
-            (e.g. ``".mttx"``).
+        launch_hooks: Per-extension launch workflow steps keyed by
+            normalised extension (e.g. ``".mttx"``). Each step is a
+            :class:`WorkflowStep` (action, content, optional ask guard).
         launch_hook_failmode: Behavior when a hook fails (``"warn"``, ...).
         launch_hook_timeout: Hook timeout in seconds.
     """
@@ -196,7 +197,7 @@ class AppConfig:
     configurations: list[MachineConfiguration] = field(default_factory=list)
     config_path: Path = field(default_factory=lambda: Path.cwd() / PRIMARY_CONFIG_NAME)
     skip_config_prompt: bool = False
-    launch_hooks: dict[str, tuple[HookSpec, ...]] = field(default_factory=dict)
+    launch_hooks: dict[str, tuple[WorkflowStep, ...]] = field(default_factory=dict)
     launch_hook_failmode: str = "warn"
     launch_hook_timeout: int = 30
 
