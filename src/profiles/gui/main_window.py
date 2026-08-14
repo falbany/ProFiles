@@ -29,6 +29,7 @@ from profiles.core.processing.file_classifier import directory_exists
 from profiles.gui.context_menu import FileContextMenu
 from profiles.gui.i18n import set_language
 from profiles.gui.status_bar import StatusBar
+from profiles.gui.styles import ToolTip
 from profiles.gui.theme import THEME_LABELS, THEMES, Md3Theme, apply_theme, resolve_theme_name
 from profiles.gui.ui import MainWindowUI
 from profiles.utils.file_utils import open_file_explorer
@@ -117,6 +118,7 @@ class MainWindow:
     _ip_label: ttk.Label
     _count_label: ttk.Label
     _dir_status_label: ttk.Label
+    _dir_status_tooltip: ToolTip | None
 
     _row_color_rules: list[tuple[str, str]]
     _row_color_pattern_cache: list[tuple[re.Pattern, str]]  # Compiled regex patterns
@@ -586,7 +588,16 @@ class MainWindow:
             return
 
         self._update_empty_state(False)
-        self._dir_status_label.config(text="Scanning...")
+        
+        if len(scan_paths) > 1:
+            self._dir_status_label.config(text=f"Scanning {len(scan_paths)} paths...")
+            if self._dir_status_tooltip:
+                self._dir_status_tooltip.set_text("Paths:\n" + "\n".join(f"• {p}" for p in scan_paths))
+        else:
+            self._dir_status_label.config(text="Scanning...")
+            if self._dir_status_tooltip:
+                self._dir_status_tooltip.set_text("Current search directory")
+            
         self._count_label.config(text="Files: 0")
         self._root.update_idletasks()
         self._scan_in_progress = True
@@ -808,9 +819,19 @@ class MainWindow:
             self._hide_progress()
             self._flash_count_label()
             self._update_empty_state(count == 0)
-            self._dir_status_label.config(
-                text=f"Directory: {display_label}" if count > 0 else "No matching files found"
-            )
+            
+            scan_paths = self._resolve_dir_selection(display_label)
+            if count == 0:
+                self._dir_status_label.config(text="No matching files found")
+            elif len(scan_paths) > 1:
+                self._dir_status_label.config(text=f"Scanned {len(scan_paths)} paths")
+                if self._dir_status_tooltip:
+                    self._dir_status_tooltip.set_text("Scanned paths:\n" + "\n".join(f"• {p}" for p in scan_paths))
+            else:
+                self._dir_status_label.config(text=f"Directory: {display_label}")
+                if self._dir_status_tooltip:
+                    self._dir_status_tooltip.set_text(f"Directory: {display_label}")
+
             self._logger.info(
                 "Scanned directory: %s | Extension: %s | Filter: '%s' | Files found: %d",
                 display_label,

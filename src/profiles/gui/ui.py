@@ -67,6 +67,7 @@ class MainWindowUI:
         self.window._ip_label = self.window._status_bar.ip_label
         self.window._count_label = self.window._status_bar.count_label
         self.window._dir_status_label = self.window._status_bar.dir_status_label
+        self.window._dir_status_tooltip = self.window._status_bar.dir_status_tooltip
 
     def _build_header(self) -> None:
         """Build the application header separator."""

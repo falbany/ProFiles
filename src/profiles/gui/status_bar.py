@@ -318,6 +318,11 @@ class StatusBar:
         """Get the directory status label."""
         return self._dir_status_label
 
+    @property
+    def dir_status_tooltip(self) -> ToolTip | None:
+        """Get the directory status tooltip."""
+        return self._dir_status_tooltip
+
     def update_theme_label(self, label: str) -> None:
         """Update the theme button label.
 
