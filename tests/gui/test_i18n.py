@@ -151,6 +151,14 @@ def test_set_language_persists_current_language() -> None:
     assert i18n.current_language() == "en"
 
 
+def test_status_user_tooltip_is_platform_neutral_en() -> None:
+    assert i18n.t("status.user.tooltip", "en") == "Current username"
+
+
+def test_status_user_tooltip_is_platform_neutral_fr() -> None:
+    assert i18n.t("status.user.tooltip", "fr") == "Nom d'utilisateur courant"
+
+
 def test_supported_languages_is_exactly_two() -> None:
     assert i18n.SUPPORTED_LANGUAGES == ("en", "fr")
 
