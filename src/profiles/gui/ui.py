@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from tkinter import ttk
 from typing import TYPE_CHECKING
@@ -195,8 +196,10 @@ class MainWindowUI:
         # Right-click context menu (Button-3 = right click, Button-2 = middle click on macOS)
         self.window._tree.bind("<Button-3>", self.window._on_tree_right_click)
         self.window._tree.bind("<Button-2>", self.window._on_tree_right_click)
+
         # On macOS, one-button mice use Control+Click. Button-3 doesn't fire.
-        self.window._tree.bind("<Control-Button-1>", self.window._on_tree_right_click)
+        if sys.platform == "darwin":
+            self.window._tree.bind("<Control-Button-1>", self.window._on_tree_right_click)
 
         # ── Smooth mouse-wheel scrolling ─────────────────────────────
         def _on_mousewheel(event: tk.Event) -> str:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import ttk
 
 from profiles.gui.i18n import LANGUAGE_LABELS, current_language, register, t
@@ -24,13 +25,13 @@ class StatusBar:
     def __init__(
         self,
         parent: ttk.Frame,
-        on_config_click: tk.Callable[[], None],
-        on_refresh_click: tk.Callable[[], None],
-        on_log_click: tk.Callable[[], None],
-        on_theme_toggle: tk.Callable[[], None],
+        on_config_click: Callable[[], None],
+        on_refresh_click: Callable[[], None],
+        on_log_click: Callable[[], None],
+        on_theme_toggle: Callable[[], None],
         theme_label: str = "☀ Light",
-        on_shortcuts_click: tk.Callable[[], None] | None = None,
-        on_language_toggle: tk.Callable[[], None] | None = None,
+        on_shortcuts_click: Callable[[], None] | None = None,
+        on_language_toggle: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the status bar.
 

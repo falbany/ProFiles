@@ -14,16 +14,14 @@ dependencies = [
     "ruamel.yaml>=0.18.0",
     "pydantic>=2.0.0",
 ]
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Florent ALBANY", email = "florent.albany@gmail.com"},
 ]
-keywords = ["launcher", "production", "test", "gui", "tkinter"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: X11 Applications",
     "Intended Audience :: Manufacturing",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: French",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS",

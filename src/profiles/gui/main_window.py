@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -588,16 +589,18 @@ class MainWindow:
             return
 
         self._update_empty_state(False)
-        
+
         if len(scan_paths) > 1:
             self._dir_status_label.config(text=f"Scanning {len(scan_paths)} paths...")
             if self._dir_status_tooltip:
-                self._dir_status_tooltip.set_text("Paths:\n" + "\n".join(f"• {p}" for p in scan_paths))
+                self._dir_status_tooltip.set_text(
+                    "Paths:\n" + "\n".join(f"• {p}" for p in scan_paths)
+                )
         else:
             self._dir_status_label.config(text="Scanning...")
             if self._dir_status_tooltip:
                 self._dir_status_tooltip.set_text("Current search directory")
-            
+
         self._count_label.config(text="Files: 0")
         self._root.update_idletasks()
         self._scan_in_progress = True
@@ -819,14 +822,16 @@ class MainWindow:
             self._hide_progress()
             self._flash_count_label()
             self._update_empty_state(count == 0)
-            
+
             scan_paths = self._resolve_dir_selection(display_label)
             if count == 0:
                 self._dir_status_label.config(text="No matching files found")
             elif len(scan_paths) > 1:
                 self._dir_status_label.config(text=f"Scanned {len(scan_paths)} paths")
                 if self._dir_status_tooltip:
-                    self._dir_status_tooltip.set_text("Scanned paths:\n" + "\n".join(f"• {p}" for p in scan_paths))
+                    self._dir_status_tooltip.set_text(
+                        "Scanned paths:\n" + "\n".join(f"• {p}" for p in scan_paths)
+                    )
             else:
                 self._dir_status_label.config(text=f"Directory: {display_label}")
                 if self._dir_status_tooltip:
@@ -1179,7 +1184,7 @@ class MainWindow:
         for _label, key, callback in self._shortcut_entries():
             self._root.bind(key, lambda e, cb=callback: cb())
 
-    def _shortcut_entries(self) -> list[tuple[str, str, tk.Callable[[], None]]]:
+    def _shortcut_entries(self) -> list[tuple[str, str, Callable[[], None]]]:
         """Return the ordered list of shortcut definitions.
 
         Returns:

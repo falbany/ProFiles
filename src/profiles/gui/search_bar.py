@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import ttk
 
 from profiles.gui.i18n import register, t
@@ -26,17 +27,17 @@ class SearchBar:
         parent: ttk.Frame,
         release_version: str,
         recursive_var: tk.BooleanVar,
-        on_directory_changed: tk.Callable[[], None],
-        on_directory_enter: tk.Callable[[], None],
-        on_directory_double_click: tk.Callable[[], None],
-        on_browse: tk.Callable[[], None],
-        on_extension_or_filter_select: tk.Callable[[], None],
-        on_debounced_refresh_ext: tk.Callable[[], None],
-        on_flush_timer_ext: tk.Callable[[], None],
-        on_filter_refresh: tk.Callable[[], None],
-        on_flush_timer_filter: tk.Callable[[], None],
-        on_recursive_toggle: tk.Callable[[], None],
-        on_search: tk.Callable[[], None],
+        on_directory_changed: Callable[[], None],
+        on_directory_enter: Callable[[], None],
+        on_directory_double_click: Callable[[], None],
+        on_browse: Callable[[], None],
+        on_extension_or_filter_select: Callable[[], None],
+        on_debounced_refresh_ext: Callable[[], None],
+        on_flush_timer_ext: Callable[[], None],
+        on_filter_refresh: Callable[[], None],
+        on_flush_timer_filter: Callable[[], None],
+        on_recursive_toggle: Callable[[], None],
+        on_search: Callable[[], None],
         config_title: str = "",
     ) -> None:
         """Initialize the search bar.
@@ -158,9 +159,9 @@ class SearchBar:
             width=60,
         )
         self._dir_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
-        self._dir_combo.bind("<<ComboboxSelected>>", self._on_directory_changed)
-        self._dir_combo.bind("<Return>", self._on_directory_enter)
-        self._dir_combo.bind("<Double-Button-1>", self._on_directory_double_click)
+        self._dir_combo.bind("<<ComboboxSelected>>", lambda e: self._on_directory_changed())
+        self._dir_combo.bind("<Return>", lambda e: self._on_directory_enter())
+        self._dir_combo.bind("<Double-Button-1>", lambda e: self._on_directory_double_click())
         self._dir_tooltip = ToolTip(self._dir_combo, t("search.dir.tooltip"))
 
         self._browse_btn = ttk.Button(
@@ -220,7 +221,9 @@ class SearchBar:
             width=20,
         )
         self._ext_combo.pack(side=tk.LEFT, padx=(0, 24))
-        self._ext_combo.bind("<<ComboboxSelected>>", self._on_extension_or_filter_select)
+        self._ext_combo.bind(
+            "<<ComboboxSelected>>", lambda e: self._on_extension_or_filter_select()
+        )
         self._ext_combo.bind("<KeyRelease>", lambda e: self._on_debounced_refresh_ext())
         self._ext_combo.bind("<<FocusOut>>", lambda e: self._on_flush_timer_ext())
         self._ext_tooltip = ToolTip(self._ext_combo, t("search.ext.tooltip"))
@@ -239,7 +242,9 @@ class SearchBar:
             state="normal",
         )
         self._filter_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 24))
-        self._filter_combo.bind("<<ComboboxSelected>>", self._on_extension_or_filter_select)
+        self._filter_combo.bind(
+            "<<ComboboxSelected>>", lambda e: self._on_extension_or_filter_select()
+        )
         self._filter_combo.bind("<KeyRelease>", lambda e: self._on_filter_refresh())
         self._filter_combo.bind("<<FocusOut>>", lambda e: self._on_flush_timer_filter())
         self._filter_tooltip = ToolTip(self._filter_combo, t("search.filter.tooltip"))
