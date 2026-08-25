@@ -607,6 +607,343 @@ class ContentSearch:
 
 ---
 
+### Milestone 6 : Workflow Builder Visuel
+
+**Statut** : À prioriser comme fonctionnalité cœur du produit
+
+**Description** :
+Ajouter un éditeur visuel pour créer et modifier des workflows de lancement sans écrire directement le YAML des hooks. Cette fonctionnalité transforme ProFiles d'un lanceur de fichiers intelligent en un moteur d'automatisation guidé par des règles métier.
+
+Le builder permet à l'utilisateur de définir des scénarios de lancement de type :
+- "si le fichier a cette extension, demander une confirmation"
+- "si le fichier est un exécutable, lancer un scan antivirus"
+- "si le fichier correspond à un environnement PRODUCTION, remplacer l'ouverture standard par un lanceur dédié"
+- "si une action échoue, afficher un message, arrêter la séquence ou continuer sans lancer l'application"
+
+**Objectif métier** :
+Réduire la complexité technique de la configuration des hooks et rendre la logique d'automatisation accessible aux utilisateurs non techniques, tout en gardant la puissance de configuration du système YAML existant.
+
+**Problème actuel** :
+Les hooks de lancement existent déjà dans le moteur de configuration, mais ils sont déclarés en YAML, ce qui limite la lisibilité, la validation visuelle et l'édition rapide pour les profils complexes.
+
+**Cible utilisateur** :
+- Utilisateurs techniques qui souhaitent configurer rapidement plusieurs workflows sans erreurs
+- Gestionnaires de projets / QA / support qui veulent définir des règles métier sans manipuler du YAML
+- Équipes multi-stations avec environnements différents (DEV / INT / PROD)
+
+---
+
+#### 1. Objectifs Fonctionnels
+
+1. **Créer un workflow visuel**
+   - Ajouter un bouton "Builder de workflow" dans la GUI
+   - Ouvrir une fenêtre de conception avec un canvas éditable
+
+2. **Ajouter des étapes séquentielles**
+   - Les étapes sont ordonnées et peuvent être déplacées
+   - Une étape représente une action, une condition ou une décision
+
+3. **Définir des déclencheurs globaux**
+   - Pattern de fichier (`*.exe`, `*.mttl`, `*.pdf`)
+   - Répertoire cible
+   - Match sur environnement / hostname / IP / config active
+   - Contraintes de nom de fichier ou de version
+
+4. **Définir des actions**
+   - `notify` : afficher une alerte ou un message markdown
+   - `run` : exécuter une commande shell ou un binaire
+   - `run_after` : exécuter une commande en arrière-plan
+   - `replace` : remplacer le lancement standard par une commande custom
+   - `browse` / `open_dir` : ouvrir le dossier contenant le fichier
+   - `copy_path` : copier le chemin dans le presse-papiers
+
+5. **Définir les comportements d'erreur**
+   - `continue` : poursuivre la séquence
+   - `warn` : afficher l'avertissement mais continuer
+   - `abort` : stopper immédiatement le workflow
+   - `skip_launch` : ignorer le lancement système standard
+
+6. **Associer les variables de contexte**
+   - `{{path}}` : chemin absolu du fichier
+   - `{{filename}}` : nom du fichier
+   - `{{directory}}` : dossier parent
+   - `{{hostname}}` : nom de machine
+   - `{{username}}` : utilisateur courant
+   - `{{release}}` : version de ProFiles
+
+7. **Prévisualiser le YAML produit**
+   - Le builder doit générer le bloc YAML correspondant en temps réel
+   - L'utilisateur peut récupérer le code exact à copier dans `.profiles`
+
+8. **Valider le workflow avant enregistrement**
+   - Vérifier les chemins, les actions inconnues et les variables non définies
+   - Signaler les erreurs de configuration sans écriture dans le fichier
+
+9. **Tester un workflow sur un fichier de démonstration**
+   - Sélectionner un fichier de test pour simuler la séquence
+   - Afficher les étapes passées / échouées / ignorées
+
+---
+
+#### 2. Cas d'Utilisation
+
+##### Cas 1 : Workflow de sécurité pour exécutables
+- Trigger : `*.exe`
+- Étape 1 : `notify` -> "Lancement d'un exécutable détecté"
+- Étape 2 : `ask` -> "Voulez-vous lancer un scan antivirus ?"
+- Étape 3 : `run` -> `antivirus.exe --scan {{path}}`
+- Étape 4 : si succès, `continue`
+- Étape 5 : `replace` -> `sandbox_launcher.exe {{path}}`
+- Résultat : l'exécutable est lancé dans un environnement contrôlé
+
+##### Cas 2 : Workflow de préparation d'environnement
+- Trigger : `*.mttl`
+- Étape 1 : `notify` -> "Préparation de l'environnement"
+- Étape 2 : `run` -> `prepare_env.exe --file {{path}}`
+- Étape 3 : `run_after` -> `logger.exe --opened {{filename}}`
+- Étape 4 : `continue`
+- Résultat : le lancement normal se poursuit après préparation
+
+##### Cas 3 : Workflow de blocage pour environnement critique
+- Trigger : `*.dll` ou `*.lnk`
+- Étape 1 : `ask` -> "Lancer ce fichier dans un environnement bloqué ?"
+- Étape 2 : si réponse non, `abort`
+- Étape 3 : `replace` -> `secure_launcher.exe {{path}}`
+
+---
+
+#### 3. Spécification UX / Interface
+
+##### 3.1 Fenêtre principale du builder
+
+**Panneau gauche : Bibliothèque des blocs**
+- Trigger
+- Condition
+- Action
+- Decision / Failure Rule
+- Variables
+
+**Panneau central : Canvas**
+- Chaque bloc est une carte rectangulaire
+- Les blocs sont reliés par des flèches
+- Support de drag & drop pour réordonner
+- Sélection d'un bloc affiche ses propriétés dans le panneau droit
+
+**Panneau droit : Propriétés**
+- Nom du bloc
+- Expression de matching
+- Commande à exécuter
+- Tableau de variables
+- Paramètres de temporisation, `wait`, `ask`, `on_failure`
+
+**Panneau inférieur : Aperçu YAML**
+- Mise à jour en temps réel
+- Boutons : "Copier", "Valider", "Tester" 
+
+##### 3.2 Éléments de bloc
+
+**Trigger**
+- `file_pattern` : motif sur le nom de fichier
+- `directory` : chemin ou sous-schéma de répertoire
+- `match` : conditions sur hostname, IP, user, profile
+
+**Condition**
+- `ask` : question à afficher avant action
+- `if_exists` : vérifier l'existence du fichier
+- `if_env` : filtrer selon le contexte courant
+
+**Action**
+- `notify`
+- `run`
+- `run_after`
+- `replace`
+- `open_dir`
+- `copy_path`
+
+**Failure rule**
+- `continue`
+- `warn`
+- `abort`
+- `skip_launch`
+
+---
+
+#### 4. Modèle de Données
+
+```python
+# core/workflow_builder/models.py
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+
+class WorkflowNodeType(str, Enum):
+    TRIGGER = "trigger"
+    CONDITION = "condition"
+    ACTION = "action"
+    FAILURE_RULE = "failure_rule"
+
+class ActionType(str, Enum):
+    NOTIFY = "notify"
+    RUN = "run"
+    RUN_AFTER = "run_after"
+    REPLACE = "replace"
+    OPEN_DIR = "open_dir"
+    COPY_PATH = "copy_path"
+
+class FailureMode(str, Enum):
+    CONTINUE = "continue"
+    WARN = "warn"
+    ABORT = "abort"
+    SKIP_LAUNCH = "skip_launch"
+
+@dataclass
+class WorkflowStep:
+    id: str
+    type: WorkflowNodeType
+    action: ActionType | None = None
+    label: str = ""
+    pattern: str | None = None
+    command: str | None = None
+    ask: str | None = None
+    on_failure: FailureMode = FailureMode.CONTINUE
+    wait: bool = True
+    enabled: bool = True
+    variables: dict[str, str] = field(default_factory=dict)
+
+@dataclass
+class WorkflowDefinition:
+    name: str
+    trigger: WorkflowStep | None = None
+    steps: list[WorkflowStep] = field(default_factory=list)
+    description: str = ""
+```
+
+**Règle de sérialisation** :
+- Le builder ne stocke pas seulement les étapes ; il doit aussi sauvegarder le nom, les variables globales, et le mode d'exécution
+- Le YAML généré doit rester compatible avec le format de hooks existant
+
+---
+
+#### 5. Schéma YAML Généré
+
+```yaml
+hooks:
+  failmode: warn
+  timeout: 30
+  entries:
+    "*.exe":
+      - action: notify
+        content: "Executable launch detected"
+      - action: run
+        content: "antivirus.exe --scan {{path}}"
+        ask: "Scan with antivirus?"
+        on_failure: warn
+      - action: replace
+        content: "sandbox_launcher.exe {{path}}"
+        ask: "Execute in sandbox?"
+        on_failure: stop
+```
+
+**Règles de conversion** :
+- Chaque bloc est converti en un objet YAML compatible avec `hooks.entries`
+- `continue` / `warn` / `abort` / `skip_launch` mappent vers `on_failure` ou `failmode`
+- L'éditeur doit conserver la compatibilité avec les hooks existants, sans réécrire la logique manuellement
+
+---
+
+#### 6. Implémentation Technique
+
+**Couche GUI**
+- Nouveau widget `WorkflowBuilderDialog` dans `src/profiles/gui/`
+- Intégration dans le menu principal et le context menu
+- Support du drag & drop et de la sélection
+
+**Couche métier**
+- Nouveau module `src/profiles/core/workflow_builder/`
+- Modèles de données, validation, sérialisation YAML
+- Convertisseurs du builder vers la structure actuelle de hooks
+
+**Couche configuration**
+- Extension du loader de config pour accepter des workflows visuels sauvegardés
+- Vérification du schéma au chargement
+
+**Couche d'exécution**
+- Le moteur de hooks existant reste le moteur d'exécution unique
+- Le builder ne fait que générer des blocs YAML compatibles
+- Aucun changement de logique métier côté runtime tant que le format est conforme
+
+---
+
+#### 7. Validation et Critères d'Acceptation
+
+**Critère 1 : création de workflow simple**
+- L'utilisateur peut ajouter un déclencheur, deux actions et une règle de gestion d'erreur
+- Le YAML généré est cohérent et valide
+
+**Critère 2 : éditeur de séquence**
+- Les étapes peuvent être ajoutées, supprimées, réordonnées et dupliquées
+- L'ordre de traitement est respecté lors du lancement
+
+**Critère 3 : variables dynamiques**
+- `{{path}}`, `{{filename}}`, `{{directory}}`, `{{hostname}}` sont reconnues et remplacées correctement
+
+**Critère 4 : validation**
+- Un workflow avec action inconnue ou commande vide est rejeté avec un message lisible
+
+**Critère 5 : test de workflow**
+- L'utilisateur peut sélectionner un fichier de test et visualiser le chemin de décision de chaque étape
+
+**Critère 6 : compatibilité**
+- Un workflow créé depuis le builder est pleinement compatible avec la syntaxe YAML des hooks déjà prise en charge par l'application
+
+---
+
+#### 8. Cas Limites et Gestion des Erreurs
+
+- Pattern de fichier vide -> validation bloquante
+- Commande inconnue -> message d'erreur explicite
+- Variable non supportée dans le contexte -> avertissement ou refus de validation
+- Workflow sans action finale -> avertissement "workflow incomplet"
+- Ordre de blocs invalide -> blocage pendant la validation
+- Action `replace` sans commande correspondante -> validation rejetée
+
+---
+
+#### 9. Livrables de la Milestone
+
+1. **Widget de builder visuel** dans l'interface principale
+2. **Modèle de workflow** avec validation des étapes
+3. **Convertisseur YAML** compatible avec les hooks existants
+4. **Mode de test** sur fichier de démonstration
+5. **Documentation d'utilisation** dans `docs/hooks-guide.*`
+6. **Tests d'intégration** pour la génération et la validation des workflows
+
+---
+
+#### 10. Estimation de Développement
+
+**Estimation** : 5-7 jours de développement
+
+**Détail** :
+- 2 jours : prototypage UI / modèles de données
+- 2 jours : logique de validation et conversion YAML
+- 1-2 jours : intégration GUI + tests utilisateur
+- 1 jour : documentation + correctifs d'intégration
+
+---
+
+#### 11. Priorité et Positionnement
+
+**Priorité** : Haute
+
+**Pourquoi maintenant** :
+- La base de hooks existe déjà
+- L'architecture de configuration est mature
+- La fonctionnalité apporte immédiatement une réduction de la courbe d'apprentissage
+- Le builder est le meilleur moyen de rendre les workflows accessibles à tout type d'utilisateur
+
+---
+
 ## 📊 Estimation Totale
 
 | Milestone | Estimation | Priorité |
@@ -616,19 +953,21 @@ class ContentSearch:
 | 3. Index inversé | 3-5 jours | Conditionnelle |
 | 4. Filtres sauvegardés | 2 jours | Faible |
 | 5. Recherche contenu | 4-5 jours | Très faible |
+| 6. Workflow Builder Visuel | 5-7 jours | Haute |
 
-**Total** : 14-19 jours (hors recherche contenu : 10-12 jours)
+**Total** : 19-26 jours (hors recherche contenu : 15-21 jours)
 
 ---
 
 ## 🔄 Ordre d'Implémentation Recommandé
 
 1. **Recherche par colonne** (document principal) — PRIORITÉ HAUTE
-2. **Autocomplétion** — Améliore l'UX immédiatement après
-3. **Filtres sauvegardés** — Fonctionnalité utilisateur utile
-4. **Index inversé** — Seulement si besoin de performance
-5. **Filtres graphiques** — Optionnel si autocomplétion suffisante
-6. **Recherche contenu** — Fonctionnalité avancée optionnelle
+2. **Workflow Builder Visuel** — Valeur forte pour l'expérience utilisateur et la configuration
+3. **Autocomplétion** — Améliore l'UX immédiatement après
+4. **Filtres sauvegardés** — Fonctionnalité utilisateur utile
+5. **Index inversé** — Seulement si besoin de performance
+6. **Filtres graphiques** — Optionnel si autocomplétion suffisante
+7. **Recherche contenu** — Fonctionnalité avancée optionnelle
 
 ---
 
