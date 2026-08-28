@@ -331,6 +331,18 @@ def apply_theme(root: tk.Tk, theme: Md3Theme) -> ttk.Style:
         selectBackground=theme.primary,
     )
 
+    # --- Native dialog (messagebox) theming via option database ---
+    # Tk's messagebox is a native widget that ignores ttk styles, but it
+    # reads from the option database. Setting *Dialog* defaults here
+    # propagates to all subsequently-shown dialogs without per-call
+    # work, since messagebox re-reads these at popup time.
+    option_add = getattr(root, "option_add", None)
+    if callable(option_add):
+        option_add("*Dialog*background", theme.surface_container)
+        option_add("*Dialog*foreground", theme.on_surface)
+        option_add("*Dialog*Button.background", theme.primary)
+        option_add("*Dialog*Button.foreground", theme.on_primary)
+
     def _font(size: int = FONT_SIZE_NORMAL, *, bold: bool = False) -> tuple:
         opts: tuple = (FONT_FAMILY, size)
         if bold:

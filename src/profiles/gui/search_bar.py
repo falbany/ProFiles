@@ -159,9 +159,9 @@ class SearchBar:
             width=60,
         )
         self._dir_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
-        self._dir_combo.bind("<<ComboboxSelected>>", lambda e: self._on_directory_changed())
-        self._dir_combo.bind("<Return>", lambda e: self._on_directory_enter())
-        self._dir_combo.bind("<Double-Button-1>", lambda e: self._on_directory_double_click())
+        self._dir_combo.bind("<<ComboboxSelected>>", lambda _e=None: self._on_directory_changed())
+        self._dir_combo.bind("<Return>", lambda _e=None: self._on_directory_enter())
+        self._dir_combo.bind("<Double-Button-1>", lambda _e=None: self._on_directory_double_click())
         self._dir_tooltip = ToolTip(self._dir_combo, t("search.dir.tooltip"))
 
         self._browse_btn = ttk.Button(
@@ -222,10 +222,10 @@ class SearchBar:
         )
         self._ext_combo.pack(side=tk.LEFT, padx=(0, 24))
         self._ext_combo.bind(
-            "<<ComboboxSelected>>", lambda e: self._on_extension_or_filter_select()
+            "<<ComboboxSelected>>", lambda _e=None: self._on_extension_or_filter_select()
         )
-        self._ext_combo.bind("<KeyRelease>", lambda e: self._on_debounced_refresh_ext())
-        self._ext_combo.bind("<<FocusOut>>", lambda e: self._on_flush_timer_ext())
+        self._ext_combo.bind("<KeyRelease>", lambda _e=None: self._on_debounced_refresh_ext())
+        self._ext_combo.bind("<<FocusOut>>", lambda _e=None: self._on_flush_timer_ext())
         self._ext_tooltip = ToolTip(self._ext_combo, t("search.ext.tooltip"))
 
         # Filter label + expanding combobox
@@ -243,10 +243,10 @@ class SearchBar:
         )
         self._filter_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 24))
         self._filter_combo.bind(
-            "<<ComboboxSelected>>", lambda e: self._on_extension_or_filter_select()
+            "<<ComboboxSelected>>", lambda _e=None: self._on_extension_or_filter_select()
         )
-        self._filter_combo.bind("<KeyRelease>", lambda e: self._on_filter_refresh())
-        self._filter_combo.bind("<<FocusOut>>", lambda e: self._on_flush_timer_filter())
+        self._filter_combo.bind("<KeyRelease>", lambda _e=None: self._on_filter_refresh())
+        self._filter_combo.bind("<<FocusOut>>", lambda _e=None: self._on_flush_timer_filter())
         self._filter_tooltip = ToolTip(self._filter_combo, t("search.filter.tooltip"))
 
     def _apply_text(self, lang: str | None = None) -> None:

@@ -30,8 +30,8 @@ from profiles.core.processing.file_classifier import directory_exists
 from profiles.gui.context_menu import FileContextMenu
 from profiles.gui.i18n import set_language
 from profiles.gui.status_bar import StatusBar
-from profiles.gui.styles import ToolTip
-from profiles.gui.theme import THEME_LABELS, THEMES, Md3Theme, apply_theme, resolve_theme_name
+from profiles.gui.styles import ToolTip, configure_styles
+from profiles.gui.theme import THEME_LABELS, THEMES, Md3Theme, resolve_theme_name
 from profiles.gui.ui import MainWindowUI
 from profiles.utils.file_utils import open_file_explorer
 
@@ -158,7 +158,7 @@ class MainWindow:
         self._theme_name: str = self._config.theme
         resolved_name = resolve_theme_name(self._theme_name)
         self._theme: Md3Theme = THEMES.get(resolved_name, THEMES["light"])
-        apply_theme(self._root, self._theme)
+        configure_styles(self._root, resolved_name)
 
         # Language initialisation (before UI build so widgets are created
         # in the configured language)
@@ -302,8 +302,8 @@ class MainWindow:
         self._theme = theme
         self._theme_name = theme_name
 
-        # 1. Apply ttk styles + tk palette
-        apply_theme(self._root, theme)
+        # 1. Apply ttk styles + tk palette (single entry point)
+        configure_styles(self._root, resolved_name)
 
         # 2. Reconfigure row color tags against the (possibly new) theme palette
         self._configure_row_colors()
@@ -540,17 +540,25 @@ class MainWindow:
         except tk.TclError as exc:
             self._logger.warning("Could not configure default row color tag: %s", exc)
 
-    def _row_color_tags_for(self, filename: str) -> tuple[str, ...] | None:
-        """Return the first matching row_color tag for *filename*, or None."""
-        if not self._row_color_rules:
-            return None
+    def _row_color_tags_for(self, filename: str) -> tuple[str, ...]:
+        """Return tags for *filename*: the default variant tag (always
+        applied) plus the first matching row_color rule, if any.
 
-        # Direct lowercase substring match avoids regex overhead per row during insertion
-        filename_lower = filename.lower()
-        for pattern_lower, tag_name in self._row_color_rules_lower:
-            if pattern_lower in filename_lower:
-                return (tag_name,)
-        return None
+        The default tag uses ``on_surface_variant`` so unstyled rows
+        visually recede behind rule-matched ones. Per-row color tags are
+        appended after the default — ttk resolves tag priority by
+        alphabetical order, so the later (alphabetically higher) tag
+        wins, ensuring user-configured colors take precedence.
+        """
+        tags: list[str] = [f"{self._row_color_tag_prefix}_default"]
+        if self._row_color_rules:
+            # Direct lowercase substring match avoids regex overhead per row
+            filename_lower = filename.lower()
+            for pattern_lower, tag_name in self._row_color_rules_lower:
+                if pattern_lower in filename_lower:
+                    tags.append(tag_name)
+                    break
+        return tuple(tags)
 
     # ----------------------------------------------------------------
     # File list operations
@@ -584,9 +592,7 @@ class MainWindow:
         # Check that at least one scan path exists
         if not scan_paths or not any(directory_exists(p) for p in scan_paths):
             self._count_label.config(text="Files: 0")
-            self._dir_status_label.config(
-                text="Directory not found", style="Status.Error.TLabel"
-            )
+            self._dir_status_label.config(text="Directory not found", style="Status.Error.TLabel")
             self._update_empty_state(True)
             return
 
@@ -601,9 +607,7 @@ class MainWindow:
                     "Paths:\n" + "\n".join(f"• {p}" for p in scan_paths)
                 )
         else:
-            self._dir_status_label.config(
-                text="Scanning...", style="Status.Info.TLabel"
-            )
+            self._dir_status_label.config(text="Scanning...", style="Status.Info.TLabel")
             if self._dir_status_tooltip:
                 self._dir_status_tooltip.set_text("Current search directory")
 
@@ -719,9 +723,7 @@ class MainWindow:
             # Result for the scan we are waiting for
             self._scan_in_progress = False
             if status == "error":
-                self._dir_status_label.config(
-                    text="Scan failed", style="Status.Error.TLabel"
-                )
+                self._dir_status_label.config(text="Scan failed", style="Status.Error.TLabel")
                 self._hide_progress()
             else:
                 self._start_chunked_insert(scan_id, items, display_label, filter_text, extension)
@@ -788,21 +790,13 @@ class MainWindow:
             )
 
             iid = f"{scan_id}_{i}"
-            if row_tags is None:
-                self._tree.insert(
-                    parent="",
-                    index=tk.END,
-                    iid=iid,
-                    values=values,
-                )
-            else:
-                self._tree.insert(
-                    parent="",
-                    index=tk.END,
-                    iid=iid,
-                    values=values,
-                    tags=row_tags,
-                )
+            self._tree.insert(
+                parent="",
+                index=tk.END,
+                iid=iid,
+                values=values,
+                tags=row_tags,
+            )
             self._tree_to_path[iid] = scanned_file.path
             self._tree_to_filename[iid] = filename
             accumulated_files.append(scanned_file.path)
@@ -833,9 +827,7 @@ class MainWindow:
 
             scan_paths = self._resolve_dir_selection(display_label)
             if count == 0:
-                self._dir_status_label.config(
-                    text="No matching files found", style="Info.TLabel"
-                )
+                self._dir_status_label.config(text="No matching files found", style="Info.TLabel")
             elif len(scan_paths) > 1:
                 self._dir_status_label.config(
                     text=f"Scanned {len(scan_paths)} paths",
@@ -1426,8 +1418,8 @@ class MainWindow:
             progress_bar.pack_forget()
 
     def _flash_count_label(self) -> None:
-        """Briefly flash count label with highlight styling on change."""
-        self._count_label.config(style="HighlightCount.TLabel")
+        """Briefly flash count label with success styling on scan completion."""
+        self._count_label.config(style="Status.Success.TLabel")
         self._root.after(600, lambda: self._count_label.config(style="Info.TLabel"))
 
     # ----------------------------------------------------------------

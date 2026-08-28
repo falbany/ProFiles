@@ -1160,7 +1160,10 @@ class TestRowColors:
         # Buggy behaviour: tag becomes "_rowcolor_PROD_7A7680" (grey outline).
         assert ("PROD", "_rowcolor_PROD_1565C0") in win._row_color_rules, win._row_color_rules
         assert _tag_foreground(win._tree, "_rowcolor_PROD_1565C0") == "#1565c0"
-        assert win._row_color_tags_for("PROD_sample.mttl") == ("_rowcolor_PROD_1565C0",)
+        assert win._row_color_tags_for("PROD_sample.mttl") == (
+            "_rowcolor_default",
+            "_rowcolor_PROD_1565C0",
+        )
 
     @needs_tk
     def test_light_to_dark_switch_reuses_same_tag(self, row_color_window) -> None:
@@ -1174,7 +1177,10 @@ class TestRowColors:
         assert ("PROD", "_rowcolor_PROD_1565C0") in win._row_color_rules, win._row_color_rules
         assert _tag_foreground(win._tree, "_rowcolor_PROD_1565C0") == "#1565c0"
         # A row inserted after a re-scan still resolves to the same tag/color.
-        assert win._row_color_tags_for("PROD_sample.mttl") == ("_rowcolor_PROD_1565C0",)
+        assert win._row_color_tags_for("PROD_sample.mttl") == (
+            "_rowcolor_default",
+            "_rowcolor_PROD_1565C0",
+        )
 
     @needs_tk
     def test_invisible_color_falls_back_to_readable_text(self, row_color_window) -> None:
