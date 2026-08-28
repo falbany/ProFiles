@@ -57,20 +57,20 @@ class TestCurrentTheme:
 
 
 class TestConfigureStyles:
-    """configure_styles() function — no Tkinter required."""
+    """configure_styles() function — theme reference only (no Tk root needed)."""
 
     def test_configure_light(self) -> None:
-        theme = configure_styles("light")
+        theme = configure_styles(None, "light")
         assert theme is LIGHT_THEME
         assert current_theme() is LIGHT_THEME
 
     def test_configure_dark(self) -> None:
-        theme = configure_styles("dark")
+        theme = configure_styles(None, "dark")
         assert theme is DARK_THEME
         assert current_theme() is DARK_THEME
 
     def test_unknown_theme_falls_back_to_light(self) -> None:
-        theme = configure_styles("unknown")
+        theme = configure_styles(None, "unknown")
         assert theme is LIGHT_THEME
 
 

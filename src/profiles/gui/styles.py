@@ -12,7 +12,7 @@ import contextlib
 import tkinter as tk
 from tkinter import ttk
 
-from profiles.gui.theme import THEMES, Md3Theme
+from profiles.gui.theme import THEMES, Md3Theme, apply_theme, resolve_theme_name
 
 # ── Current theme tracking ──────────────────────────────────────────────────
 
@@ -27,21 +27,27 @@ def current_theme() -> Md3Theme:
     return _current_theme
 
 
-def configure_styles(theme_name: str = "light") -> Md3Theme:
-    """Configure ttk styles for the application.
+def configure_styles(root: tk.Tk | None, theme_name: str = "light") -> Md3Theme:
+    """Configure ttk styles and the active theme reference.
 
-    Applies the named Material Design 3 theme to all ttk widgets and
-    updates the internal theme reference.
+    Applies the named Material Design 3 theme to all ttk widgets (via
+    :func:`profiles.gui.theme.apply_theme`) and updates the internal
+    theme reference so :func:`current_theme` reflects the change.
 
     Args:
-        theme_name: One of ``"light"`` or ``"dark"``.
+        root: The root ``tk.Tk`` window. When ``None`` (e.g. headless
+            tests) only the in-memory theme reference is updated.
+        theme_name: One of ``"light"``, ``"dark"``, or ``"auto"``.
 
     Returns:
         The applied Md3Theme instance.
     """
     global _current_theme
-    theme = THEMES.get(theme_name, THEMES["light"])
+    resolved = resolve_theme_name(theme_name)
+    theme = THEMES.get(resolved, THEMES["light"])
     _current_theme = theme
+    if root is not None:
+        apply_theme(root, theme)
     return theme
 
 

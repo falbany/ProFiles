@@ -108,7 +108,7 @@ class StatusBar:
         self._config_link = ttk.Button(
             self._status_inner,
             text=t("status.config"),
-            style="Theme.TButton",
+            style="Link.TButton",
             command=self._on_config_click,
         )
         self._config_link.pack(side=tk.LEFT, padx=(0, 4))
@@ -118,7 +118,7 @@ class StatusBar:
         self._refresh_btn = ttk.Button(
             self._status_inner,
             text=t("status.refresh"),
-            style="Theme.TButton",
+            style="Link.TButton",
             command=self._on_refresh_click,
         )
         self._refresh_btn.pack(side=tk.LEFT, padx=(4, 8))
@@ -128,7 +128,7 @@ class StatusBar:
         self._log_link = ttk.Button(
             self._status_inner,
             text=t("status.log"),
-            style="Theme.TButton",
+            style="Link.TButton",
             command=self._on_log_click,
         )
         self._log_link.pack(side=tk.LEFT, padx=(0, 10))
@@ -140,7 +140,7 @@ class StatusBar:
             self._shortcuts_btn = ttk.Button(
                 self._status_inner,
                 text=t("status.shortcuts"),
-                style="Theme.TButton",
+                style="Link.TButton",
                 command=self._on_shortcuts_click,
             )
             self._shortcuts_btn.pack(side=tk.LEFT, padx=(0, 4))
@@ -155,7 +155,7 @@ class StatusBar:
         self._theme_btn = ttk.Button(
             self._status_inner,
             text=self._theme_label,
-            style="Theme.TButton",
+            style="Link.TButton",
             command=self._on_theme_toggle,
         )
         self._theme_btn.pack(side=tk.LEFT, padx=(0, 4))
@@ -167,7 +167,7 @@ class StatusBar:
             self._language_btn = ttk.Button(
                 self._status_inner,
                 text=LANGUAGE_LABELS.get(current_language(), "\U0001f310"),
-                style="Theme.TButton",
+                style="Link.TButton",
                 command=self._on_language_toggle,
             )
             self._language_btn.pack(side=tk.LEFT, padx=(0, 12))

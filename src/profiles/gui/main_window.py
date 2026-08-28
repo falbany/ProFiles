@@ -584,20 +584,26 @@ class MainWindow:
         # Check that at least one scan path exists
         if not scan_paths or not any(directory_exists(p) for p in scan_paths):
             self._count_label.config(text="Files: 0")
-            self._dir_status_label.config(text="Directory not found")
+            self._dir_status_label.config(
+                text="Directory not found", style="Status.Error.TLabel"
+            )
             self._update_empty_state(True)
             return
 
         self._update_empty_state(False)
 
         if len(scan_paths) > 1:
-            self._dir_status_label.config(text=f"Scanning {len(scan_paths)} paths...")
+            self._dir_status_label.config(
+                text=f"Scanning {len(scan_paths)} paths", style="Status.Info.TLabel"
+            )
             if self._dir_status_tooltip:
                 self._dir_status_tooltip.set_text(
                     "Paths:\n" + "\n".join(f"• {p}" for p in scan_paths)
                 )
         else:
-            self._dir_status_label.config(text="Scanning...")
+            self._dir_status_label.config(
+                text="Scanning...", style="Status.Info.TLabel"
+            )
             if self._dir_status_tooltip:
                 self._dir_status_tooltip.set_text("Current search directory")
 
@@ -713,7 +719,9 @@ class MainWindow:
             # Result for the scan we are waiting for
             self._scan_in_progress = False
             if status == "error":
-                self._dir_status_label.config(text="Scan failed")
+                self._dir_status_label.config(
+                    text="Scan failed", style="Status.Error.TLabel"
+                )
                 self._hide_progress()
             else:
                 self._start_chunked_insert(scan_id, items, display_label, filter_text, extension)
@@ -825,15 +833,22 @@ class MainWindow:
 
             scan_paths = self._resolve_dir_selection(display_label)
             if count == 0:
-                self._dir_status_label.config(text="No matching files found")
+                self._dir_status_label.config(
+                    text="No matching files found", style="Info.TLabel"
+                )
             elif len(scan_paths) > 1:
-                self._dir_status_label.config(text=f"Scanned {len(scan_paths)} paths")
+                self._dir_status_label.config(
+                    text=f"Scanned {len(scan_paths)} paths",
+                    style="Info.TLabel",
+                )
                 if self._dir_status_tooltip:
                     self._dir_status_tooltip.set_text(
                         "Scanned paths:\n" + "\n".join(f"• {p}" for p in scan_paths)
                     )
             else:
-                self._dir_status_label.config(text=f"Directory: {display_label}")
+                self._dir_status_label.config(
+                    text=f"Directory: {display_label}", style="Info.TLabel"
+                )
                 if self._dir_status_tooltip:
                     self._dir_status_tooltip.set_text(f"Directory: {display_label}")
 
