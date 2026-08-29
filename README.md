@@ -68,10 +68,37 @@ python install.py
 *Runs an interactive wizard that installs the package.*
 
 ### Manual Install
+
+#### Option 1: pip (system-wide)
 ```bash
 git clone https://github.com/falbany/ProFiles.git
 cd ProFiles
 pip install .
+```
+
+#### Option 2: pipx (recommended for system-wide)
+```bash
+git clone https://github.com/falbany/ProFiles.git
+cd ProFiles
+pipx install .
+```
+
+#### Option 3: uv (development)
+```bash
+git clone https://github.com/falbany/ProFiles.git
+cd ProFiles
+uv sync          # creates .venv and installs dependencies
+uv run ProFiles  # run the app
+uv run pytest --cov  # run tests
+```
+
+#### Option 4: Poetry (development)
+```bash
+git clone https://github.com/falbany/ProFiles.git
+cd ProFiles
+poetry install   # creates .venv and installs dependencies
+poetry run ProFiles  # run the app
+poetry run pytest --cov  # run tests
 ```
 
 ### Desktop Shortcut
