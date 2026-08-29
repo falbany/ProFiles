@@ -695,59 +695,52 @@ class TestOpenTerminal:
 
 
 class TestApplicationRestart:
-    """Tests for the _restart_application method."""
+    """Tests for the WindowActions.restart path (delegated from _restart_application)."""
 
-    def test_restart_destroyes_current_window(self, tmp_path: Path) -> None:
+    def test_restart_destroys_current_window(self) -> None:
         """Verify that restart destroys the current window before launching new instance."""
-        mock_window = MagicMock()
-        mock_window._config = AppConfig()
-        mock_window._config.config_path = tmp_path / ".profiles"
-        mock_window._root = MagicMock()
-        mock_window._logger = MagicMock()
+        from profiles.gui.controllers.window_actions import WindowActions
 
+        mock_destroy = MagicMock()
         with (
-            patch("profiles.gui.main_window.subprocess") as mock_subprocess,
-            patch("profiles.gui.main_window.sys") as mock_sys,
-            patch("profiles.gui.main_window.Path") as mock_path_class,
+            patch("profiles.gui.controllers.window_actions.subprocess") as mock_subprocess,
+            patch("profiles.gui.controllers.window_actions.sys") as mock_sys,
         ):
             mock_sys.executable = "python.exe"
-            mock_script = MagicMock()
-            mock_script.exists.return_value = True
-            mock_path_class.return_value = mock_script
-
-            MainWindow._restart_application(mock_window)
+            actions = WindowActions(
+                config=AppConfig(),
+                logger=MagicMock(),
+                root_destroy=mock_destroy,
+            )
+            actions.restart()
 
             # Verify window was destroyed
-            mock_window._root.destroy.assert_called_once()
-
+            mock_destroy.assert_called_once()
             # Verify subprocess was called to launch new instance
             assert mock_subprocess.Popen.called
 
-    def test_restart_handles_launch_failure_gracefully(self, tmp_path: Path) -> None:
+    def test_restart_handles_launch_failure_gracefully(self) -> None:
         """Verify that restart shows error message if subprocess fails."""
-        mock_window = MagicMock()
-        mock_window._config = AppConfig()
-        mock_window._config.config_path = tmp_path / ".profiles"
-        mock_window._root = MagicMock()
-        mock_window._logger = MagicMock()
+        from profiles.gui.controllers.window_actions import WindowActions
 
+        mock_destroy = MagicMock()
         with (
-            patch("profiles.gui.main_window.subprocess") as mock_subprocess,
-            patch("profiles.gui.main_window.sys") as mock_sys,
-            patch("profiles.gui.main_window.Path") as mock_path_class,
-            patch("profiles.gui.main_window.messagebox") as mock_messagebox,
+            patch("profiles.gui.controllers.window_actions.subprocess") as mock_subprocess,
+            patch("profiles.gui.controllers.window_actions.sys") as mock_sys,
+            patch("profiles.gui.controllers.window_actions.messagebox") as mock_messagebox,
         ):
             mock_sys.executable = "python.exe"
-            mock_script = MagicMock()
-            mock_script.exists.return_value = True
-            mock_path_class.return_value = mock_script
             mock_subprocess.Popen.side_effect = OSError("Launch failed")
-
-            MainWindow._restart_application(mock_window)
+            actions = WindowActions(
+                config=AppConfig(),
+                logger=MagicMock(),
+                root_destroy=mock_destroy,
+            )
+            actions.restart()
 
             # Verify error message was shown
             mock_messagebox.showerror.assert_called_once()
-            assert "Restart Failed" in mock_messagebox.showerror.call_args[0][0]
+            assert "Restart Failed" in mock_messagebox.showerror.call_args.args[0]
 
 
 # ── TestNoConfigFileMode (from test_no_config_file_mode.py) ────────────────

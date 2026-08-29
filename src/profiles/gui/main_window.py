@@ -11,8 +11,6 @@ import importlib.resources
 import logging
 import queue
 import re
-import subprocess
-import sys
 import threading
 import tkinter as tk
 from collections.abc import Callable
@@ -33,6 +31,7 @@ from profiles.gui.controllers.directory_manager import (
     format_dir_entry,
 )
 from profiles.gui.controllers.scan_controller import run_scan
+from profiles.gui.controllers.window_actions import WindowActions
 from profiles.gui.i18n import set_language
 from profiles.gui.presentation.row_colors import RowColorRules, default_tag_name
 from profiles.gui.status_bar import StatusBar
@@ -156,6 +155,11 @@ class MainWindow:
         # Populate initial data
         self._load_system_info()  # sets self._hostname early
         self._dir_manager = DirectoryManager(view=self, hostname=self._hostname)
+        self._window_actions = WindowActions(
+            config=self._config,
+            logger=self._logger,
+            root_destroy=self._root.destroy,
+        )
         self._populate_directories()
         self._populate_extensions()
         self._populate_filters()
@@ -796,65 +800,13 @@ class MainWindow:
     def _on_open_config(self) -> None:
         """Open the configuration file with the default text editor.
 
-        When the expected ``.profiles`` file does not exist, the user
-        is informed and offered the choice to generate a documented
-        starter file at the resolved config path (typically CWD) and
-        open it. Refusal simply closes the dialog without changes.
+        Delegates to :class:`WindowActions`.
         """
-        config_path = self._config.config_path
-
-        if not config_path.exists():
-            cwd_label = str(Path.cwd())
-            prompt = (
-                f"No configuration file was found at:\n{config_path}\n\n"
-                "Would you like to generate a starter .profiles file in the\n"
-                f"current working directory ({cwd_label})?\n\n"
-                "The starter is fully commented and ready to edit."
-            )
-            if not messagebox.askyesno(
-                "Configuration File Missing",
-                prompt,
-                default=messagebox.YES,
-            ):
-                return
-
-            write_result = actions.write_starter_config(
-                config_path,
-                logger=self._logger,
-            )
-            if write_result.status is not actions.ActionStatus.SUCCESS:
-                messagebox.showerror(
-                    self._result_title(write_result),
-                    write_result.message,
-                )
-                return
-
-            messagebox.showinfo(
-                "Starter Configuration Created",
-                write_result.message,
-            )
-
-        result = actions.open_config_file(
-            config_path,
-            logger=self._logger,
-        )
-        if result.status is not actions.ActionStatus.SUCCESS:
-            messagebox.showerror(self._result_title(result), result.message)
+        self._window_actions.open_config()
 
     def _on_open_log(self) -> None:
-        """Open the log file with the default text editor.
-
-        The log path is resolved relative to the current working
-        directory (wherever ``profiles`` was launched from). If the
-        file or its parent directory is missing, it is created on
-        demand so the user can always open it.
-        """
-        result = actions.open_log_file(
-            Path.cwd() / "profiles.log",
-            logger=self._logger,
-        )
-        if result.status is not actions.ActionStatus.SUCCESS:
-            messagebox.showerror(self._result_title(result), result.message)
+        """Open the log file with the default text editor."""
+        self._window_actions.open_log(Path.cwd() / "profiles.log")
 
     @staticmethod
     def _result_title(result: actions.ActionResult) -> str:
@@ -1377,33 +1329,11 @@ class MainWindow:
             self._logger.error("Failed to create config file: %s", exc)
 
     def _restart_application(self) -> None:
-        """Restart the application using the module entry point."""
+        """Restart the application using the module entry point.
 
-        self._logger.info("Restarting application...")
-
-        # Destroy the current window
-        self._root.destroy()
-
-        # Get the current Python executable
-        python_executable = sys.executable
-
-        # Launch a new instance via module entry point
-        try:
-            subprocess.Popen([str(python_executable), "-m", "profiles"])
-            self._logger.info(
-                "New instance launched via module: %s -m profiles",
-                python_executable,
-            )
-        except OSError as exc:
-            self._logger.error("Failed to restart application: %s", exc)
-            # Show error but don't block - user can manually restart
-            messagebox.showerror(
-                "Restart Failed",
-                f"Could not automatically restart the application.\n\n"
-                f"Error: {exc}\n\n"
-                f"Please restart manually by running ProFiles again.",
-                parent=self._root,
-            )
+        Delegates to :class:`WindowActions`.
+        """
+        self._window_actions.restart()
 
     def run(self) -> None:
         """Start the application main loop."""
