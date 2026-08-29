@@ -1,1 +1,1 @@
-"""Tests for the presentation layer — pure rendering helpers."""
+"""Tests for the presentation layer."""
