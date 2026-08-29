@@ -8,6 +8,10 @@ how to surface failures (messagebox in the GUI, stderr in the CLI).
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -18,7 +22,18 @@ from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 from profiles.core.processing.file_classifier import ensure_trailing_separator
 from profiles.core.telemetry import events
-from profiles.utils.file_utils import launch_file, launch_file_with_args, open_with_default_app
+from profiles.utils.file_utils import (
+    launch_file,
+    launch_file_with_args,
+    open_file_explorer,
+    open_with_default_app,
+)
+
+# ``CREATE_NO_WINDOW`` only exists on Windows. Build the kwargs dict once
+# at import time so platform branches don't have to repeat the check.
+_POPEN_NO_WINDOW: dict[str, int] = (
+    {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+)
 
 
 class ActionStatus(Enum):
@@ -192,7 +207,9 @@ def launch_selected_file(
                     events.file_launch_failed(
                         logger, path=str(file_path), error="aborted by launch hook"
                     )
-                detail = "\n".join(failure_context) if failure_context else "A launch hook step failed."
+                detail = (
+                    "\n".join(failure_context) if failure_context else "A launch hook step failed."
+                )
                 return ActionResult(
                     status=ActionStatus.FAILED,
                     message=f"Launch aborted by a launch hook.\n\nFile: {file_path}\n\n{detail}",
@@ -332,4 +349,126 @@ def clear_file(
         status=ActionStatus.SUCCESS,
         message=f"File deleted:\n{file_path}",
         path=file_path,
+    )
+
+
+# ---------------------------------------------------------------------------
+# File manager & terminal helpers
+# ---------------------------------------------------------------------------
+
+
+def reveal_in_file_manager(file_path: Path) -> ActionResult:
+    """Reveal *file_path* in the OS file explorer.
+
+    macOS uses ``open -R`` (select in Finder).
+    Windows uses ``explorer /select``.
+    Linux falls back to :func:`open_file_explorer` on the parent directory.
+
+    Args:
+        file_path: Path of the file to reveal.
+
+    Returns:
+        ``ActionResult`` describing the outcome.
+    """
+    if not file_path.exists():
+        return ActionResult(
+            status=ActionStatus.NOT_FOUND,
+            message=f"The file does not exist:\n{file_path}",
+            path=file_path,
+        )
+
+    try:
+        if sys.platform == "darwin":
+            with subprocess.Popen(["open", "-R", str(file_path)]) as proc:
+                proc.wait()
+        elif os.name == "nt":
+            with subprocess.Popen(
+                ["explorer", f"/select,{file_path}"],
+                **_POPEN_NO_WINDOW,
+            ) as proc:
+                proc.wait()
+        else:
+            # Linux: open parent directory
+            if not open_file_explorer(file_path.parent):
+                return ActionResult(
+                    status=ActionStatus.FAILED,
+                    message=f"Could not open file manager for:\n{file_path}",
+                    path=file_path,
+                )
+    except OSError as exc:
+        return ActionResult(
+            status=ActionStatus.FAILED,
+            message=f"Failed to reveal file:\n{exc}",
+            path=file_path,
+        )
+
+    return ActionResult(
+        status=ActionStatus.SUCCESS,
+        message=f"Revealed in file manager:\n{file_path}",
+        path=file_path,
+    )
+
+
+def open_terminal_in_directory(path: Path) -> ActionResult:
+    """Open a terminal session in *path* (which must be a directory).
+
+    macOS: ``open -a Terminal <path>``
+    Windows: ``cmd /K cd /D <path>``
+    Linux: tries ``x-terminal-emulator``, ``gnome-terminal``,
+    ``konsole``, ``xfce4-terminal`` in order.
+
+    Args:
+        path: Directory to open the terminal in.
+
+    Returns:
+        ``ActionResult`` describing the outcome.
+    """
+    if not path.is_dir():
+        return ActionResult(
+            status=ActionStatus.NOT_FOUND,
+            message=f"Not a directory:\n{path}",
+            path=path,
+        )
+
+    try:
+        if sys.platform == "darwin":
+            with subprocess.Popen(["open", "-a", "Terminal", str(path)]):
+                pass
+        elif os.name == "nt":
+            with subprocess.Popen(
+                ["cmd", "/c", "start", "cmd", "/K", f"cd /D {path}"],
+                **_POPEN_NO_WINDOW,
+            ):
+                pass
+        else:
+            # Linux: find first available terminal
+            opener: list[str] | None = None
+            for cmd in (
+                ["x-terminal-emulator", "--working-directory", str(path)],
+                ["gnome-terminal", "--working-directory", str(path)],
+                ["konsole", "--workdir", str(path)],
+                ["xfce4-terminal", "--working-directory", str(path)],
+            ):
+                if shutil.which(cmd[0]):
+                    opener = cmd
+                    break
+            if opener is None:
+                return ActionResult(
+                    status=ActionStatus.FAILED,
+                    message=f"No terminal emulator found.\nFolder: {path}",
+                    path=path,
+                )
+            with subprocess.Popen(opener):
+                pass
+    except OSError as exc:
+        return ActionResult(
+            status=ActionStatus.FAILED,
+            message=f"Failed to open terminal:\n{exc}",
+            path=path,
+        )
+
+    return ActionResult(
+        status=ActionStatus.SUCCESS,
+        message=f"Terminal opened in:\n{path}",
+        path=path,
     )

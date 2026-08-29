@@ -705,3 +705,142 @@ class TestLaunchSelectedFileIntegration:
         assert result.status is ActionStatus.SUCCESS
         mock_workflow.assert_not_called()
         mock_launch.assert_called_once()
+
+
+class TestRevealInFileManager:
+    """Tests for reveal_in_file_manager()."""
+
+    def test_missing_file_returns_not_found(self, tmp_path: Path) -> None:
+        """A non-existent file returns NOT_FOUND without invoking subprocess."""
+        result = actions.reveal_in_file_manager(tmp_path / "missing.txt")
+        assert result.status is ActionStatus.NOT_FOUND
+        assert "does not exist" in result.message
+
+    @patch("profiles.core.actions.open_file_explorer", return_value=True)
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_darwin_uses_open_select(
+        self, mock_popen: MagicMock, mock_open_explorer: MagicMock, tmp_path: Path
+    ) -> None:
+        """On macOS we invoke ``open -R <file>``."""
+        target = tmp_path / "thing.txt"
+        target.write_text("")
+        with patch("profiles.core.actions.sys.platform", "darwin"):
+            result = actions.reveal_in_file_manager(target)
+        assert result.status is ActionStatus.SUCCESS
+        mock_popen.assert_called_once()
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "open"
+        assert args[1] == "-R"
+        assert args[2] == str(target)
+        mock_open_explorer.assert_not_called()
+
+    @patch("profiles.core.actions.open_file_explorer", return_value=True)
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_windows_uses_explorer_select(
+        self, mock_popen: MagicMock, mock_open_explorer: MagicMock, tmp_path: Path
+    ) -> None:
+        """On Windows we invoke ``explorer /select,<file>``."""
+        target = tmp_path / "thing.txt"
+        target.write_text("")
+        with (
+            patch("profiles.core.actions.os.name", "nt"),
+            patch("profiles.core.actions.sys.platform", "win32"),
+        ):
+            result = actions.reveal_in_file_manager(target)
+        assert result.status is ActionStatus.SUCCESS
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "explorer"
+        assert args[1] == f"/select,{target}"
+        mock_open_explorer.assert_not_called()
+
+    @patch("profiles.core.actions.open_file_explorer", return_value=True)
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_linux_falls_back_to_open_file_explorer(
+        self, mock_popen: MagicMock, mock_open_explorer: MagicMock, tmp_path: Path
+    ) -> None:
+        """On Linux we don't spawn a subprocess — we delegate to open_file_explorer."""
+        target = tmp_path / "thing.txt"
+        target.write_text("")
+        with patch("profiles.core.actions.sys.platform", "linux"):
+            result = actions.reveal_in_file_manager(target)
+        assert result.status is ActionStatus.SUCCESS
+        mock_popen.assert_not_called()
+        mock_open_explorer.assert_called_once_with(target.parent)
+
+    @patch("profiles.core.actions.open_file_explorer", return_value=False)
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_linux_failure_returns_failed(
+        self, mock_popen: MagicMock, mock_open_explorer: MagicMock, tmp_path: Path
+    ) -> None:
+        """If the Linux fallback fails, status is FAILED."""
+        target = tmp_path / "thing.txt"
+        target.write_text("")
+        with patch("profiles.core.actions.sys.platform", "linux"):
+            result = actions.reveal_in_file_manager(target)
+        assert result.status is ActionStatus.FAILED
+
+
+class TestOpenTerminalInDirectory:
+    """Tests for open_terminal_in_directory()."""
+
+    def test_missing_dir_returns_not_found(self, tmp_path: Path) -> None:
+        """A non-existent path returns NOT_FOUND."""
+        result = actions.open_terminal_in_directory(tmp_path / "nope")
+        assert result.status is ActionStatus.NOT_FOUND
+        assert "Not a directory" in result.message
+
+    def test_file_path_returns_not_found(self, tmp_path: Path) -> None:
+        """A file (not a dir) returns NOT_FOUND."""
+        f = tmp_path / "a.txt"
+        f.write_text("")
+        result = actions.open_terminal_in_directory(f)
+        assert result.status is ActionStatus.NOT_FOUND
+
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_darwin_uses_open_terminal_app(self, mock_popen: MagicMock, tmp_path: Path) -> None:
+        """On macOS we invoke ``open -a Terminal <path>``."""
+        with patch("profiles.core.actions.sys.platform", "darwin"):
+            result = actions.open_terminal_in_directory(tmp_path)
+        assert result.status is ActionStatus.SUCCESS
+        args = mock_popen.call_args[0][0]
+        assert args == ["open", "-a", "Terminal", str(tmp_path)]
+
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_windows_uses_cmd(self, mock_popen: MagicMock, tmp_path: Path) -> None:
+        """On Windows we invoke ``cmd /K cd /D <path>``."""
+        with (
+            patch("profiles.core.actions.os.name", "nt"),
+            patch("profiles.core.actions.sys.platform", "win32"),
+        ):
+            result = actions.open_terminal_in_directory(tmp_path)
+        assert result.status is ActionStatus.SUCCESS
+        args = mock_popen.call_args[0][0]
+        assert args[0:3] == ["cmd", "/c", "start"]
+        assert args[3] == "cmd"
+        assert args[4] == "/K"
+        assert args[5] == f"cd /D {tmp_path}"
+
+    @patch("profiles.core.actions.shutil.which", return_value="/usr/bin/x-terminal-emulator")
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_linux_uses_x_terminal_emulator(
+        self, mock_popen: MagicMock, mock_which: MagicMock, tmp_path: Path
+    ) -> None:
+        """On Linux, the first available terminal emulator wins."""
+        with patch("profiles.core.actions.sys.platform", "linux"):
+            result = actions.open_terminal_in_directory(tmp_path)
+        assert result.status is ActionStatus.SUCCESS
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "x-terminal-emulator"
+        assert args[1] == "--working-directory"
+        assert args[2] == str(tmp_path)
+
+    @patch("profiles.core.actions.shutil.which", return_value=None)
+    @patch("profiles.core.actions.subprocess.Popen")
+    def test_linux_no_terminal_returns_failed(
+        self, mock_popen: MagicMock, mock_which: MagicMock, tmp_path: Path
+    ) -> None:
+        """When no terminal is found, status is FAILED."""
+        with patch("profiles.core.actions.sys.platform", "linux"):
+            result = actions.open_terminal_in_directory(tmp_path)
+        assert result.status is ActionStatus.FAILED
+        assert "No terminal emulator" in result.message

@@ -603,7 +603,7 @@ class TestOpenTerminal:
         ghost = tmp_path / "doesnt_exist" / "child.mttl"
         mock_warn = mocker.patch("profiles.gui.main_window.messagebox.showwarning")
         mock_popen = mocker.patch(
-            "profiles.gui.context_menu.subprocess.Popen",
+            "profiles.core.actions.subprocess.Popen",
         )
         window._action_open_terminal(ghost)
         mock_warn.assert_called_once()
@@ -618,8 +618,8 @@ class TestOpenTerminal:
     ) -> None:
         f = tmp_path / "child.mttl"
         f.write_text("", encoding="utf-8")
-        mock_popen = mocker.patch("profiles.gui.context_menu.subprocess.Popen")
-        mocker.patch("profiles.gui.context_menu.sys.platform", "darwin")
+        mock_popen = mocker.patch("profiles.core.actions.subprocess.Popen")
+        mocker.patch("profiles.core.actions.sys.platform", "darwin")
         window._action_open_terminal(f)
         mock_popen.assert_called_once()
         args = mock_popen.call_args.args[0]
@@ -637,9 +637,9 @@ class TestOpenTerminal:
     ) -> None:
         f = tmp_path / "child.mttl"
         f.write_text("", encoding="utf-8")
-        mock_popen = mocker.patch("profiles.gui.context_menu.subprocess.Popen")
-        mocker.patch("profiles.gui.context_menu.sys.platform", "win32")
-        mocker.patch("profiles.gui.context_menu.os.name", "nt")
+        mock_popen = mocker.patch("profiles.core.actions.subprocess.Popen")
+        mocker.patch("profiles.core.actions.sys.platform", "win32")
+        mocker.patch("profiles.core.actions.os.name", "nt")
         window._action_open_terminal(f)
         mock_popen.assert_called_once()
         args = mock_popen.call_args.args[0]
@@ -656,15 +656,16 @@ class TestOpenTerminal:
     ) -> None:
         f = tmp_path / "child.mttl"
         f.write_text("", encoding="utf-8")
-        mocker.patch("profiles.gui.context_menu.sys.platform", "linux")
-        mocker.patch("profiles.gui.context_menu.os.name", "posix")
-        mocker.patch("profiles.gui.context_menu.shutil.which", return_value=None)
-        mock_popen = mocker.patch("profiles.gui.context_menu.subprocess.Popen")
+        mocker.patch("profiles.core.actions.sys.platform", "linux")
+        mocker.patch("profiles.core.actions.os.name", "posix")
+        mocker.patch("profiles.core.actions.shutil.which", return_value=None)
+        mock_popen = mocker.patch("profiles.core.actions.subprocess.Popen")
         mock_error = mocker.patch("profiles.gui.main_window.messagebox.showerror")
         window._action_open_terminal(f)
         mock_popen.assert_not_called()
         mock_error.assert_called_once()
-        assert "No Terminal" in mock_error.call_args.args[0]
+        # Title is fixed; the "No terminal emulator" detail is in the message.
+        assert "No terminal emulator" in mock_error.call_args.args[1]
 
     @needs_tk
     def test_linux_finds_x_terminal_emulator(
@@ -675,15 +676,15 @@ class TestOpenTerminal:
     ) -> None:
         f = tmp_path / "child.mttl"
         f.write_text("", encoding="utf-8")
-        mocker.patch("profiles.gui.context_menu.sys.platform", "linux")
-        mocker.patch("profiles.gui.context_menu.os.name", "posix")
+        mocker.patch("profiles.core.actions.sys.platform", "linux")
+        mocker.patch("profiles.core.actions.os.name", "posix")
         mocker.patch(
-            "profiles.gui.context_menu.shutil.which",
+            "profiles.core.actions.shutil.which",
             side_effect=lambda name: (
                 "/usr/bin/x-terminal-emulator" if name == "x-terminal-emulator" else None
             ),
         )
-        mock_popen = mocker.patch("profiles.gui.context_menu.subprocess.Popen")
+        mock_popen = mocker.patch("profiles.core.actions.subprocess.Popen")
         window._action_open_terminal(f)
         mock_popen.assert_called_once()
         args = mock_popen.call_args.args[0]

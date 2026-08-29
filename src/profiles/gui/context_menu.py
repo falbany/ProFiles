@@ -4,20 +4,20 @@
 
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
-import sys
 import tkinter as tk
-from datetime import datetime
 from functools import partial
 from pathlib import Path
 from tkinter import messagebox
 from typing import TYPE_CHECKING
 
 from profiles.core import actions
-from profiles.core.actions import ActionStatus
+from profiles.core.actions import (
+    ActionStatus,
+    open_terminal_in_directory,
+    reveal_in_file_manager,
+)
 from profiles.core.processing.file_classifier import ensure_trailing_separator
+from profiles.core.processing.file_metadata import get_file_metadata
 from profiles.gui.i18n import t
 from profiles.utils.file_utils import hash_file, open_file_explorer
 from profiles.utils.network import get_username
@@ -269,23 +269,13 @@ class FileContextMenu:
 
     def action_reveal(self, file_path: Path) -> None:
         """Reveal the file in the OS file explorer."""
-        if not file_path.exists():
-            messagebox.showwarning(
-                "File Not Found",
-                f"The selected file does not exist:\n{file_path}",
-            )
+        result = reveal_in_file_manager(file_path)
+        if result.status is ActionStatus.NOT_FOUND:
+            messagebox.showwarning("File Not Found", result.message)
             return
-        try:
-            if sys.platform == "darwin":
-                with subprocess.Popen(["open", "-R", str(file_path)]) as proc:
-                    proc.wait()
-            elif os.name == "nt":
-                with subprocess.Popen(["explorer", f"/select,{file_path}"]) as proc:
-                    proc.wait()
-            else:
-                open_file_explorer(file_path.parent)
-        except OSError as exc:
-            self.window._logger.error("Reveal failed: %s", exc)
+        if result.status is ActionStatus.FAILED:
+            self.window._logger.error("Reveal failed: %s", result.message)
+            # Last-resort fallback: open the parent folder.
             open_file_explorer(file_path.parent)
 
     def action_copy(self, value: str) -> None:
@@ -313,20 +303,18 @@ class FileContextMenu:
             )
             return
         try:
-            stat = file_path.stat()
-            size_kb = stat.st_size / 1024
-            modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-            created = datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S")
-        except OSError as exc:
+            meta = get_file_metadata(file_path)
+        except (OSError, ValueError) as exc:
             messagebox.showerror("Properties Error", f"Failed to read file info:\n{exc}")
             return
 
+        size_kb = meta["size_bytes"] / 1024
         text = (
-            f"File: {file_path.name}\n"
-            f"Path: {file_path}\n\n"
-            f"Size: {stat.st_size:,} bytes ({size_kb:.1f} KB)\n"
-            f"Modified: {modified}\n"
-            f"Created: {created}"
+            f"File: {meta['name']}\n"
+            f"Path: {meta['path']}\n\n"
+            f"Size: {meta['size_bytes']:,} bytes ({size_kb:.1f} KB)\n"
+            f"Modified: {meta['modified']}\n"
+            f"Created: {meta['created']}"
         )
         messagebox.showinfo("File Properties", text)
 
@@ -435,48 +423,14 @@ class FileContextMenu:
 
     def action_open_terminal(self, file_path: Path) -> None:
         """Open a terminal session in the file's parent directory."""
-        parent = file_path.parent
-        if not parent.is_dir():
-            messagebox.showwarning(
-                "Folder Not Found",
-                f"The folder does not exist:\n{parent}",
-            )
+        result = open_terminal_in_directory(file_path.parent)
+        if result.status is ActionStatus.SUCCESS:
             return
-        try:
-            if sys.platform == "darwin":
-                with subprocess.Popen(["open", "-a", "Terminal", str(parent)]):
-                    pass
-            elif os.name == "nt":
-                with subprocess.Popen(
-                    ["cmd", "/c", "start", "cmd", "/K", f"cd /D {parent}"],
-                ):
-                    pass
-            else:
-                # Best-effort: try a few common Linux terminals in order.
-                opener = None
-                for cmd in (
-                    ["x-terminal-emulator", "--working-directory", str(parent)],
-                    ["gnome-terminal", "--working-directory", str(parent)],
-                    ["konsole", "--workdir", str(parent)],
-                    ["xfce4-terminal", "--working-directory", str(parent)],
-                ):
-                    if shutil.which(cmd[0]):
-                        opener = cmd
-                        break
-                if opener is None:
-                    messagebox.showerror(
-                        "No Terminal Found",
-                        f"Could not find a terminal emulator.\nFolder: {parent}",
-                    )
-                    return
-                with subprocess.Popen(opener):
-                    pass
-        except OSError as exc:
-            self.window._logger.error("Open terminal failed: %s", exc)
-            messagebox.showerror(
-                "Open Terminal Error",
-                f"Failed to open terminal:\n{exc}",
-            )
+        if result.status is ActionStatus.NOT_FOUND:
+            messagebox.showwarning("Folder Not Found", result.message)
+            return
+        self.window._logger.error("Open terminal failed: %s", result.message)
+        messagebox.showerror("Open Terminal Error", result.message)
 
     def action_clear_file(self, file_path: Path) -> None:
         """Delete the given file from the filesystem."""
