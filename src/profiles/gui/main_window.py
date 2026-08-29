@@ -28,6 +28,7 @@ from profiles.core.environment import system
 from profiles.core.processing import scanner
 from profiles.core.processing.file_classifier import directory_exists
 from profiles.gui.context_menu import FileContextMenu
+from profiles.gui.controllers.scan_controller import run_scan
 from profiles.gui.i18n import set_language
 from profiles.gui.presentation.row_colors import RowColorRules, default_tag_name
 from profiles.gui.status_bar import StatusBar
@@ -113,7 +114,6 @@ class MainWindow:
         self._scan_in_progress: bool = False
         self._filter_timer: str | None = None  # Debounce timer for filter field
         self._ext_timer: str | None = None  # Debounce timer for extension field
-        self._scan_queue: queue.Queue = queue.Queue()
         self._row_color_rules: list[tuple[str, str]] = []
         self._row_color_tag_prefix = "_rowcolor"
         self._tree_to_path: dict[str, Path] = {}  # iid -> filesystem path
@@ -611,45 +611,25 @@ class MainWindow:
     ) -> None:
         """Scan directories and process files in a background thread.
 
-        Runs entirely off the Tk main thread: no widget or Tk variable is
-        touched here. The result (or error) is pushed onto ``_scan_queue``
-        and applied by :meth:`_poll_scan_queue` on the main thread, which
-        keeps Tk calls on a single thread (Tkinter is not thread-safe).
+        Thin wrapper around :func:`run_scan` (which owns the pure
+        worker logic). Kept as a method so existing
+        ``threading.Thread(target=self._bg_scan_and_process, args=...)``
+        call sites continue to work without churn.
         """
-        try:
-            # File exclusion patterns: active config (base + per-config
-            # merged by the reader) or the [LAUNCHER] base as fallback.
-            active = config_service.find_active_config(self._config, directory_label)
-            exclude_files = (
-                active.search_exclude_files
-                if active is not None
-                else self._config.search_exclude_files
-            )
-
-            # Multi-directory scan: scanner merges results from all paths,
-            # deduplicating by realpath. The display label is used for
-            # status messages.
-            processed_items = scanner.scan_and_process_dynamic(
-                directories,
-                extension=extension,
-                filter_text=filter_text,
-                recursive=recursive,
-                exclude_dirs=self._config.search_exclude_dirs,
-                exclude_files=exclude_files,
-                column_names=self._config.column_names,
-                columns=self._config.columns,
-                config=self._config,  # Pass config for scan_metrics
-            )
-
-            # Check if this scan is still active
-            if scan_id != self._current_scan_id:
-                return
-
-            self._scan_queue.put(("ok", scan_id, processed_items))
-
-        except Exception as exc:
-            self._logger.error("Error during background file scan: %s", exc)
-            self._scan_queue.put(("error", scan_id, None))
+        # If this scan has already been superseded, skip the work entirely.
+        if scan_id != self._current_scan_id:
+            return
+        run_scan(
+            config=self._config,
+            directory_label=directory_label,
+            scan_paths=directories,
+            extension=extension,
+            filter_text=filter_text,
+            recursive=recursive,
+            queue_=self._scan_queue,
+            scan_id=scan_id,
+            logger=self._logger,
+        )
 
     def _poll_scan_queue(
         self,
