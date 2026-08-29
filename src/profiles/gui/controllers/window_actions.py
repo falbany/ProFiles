@@ -96,7 +96,7 @@ class WindowActions:
                 self._logger, command=f"{python_executable} -m profiles"
             )
         except OSError as exc:
-            self._logger.error("Failed to restart application: %s", exc)
+            events.app_gui_failed(self._logger, error=f"restart failed: {exc}")
             messagebox.showerror(
                 "Restart Failed",
                 f"Could not automatically restart the application.\n\n"

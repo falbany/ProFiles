@@ -150,8 +150,8 @@ def test_config_load_success_logs_info(tmp_path: Path, caplog: pytest.LogCapture
     config = reader.load()
 
     assert isinstance(config, AppConfig)
-    # Check that success was logged
-    assert any("successfully" in rec.message for rec in caplog.records)
+    # Check that success was logged (CONFIG_LOADED event)
+    assert any("CONFIG_LOADED" in rec.message for rec in caplog.records)
 
 
 def test_cross_platform_path_handling() -> None:

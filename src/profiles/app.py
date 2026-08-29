@@ -212,7 +212,6 @@ class ProFileApp:
 
         # If file_path is not provided, scan all configured directories
         if not file_path:
-            _logger.info("No file specified, scanning configured directories...")
             for cfg in _config.configurations:
                 if cfg.directory:
                     ext = _config.extensions[0] if _config.extensions else "All"

@@ -12,11 +12,13 @@ import logging
 import queue
 import re
 import threading
+import time
 import tkinter as tk
 from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from profiles import __version__
 from profiles.core import actions
 from profiles.core.config import service as config_service
 from profiles.core.config.io.yaml_io import write_value
@@ -306,7 +308,7 @@ class MainWindow:
             theme_name,
         )
 
-        self._logger.info("Theme switched to: %s", theme_name)
+        events.theme_switched(self._logger, value=theme_name)
 
     def _on_toggle_language(self) -> None:
         """Toggle the GUI language between English and French."""
@@ -322,7 +324,7 @@ class MainWindow:
             new_lang,
         )
 
-        self._logger.info("Language switched to: %s", new_lang)
+        events.lang_switched(self._logger, value=new_lang)
 
     # ----------------------------------------------------------------
     # Data population
@@ -1020,8 +1022,7 @@ class MainWindow:
 
     def _on_close(self) -> None:
         """Handle window close event."""
-        import time as _time
-        uptime = _time.time() - self._start_time if self._start_time else 0.0
+        uptime = time.time() - self._start_time if self._start_time else 0.0
         events.app_closed(self._logger, uptime_s=uptime)
         self._root.destroy()
 
@@ -1333,7 +1334,7 @@ class MainWindow:
                 f"Failed to create configuration file:\n{exc}",
                 parent=self._root,
             )
-            self._logger.error("Failed to create config file: %s", exc)
+            events.config_create_failed(self._logger, error=str(exc))
 
     def _restart_application(self) -> None:
         """Restart the application using the module entry point.
@@ -1344,10 +1345,7 @@ class MainWindow:
 
     def run(self) -> None:
         """Start the application main loop."""
-        import time as _time
-        from profiles import __version__
-        self._start_time = _time.time()
+        self._start_time = time.time()
         events.app_started(
             self._logger, version=__version__, headless=False
         )
-        self._root.mainloop()

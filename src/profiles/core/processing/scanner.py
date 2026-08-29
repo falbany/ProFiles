@@ -21,8 +21,8 @@ from profiles.core.processing.file_classifier import (
     _strip_extension_from_version,
     get_file_info,
 )
-from profiles.core.telemetry.metrics import ScanTimer
 from profiles.core.telemetry import events as _events
+from profiles.core.telemetry.metrics import ScanTimer
 from profiles.utils.file_utils import scan_directory
 from profiles.utils.search_parser import match_filter, tokenize
 

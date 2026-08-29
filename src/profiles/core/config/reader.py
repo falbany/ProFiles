@@ -23,6 +23,7 @@ from profiles.core.config.service import (
     find_configuration_by_hostname as _find_configuration_by_hostname,
 )
 from profiles.core.config.validator import validate
+from profiles.core.telemetry import events
 
 _DEFAULT_FILE_COLUMN_WIDTH = 600
 _DEFAULT_COLUMN_WIDTH = 150
@@ -104,7 +105,12 @@ class ConfigReader:
             self._apply_columns(config, schema)
             self._apply_hooks(config, schema)
             config.configurations = self._build_configurations(schema)
-            logger.info(f"Configuration loaded successfully: {self._config_path}")
+            events.config_loaded(
+                logger,
+                path=str(self._config_path),
+                mode="explicit" if self._config_path else "auto",
+                release=str(getattr(config, "release", "")),
+            )
         except Exception as e:
             # Catch validation/schema errors
             logger.error(

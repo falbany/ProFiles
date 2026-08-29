@@ -19,6 +19,7 @@ from profiles.core.config import service as config_service
 from profiles.core.config.models import AppConfig
 from profiles.core.processing import scanner
 from profiles.core.processing.scanner import ScannedFileDynamic
+from profiles.core.telemetry import events
 
 # Tuple pushed onto the result queue:
 #   ("ok", scan_id, [ScannedFileDynamic, ...])
@@ -75,7 +76,7 @@ def run_scan(
         )
         queue_.put(("ok", scan_id, items))
     except Exception as exc:  # pylint: disable=broad-except
-        logger.error("Error during background file scan: %s", exc)
+        events.scan_failed(logger, directory="background", error=str(exc))
         queue_.put(("error", scan_id, None))
 
 

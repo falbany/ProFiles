@@ -13,6 +13,8 @@ import tkinter as tk
 from dataclasses import dataclass
 from tkinter import ttk
 
+from profiles.core.telemetry import events
+
 # ── Theme colour palette ────────────────────────────────────────────────────
 
 
@@ -675,12 +677,12 @@ def apply_theme(root: tk.Tk, theme: Md3Theme) -> ttk.Style:
     for label, fg, bg in audit_pairs:
         ratio = contrast_ratio(fg, bg)
         if ratio < 4.5:
-            audit_logger.warning(
-                "WCAG contrast below AA threshold: %s ratio=%.2f (fg=%s bg=%s)",
-                label,
-                ratio,
-                fg,
-                bg,
+            events.wcag_contrast_faint(
+                audit_logger,
+                pair=label,
+                ratio=f"{ratio:.2f}",
+                fg=fg,
+                bg=bg,
             )
 
     return style

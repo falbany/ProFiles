@@ -13,6 +13,7 @@ from typing import Literal
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.interactions import confirm_dialog_3way
 from profiles.core.environment.message_dialog import show_notify_dialog
+from profiles.core.telemetry import events
 
 
 class WorkflowOutcome(Enum):
@@ -81,7 +82,9 @@ def run_workflow(
             continue
 
         if logger is not None:
-            logger.info("Executing step %d/%d (action: %s)", i + 1, len(steps), step.action)
+            events.workflow_step(
+                logger, index=i + 1, total=len(steps), action=step.action, result="start"
+            )
 
         # Handle 'ask' confirmation guard if present
         if step.ask:
@@ -100,11 +103,17 @@ def run_workflow(
 
             if choice == "no":
                 if logger is not None:
-                    logger.info("Step %d aborted by user ('no')", i + 1)
+                    events.workflow_step(
+                        logger, index=i + 1, total=len(steps),
+                        action=step.action, result="aborted",
+                    )
                 return WorkflowOutcome.ABORT
             if choice == "skip":
                 if logger is not None:
-                    logger.info("Step %d skipped by user ('skip')", i + 1)
+                    events.workflow_step(
+                        logger, index=i + 1, total=len(steps),
+                        action=step.action, result="skipped-user",
+                    )
                 # If skipping the last step, return SKIP_LAUNCH
                 if i == len(steps) - 1:
                     return WorkflowOutcome.SKIP_LAUNCH
@@ -114,7 +123,10 @@ def run_workflow(
         # Evaluate conditional guard
         if not step.evaluate_condition(file_path):
             if logger is not None:
-                logger.info("Step %d skipped (condition %r not met)", i + 1, step.if_)
+                events.workflow_step(
+                    logger, index=i + 1, total=len(steps),
+                    action=step.action, result="skipped-condition",
+                )
             continue
 
         # Resolve effective timeout: per-step overrides global
@@ -159,30 +171,30 @@ def _resolve_failure(
     """
     if on_failure == "stop":
         if logger is not None:
-            logger.error("Step failed and on_failure=stop. Aborting.")
+            events.workflow_aborted(logger, reason=f"on_failure=stop: {step_content}")
         if failure_context is not None and step_content is not None:
             failure_context.append(f"Step failed (on_failure=stop): {step_content}")
         return WorkflowOutcome.ABORT
     if on_failure == "warn":
         if logger is not None:
-            logger.warning("Step failed (on_failure=warn). Continuing.")
+            events.workflow_step_failed(logger, failmode="on_failure=warn", action=step_content or "")
         return None
     if on_failure == "continue":
         return None
     # Unknown on_failure → fall back to global failmode
     if failmode == "abort":
         if logger is not None:
-            logger.error("Step failed and failmode=abort. Aborting.")
+            events.workflow_aborted(logger, reason=f"failmode=abort: {step_content}")
         if failure_context is not None and step_content is not None:
             failure_context.append(f"Step failed (failmode=abort): {step_content}")
         return WorkflowOutcome.ABORT
     if failmode == "skip":
         if logger is not None:
-            logger.warning("Step failed and failmode=skip. Stopping workflow.")
+            events.workflow_step_failed(logger, failmode="failmode=skip", action=step_content or "")
         return WorkflowOutcome.SKIP_LAUNCH
     # failmode == "warn" (default)
     if logger is not None:
-        logger.warning("Step failed (failmode=warn). Continuing.")
+        events.workflow_step_failed(logger, failmode="failmode=warn", action=step_content or "")
     return None
 
 
@@ -215,7 +227,9 @@ def _execute_step(
 
     if step.action == "replace":
         if logger is not None:
-            logger.info("Executing replace command: %s", content)
+            events.workflow_step(
+                logger, index=0, total=1, action="replace", result=content
+            )
         # Launch replace command instead of OS default file launch
         success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
         if logger is not None:
@@ -224,7 +238,9 @@ def _execute_step(
 
     if step.action == "run":
         if logger is not None:
-            logger.info("Executing run command: %s", content)
+            events.workflow_step(
+                logger, index=0, total=1, action="run", result=content
+            )
         success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
         if not success:
             return _resolve_failure(
@@ -235,13 +251,17 @@ def _execute_step(
 
     if step.action == "run_after":
         if logger is not None:
-            logger.info("Executing background run_after command: %s", content)
+            events.workflow_step(
+                logger, index=0, total=1, action="run_after", result=content
+            )
         _run_command(content, wait=False, timeout=None, logger=logger)
         return None
 
     if step.action == "check":
         if logger is not None:
-            logger.info("Executing check command: %s", content)
+            events.workflow_step(
+                logger, index=0, total=1, action="check", result=content
+            )
         success = _run_command(content, wait=True, timeout=timeout, logger=logger)
         if not success:
             return _resolve_failure(
@@ -293,7 +313,7 @@ def _run_command(
                 command, shell=True, check=False, timeout=timeout
             )
             if logger is not None:
-                logger.debug("Command exited with code %d", res.returncode)
+                events.command_exit(logger, code=res.returncode, command=command)
             return res.returncode == 0
         else:
             subprocess.Popen(command, shell=True)
@@ -302,11 +322,13 @@ def _run_command(
             return True
     except subprocess.TimeoutExpired:
         if logger is not None:
-            logger.warning("Command timed out after %ss: %s", timeout, command)
+            events.command_timeout(
+                logger, timeout_s=timeout if timeout is not None else 0, command=command
+            )
         return False
     except Exception as e:
         if logger is not None:
-            logger.error("Command execution failed: %s", e)
+            events.command_failed(logger, error=str(e), command=command)
         return False
 
 

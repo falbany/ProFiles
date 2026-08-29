@@ -17,6 +17,7 @@ from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 from profiles.core.processing.file_classifier import ensure_trailing_separator
+from profiles.core.telemetry import events
 from profiles.utils.file_utils import launch_file, launch_file_with_args, open_with_default_app
 
 
@@ -59,7 +60,7 @@ def open_config_file(
         )
 
     if logger is not None:
-        logger.info("Opening configuration file: %s", config_path)
+        events.file_open_config(logger, path=str(config_path))
 
     if open_with_default_app(config_path):
         return ActionResult(
@@ -105,7 +106,7 @@ def open_log_file(
             )
 
     if logger is not None:
-        logger.info("Opening log file: %s", log_path)
+        events.file_open_log(logger, path=str(log_path))
 
     if open_with_default_app(log_path):
         return ActionResult(
@@ -162,7 +163,7 @@ def launch_selected_file(
 
     if not file_path.exists():
         if logger is not None:
-            logger.warning("File not found: %s", file_path)
+            events.file_not_found(logger, path=str(file_path))
         return ActionResult(
             status=ActionStatus.NOT_FOUND,
             message=f"The selected file does not exist:\n{file_path}",
@@ -188,7 +189,9 @@ def launch_selected_file(
 
             if workflow_outcome == WorkflowOutcome.ABORT:
                 if logger is not None:
-                    logger.error("Launch aborted by a launch hook: %s", file_path)
+                    events.file_launch_failed(
+                        logger, path=str(file_path), error="aborted by launch hook"
+                    )
                 detail = "\n".join(failure_context) if failure_context else "A launch hook step failed."
                 return ActionResult(
                     status=ActionStatus.FAILED,
@@ -197,9 +200,12 @@ def launch_selected_file(
                 )
             if workflow_outcome == WorkflowOutcome.SKIP_LAUNCH:
                 if logger is not None:
-                    logger.info(
-                        "Launched %s (OS launch replaced/skipped by workflow step)",
-                        file_path,
+                    events.file_launched(
+                        logger,
+                        path=str(file_path),
+                        version=release,
+                        user=username,
+                        args=(args or "-") + " (workflow-skipped)",
                     )
                 return ActionResult(
                     status=ActionStatus.SUCCESS,
@@ -211,7 +217,7 @@ def launch_selected_file(
 
     if not launched:
         if logger is not None:
-            logger.error("Failed to launch file: %s", file_path)
+            events.file_launch_failed(logger, path=str(file_path), error="OS launch failed")
         return ActionResult(
             status=ActionStatus.FAILED,
             message=(
@@ -222,12 +228,12 @@ def launch_selected_file(
         )
 
     if logger is not None:
-        logger.info(
-            "USER=%s,PROFILE_VERSION=%s,LAUNCH=%s,ARGS=%s",
-            username,
-            release,
-            file_path,
-            args or "-",
+        events.file_launched(
+            logger,
+            path=str(file_path),
+            version=release,
+            user=username,
+            args=args or "-",
         )
     return ActionResult(
         status=ActionStatus.SUCCESS,
@@ -261,7 +267,7 @@ def write_starter_config(
         target.write_text(body, encoding="utf-8")
     except OSError as exc:
         if logger is not None:
-            logger.error("Failed to write starter config %s: %s", target, exc)
+            events.config_create_failed(logger, error=str(exc))
         return ActionResult(
             status=ActionStatus.FAILED,
             message=f"Could not write starter configuration:\n{target} ({exc})",
@@ -269,7 +275,7 @@ def write_starter_config(
         )
 
     if logger is not None:
-        logger.info("Wrote starter configuration: %s", target)
+        events.config_created(logger, path=str(target))
     return ActionResult(
         status=ActionStatus.SUCCESS,
         message=f"Starter configuration written:\n{target}",
@@ -293,7 +299,7 @@ def clear_file(
     """
     if not file_path.exists():
         if logger is not None:
-            logger.warning("File not found: %s", file_path)
+            events.file_not_found(logger, path=str(file_path))
         return ActionResult(
             status=ActionStatus.NOT_FOUND,
             message=f"The file does not exist:\n{file_path}",
@@ -302,7 +308,7 @@ def clear_file(
 
     if not file_path.is_file():
         if logger is not None:
-            logger.warning("Not a file: %s", file_path)
+            events.file_not_a_file(logger, path=str(file_path))
         return ActionResult(
             status=ActionStatus.FAILED,
             message=f"Not a file:\n{file_path}",
@@ -313,7 +319,7 @@ def clear_file(
         file_path.unlink()
     except OSError as exc:
         if logger is not None:
-            logger.error("Failed to delete file %s: %s", file_path, exc)
+            events.file_delete_failed(logger, path=str(file_path), error=str(exc))
         return ActionResult(
             status=ActionStatus.FAILED,
             message=f"Failed to delete file:\n{file_path}\n\n{exc}",
@@ -321,7 +327,7 @@ def clear_file(
         )
 
     if logger is not None:
-        logger.info("File deleted: %s", file_path)
+        events.file_deleted(logger, path=str(file_path))
     return ActionResult(
         status=ActionStatus.SUCCESS,
         message=f"File deleted:\n{file_path}",
