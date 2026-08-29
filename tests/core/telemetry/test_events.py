@@ -22,6 +22,7 @@ from profiles.core.telemetry.events import (
     config_loaded,
     config_reload_failed,
     config_reloaded,
+    external_opened,
     file_delete_failed,
     file_deleted,
     file_launch_failed,
@@ -30,6 +31,11 @@ from profiles.core.telemetry.events import (
     file_not_found,
     file_open_config,
     file_open_log,
+    file_revealed,
+    filter_changed,
+    filter_rejected,
+    hash_computed,
+    hash_verified,
     lang_switched,
     processing_failed,
     scan_complete,
@@ -424,3 +430,181 @@ class TestGrammarRegression:
         m = GRAMMAR_RE.match(line)
         assert m is not None, f"Grammar failed: {line}"
         assert m.group(2) == "APP_CLOSED"
+
+
+# ---------------------------------------------------------------------------
+# Context menu event helpers (added 2026-08-29)
+# ---------------------------------------------------------------------------
+
+class TestFileRevealed:
+    def test_ok(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_file_revealed_ok")
+        caplog.set_level(logging.DEBUG, logger="test_file_revealed_ok")
+        file_revealed(logger, path="/a.txt", status="ok")
+        assert 'FILE_REVEALED path=/a.txt status="ok"' in caplog.text
+
+    def test_failed(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_file_revealed_failed")
+        caplog.set_level(logging.DEBUG, logger="test_file_revealed_failed")
+        file_revealed(logger, path="/a.txt", status="failed", error="denied")
+        assert 'FILE_REVEALED path=/a.txt status="failed" error="denied"' in caplog.text
+
+
+class TestExternalOpened:
+    def test_folder_ok(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_external_folder_ok")
+        caplog.set_level(logging.DEBUG, logger="test_external_folder_ok")
+        external_opened(logger, kind="folder", path="/abs/parent", status="ok")
+        assert (
+            'EXTERNAL_OPENED kind="folder" path=/abs/parent status="ok"'
+            in caplog.text
+        )
+
+    def test_terminal_failed(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_external_terminal_failed")
+        caplog.set_level(logging.DEBUG, logger="test_external_terminal_failed")
+        external_opened(
+            logger,
+            kind="terminal",
+            path="/abs/parent",
+            status="failed",
+            error="no shell",
+        )
+        assert (
+            'EXTERNAL_OPENED kind="terminal" path=/abs/parent status="failed" error="no shell"'
+            in caplog.text
+        )
+
+    def test_rejected_with_reason(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_external_rejected")
+        caplog.set_level(logging.DEBUG, logger="test_external_rejected")
+        external_opened(
+            logger,
+            kind="folder",
+            path="/abs/parent",
+            status="rejected",
+            reason="not_found",
+        )
+        assert (
+            'EXTERNAL_OPENED kind="folder" path=/abs/parent status="rejected" reason="not_found"'
+            in caplog.text
+        )
+
+
+class TestFilterChanged:
+    def test_folder(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_filter_folder")
+        caplog.set_level(logging.INFO, logger="test_filter_folder")
+        filter_changed(logger, kind="folder", value="/abs/dir")
+        assert 'FILTER_CHANGED kind="folder" value=/abs/dir' in caplog.text
+
+    def test_extension(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_filter_extension")
+        caplog.set_level(logging.INFO, logger="test_filter_extension")
+        filter_changed(logger, kind="extension", value=".mttl")
+        assert 'FILTER_CHANGED kind="extension" value=.mttl' in caplog.text
+
+
+class TestFilterRejected:
+    def test_already_active(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_filter_rej_already")
+        caplog.set_level(logging.DEBUG, logger="test_filter_rej_already")
+        filter_rejected(
+            logger, kind="folder", reason="already_active", value="/abs/dir",
+        )
+        assert (
+            'FILTER_REJECTED kind="folder" reason="already_active" value=/abs/dir'
+            in caplog.text
+        )
+
+    def test_no_extension(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_filter_rej_ext")
+        caplog.set_level(logging.DEBUG, logger="test_filter_rej_ext")
+        filter_rejected(
+            logger, kind="extension", reason="no_extension", value=".gitignore",
+        )
+        assert (
+            'FILTER_REJECTED kind="extension" reason="no_extension" value=.gitignore'
+            in caplog.text
+        )
+
+
+class TestHashComputed:
+    def test_ok_with_duration(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_hash_ok")
+        caplog.set_level(logging.INFO, logger="test_hash_ok")
+        hash_computed(
+            logger,
+            algorithm="sha256",
+            path="/a.bin",
+            status="ok",
+            duration_ms=12.5,
+        )
+        assert (
+            'HASH_COMPUTED algorithm="sha256" path=/a.bin status="ok" duration_ms=12.500'
+            in caplog.text
+        )
+
+    def test_failed(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_hash_failed")
+        caplog.set_level(logging.DEBUG, logger="test_hash_failed")
+        hash_computed(
+            logger,
+            algorithm="md5",
+            path="/a.bin",
+            status="failed",
+            error="permission denied",
+        )
+        assert (
+            'HASH_COMPUTED algorithm="md5" path=/a.bin status="failed" error="permission denied"'
+            in caplog.text
+        )
+
+    def test_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_hash_rejected")
+        caplog.set_level(logging.DEBUG, logger="test_hash_rejected")
+        hash_computed(
+            logger,
+            algorithm="md5",
+            path="/a.bin",
+            status="rejected",
+            reason="not_found",
+        )
+        assert (
+            'HASH_COMPUTED algorithm="md5" path=/a.bin status="rejected" reason="not_found"'
+            in caplog.text
+        )
+
+
+class TestHashVerified:
+    def test_match_true(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_verify_match")
+        caplog.set_level(logging.INFO, logger="test_verify_match")
+        hash_verified(logger, algorithm="md5", path="/a.zip", match=True)
+        assert 'HASH_VERIFIED algorithm="md5" path=/a.zip match=true' in caplog.text
+
+    def test_match_false(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_verify_mismatch")
+        caplog.set_level(logging.WARNING, logger="test_verify_mismatch")
+        hash_verified(logger, algorithm="sha256", path="/a.zip", match=False)
+        assert (
+            'HASH_VERIFIED algorithm="sha256" path=/a.zip match=false'
+            in caplog.text
+        )
+
+    def test_rejected_empty_clipboard(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        logger = logging.getLogger("test_verify_rejected")
+        caplog.set_level(logging.DEBUG, logger="test_verify_rejected")
+        hash_verified(
+            logger,
+            algorithm="md5",
+            path="/a.zip",
+            status="rejected",
+            reason="empty_clipboard",
+        )
+        assert (
+            'HASH_VERIFIED algorithm="md5" path=/a.zip status="rejected" reason="empty_clipboard"'
+            in caplog.text
+        )

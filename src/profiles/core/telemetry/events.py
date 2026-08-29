@@ -274,3 +274,101 @@ def command_exit(logger: logging.Logger, *, code: int, command: str) -> None:
 def command_failed(logger: logging.Logger, *, error: str, command: str) -> None:
     """Emit COMMAND_FAILED."""
     logger.error('COMMAND_FAILED error="%s" command="%s"', error, command)
+
+
+# ---------------------------------------------------------------------------
+# Context menu — right-click actions
+# ---------------------------------------------------------------------------
+
+def file_revealed(
+    logger: logging.Logger, *, path: str, status: str, error: str = ""
+) -> None:
+    """Emit FILE_REVEALED. status is "ok" or "failed"."""
+    if error:
+        logger.debug(
+            'FILE_REVEALED path=%s status="%s" error="%s"',
+            _quote(path), status, error,
+        )
+    else:
+        logger.debug('FILE_REVEALED path=%s status="%s"', _quote(path), status)
+
+
+def external_opened(
+    logger: logging.Logger, *,
+    kind: str, path: str, status: str, reason: str = "", error: str = ""
+) -> None:
+    """Emit EXTERNAL_OPENED. kind is "folder" or "terminal"."""
+    parts = [f'kind="{kind}"', f'path={_quote(path)}', f'status="{status}"']
+    if reason:
+        parts.append(f'reason="{reason}"')
+    if error:
+        parts.append(f'error="{error}"')
+    logger.debug("EXTERNAL_OPENED %s", " ".join(parts))
+
+
+def filter_changed(logger: logging.Logger, *, kind: str, value: str) -> None:
+    """Emit FILTER_CHANGED. kind is "folder" or "extension"."""
+    logger.info('FILTER_CHANGED kind="%s" value=%s', kind, _quote(value))
+
+
+def filter_rejected(
+    logger: logging.Logger, *, kind: str, reason: str, value: str
+) -> None:
+    """Emit FILTER_REJECTED. reason describes why the filter was not applied."""
+    logger.debug(
+        'FILTER_REJECTED kind="%s" reason="%s" value=%s',
+        kind, reason, _quote(value),
+    )
+
+
+def hash_computed(
+    logger: logging.Logger, *,
+    algorithm: str, path: str, status: str,
+    duration_ms: float = 0.0, reason: str = "", error: str = ""
+) -> None:
+    """Emit HASH_COMPUTED. status is "ok", "failed", or "rejected"."""
+    if status == "ok":
+        logger.info(
+            'HASH_COMPUTED algorithm="%s" path=%s status="ok" duration_ms=%.3f',
+            algorithm, _quote(path), duration_ms,
+        )
+    elif status == "failed":
+        logger.debug(
+            'HASH_COMPUTED algorithm="%s" path=%s status="failed" error="%s"',
+            algorithm, _quote(path), error,
+        )
+    else:  # rejected
+        logger.debug(
+            'HASH_COMPUTED algorithm="%s" path=%s status="rejected" reason="%s"',
+            algorithm, _quote(path), reason,
+        )
+
+
+def hash_verified(
+    logger: logging.Logger, *,
+    algorithm: str, path: str,
+    match: bool | None = None,
+    status: str = "", reason: str = "", error: str = ""
+) -> None:
+    """Emit HASH_VERIFIED. match is True/False for verification outcomes;
+    pass status="rejected" or status="failed" with reason/error for pre-checks."""
+    if match is True:
+        logger.info(
+            'HASH_VERIFIED algorithm="%s" path=%s match=true',
+            algorithm, _quote(path),
+        )
+    elif match is False:
+        logger.warning(
+            'HASH_VERIFIED algorithm="%s" path=%s match=false',
+            algorithm, _quote(path),
+        )
+    elif status == "failed":
+        logger.debug(
+            'HASH_VERIFIED algorithm="%s" path=%s status="failed" error="%s"',
+            algorithm, _quote(path), error,
+        )
+    else:  # rejected
+        logger.debug(
+            'HASH_VERIFIED algorithm="%s" path=%s status="rejected" reason="%s"',
+            algorithm, _quote(path), reason,
+        )
