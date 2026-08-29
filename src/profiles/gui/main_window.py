@@ -1349,3 +1349,4 @@ class MainWindow:
         events.app_started(
             self._logger, version=__version__, headless=False
         )
+        self._root.mainloop()
