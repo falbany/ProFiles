@@ -738,15 +738,8 @@ class MainWindow:
                 if self._dir_status_tooltip:
                     self._dir_status_tooltip.set_text(f"Directory: {display_label}")
 
-            events.scan_complete(
-                self._logger,
-                directory=display_label,
-                extension=extension or "*",
-                filter_text=filter_text,
-                files=count,
-                recursive=bool(self._recursive_var.get()),
-                duration_ms=0.0,
-            )
+            # Note: SCAN_COMPLETE / SCAN_METRICS are emitted by the scanner
+            # pipeline via ScanTimer.finish(); do not duplicate here.
 
     # ----------------------------------------------------------------
     # Event handlers
