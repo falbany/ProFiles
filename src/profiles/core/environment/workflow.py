@@ -173,6 +173,8 @@ def _resolve_failure(
     if failmode == "abort":
         if logger is not None:
             logger.error("Step failed and failmode=abort. Aborting.")
+        if failure_context is not None and step_content is not None:
+            failure_context.append(f"Step failed (failmode=abort): {step_content}")
         return WorkflowOutcome.ABORT
     if failmode == "skip":
         if logger is not None:

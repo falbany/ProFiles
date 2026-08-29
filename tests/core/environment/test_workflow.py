@@ -284,3 +284,124 @@ def test_failure_context_populated_on_abort():
         assert outcome == WorkflowOutcome.ABORT
         assert len(failure_context) > 0
         assert "echo failing-step" in failure_context[0]
+
+
+def test_per_step_timeout_with_check_action():
+    """A per-step timeout applies to check actions too."""
+    with patch(
+        "profiles.core.environment.workflow._run_command",
+        return_value=True,
+    ) as mock_cmd:
+        steps = [
+            WorkflowStep(action="check", content="verify.exe", timeout=7),
+        ]
+        run_workflow(steps, None, timeout=60)
+        mock_cmd.assert_called_once_with(
+            "verify.exe", wait=True, timeout=7, logger=None,
+        )
+
+
+def test_global_timeout_used_when_no_per_step_timeout():
+    """Global timeout is used when step has no per-step timeout."""
+    with patch(
+        "profiles.core.environment.workflow._run_command",
+        return_value=True,
+    ) as mock_cmd:
+        steps = [
+            WorkflowStep(action="run", content="echo hi"),
+        ]
+        run_workflow(steps, None, timeout=45)
+        mock_cmd.assert_called_once_with(
+            "echo hi", wait=True, timeout=45, logger=None,
+        )
+
+
+def test_no_timeout_when_both_unset():
+    """When neither global nor per-step timeout is set, timeout is None."""
+    with patch(
+        "profiles.core.environment.workflow._run_command",
+        return_value=True,
+    ) as mock_cmd:
+        steps = [
+            WorkflowStep(action="run", content="echo hi"),
+        ]
+        run_workflow(steps, None)
+        mock_cmd.assert_called_once_with(
+            "echo hi", wait=True, timeout=None, logger=None,
+        )
+
+
+def test_if_condition_skips_run_after():
+    """if_ guard skips run_after steps when condition not met."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.delenv("SKIP_FLAG", raising=False)
+    try:
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+        ) as mock_cmd:
+            steps = [
+                WorkflowStep(
+                    action="run_after",
+                    content="logger.exe",
+                    if_="env:SKIP_FLAG",
+                ),
+            ]
+            run_workflow(steps, None)
+            mock_cmd.assert_not_called()
+    finally:
+        monkeypatch.undo()
+
+
+def test_if_condition_multiple_steps_skips_only_failed():
+    """Steps with unmet if_ are skipped; others still execute."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("RUN_SECOND", "1")
+    try:
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            return_value=True,
+        ) as mock_cmd:
+            steps = [
+                WorkflowStep(action="run", content="echo first", if_="env:NOPE"),
+                WorkflowStep(action="run", content="echo second", if_="env:RUN_SECOND"),
+            ]
+            run_workflow(steps, None)
+            assert mock_cmd.call_count == 1
+            assert "echo second" in mock_cmd.call_args[0][0]
+    finally:
+        monkeypatch.undo()
+
+
+def test_failure_context_populated_on_failmode_abort():
+    """failure_context is populated when an unknown on_failure triggers failmode=abort."""
+    with patch(
+        "profiles.core.environment.workflow._run_command", return_value=False,
+    ):
+        steps = [
+            WorkflowStep(
+                action="run",
+                content="echo bad-step",
+                on_failure="bogus",  # unknown -> falls back to failmode
+            ),
+        ]
+        failure_context: list[str] = []
+        outcome = run_workflow(
+            steps, None, failmode="abort", failure_context=failure_context,
+        )
+        assert outcome == WorkflowOutcome.ABORT
+        assert len(failure_context) > 0
+        assert "echo bad-step" in failure_context[0]
+
+
+def test_failure_context_empty_when_no_failure():
+    """failure_context remains empty when all steps succeed."""
+    with patch(
+        "profiles.core.environment.workflow._run_command", return_value=True,
+    ):
+        steps = [
+            WorkflowStep(action="run", content="echo ok"),
+        ]
+        failure_context: list[str] = []
+        outcome = run_workflow(steps, None, failure_context=failure_context)
+        assert outcome == WorkflowOutcome.CONTINUE
+        assert failure_context == []
