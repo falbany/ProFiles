@@ -28,6 +28,10 @@ from profiles.core.environment import system
 from profiles.core.processing import scanner
 from profiles.core.processing.file_classifier import directory_exists
 from profiles.gui.context_menu import FileContextMenu
+from profiles.gui.controllers.directory_manager import (
+    DirectoryManager,
+    format_dir_entry,
+)
 from profiles.gui.controllers.scan_controller import run_scan
 from profiles.gui.i18n import set_language
 from profiles.gui.presentation.row_colors import RowColorRules, default_tag_name
@@ -150,10 +154,11 @@ class MainWindow:
         self._configure_bindings()
 
         # Populate initial data
+        self._load_system_info()  # sets self._hostname early
+        self._dir_manager = DirectoryManager(view=self, hostname=self._hostname)
         self._populate_directories()
         self._populate_extensions()
         self._populate_filters()
-        self._load_system_info()
         self._auto_select_directory()
         self._apply_config_overrides()
         self._configure_row_colors()
@@ -319,41 +324,22 @@ class MainWindow:
     def _populate_directories(self) -> None:
         """Populate the directory combobox from configurations.
 
-        Each entry is displayed as ``icon label`` where the icon
-        distinguishes config groups (📁) from individual paths (📄).
-        For multi-path config groups, a ``(N paths)`` suffix is appended.
+        Delegates to :class:`DirectoryManager` for the actual logic.
         """
-        entries = config_service.get_directory_combobox_values(self._config)
-        self._dir_combo["values"] = [self._format_dir_entry(e) for e in entries]
+        self._dir_manager.populate()
 
     @staticmethod
     def _format_dir_entry(entry: config_service.DirectoryEntry) -> str:
         """Format a DirectoryEntry as a combobox display string."""
-        if entry.icon == "📁" and len(entry.paths) > 1:
-            return f"{entry.icon} {entry.label} ({len(entry.paths)} paths)"
-        return f"{entry.icon} {entry.label}"
+        return format_dir_entry(entry)
 
     def _resolve_dir_selection(self, label: str) -> list[str]:
-        """Resolve a combobox selection label to the list of scan paths.
-
-        If *label* matches a config display name or a path, returns the
-        corresponding scan paths. Falls back to ``[label]`` when no match
-        is found (treating it as a raw path).
-        """
-        entries = config_service.get_directory_combobox_values(self._config)
-        for entry in entries:
-            if entry.label == label:
-                return entry.paths
-        return [label]
+        """Resolve a combobox selection label to the list of scan paths."""
+        return self._dir_manager.resolve(label)
 
     def _set_dir_selection(self, label: str) -> None:
         """Set the combobox to the entry matching *label*, or ``label`` itself."""
-        entries = config_service.get_directory_combobox_values(self._config)
-        for entry in entries:
-            if entry.label == label:
-                self._dir_var.set(self._format_dir_entry(entry))
-                return
-        self._dir_var.set(label)
+        self._dir_manager.set_selection(label)
 
     def _populate_extensions(self) -> None:
         """Populate the extension combobox."""
@@ -386,66 +372,21 @@ class MainWindow:
     def _auto_select_directory(self) -> None:
         """Auto-select the directory matching the current hostname.
 
-        When no ``.profiles`` is present (or it yields no matching
-        section and no ``search_dir``), the GUI Directory field
-        defaults to the current working directory as a usable fallback.
+        Delegates to :class:`DirectoryManager`.
         """
-        config_path = self._config.config_path
-        config_exists = config_path.exists()
-
-        if not config_exists:
-            self._dir_var.set(str(Path.cwd()))
-            return
-
-        try:
-            fresh_config = load_config(config_path)
-        except (FileNotFoundError, OSError):
-            self._dir_var.set(str(Path.cwd()))
-            return
-
-        matched_label = config_service.auto_select_directory(fresh_config, self._hostname)
-        if matched_label:
-            self._set_dir_selection(matched_label)
-        else:
-            self._dir_var.set(str(Path.cwd()))
+        self._dir_manager.auto_select()
 
     def _current_dir_label(self) -> str:
-        """Return the current combobox selection with icon prefix stripped.
-
-        Also strips the ``(N paths)`` count suffix added by
-        ``_format_dir_entry`` for multi-path config groups.
-        """
-        raw = self._dir_var.get()
-        # Strip icon prefix (📁 or 📄) and spaces
-        for prefix in ("📁 ", "📄 "):
-            if raw.startswith(prefix):
-                label = raw[len(prefix) :]
-                break
-        else:
-            label = raw
-        # Strip "(N paths)" suffix from config group entries
-        if label.endswith(")"):
-            idx = label.rfind(" (")
-            if idx != -1:
-                label = label[:idx]
-        return label.strip()
+        """Return the current combobox selection with icon prefix stripped."""
+        return self._dir_manager.current_label()
 
     def _find_active_config(self) -> MachineConfiguration | None:
         """Find the configuration matching the currently selected directory."""
-        return config_service.find_active_config(self._config, self._current_dir_label())
+        return self._dir_manager.find_active_config()
 
     def _apply_config_overrides(self) -> None:
         """Merge per-config extensions/filters with the generic [LAUNCHER] defaults."""
-        merged_extensions, merged_filters = config_service.merge_config_overrides(
-            self._config,
-            self._current_dir_label(),
-        )
-
-        self._ext_combo["values"] = merged_extensions
-        self._ext_var.set(merged_extensions[0] if merged_extensions else "")
-
-        self._filter_combo["values"] = merged_filters
-        self._filter_var.set(merged_filters[0] if merged_filters else "")
+        self._dir_manager.apply_config_overrides()
 
     # ----------------------------------------------------------------
     # Row coloring (per-config `row_colors`)
