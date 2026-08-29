@@ -193,6 +193,8 @@ columns:
 #   {{path}}       absolute file path                    {{dir}}   parent directory
 #   {{filename}}   file name (with extension)            {{ext}}   extension (e.g. ".mttl")
 #   {{stem}}       file name without extension           {{content}} step content (useful in 'ask')
+#   {{username}}   operator username                     {{hostname}}  machine hostname
+#   {{date}}       today's date (ISO 8601)
 #
 # failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
 # timeout: seconds for blocking steps.

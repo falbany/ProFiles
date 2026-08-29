@@ -238,6 +238,9 @@ Le moteur substitue automatiquement des **placeholders** au moment de l'exécuti
 | `{{stem}}`     | Nom du fichier sans extension | `test`                       |
 | `{{ext}}`      | Extension (avec point)        | `.mttl`                      |
 | `{{content}}`  | Contenu de l'étape actuel     | Utile dans les invites `ask` |
+| `{{username}}` | Nom d'utilisateur             | `alice`                      |
+| `{{hostname}}` | Nom de machine                | `workstation-01`             |
+| `{{date}}`     | Date du jour (ISO 8601)       | `2026-08-29`                 |
 
 ### Exemples d'Utilisation
 

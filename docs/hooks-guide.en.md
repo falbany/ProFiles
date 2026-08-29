@@ -240,6 +240,9 @@ The engine automatically substitutes **placeholders** at runtime.
 | `{{stem}}`     | Filename without extension | `test`                    |
 | `{{ext}}`      | Extension (with dot)       | `.mttl`                   |
 | `{{content}}`  | Current step's content     | Useful in `ask` prompts   |
+| `{{username}}` | Operator username          | `alice`                   |
+| `{{hostname}}` | Machine hostname           | `workstation-01`          |
+| `{{date}}`     | Today's date (ISO 8601)    | `2026-08-29`              |
 
 ### Usage Examples
 
