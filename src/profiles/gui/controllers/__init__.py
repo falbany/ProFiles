@@ -3,6 +3,7 @@
 Tk-dependent, no I/O knowledge. Each controller encapsulates a cluster
 of related methods that previously lived on :class:`MainWindow`.
 """
+
 from profiles.gui.controllers.directory_manager import (
     DirectoryManager,
     format_dir_entry,

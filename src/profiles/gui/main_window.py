@@ -115,6 +115,7 @@ class MainWindow:
         self._logger = logging.getLogger("profiles")
         self._current_scan_id: int = 0
         self._scan_in_progress: bool = False
+        self._scan_queue: queue.Queue = queue.Queue()
         self._filter_timer: str | None = None  # Debounce timer for filter field
         self._ext_timer: str | None = None  # Debounce timer for extension field
         self._row_color_rules: list[tuple[str, str]] = []
