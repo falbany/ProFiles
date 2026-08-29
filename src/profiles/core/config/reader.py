@@ -105,12 +105,6 @@ class ConfigReader:
             self._apply_columns(config, schema)
             self._apply_hooks(config, schema)
             config.configurations = self._build_configurations(schema)
-            events.config_loaded(
-                logger,
-                path=str(self._config_path),
-                mode="explicit" if self._config_path else "auto",
-                release=str(getattr(config, "release", "")),
-            )
         except Exception as e:
             # Catch validation/schema errors
             events.config_invalid(
