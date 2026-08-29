@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import time
 import tkinter as tk
 from functools import partial
 from pathlib import Path
@@ -18,6 +19,7 @@ from profiles.core.actions import (
 )
 from profiles.core.processing.file_classifier import ensure_trailing_separator
 from profiles.core.processing.file_metadata import get_file_metadata
+from profiles.core.telemetry import events
 from profiles.gui.i18n import t
 from profiles.utils.file_utils import hash_file, open_file_explorer
 from profiles.utils.network import get_username
@@ -232,6 +234,11 @@ class FileContextMenu:
             config=self.window._config,
         )
         if result.status is ActionStatus.NOT_FOUND:
+            events.file_launch_failed(
+                self.window._logger,
+                path=str(file_path),
+                error=result.message,
+            )
             messagebox.showwarning(
                 "File Not Found",
                 f"The selected file does not exist:\n{file_path}",
@@ -241,6 +248,11 @@ class FileContextMenu:
             if self.window._close_var.get():
                 self.window._root.after(500, self.window._on_close)
             return
+        events.file_launch_failed(
+            self.window._logger,
+            path=str(file_path),
+            error=result.message,
+        )
         messagebox.showerror("Execution Error", result.message)
 
     def action_launch_with_args(self, file_path: Path) -> None:
@@ -256,27 +268,63 @@ class FileContextMenu:
         """Open the directory that contains *file_path*."""
         parent = file_path.parent
         if not parent.is_dir():
+            events.external_opened(
+                self.window._logger,
+                kind="folder",
+                path=str(parent),
+                status="rejected",
+                reason="not_found",
+            )
             messagebox.showwarning(
                 "Folder Not Found",
                 f"The folder does not exist:\n{parent}",
             )
             return
         if not open_file_explorer(parent):
+            events.external_opened(
+                self.window._logger,
+                kind="folder",
+                path=str(parent),
+                status="failed",
+                error="open_file_explorer returned False",
+            )
             messagebox.showerror(
                 "Open Folder Error",
                 f"Failed to open folder:\n{parent}",
             )
+            return
+        events.external_opened(
+            self.window._logger,
+            kind="folder",
+            path=str(parent),
+            status="ok",
+        )
 
     def action_reveal(self, file_path: Path) -> None:
         """Reveal the file in the OS file explorer."""
         result = reveal_in_file_manager(file_path)
         if result.status is ActionStatus.NOT_FOUND:
+            events.file_revealed(
+                self.window._logger,
+                path=str(file_path),
+                status="failed",
+                error=result.message,
+            )
             messagebox.showwarning("File Not Found", result.message)
             return
         if result.status is ActionStatus.FAILED:
-            self.window._logger.error("Reveal failed: %s", result.message)
+            events.file_revealed(
+                self.window._logger,
+                path=str(file_path),
+                status="failed",
+                error=result.message,
+            )
             # Last-resort fallback: open the parent folder.
             open_file_explorer(file_path.parent)
+            return
+        events.file_revealed(
+            self.window._logger, path=str(file_path), status="ok",
+        )
 
     def action_copy(self, value: str) -> None:
         """Copy *value* to the system clipboard."""
@@ -328,8 +376,20 @@ class FileContextMenu:
         )
         current = Path(current_paths[0]) if current_paths else None
         if current is not None and parent == current:
+            events.filter_rejected(
+                self.window._logger,
+                kind="folder",
+                reason="already_active",
+                value=str(parent),
+            )
             return
         if not parent.is_dir():
+            events.filter_rejected(
+                self.window._logger,
+                kind="folder",
+                reason="not_found",
+                value=str(parent),
+            )
             messagebox.showwarning(
                 "Folder Not Found",
                 f"The folder does not exist:\n{parent}",
@@ -338,21 +398,46 @@ class FileContextMenu:
         self.window._dir_var.set(str(parent))
         self.window._apply_config_overrides()
         self.window._refresh_file_list()
-        self.window._logger.info("Filtered list to folder: %s", parent)
+        events.filter_changed(
+            self.window._logger, kind="folder", value=str(parent),
+        )
 
     def action_hash(self, file_path: Path, algorithm: str, *, copy_only: bool = False) -> None:
         """Compute the file's hash, show a dialog, and optionally copy it."""
         if not file_path.exists():
+            events.hash_computed(
+                self.window._logger,
+                algorithm=algorithm,
+                path=str(file_path),
+                status="rejected",
+                reason="not_found",
+            )
             messagebox.showwarning(
                 "File Not Found",
                 f"The selected file does not exist:\n{file_path}",
             )
             return
+        start = time.perf_counter()
         try:
             digest = hash_file(file_path, algorithm)
         except (OSError, ValueError) as exc:
+            events.hash_computed(
+                self.window._logger,
+                algorithm=algorithm,
+                path=str(file_path),
+                status="failed",
+                error=str(exc),
+            )
             messagebox.showerror("Hash Error", f"Failed to hash file:\n{exc}")
             return
+        duration_ms = (time.perf_counter() - start) * 1000
+        events.hash_computed(
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            status="ok",
+            duration_ms=duration_ms,
+        )
 
         if copy_only:
             self.action_copy(digest)
@@ -376,6 +461,12 @@ class FileContextMenu:
         """Set the extension filter to ``.<ext>`` and re-scan the current folder."""
         ext = file_path.suffix
         if not ext:
+            events.filter_rejected(
+                self.window._logger,
+                kind="extension",
+                reason="no_extension",
+                value=file_path.name,
+            )
             messagebox.showwarning(
                 "No Extension",
                 f"Selected file has no extension:\n{file_path.name}",
@@ -383,11 +474,20 @@ class FileContextMenu:
             return
         self.window._ext_var.set(ext)
         self.window._refresh_file_list()
-        self.window._logger.info("Filtered list by extension: %s", ext)
+        events.filter_changed(
+            self.window._logger, kind="extension", value=ext,
+        )
 
     def action_verify_hash(self, file_path: Path, algorithm: str) -> None:
         """Compute the file's *algorithm* hash and compare it to the clipboard."""
         if not file_path.exists():
+            events.hash_verified(
+                self.window._logger,
+                algorithm=algorithm,
+                path=str(file_path),
+                status="rejected",
+                reason="not_found",
+            )
             messagebox.showwarning(
                 "File Not Found",
                 f"The selected file does not exist:\n{file_path}",
@@ -398,6 +498,13 @@ class FileContextMenu:
         except tk.TclError:
             expected_clip = ""
         if not expected_clip:
+            events.hash_verified(
+                self.window._logger,
+                algorithm=algorithm,
+                path=str(file_path),
+                status="rejected",
+                reason="empty_clipboard",
+            )
             messagebox.showinfo(
                 f"Verify {algorithm.upper()}",
                 "Clipboard is empty — copy a hash first, then try again.",
@@ -406,10 +513,23 @@ class FileContextMenu:
         try:
             digest = hash_file(file_path, algorithm)
         except (OSError, ValueError) as exc:
+            events.hash_verified(
+                self.window._logger,
+                algorithm=algorithm,
+                path=str(file_path),
+                status="failed",
+                error=str(exc),
+            )
             messagebox.showerror("Hash Error", f"Failed to hash file:\n{exc}")
             return
 
         match = digest.casefold() == expected_clip.casefold()
+        events.hash_verified(
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            match=match,
+        )
         if match:
             messagebox.showinfo(
                 f"Verify {algorithm.upper()}",
@@ -425,11 +545,29 @@ class FileContextMenu:
         """Open a terminal session in the file's parent directory."""
         result = open_terminal_in_directory(file_path.parent)
         if result.status is ActionStatus.SUCCESS:
+            events.external_opened(
+                self.window._logger,
+                kind="terminal",
+                path=str(file_path.parent),
+                status="ok",
+            )
             return
         if result.status is ActionStatus.NOT_FOUND:
+            events.external_opened(
+                self.window._logger,
+                kind="terminal",
+                path=str(file_path.parent),
+                status="rejected",
+            )
             messagebox.showwarning("Folder Not Found", result.message)
             return
-        self.window._logger.error("Open terminal failed: %s", result.message)
+        events.external_opened(
+            self.window._logger,
+            kind="terminal",
+            path=str(file_path.parent),
+            status="failed",
+            error=result.message,
+        )
         messagebox.showerror("Open Terminal Error", result.message)
 
     def action_clear_file(self, file_path: Path) -> None:
@@ -452,14 +590,16 @@ class FileContextMenu:
 
         try:
             file_path.unlink()
-            self.window._logger.info("File deleted: %s", file_path)
+            events.file_deleted(self.window._logger, path=str(file_path))
             messagebox.showinfo(
                 "File Deleted",
                 f"File deleted successfully:\n{file_path}",
             )
             self.window._refresh_file_list()
         except OSError as exc:
-            self.window._logger.error("Failed to delete file %s: %s", file_path, exc)
+            events.file_delete_failed(
+                self.window._logger, path=str(file_path), error=str(exc),
+            )
             messagebox.showerror(
                 "Delete File Error",
                 f"Failed to delete file:\n{file_path}\n\n{exc}",
