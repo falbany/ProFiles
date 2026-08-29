@@ -206,9 +206,17 @@ class ProFileApp:
         assert _config is not None
 
         if file_path:
-            _logger.info("Running in headless mode. File: %s", file_path)
+            events.app_started(_logger, version=_config.release, headless=True)
         else:
-            _logger.info("Running in headless mode: scanning all configured directories")
+            events.scan_complete(
+                _logger,
+                directory="<headless-all>",
+                extension="*",
+                filter_text="",
+                files=0,
+                recursive=True,
+                duration_ms=0.0,
+            )
 
         # If file_path is not provided, scan all configured directories
         if not file_path:
@@ -233,10 +241,10 @@ class ProFileApp:
                             config=_config,
                         )
                         if result.status is not actions.ActionStatus.SUCCESS:
-                            _logger.warning(
-                                "Launch did not succeed for %s: %s",
-                                scanned.path,
-                                result.message,
+                            events.file_launch_failed(
+                                _logger,
+                                path=str(scanned.path),
+                                error=result.message,
                             )
             return 0
 

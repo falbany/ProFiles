@@ -113,10 +113,9 @@ class ConfigReader:
             )
         except Exception as e:
             # Catch validation/schema errors
-            logger.error(
-                f"Configuration validation failed: {self._config_path}\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"Falling back to defaults from {Path.cwd()}"
+            events.config_invalid(
+                logger,
+                error=f"{type(e).__name__}: {e} (path={self._config_path})",
             )
             self._build_column_configs(config)
             return config

@@ -78,8 +78,8 @@ def test_config_load_with_validation_error(
     config = reader.load()
 
     assert isinstance(config, AppConfig)
-    # Check that validation error was logged
-    assert any("failed" in rec.message.lower() for rec in caplog.records)
+    # Check that validation error was logged (CONFIG_INVALID event)
+    assert any("CONFIG_INVALID" in rec.message for rec in caplog.records)
 
 
 def test_config_load_missing_file_logs_warning(
