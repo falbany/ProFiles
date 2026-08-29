@@ -36,7 +36,7 @@ class TestPackageMetadata:
     """profiles.__init__ exports version, author, license."""
 
     def test_version(self) -> None:
-        assert profiles.__version__ == "2026.7.0"
+        assert profiles.__version__ == "2026.8.0"
 
     def test_author(self) -> None:
         assert profiles.__author__ == "Florent ALBANY"

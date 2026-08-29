@@ -16,7 +16,7 @@ class TestAppConfig:
 
     def test_default_values(self) -> None:
         config = AppConfig()
-        assert config.release == "2026.7.0"
+        assert config.release == "2026.8.0"
         assert config.title == ""
         assert config.gui_auto_launch is True
         assert config.close_after_execute is False
