@@ -20,10 +20,10 @@ from profiles.gui.theme import (
     THEME_LABELS,
     THEMES,
     Md3Theme,
-    _assert_contrast,
-    _contrast_ratio,
-    _hex_luminance,
     apply_theme,
+    assert_contrast,
+    contrast_ratio,
+    hex_luminance,
     resolve_theme_name,
 )
 
@@ -40,7 +40,6 @@ needs_tk = pytest.mark.skipif(
     not _tk_available,
     reason="Tkinter not available (headless CI or missing Tcl/Tk)",
 )
-
 
 # ── Md3Theme dataclass ─────────────────────────────────────────────────────
 
@@ -319,81 +318,76 @@ class TestResolveThemeName:
         assert resolve_theme_name("auto") == "light"
 
 
-# ── _hex_luminance binding to Md3Theme colours ──────────────────────────────
+# ── hex_luminance binding to Md3Theme colours ──────────────────────────────
 
 
 class TestThemeLuminance:
     """Luminance helper must yield values in [0, 1] for the theme palette.
 
-    These tests exercise the ``_hex_luminance`` module-level helper from
+    These tests exercise the ``hex_luminance`` module-level helper from
     ``profiles.gui.main_window`` against the canonical ``surface`` and
     ``outline`` colours of both built-in themes. The helper is a pure
     function so importing it does not instantiate Tk.
     """
 
     def test_light_surface_luminance_in_range(self) -> None:
-        from profiles.gui.main_window import _hex_luminance
 
-        value = _hex_luminance(LIGHT_THEME.surface)
+        value = hex_luminance(LIGHT_THEME.surface)
         assert 0.0 <= value <= 1.0
 
     def test_dark_surface_luminance_in_range(self) -> None:
-        from profiles.gui.main_window import _hex_luminance
 
-        value = _hex_luminance(DARK_THEME.surface)
+        value = hex_luminance(DARK_THEME.surface)
         assert 0.0 <= value <= 1.0
 
     def test_light_outline_luminance_in_range(self) -> None:
-        from profiles.gui.main_window import _hex_luminance
 
-        value = _hex_luminance(LIGHT_THEME.outline)
+        value = hex_luminance(LIGHT_THEME.outline)
         assert 0.0 <= value <= 1.0
 
     def test_dark_outline_luminance_in_range(self) -> None:
-        from profiles.gui.main_window import _hex_luminance
 
-        value = _hex_luminance(DARK_THEME.outline)
+        value = hex_luminance(DARK_THEME.outline)
         assert 0.0 <= value <= 1.0
 
     def test_light_surface_lighter_than_dark_surface(self) -> None:
         """The luminance helper agrees with the qualitative expectation:
         light theme surface > dark theme surface."""
-        from profiles.gui.main_window import _hex_luminance
 
-        assert _hex_luminance(LIGHT_THEME.surface) > _hex_luminance(DARK_THEME.surface)
+        assert hex_luminance(LIGHT_THEME.surface) > hex_luminance(DARK_THEME.surface)
 
 
 # ── WCAG contrast helpers ───────────────────────────────────────────────────
 
 
 class TestContrast:
-    """Unit tests for ``_hex_luminance``, ``_contrast_ratio``, ``_assert_contrast``."""
+    """Unit tests for ``hex_luminance``, ``contrast_ratio``, ``assert_contrast``."""
 
     def test_luminance_black_is_zero(self) -> None:
-        assert _hex_luminance("#000000") == 0.0
+        assert hex_luminance("#000000") == 0.0
 
     def test_luminance_white_is_one(self) -> None:
-        assert _hex_luminance("#FFFFFF") == pytest.approx(1.0, abs=1e-6)
+        assert hex_luminance("#FFFFFF") == pytest.approx(1.0, abs=1e-6)
 
     def test_luminance_missing_hash_tolerated(self) -> None:
-        assert _hex_luminance("FFFFFF") == pytest.approx(1.0, abs=1e-6)
+        assert hex_luminance("FFFFFF") == pytest.approx(1.0, abs=1e-6)
         # Garbage returns the safe neutral 0.5
-        assert _hex_luminance("not-a-color") == 0.5
-        assert _hex_luminance("#abc") == 0.5  # wrong length
+        assert hex_luminance("not-a-color") == 0.5
+        assert hex_luminance("#abc") == 0.5  # wrong length
 
-    def test_contrast_ratio_black_on_white_is_21(self) -> None:
-        assert _contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21.0, abs=1e-3)
+    def testcontrast_ratio_black_on_white_is_21(self) -> None:
+        assert contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21.0, abs=1e-3)
 
-    def test_contrast_ratio_white_on_white_is_1(self) -> None:
-        assert _contrast_ratio("#FFFFFF", "#FFFFFF") == pytest.approx(1.0, abs=1e-6)
+    def testcontrast_ratio_white_on_white_is_1(self) -> None:
+        assert contrast_ratio("#FFFFFF", "#FFFFFF") == pytest.approx(1.0, abs=1e-6)
 
-    def test_assert_contrast_passes_for_known_good_pair(self) -> None:
+    def testassert_contrast_passes_for_known_good_pair(self) -> None:
         # Black on white is 21:1 — well above the AA threshold of 4.5.
-        assert _assert_contrast("#000000", "#FFFFFF") is True
+        assert assert_contrast("#000000", "#FFFFFF") is True
 
-    def test_assert_contrast_fails_for_known_bad_pair(self) -> None:
+    def testassert_contrast_fails_for_known_bad_pair(self) -> None:
         # Light grey on white has a ratio of about 1.3:1.
-        assert _assert_contrast("#CCCCCC", "#FFFFFF") is False
+        assert assert_contrast("#CCCCCC", "#FFFFFF") is False
 
 
 # ── apply_theme WCAG audit logging ───────────────────────────────────────────
@@ -471,3 +465,28 @@ class TestApplyThemeContrastAudit:
         assert any("on_surface/surface" in msg for msg in labels)
         # Valid pairs stay silent.
         assert all("on_primary/primary" not in msg for msg in labels)
+
+
+# ── Refactor (Task 1): additional public API edge cases ────────────────────
+
+
+class TestHexLuminanceEdgeCases:
+    """Cover the edge cases that the previous duplicated helper didn't test."""
+
+    def test_empty_string_returns_midpoint(self) -> None:
+        assert hex_luminance("") == 0.5
+
+    def test_non_string_input_returns_midpoint(self) -> None:
+        assert hex_luminance(None) == 0.5  # type: ignore[arg-type]
+
+    def test_uppercase_hex(self) -> None:
+        assert hex_luminance("#ABCDEF") == pytest.approx(hex_luminance("#abcdef"), abs=1e-9)
+
+
+class TestContrastRatioSymmetry:
+    """Contrast ratio is symmetric: order of arguments does not matter."""
+
+    def test_symmetric(self) -> None:
+        a = contrast_ratio("#1565C0", "#fafafa")
+        b = contrast_ratio("#fafafa", "#1565C0")
+        assert a == pytest.approx(b, abs=1e-9)

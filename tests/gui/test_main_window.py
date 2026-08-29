@@ -37,7 +37,6 @@ needs_tk = pytest.mark.skipif(
     reason="Tkinter not available (headless CI or missing Tcl/Tk)",
 )
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -864,64 +863,64 @@ class TestNoConfigFileMode:
 
 
 class TestHexLuminance:
-    """_hex_luminance() — WCAG relative luminance for #RRGGBB strings."""
+    """hex_luminance() — WCAG relative luminance for #RRGGBB strings."""
 
     def test_black_is_zero(self) -> None:
         """#000000 → 0.0 (per WCAG: all channels linearised to 0)."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("#000000") == pytest.approx(0.0, abs=1e-6)
+        assert hex_luminance("#000000") == pytest.approx(0.0, abs=1e-6)
 
     def test_white_is_one(self) -> None:
         """#ffffff → 1.0 (per WCAG: weighted sum of three ones)."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("#ffffff") == pytest.approx(1.0, abs=1e-3)
+        assert hex_luminance("#ffffff") == pytest.approx(1.0, abs=1e-3)
 
     def test_red_is_2126(self) -> None:
         """#ff0000 → ≈0.2126 (R coefficient × 1.0)."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("#ff0000") == pytest.approx(0.2126, abs=0.01)
+        assert hex_luminance("#ff0000") == pytest.approx(0.2126, abs=0.01)
 
     def test_missing_hash_tolerated(self) -> None:
         """A leading '#' is optional — same value with or without it."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("ff0000") == pytest.approx(_hex_luminance("#ff0000"), abs=1e-6)
+        assert hex_luminance("ff0000") == pytest.approx(hex_luminance("#ff0000"), abs=1e-6)
 
     def test_uppercase_hex_matches(self) -> None:
         """Uppercase hex digits parse to the same luminance as lowercase."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("#FF0000") == pytest.approx(_hex_luminance("#ff0000"), abs=1e-6)
+        assert hex_luminance("#FF0000") == pytest.approx(hex_luminance("#ff0000"), abs=1e-6)
 
     def test_green_is_7152(self) -> None:
         """Sanity check: pure green contributes the G coefficient (0.7152)."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("#00ff00") == pytest.approx(0.7152, abs=0.01)
+        assert hex_luminance("#00ff00") == pytest.approx(0.7152, abs=0.01)
 
     def test_blue_is_0722(self) -> None:
         """Sanity check: pure blue contributes the B coefficient (0.0722)."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("#0000ff") == pytest.approx(0.0722, abs=0.01)
+        assert hex_luminance("#0000ff") == pytest.approx(0.0722, abs=0.01)
 
     def test_invalid_returns_neutral(self) -> None:
         """Garbage input returns the neutral fallback 0.5."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
-        assert _hex_luminance("not-a-color") == 0.5
-        assert _hex_luminance("") == 0.5
-        assert _hex_luminance("#zz0000") == 0.5
+        assert hex_luminance("not-a-color") == 0.5
+        assert hex_luminance("") == 0.5
+        assert hex_luminance("#zz0000") == 0.5
 
     def test_result_within_unit_interval(self) -> None:
         """For a representative sample, the result must lie in [0, 1]."""
-        from profiles.gui.main_window import _hex_luminance
+        from profiles.gui.theme import hex_luminance
 
         for color in ("#000000", "#ffffff", "#7f7f7f", "#abcdef", "#123456"):
-            value = _hex_luminance(color)
+            value = hex_luminance(color)
             assert 0.0 <= value <= 1.0, f"{color} produced {value}"
 
 

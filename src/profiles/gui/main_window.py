@@ -31,41 +31,15 @@ from profiles.gui.context_menu import FileContextMenu
 from profiles.gui.i18n import set_language
 from profiles.gui.status_bar import StatusBar
 from profiles.gui.styles import ToolTip, configure_styles
-from profiles.gui.theme import THEME_LABELS, THEMES, Md3Theme, resolve_theme_name
+from profiles.gui.theme import (
+    THEME_LABELS,
+    THEMES,
+    Md3Theme,
+    contrast_ratio,
+    resolve_theme_name,
+)
 from profiles.gui.ui import MainWindowUI
 from profiles.utils.file_utils import open_file_explorer
-
-
-def _hex_luminance(hex_color: str) -> float:
-    """Return relative luminance (0..1) of a #RRGGBB hex color per WCAG.
-
-    Tolerates missing leading '#'. Returns 0.5 on parse failure.
-    """
-    if not isinstance(hex_color, str):
-        return 0.5
-    raw = hex_color.lstrip("#")
-    if len(raw) != 6:
-        return 0.5
-    try:
-        channels = (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
-    except ValueError:
-        return 0.5
-
-    def linear(channel: int) -> float:
-        srgb = channel / 255.0
-        return srgb / 12.92 if srgb <= 0.03928 else ((srgb + 0.055) / 1.055) ** 2.4
-
-    r, g, b = (linear(c) for c in channels)
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def _contrast_ratio(fg_hex: str, bg_hex: str) -> float:
-    """Return the WCAG contrast ratio (1.0..21.0) between two #RRGGBB colors."""
-    fg_lum = _hex_luminance(fg_hex)
-    bg_lum = _hex_luminance(bg_hex)
-    lighter, darker = max(fg_lum, bg_lum), min(fg_lum, bg_lum)
-    return (lighter + 0.05) / (darker + 0.05)
-
 
 #: Minimum WCAG contrast ratio for a row-colour foreground against the
 #: theme surface. Below this the text is effectively unreadable, so the
@@ -510,7 +484,7 @@ class MainWindow:
             # readable text colour. Legitimate tints (e.g. PROD:#1565C0
             # on the dark surface) keep their colour in both themes.
             effective_color = color
-            if _contrast_ratio(color, self._theme.surface) < _MIN_ROW_COLOR_CONTRAST:
+            if contrast_ratio(color, self._theme.surface) < _MIN_ROW_COLOR_CONTRAST:
                 effective_color = self._theme.on_surface
             # Tag names disallow spaces; replace them so the tag can be applied.
             safe_pattern = pattern.replace(" ", "_")

@@ -7,6 +7,7 @@ for applying themes to the Tkinter application.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import tkinter as tk
 from dataclasses import dataclass
@@ -252,7 +253,7 @@ def resolve_theme_name(config_theme: str) -> str:
 # ── WCAG contrast helpers ───────────────────────────────────────────────────
 
 
-def _hex_luminance(hex_color: str) -> float:
+def hex_luminance(hex_color: str) -> float:
     """Return WCAG relative luminance (0..1) of a #RRGGBB hex color.
 
     Tolerates a missing leading ``#``. Returns 0.5 on parse failure so
@@ -277,15 +278,15 @@ def _hex_luminance(hex_color: str) -> float:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
-def _contrast_ratio(fg_hex: str, bg_hex: str) -> float:
+def contrast_ratio(fg_hex: str, bg_hex: str) -> float:
     """Return WCAG contrast ratio (1.0..21.0) between two #RRGGBB colors."""
-    fg_lum = _hex_luminance(fg_hex)
-    bg_lum = _hex_luminance(bg_hex)
+    fg_lum = hex_luminance(fg_hex)
+    bg_lum = hex_luminance(bg_hex)
     lighter, darker = max(fg_lum, bg_lum), min(fg_lum, bg_lum)
     return (lighter + 0.05) / (darker + 0.05)
 
 
-def _assert_contrast(
+def assert_contrast(
     fg_hex: str,
     bg_hex: str,
     *,
@@ -296,7 +297,7 @@ def _assert_contrast(
 
     Used by :func:`apply_theme` for audit logs only — never raises.
     """
-    ratio = _contrast_ratio(fg_hex, bg_hex)
+    ratio = contrast_ratio(fg_hex, bg_hex)
     return ratio >= min_ratio
 
 
@@ -435,10 +436,10 @@ def apply_theme(root: tk.Tk, theme: Md3Theme) -> ttk.Style:
     # ── Focus ring: highlight keyboard focus on all interactive widgets ──
     focus = theme.focus_ring
     for sname in ("TButton", "TCombobox", "TEntry", "TCheckbutton"):
-        try:
-            style.map(sname, focuscolor=[("focus", focus)])
-        except tk.TclError:
-            pass  # some themes ignore focuscolor — harmless
+        with contextlib.suppress(tk.TclError):
+            style.map(
+                sname, focuscolor=[("focus", focus)]
+            )  # some themes ignore focuscolor — harmless
 
     # ── Custom Sub-Styles (always apply on top of base theme) ──────
     style.configure(
@@ -672,7 +673,7 @@ def apply_theme(root: tk.Tk, theme: Md3Theme) -> ttk.Style:
     )
     audit_logger = logging.getLogger("profiles")
     for label, fg, bg in audit_pairs:
-        ratio = _contrast_ratio(fg, bg)
+        ratio = contrast_ratio(fg, bg)
         if ratio < 4.5:
             audit_logger.warning(
                 "WCAG contrast below AA threshold: %s ratio=%.2f (fg=%s bg=%s)",
