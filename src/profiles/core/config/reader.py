@@ -161,6 +161,8 @@ class ConfigReader:
                     ask=entry.ask,
                     wait=entry.wait,
                     on_failure=entry.on_failure,
+                    timeout=entry.timeout,
+                    if_=entry.if_,
                 )
                 for entry in entries
             )

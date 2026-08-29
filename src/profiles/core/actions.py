@@ -175,21 +175,24 @@ def launch_selected_file(
 
         if selected_pattern and selected_pattern in config.launch_hooks:
             steps = list(config.launch_hooks[selected_pattern])
+            failure_context: list[str] = []
             workflow_outcome = run_workflow(
                 steps,
                 file_path,
                 timeout=config.launch_hook_timeout,
                 failmode=config.launch_hook_failmode,
                 username=username,
+                failure_context=failure_context,
                 logger=logger,
             )
 
             if workflow_outcome == WorkflowOutcome.ABORT:
                 if logger is not None:
                     logger.error("Launch aborted by a launch hook: %s", file_path)
+                detail = "\n".join(failure_context) if failure_context else "A launch hook step failed."
                 return ActionResult(
                     status=ActionStatus.FAILED,
-                    message=f"Launch aborted by a launch hook.\n\nFile: {file_path}",
+                    message=f"Launch aborted by a launch hook.\n\nFile: {file_path}\n\n{detail}",
                     path=file_path,
                 )
             if workflow_outcome == WorkflowOutcome.SKIP_LAUNCH:

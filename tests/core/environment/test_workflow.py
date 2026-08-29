@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 
@@ -132,6 +134,22 @@ def test_username_hostname_token_substitution():
     assert "echo alice@box.local" in captured[0]
 
 
+def test_date_token_substitution():
+    """The {date} token is substituted with today's ISO date."""
+    import datetime as dt
+
+    captured = []
+    with patch(
+        "profiles.core.environment.workflow._run_command",
+        side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+    ):
+        steps = [WorkflowStep(action="run", content="echo {date}")]
+        run_workflow(steps, None)
+
+    expected = dt.date.today().isoformat()
+    assert f"echo {expected}" in captured[0]
+
+
 def test_username_in_ask_guard():
     """{username} token is substituted in ask prompts."""
     with patch(
@@ -149,3 +167,120 @@ def test_username_in_ask_guard():
         ]
         run_workflow(steps, None, username="bob")
         mock_ask.assert_called_once_with("Run for bob?", headless=False)
+
+
+def test_per_step_timeout_override():
+    """A per-step timeout overrides the global timeout."""
+    with patch(
+        "profiles.core.environment.workflow._run_command",
+        return_value=True,
+    ) as mock_cmd:
+        steps = [
+            WorkflowStep(action="run", content="echo hi", timeout=3),
+        ]
+        run_workflow(steps, None, timeout=30)
+        mock_cmd.assert_called_once_with(
+            "echo hi", wait=True, timeout=3, logger=None,
+        )
+
+
+def test_if_env_var_set_condition_met():
+    """if_=env:VAR passes when VAR is set in environment."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("DEPLOY_ENV", "production")
+    try:
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            return_value=True,
+        ) as mock_cmd:
+            steps = [
+                WorkflowStep(
+                    action="run", content="echo deploy", if_="env:DEPLOY_ENV",
+                ),
+            ]
+            run_workflow(steps, None)
+            mock_cmd.assert_called_once()
+    finally:
+        monkeypatch.undo()
+
+
+def test_if_env_var_set_condition_not_met():
+    """if_=env:VAR skips the step when VAR is not set."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.delenv("DEPLOY_ENV", raising=False)
+    try:
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            return_value=True,
+        ) as mock_cmd:
+            steps = [
+                WorkflowStep(
+                    action="run", content="echo deploy", if_="env:DEPLOY_ENV",
+                ),
+            ]
+            outcome = run_workflow(steps, None)
+            mock_cmd.assert_not_called()
+            assert outcome == WorkflowOutcome.CONTINUE
+    finally:
+        monkeypatch.undo()
+
+
+def test_if_env_var_equals_condition_met():
+    """if_=env:VAR=value passes when VAR matches the expected value."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("MODE", "release")
+    try:
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            return_value=True,
+        ) as mock_cmd:
+            steps = [
+                WorkflowStep(
+                    action="run", content="echo build", if_="env:MODE=release",
+                ),
+            ]
+            run_workflow(steps, None)
+            mock_cmd.assert_called_once()
+    finally:
+        monkeypatch.undo()
+
+
+def test_if_env_var_equals_condition_not_met():
+    """if_=env:VAR=value skips the step when VAR has a different value."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("MODE", "debug")
+    try:
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            return_value=True,
+        ) as mock_cmd:
+            steps = [
+                WorkflowStep(
+                    action="run", content="echo build", if_="env:MODE=release",
+                ),
+            ]
+            run_workflow(steps, None)
+            mock_cmd.assert_not_called()
+    finally:
+        monkeypatch.undo()
+
+
+def test_failure_context_populated_on_abort():
+    """failure_context is populated with step content when a hook aborts."""
+    with patch(
+        "profiles.core.environment.workflow._run_command", return_value=False,
+    ):
+        steps = [
+            WorkflowStep(
+                action="run",
+                content="echo failing-step",
+                on_failure="stop",
+            ),
+        ]
+        failure_context: list[str] = []
+        outcome = run_workflow(
+            steps, None, failure_context=failure_context,
+        )
+        assert outcome == WorkflowOutcome.ABORT
+        assert len(failure_context) > 0
+        assert "echo failing-step" in failure_context[0]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import subprocess
 from collections.abc import Callable
@@ -40,6 +41,7 @@ def run_workflow(
     failmode: FailMode = "warn",
     username: str | None = None,
     hostname: str | None = None,
+    failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
 ) -> WorkflowOutcome:
     """Execute a list of workflow steps sequentially.
@@ -52,10 +54,13 @@ def run_workflow(
         notify_callback: Custom callback for 'notify' steps.
         user_choice: Optional override for 'ask' prompt choice (testing helper).
         timeout: Maximum seconds to wait for each blocking step. None = no limit.
+            Overridden by a step's own ``timeout`` field when set.
         failmode: Global failure behavior: `"warn"` (log, continue),
             `"abort"` (stop workflow), `"skip"` (stop workflow, skip OS launch).
         username: Operator username, substituted as `{username}`.
         hostname: Machine hostname, substituted as `{hostname}`.
+        failure_context: Optional mutable list appended with a human-readable
+            failure description when the workflow aborts due to a step error.
         logger: Optional logger for workflow execution traces.
 
     Returns:
@@ -67,6 +72,7 @@ def run_workflow(
     skip_next = False
 
     for i, step in enumerate(steps):
+        # If previous step was skipped via "skip", skip this step
         # If previous step was skipped via "skip", skip this step
         if skip_next:
             if logger is not None:
@@ -105,16 +111,26 @@ def run_workflow(
                 skip_next = True
                 continue
 
+        # Evaluate conditional guard
+        if not step.evaluate_condition(file_path):
+            if logger is not None:
+                logger.info("Step %d skipped (condition %r not met)", i + 1, step.if_)
+            continue
+
+        # Resolve effective timeout: per-step overrides global
+        effective_timeout = step.timeout if step.timeout is not None else timeout
+
         # Execute the action for this step
         outcome = _execute_step(
             step,
             file_path,
             headless=headless,
             notify_callback=notify_callback,
-            timeout=timeout,
+            timeout=effective_timeout,
             failmode=failmode,
             username=username,
             hostname=hostname,
+            failure_context=failure_context,
             logger=logger,
         )
         if outcome is not None:
@@ -127,6 +143,8 @@ def _resolve_failure(
     on_failure: Literal["stop", "warn", "continue"],
     failmode: FailMode,
     *,
+    step_content: str | None = None,
+    failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
 ) -> WorkflowOutcome | None:
     """Resolve a step failure: per-step ``on_failure`` then global ``failmode``.
@@ -142,6 +160,8 @@ def _resolve_failure(
     if on_failure == "stop":
         if logger is not None:
             logger.error("Step failed and on_failure=stop. Aborting.")
+        if failure_context is not None and step_content is not None:
+            failure_context.append(f"Step failed (on_failure=stop): {step_content}")
         return WorkflowOutcome.ABORT
     if on_failure == "warn":
         if logger is not None:
@@ -174,6 +194,7 @@ def _execute_step(
     failmode: FailMode = "warn",
     username: str | None = None,
     hostname: str | None = None,
+    failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
 ) -> WorkflowOutcome | None:
     """Execute a single step. Returns terminal WorkflowOutcome or None to continue."""
@@ -204,7 +225,10 @@ def _execute_step(
             logger.info("Executing run command: %s", content)
         success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
         if not success:
-            return _resolve_failure(step.on_failure, failmode, logger=logger)
+            return _resolve_failure(
+                step.on_failure, failmode,
+                step_content=content, failure_context=failure_context, logger=logger,
+            )
         return None
 
     if step.action == "run_after":
@@ -218,7 +242,10 @@ def _execute_step(
             logger.info("Executing check command: %s", content)
         success = _run_command(content, wait=True, timeout=timeout, logger=logger)
         if not success:
-            return _resolve_failure(step.on_failure, failmode, logger=logger)
+            return _resolve_failure(
+                step.on_failure, failmode,
+                step_content=content, failure_context=failure_context, logger=logger,
+            )
         return None
 
     return None
@@ -241,6 +268,7 @@ def _substitute_variables(
         res = res.replace("{username}", username)
     if hostname is not None:
         res = res.replace("{hostname}", hostname)
+    res = res.replace("{date}", datetime.date.today().isoformat())
 
     if not file_path:
         return res

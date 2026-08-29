@@ -109,6 +109,8 @@ Executes a shell command and waits for completion.
   content: "prepare_env.exe --file {{path}} --verbose"
   wait: true           # Wait for completion (default)
   on_failure: stop     # stop | warn | continue
+  timeout: 15          # Optional: override global timeout (seconds)
+  if: "env:DEBUG"      # Optional: only run if DEBUG env var is set
 ```
 
 **Behavior**:
@@ -159,6 +161,8 @@ Executes a command and checks its return code.
   content: "env_check.exe --verify {{dir}}"
   wait: true
   on_failure: warn
+  timeout: 10          # Optional: override global timeout (seconds)
+  if: "env:DEPLOY_ENV=prod"  # Optional: only run in production
 ```
 
 **Behavior**:
@@ -375,14 +379,28 @@ hooks:
   timeout: 60  # 60 seconds for all blocking steps
 ```
 
-### Per-Step Timeout
+### Per-Step Timeout Override
 
-Currently, timeout is **global** for all blocking steps. A timeout:
+Each step can override the global timeout with its own `timeout` field:
 
-1. **Raises exception** `TimeoutError` in engine
-2. **Logs warning**: `Hook timed out after Xs: {template}`
-3. **Applies `failmode`** configured
-4. **If `requires_success: true`** and `failmode=abort` → Workflow aborted
+```yaml
+hooks:
+  timeout: 30  # Global default
+
+entries:
+  "*.mttl":
+    - action: run
+      content: "quick_check.exe {{path}}"
+      timeout: 5    # Overrides global — 5 seconds for this step only
+    - action: run
+      content: "slow_build.exe {{path}}"
+      # Uses global 30s timeout
+```
+
+When a per-step `timeout` is set, it takes precedence over `hooks.timeout`.
+A timeout results in a failure outcome (non-0 return code) and triggers the step's `on_failure` resolution.
+
+**Applies to**: `run`, `check`, and `replace` actions.
 
 ### Asynchronous Commands (`run_after`)
 
@@ -393,7 +411,33 @@ Currently, timeout is **global** for all blocking steps. A timeout:
 
 ---
 
-## Pattern Specificity (Pattern Matching)
+## Conditional Execution (`if`)
+
+Each step can include an `if` condition that controls whether the step executes.
+
+### Environment Variable Checks
+
+The `if` field supports environment variable checks:
+
+```yaml
+entries:
+  "*.mttl":
+    - action: run
+      content: "deploy.exe --production {{path}}"
+      if: "env:DEPLOY_ENV"      # Executes only if DEPLOY_ENV is set
+    - action: run
+      content: "staging_deploy.exe {{path}}"
+      if: "env:DEPLOY_ENV=prod"  # Executes only if DEPLOY_ENV equals "prod"
+```
+
+| Syntax            | Behavior                                  |
+| ----------------- | ----------------------------------------- |
+| `env:VAR_NAME`    | Step runs if `VAR_NAME` is **set** (any value) |
+| `env:VAR=value`   | Step runs if `VAR_NAME` **equals** `value`  |
+
+If the condition is **not met**, the step is silently skipped — the workflow continues to the next step.
+
+---
 
 The engine uses a **scoring algorithm** to determine the most specific pattern.
 
@@ -663,8 +707,9 @@ outcome = run_workflow(
 
 **Solutions**:
 1. Increase `hooks.timeout` in `.profiles`
-2. Use `action: run_after` for long commands
-3. Optimize command to be faster
+2. Set a per-step `timeout` to override the global value for slow commands
+3. Use `action: run_after` for long-running background commands
+4. Optimize command to be faster
 
 ### Problem: Workflow Doesn't Stop on Failure
 
@@ -674,6 +719,15 @@ outcome = run_workflow(
 1. Verify `failmode: abort` for strict behavior
 2. Add `on_failure: stop` to critical steps
 3. Use `action: check` for explicit validations
+
+### Problem: `if` Condition Step Not Running
+
+**Cause**: Environment variable check not met.
+
+**Solutions**:
+1. Verify the variable is set in the environment before launching
+2. Use `env:VAR` for existence checks or `env:VAR=value` for equality
+3. Remember: skipped steps are **silent** — no warning is logged
 
 ---
 

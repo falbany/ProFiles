@@ -109,6 +109,8 @@ Exécute une commande shell et attend la fin de l'exécution.
   content: "prepare_env.exe --file {{path}} --verbose"
   wait: true           # Attend la fin (défaut)
   on_failure: stop     # stop | warn | continue
+  timeout: 15          # Optionnel : surcharge du timeout global (secondes)
+  if: "env:DEBUG"      # Optionnel : n'exécute que si DEBUG est défini
 ```
 
 **Comportement** :
@@ -375,14 +377,28 @@ hooks:
   timeout: 60  # 60 secondes pour tous les étapes bloquants
 ```
 
-### Timeout par Étape
+### Timeout par Étape (override)
 
-Actuellement, le timeout est **global** pour tous les étapes bloquants. Un timeout :
+Chaque étape peut surcharger le timeout global avec son propre champ `timeout` :
 
-1. **Lève une exception** `TimeoutError` dans le moteur
-2. **Log un avertissement** : `Hook timed out after Xs: {template}`
-3. **Applique le `failmode`** configuré
-4. **Si `requires_success: true`** et `failmode=abort` → Workflow aborté
+```yaml
+hooks:
+  timeout: 30  # Timeout global par défaut
+
+entries:
+  "*.mttl":
+    - action: run
+      content: "quick_check.exe {{path}}"
+      timeout: 5    # Surcharge — 5 secondes pour cette étape seulement
+    - action: run
+      content: "slow_build.exe {{path}}"
+      # Utilise le timeout global de 30s
+```
+
+Lorsqu'un `timeout` par étape est défini, il prend le pas sur `hooks.timeout`.
+Un timeout entraîne un résultat d'échec (code de retour non-0) et déclenche la résolution `on_failure` de l'étape.
+
+**S'applique à** : les actions `run`, `check`, et `replace`.
 
 ### Commandes Asynchrones (`run_after`)
 
@@ -393,7 +409,33 @@ Les étapes `run_after` **ne sont pas sujettes au timeout** :
 
 ---
 
-## Spécificité des Motifs (Pattern Matching)
+## Exécution Conditionnelle (`if`)
+
+Chaque étape peut inclure une condition `if` qui contrôle si l'étape s'exécute.
+
+### Vérifications de Variables d'Environnement
+
+Le champ `if` supporte les vérifications de variables d'environnement :
+
+```yaml
+entries:
+  "*.mttl":
+    - action: run
+      content: "deploy.exe --production {{path}}"
+      if: "env:DEPLOY_ENV"      # S'exécute seulement si DEPLOY_ENV est défini
+    - action: run
+      content: "staging_deploy.exe {{path}}"
+      if: "env:DEPLOY_ENV=prod"  # S'exécute seulement si DEPLOY_ENV = "prod"
+```
+
+| Syntaxe            | Comportement                                  |
+| ------------------ | --------------------------------------------- |
+| `env:VAR_NAME`     | L'étape s'exécute si `VAR_NAME` est **défini** (n'importe quelle valeur) |
+| `env:VAR=value`    | L'étape s'exécute si `VAR_NAME` **vaut** `value`  |
+
+Si la condition **n'est pas remplie**, l'étape est silencieusement ignorée — le workflow continue à l'étape suivante.
+
+---
 
 Le moteur utilise un **algorithme de scoring** pour déterminer le motif le plus spécifique.
 
@@ -665,8 +707,18 @@ outcome = run_workflow(
 
 **Solutions** :
 1. Augmenter `hooks.timeout` dans `.profiles`
-2. Utiliser `action: run_after` pour les commandes longues
-3. Optimiser la commande pour qu'elle soit plus rapide
+2. Définir un `timeout` par étape pour surcharger la valeur globale pour les commandes lentes
+3. Utiliser `action: run_after` pour les commandes longues en arrière-plan
+4. Optimiser la commande pour qu'elle soit plus rapide
+
+### Problème : Étape `if` ne s'exécute Pas
+
+**Cause** : Vérification de variable d'environnement non remplie.
+
+**Solutions** :
+1. Vérifier que la variable est définie dans l'environnement avant le lancement
+2. Utiliser `env:VAR` pour les vérifications d'existence ou `env:VAR=value` pour l'égalité
+3. Se rappeler : les étapes ignorées sont **silencieuses** — aucun avertissement n'est journalisé
 
 ### Problème : Workflow ne S'arrête Pas sur Échec
 

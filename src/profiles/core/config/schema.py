@@ -74,6 +74,8 @@ class WorkflowStepSchema(BaseModel):
     ask: str | None = None
     wait: bool = True
     on_failure: Literal["stop", "warn", "continue"] = "stop"
+    timeout: int | None = None
+    if_: str | None = None
 
 
 class HooksConfig(BaseModel):

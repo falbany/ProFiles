@@ -6,6 +6,7 @@ No I/O, no parsing, no UI dependencies. Safe to import from anywhere.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -29,6 +30,11 @@ class WorkflowStep:
             Default: True.
         on_failure: Behavior when step fails — one of ``"stop"``, ``"warn"``,
             ``"continue"``. Default: "stop".
+        timeout: Optional per-step timeout in seconds. Overrides the
+            global ``failmode`` timeout when set. Default: None (uses global).
+        if_: Optional conditional. If present, the step is skipped when the
+            condition evaluates to false. Syntax: ``env:VAR`` or
+            ``env:VAR=value``. Default: None.
     """
 
     action: Literal["notify", "run", "run_after", "replace", "check"]
@@ -36,6 +42,25 @@ class WorkflowStep:
     ask: str | None = None
     wait: bool = True
     on_failure: Literal["stop", "warn", "continue"] = "stop"
+    timeout: int | None = None
+    if_: str | None = None
+
+    def evaluate_condition(self, file_path: Path | None = None) -> bool:
+        """Evaluate the ``if_`` conditional. Always True when ``if_`` is unset.
+
+        Supports ``env:VAR`` (true when VAR is set) and ``env:VAR=value``
+        (true when VAR equals value). Unknown syntax defaults to False.
+        """
+        if not self.if_:
+            return True
+        if not self.if_.startswith("env:"):
+            return False
+        body = self.if_[4:]
+        if "=" in body:
+            name, _, expected = body.partition("=")
+            actual = os.environ.get(name)
+            return actual is not None and actual == expected
+        return os.environ.get(body) is not None
 
 
 @dataclass(frozen=True)

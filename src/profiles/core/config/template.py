@@ -176,6 +176,9 @@ columns:
 #               (Yes -> run step; Skip -> proceed to NEXT step; No -> ABORT).
 #   wait        bool, default true — wait for command completion.
 #   on_failure  "stop" | "warn" | "continue" (default "stop").
+#   timeout     int, optional — per-step timeout in seconds (overrides hooks.timeout).
+#   if          string, optional — conditional guard, e.g. "env:VAR" (var is set)
+#               or "env:VAR=value" (var equals value). Step is skipped if not met.
 #
 # ACTIONS:
 #   notify      Show a message to the user. Supports simple Markdown (**bold**,
@@ -204,6 +207,8 @@ hooks:
     #   - action: run
     #     content: "prepare.exe --file {{path}}"
     #     ask: "Run preparation script?"
+    #     timeout: 15
+    #     if: "env:RUN_HOOKS"
     #   - action: replace
     #     content: "special_launcher.exe {{path}}"
     #     ask: "Use special launcher instead of OS default?"
