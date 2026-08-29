@@ -68,8 +68,15 @@ class FileContextMenu:
         selection = self.window._tree.selection()
         if not selection:
             return None
-        values = self.window._tree.item(selection[0], "values")
-        if not values or len(values) < 2:
+        iid = selection[0]
+        # Authoritative path is kept in _tree_to_path when the scan worker
+        # populates the tree. Fall back to reconstructing from the combobox
+        # value for callers that insert rows directly (e.g. tests).
+        cached = self.window._tree_to_path.get(iid)
+        if cached is not None:
+            return cached
+        values = self.window._tree.item(iid, "values")
+        if not values:
             return None
         directory = self.window._dir_var.get().strip()
         if not directory:
@@ -326,8 +333,12 @@ class FileContextMenu:
     def action_filter_to_folder(self, file_path: Path) -> None:
         """Switch the directory combobox to the file's parent folder."""
         parent = file_path.parent
-        current_dir = self.window._dir_var.get()
-        current = Path(current_dir) if current_dir else None
+        # _dir_var holds a formatted combobox label (e.g. "📁 base"); resolve
+        # it through DirectoryManager to compare against a real path.
+        current_paths = self.window._dir_manager.resolve(
+            self.window._dir_var.get(),
+        )
+        current = Path(current_paths[0]) if current_paths else None
         if current is not None and parent == current:
             return
         if not parent.is_dir():
