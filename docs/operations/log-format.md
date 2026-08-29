@@ -55,6 +55,12 @@ Every line follows this shape:
 | `COMMAND_TIMEOUT` | Exec timeout | `timeout_s`, `command` |
 | `COMMAND_EXIT` | Exec finished (DEBUG) | `code`, `command` |
 | `COMMAND_FAILED` | Exec exception | `error`, `command` |
+| `FILE_REVEALED` | Right-click → Reveal | `path`, `status`, `error` |
+| `EXTERNAL_OPENED` | Right-click → Open folder / Open terminal | `kind`, `path`, `status`, `reason`, `error` |
+| `FILTER_CHANGED` | Right-click → Filter applied | `kind`, `value` |
+| `FILTER_REJECTED` | Right-click → Filter pre-check failed | `kind`, `reason`, `value` |
+| `HASH_COMPUTED` | Right-click → Hash computed | `algorithm`, `path`, `status`, `duration_ms`, `error`, `reason` |
+| `HASH_VERIFIED` | Right-click → Hash verified against clipboard | `algorithm`, `path`, `match`, `status`, `reason`, `error` |
 
 ## Examples
 
@@ -95,8 +101,24 @@ grep 'SCAN_METRICS' profiles.log | awk -F'duration_ms=' '{print $2}' | sort -nr 
 grep 'FILE_LAUNCHED' profiles.log
 ```
 
+**All right-click filter changes:**
+```bash
+grep 'FILTER_CHANGED' profiles.log
+```
+
+**All hash verifications that mismatched (WARNING):**
+```bash
+grep 'HASH_VERIFIED.*match=false' profiles.log
+```
+
+**All right-click reveal/launch failures:**
+```bash
+grep -E '(FILE_REVEALED.*status="failed"|FILE_LAUNCH_FAILED)' profiles.log
+```
+
 ## See Also
 
 - `docs/superpowers/specs/2026-08-29-log-format-and-telemetry-design.md` — full spec
+- `docs/superpowers/specs/2026-08-29-context-menu-telemetry-design.md` — context menu events
 - `src/profiles/core/telemetry/events.py` — event helper source of truth
 - `tests/core/telemetry/test_events.py` — one test per event
