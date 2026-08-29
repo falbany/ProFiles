@@ -25,6 +25,7 @@ from profiles.core.config.models import AppConfig, MachineConfiguration
 from profiles.core.environment import system
 from profiles.core.processing import scanner
 from profiles.core.processing.file_classifier import directory_exists
+from profiles.core.telemetry import events
 from profiles.gui.context_menu import FileContextMenu
 from profiles.gui.controllers.directory_manager import (
     DirectoryManager,
@@ -118,6 +119,7 @@ class MainWindow:
         self._scan_queue: queue.Queue = queue.Queue()
         self._filter_timer: str | None = None  # Debounce timer for filter field
         self._ext_timer: str | None = None  # Debounce timer for extension field
+        self._start_time: float = 0.0  # Set in run() to compute APP_CLOSED uptime_s
         self._row_color_rules: list[tuple[str, str]] = []
         self._row_color_tag_prefix = "_rowcolor"
         self._tree_to_path: dict[str, Path] = {}  # iid -> filesystem path
@@ -734,12 +736,14 @@ class MainWindow:
                 if self._dir_status_tooltip:
                     self._dir_status_tooltip.set_text(f"Directory: {display_label}")
 
-            self._logger.info(
-                "Scanned directory: %s | Extension: %s | Filter: '%s' | Files found: %d",
-                display_label,
-                extension,
-                filter_text,
-                count,
+            events.scan_complete(
+                self._logger,
+                directory=display_label,
+                extension=extension or "*",
+                filter_text=filter_text,
+                files=count,
+                recursive=bool(self._recursive_var.get()),
+                duration_ms=0.0,
             )
 
     # ----------------------------------------------------------------
@@ -843,9 +847,9 @@ class MainWindow:
             self._auto_select_directory()
             self._apply_config_overrides()
             self._configure_row_colors()
-            self._logger.info("Configuration reloaded")
+            events.config_reloaded(self._logger, path=str(self._config.config_path))
         except (FileNotFoundError, OSError) as exc:
-            self._logger.error("Failed to reload configuration: %s", exc)
+            events.config_reload_failed(self._logger, error=str(exc))
             messagebox.showerror(
                 "Configuration Error",
                 f"Failed to reload configuration:\n{exc}",
@@ -1016,7 +1020,9 @@ class MainWindow:
 
     def _on_close(self) -> None:
         """Handle window close event."""
-        self._logger.info("ProFiles closed")
+        import time as _time
+        uptime = _time.time() - self._start_time if self._start_time else 0.0
+        events.app_closed(self._logger, uptime_s=uptime)
         self._root.destroy()
 
     def _configure_bindings(self) -> None:
@@ -1300,7 +1306,7 @@ class MainWindow:
             body = STARTER_CONFIG_TEMPLATE.format(cwd=str(Path.cwd()))
             target.write_text(body, encoding="utf-8")
 
-            self._logger.info("Configuration file created: %s", target)
+            events.config_created(self._logger, path=str(target))
 
             # Ask user if they want to restart to apply the new configuration
             if messagebox.askyesno(
@@ -1338,5 +1344,10 @@ class MainWindow:
 
     def run(self) -> None:
         """Start the application main loop."""
-        self._logger.info("ProFiles started")
+        import time as _time
+        from profiles import __version__
+        self._start_time = _time.time()
+        events.app_started(
+            self._logger, version=__version__, headless=False
+        )
         self._root.mainloop()

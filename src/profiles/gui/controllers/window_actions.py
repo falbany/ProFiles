@@ -15,6 +15,7 @@ from tkinter import messagebox
 
 from profiles.core import actions
 from profiles.core.config.models import AppConfig
+from profiles.core.telemetry import events
 
 __all__ = ["WindowActions"]
 
@@ -85,15 +86,14 @@ class WindowActions:
 
     def restart(self) -> None:
         """Destroy the current window and launch a fresh instance."""
-        self._logger.info("Restarting application...")
+        events.app_restarting(self._logger)
         self._root_destroy()
 
         python_executable = sys.executable
         try:
             subprocess.Popen([str(python_executable), "-m", "profiles"])
-            self._logger.info(
-                "New instance launched via module: %s -m profiles",
-                python_executable,
+            events.app_launched(
+                self._logger, command=f"{python_executable} -m profiles"
             )
         except OSError as exc:
             self._logger.error("Failed to restart application: %s", exc)

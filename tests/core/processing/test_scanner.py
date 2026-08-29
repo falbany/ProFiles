@@ -469,7 +469,7 @@ class TestScanPipelineSharedOrchestration:
 
         assert len(results) == 2
         assert {r.filename for r in results} == {"file_000.mttl", "file_002.mttl"}
-        assert any("Error processing file" in r.message for r in caplog.records)
+        assert any("PROCESSING_FAILED" in r.message for r in caplog.records)
 
     def test_parallel_skips_failing_file(self, tmp_path: Path, monkeypatch, caplog) -> None:
         """The parallel path skips + logs a failing file instead of aborting."""
@@ -489,7 +489,7 @@ class TestScanPipelineSharedOrchestration:
 
         assert len(results) == 2
         assert {r.filename for r in results} == {"file_000.mttl", "file_001.mttl"}
-        assert any("Error processing file" in r.message for r in caplog.records)
+        assert any("PROCESSING_FAILED" in r.message for r in caplog.records)
 
     def test_dynamic_skips_failing_file(self, tmp_path: Path, monkeypatch, caplog) -> None:
         """Dynamic extraction failures are skipped + logged, not fatal."""
@@ -518,7 +518,7 @@ class TestScanPipelineSharedOrchestration:
 
         assert len(results) == 2
         assert {r.path.name for r in results} == {"file_000.mttl", "file_002.mttl"}
-        assert any("Error processing file" in r.message for r in caplog.records)
+        assert any("PROCESSING_FAILED" in r.message for r in caplog.records)
 
     def test_metrics_reports_error_count(self, tmp_path: Path, monkeypatch, caplog) -> None:
         """ScanMetrics.error_count is populated when a per-file error occurs."""
@@ -536,9 +536,9 @@ class TestScanPipelineSharedOrchestration:
         with caplog.at_level(logging.DEBUG, logger="profiles"):
             scan_and_process(str(tmp_path), extension=".mttl", config=config)
 
-        metrics_records = [r for r in caplog.records if "Scan metrics" in r.message]
+        metrics_records = [r for r in caplog.records if "SCAN_METRICS" in r.message]
         assert len(metrics_records) == 1
-        assert "'error_count': 1" in metrics_records[0].message
+        assert "errors=1" in metrics_records[0].message
 
     def test_no_metrics_when_disabled(self, tmp_path: Path, caplog) -> None:
         """With metrics disabled, no DEBUG metrics line is emitted."""
@@ -547,7 +547,7 @@ class TestScanPipelineSharedOrchestration:
         with caplog.at_level(logging.DEBUG, logger="profiles"):
             scan_and_process(str(tmp_path), extension=".mttl")
 
-        assert not any("Scan metrics" in r.message for r in caplog.records)
+        assert not any("SCAN_METRICS" in r.message for r in caplog.records)
 
     def test_dynamic_log_metrics_flag(self, tmp_path: Path, caplog) -> None:
         """log_metrics=True on the dynamic scan enables metrics logging."""
@@ -561,7 +561,7 @@ class TestScanPipelineSharedOrchestration:
                 log_metrics=True,
             )
 
-        assert any("Scan metrics" in r.message for r in caplog.records)
+        assert any("SCAN_METRICS" in r.message for r in caplog.records)
 
     def test_dynamic_default_columns_equivalent_to_legacy(self, tmp_path: Path) -> None:
         """Dynamic extraction with default File/Version columns matches legacy output."""

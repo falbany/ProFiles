@@ -15,6 +15,7 @@ from pathlib import Path
 from profiles.core import AppConfig, actions, load_config
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.processing.scanner import scan_and_process
+from profiles.core.telemetry import events
 from profiles.core.telemetry.diagnostics import configure_logger
 from profiles.gui.main_window import MainWindow
 from profiles.utils.network import get_hostname, get_username
@@ -108,14 +109,15 @@ class ProFileApp:
         """
         try:
             config = load_config(self._config_path)
-            logger.info(
-                "Configuration loaded: %s (release=%s)",
-                self._config_path or "auto (folder tree search)",
-                config.release,
+            events.config_loaded(
+                logger,
+                path=str(self._config_path) if self._config_path else "auto",
+                mode="folder tree search" if not self._config_path else "explicit",
+                release=config.release,
             )
             return config
         except (OSError, ValueError) as exc:
-            logger.error("Invalid configuration: %s", exc)
+            events.config_invalid(logger, error=str(exc))
             print(f"ERROR: Invalid configuration: {exc}", file=sys.stderr)
             sys.exit(1)
 
@@ -172,16 +174,16 @@ class ProFileApp:
         except (RuntimeError, tk.TclError) as exc:
             error_msg = str(exc).lower()
             if "screen" in error_msg or "display" in error_msg:
-                self._logger.error(
-                    "GUI initialization failed: running in headless environment. "
-                    "Use --headless for CLI mode."
+                events.app_gui_failed(
+                    self._logger,
+                    error="running in headless environment. Use --headless for CLI mode.",
                 )
                 print(
                     "ERROR: No display available. Use 'profiles --headless' for CLI mode.",
                     file=sys.stderr,
                 )
             else:
-                self._logger.error("Failed to create GUI: %s", exc)
+                events.app_gui_failed(self._logger, error=str(exc))
                 print(f"ERROR: Failed to create GUI: {exc}", file=sys.stderr)
             sys.exit(1)
 
@@ -242,7 +244,7 @@ class ProFileApp:
         # Launch the specified file
         file_path = Path(file_path)
         if not file_path.exists():
-            _logger.error("File not found: %s", file_path)
+            events.file_not_found(logger=_logger, path=str(file_path))
             print(f"ERROR: File not found: {file_path}", file=sys.stderr)
             return 1
 

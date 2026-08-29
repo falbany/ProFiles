@@ -22,6 +22,7 @@ from profiles.core.processing.file_classifier import (
     get_file_info,
 )
 from profiles.core.telemetry.metrics import ScanTimer
+from profiles.core.telemetry import events as _events
 from profiles.utils.file_utils import scan_directory
 from profiles.utils.search_parser import match_filter, tokenize
 
@@ -154,7 +155,7 @@ def _scan_and_filter(
 
                 yield file_path, display_path, full_suffix
         except Exception as e:
-            logger.warning(f"Error scanning directory {directory}: {e}")
+            _events.scan_failed(logger, directory=directory, error=str(e))
 
 
 def _compute_display_path(file_path: Path, base_path: Path) -> str:
@@ -314,7 +315,7 @@ def _process_files_sequential(
         try:
             results.append(worker(file_path, display_path, full_suffix))
         except Exception as exc:
-            logger.error("Error processing file %s: %s", file_path, exc)
+            _events.processing_failed(logger, path=str(file_path), error=str(exc))
             error_count += 1
     return results, error_count
 
@@ -352,7 +353,7 @@ def _process_files_parallel(
                 results[idx] = future.result()
             except Exception as exc:
                 file_path, _display_path, _full_suffix = files[idx]
-                logger.error("Error processing file %s: %s", file_path, exc)
+                _events.processing_failed(logger, path=str(file_path), error=str(exc))
                 error_count += 1
 
     return [results[idx] for idx in sorted(results)], error_count
