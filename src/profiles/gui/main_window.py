@@ -29,6 +29,7 @@ from profiles.core.processing import scanner
 from profiles.core.processing.file_classifier import directory_exists
 from profiles.gui.context_menu import FileContextMenu
 from profiles.gui.i18n import set_language
+from profiles.gui.presentation.row_colors import RowColorRules, default_tag_name
 from profiles.gui.status_bar import StatusBar
 from profiles.gui.styles import ToolTip, configure_styles
 from profiles.gui.theme import (
@@ -497,10 +498,8 @@ class MainWindow:
                 continue
             self._row_color_rules.append((pattern, tag_name))
 
-        # Pre-compute lowercase patterns for fast substring matching during row insertion
-        self._row_color_rules_lower = [
-            (pattern.lower(), tag_name) for pattern, tag_name in self._row_color_rules
-        ]
+        # Build the engine for fast per-row tag lookup
+        self._row_color_rules_engine = RowColorRules(row_colors_to_use, self._row_color_tag_prefix)
 
         # Always expose a default tag so empty rule lists still produce a
         # visible colour that tests can inspect. The tag is intentionally
@@ -508,7 +507,7 @@ class MainWindow:
         # colouring behaviour when no rules are configured.
         try:
             self._tree.tag_configure(
-                f"{self._row_color_tag_prefix}_default",
+                default_tag_name(self._row_color_tag_prefix),
                 foreground=self._theme.on_surface_variant,
             )
         except tk.TclError as exc:
@@ -518,21 +517,12 @@ class MainWindow:
         """Return tags for *filename*: the default variant tag (always
         applied) plus the first matching row_color rule, if any.
 
-        The default tag uses ``on_surface_variant`` so unstyled rows
-        visually recede behind rule-matched ones. Per-row color tags are
-        appended after the default — ttk resolves tag priority by
-        alphabetical order, so the later (alphabetically higher) tag
-        wins, ensuring user-configured colors take precedence.
+        Delegates to :class:`RowColorRules` for the matching — this
+        method only exists to keep the original call sites stable.
         """
-        tags: list[str] = [f"{self._row_color_tag_prefix}_default"]
-        if self._row_color_rules:
-            # Direct lowercase substring match avoids regex overhead per row
-            filename_lower = filename.lower()
-            for pattern_lower, tag_name in self._row_color_rules_lower:
-                if pattern_lower in filename_lower:
-                    tags.append(tag_name)
-                    break
-        return tuple(tags)
+        if self._row_color_rules_engine is None:
+            return (default_tag_name(self._row_color_tag_prefix),)
+        return self._row_color_rules_engine.tags_for(filename)
 
     # ----------------------------------------------------------------
     # File list operations
