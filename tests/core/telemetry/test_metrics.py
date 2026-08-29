@@ -78,8 +78,9 @@ class TestScanTimer:
         assert metrics is not None
         assert metrics.file_count == 7
         assert metrics.duration_ms >= 0
-        # And emits the DEBUG log line
-        assert any("Scan metrics" in r.message for r in caplog.records)
+        # And emits the structured event lines
+        assert any("SCAN_COMPLETE" in r.message for r in caplog.records)
+        assert any("SCAN_METRICS" in r.message for r in caplog.records)
 
     def test_metrics_to_dict(self) -> None:
         """Test metrics serialization to dictionary."""

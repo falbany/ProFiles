@@ -13,6 +13,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from profiles.core.telemetry.events import scan_complete
+
 logger = logging.getLogger("profiles")  # Use parent logger directly for proper propagation
 
 
@@ -98,5 +100,14 @@ class ScanTimer:
         self.__exit__(None, None, None)
         metrics = self.get_metrics()
         if metrics:
-            logger.log(level, "Scan metrics: %s", metrics.to_dict())
+            scan_complete(
+                logger,
+                directory=metrics.directory,
+                extension="*",
+                filter_text="",
+                files=metrics.file_count,
+                recursive=metrics.recursive,
+                duration_ms=metrics.duration_ms,
+                errors=metrics.error_count,
+            )
         return metrics
