@@ -2,7 +2,7 @@
 
 Date: 2026-08-29
 Status: Draft (pending user review)
-Scope: `src/profiles/gui/context_menu.py` + 7 new event helpers in `src/profiles/core/telemetry/events.py`
+Scope: `src/profiles/gui/context_menu.py` + 6 new event helpers in `src/profiles/core/telemetry/events.py`
 
 ## Problem
 
@@ -42,16 +42,17 @@ Consequences:
 | Action | Pre-check | Outcome | Event | Level |
 |---|---|---|---|---|
 | `action_launch` | — | success | `FILE_LAUNCHED` *(existing)* | INFO |
-| `action_launch` | — | not_found | none (legacy `actions.launch_selected_file` emits the warning box only) | — |
+| `action_launch` | — | not_found | `FILE_LAUNCH_FAILED` *(existing, `reason=not_found`)* | ERROR |
+| `action_launch` | — | failed | `FILE_LAUNCH_FAILED` *(existing)* | ERROR |
 | `action_launch_with_args` | — | success | `FILE_LAUNCHED` *(existing, via nested call)* | INFO |
 | `action_reveal` | — | success | `FILE_REVEALED` *(new)* | DEBUG |
 | `action_reveal` | — | failed | `FILE_REVEALED` *(new, `status=failed`)* | DEBUG |
-| `action_open_folder` | folder not found | pre-check | `FOLDER_OPENED` *(new, `status=rejected`)* | DEBUG |
-| `action_open_folder` | — | success | `FOLDER_OPENED` *(new, `status=ok`)* | DEBUG |
-| `action_open_folder` | — | failed | `FOLDER_OPENED` *(new, `status=failed`)* | DEBUG |
-| `action_open_terminal` | — | success | `TERMINAL_OPENED` *(new, `status=ok`)* | DEBUG |
-| `action_open_terminal` | — | not_found | `TERMINAL_OPENED` *(new, `status=rejected`)* | DEBUG |
-| `action_open_terminal` | — | failed | `TERMINAL_OPENED` *(new, `status=failed`)* | DEBUG |
+| `action_open_folder` | folder not found | pre-check | `EXTERNAL_OPENED` *(new, `kind=folder, status=rejected`)* | DEBUG |
+| `action_open_folder` | — | success | `EXTERNAL_OPENED` *(new, `kind=folder, status=ok`)* | DEBUG |
+| `action_open_folder` | — | failed | `EXTERNAL_OPENED` *(new, `kind=folder, status=failed`)* | DEBUG |
+| `action_open_terminal` | — | success | `EXTERNAL_OPENED` *(new, `kind=terminal, status=ok`)* | DEBUG |
+| `action_open_terminal` | — | not_found | `EXTERNAL_OPENED` *(new, `kind=terminal, status=rejected`)* | DEBUG |
+| `action_open_terminal` | — | failed | `EXTERNAL_OPENED` *(new, `kind=terminal, status=failed`)* | DEBUG |
 | `action_filter_to_folder` | already in folder | pre-check | `FILTER_REJECTED` *(new, `kind=folder, reason=already_active`)* | DEBUG |
 | `action_filter_to_folder` | folder not found | pre-check | `FILTER_REJECTED` *(new, `kind=folder, reason=not_found`)* | DEBUG |
 | `action_filter_to_folder` | — | applied | `FILTER_CHANGED` *(new, `kind=folder`)* | INFO |
@@ -75,7 +76,7 @@ Consequences:
 
 Notes on `FILE_DELETED` extension: the existing event has no `status` field. To avoid a backwards-incompatible field, we keep the success case as a plain `FILE_DELETED path=…` and the rejected cases emit nothing (pre-check at the call site, the messagebox already explains the cancellation to the user). This drops the `FILE_DELETED` row above from 4 cases to 1 — the spec simplifies to: success uses existing event, everything else is silent.
 
-## New Events (7)
+## New Events (6)
 
 All follow the grammar: `<event> key=value …`
 
@@ -95,35 +96,26 @@ Fields:
 
 Level: DEBUG.
 
-### `FOLDER_OPENED`
+### `EXTERNAL_OPENED`
 
-Emitted by `action_open_folder`. Replaces silent behaviour.
+Emitted by `action_open_folder` and `action_open_terminal`. Replaces legacy
+`Open terminal failed: %s` and the silent `action_open_folder` path.
 
 ```
-FOLDER_OPENED path=/abs/parent status=ok
-FOLDER_OPENED path=/abs/parent status=rejected reason=not_found
-FOLDER_OPENED path=/abs/parent status=failed error="..."
+EXTERNAL_OPENED kind=folder path=/abs/parent status=ok
+EXTERNAL_OPENED kind=folder path=/abs/parent status=rejected reason=not_found
+EXTERNAL_OPENED kind=folder path=/abs/parent status=failed error="..."
+EXTERNAL_OPENED kind=terminal path=/abs/parent status=ok
+EXTERNAL_OPENED kind=terminal path=/abs/parent status=rejected
+EXTERNAL_OPENED kind=terminal path=/abs/parent status=failed error="..."
 ```
 
 Fields:
+- `kind` (one of: `folder`, `terminal`)
 - `path` (string) — the folder path, not the file path
 - `status` (one of: `ok`, `rejected`, `failed`)
 - `reason` (string, optional, only when `status=rejected`)
 - `error` (string, optional, only when `status=failed`)
-
-Level: DEBUG.
-
-### `TERMINAL_OPENED`
-
-Emitted by `action_open_terminal`. Replaces legacy `Open terminal failed: %s`.
-
-```
-TERMINAL_OPENED path=/abs/parent status=ok
-TERMINAL_OPENED path=/abs/parent status=rejected
-TERMINAL_OPENED path=/abs/parent status=failed error="..."
-```
-
-Fields: same as `FOLDER_OPENED`.
 
 Level: DEBUG.
 
@@ -206,7 +198,7 @@ Level: INFO on `match=true`, WARNING on `match=false`, DEBUG on rejection/failur
 
 ```
 2026-08-29 22:00:01 - DEBUG - MACBOOKFA.LOCAL: FILE_REVEALED path=/Users/test/README.md status=ok
-2026-08-29 22:00:02 - DEBUG - MACBOOKFA.LOCAL: FOLDER_OPENED path=/Users/test status=ok
+2026-08-29 22:00:02 - DEBUG - MACBOOKFA.LOCAL: EXTERNAL_OPENED kind=folder path=/Users/test status=ok
 2026-08-29 22:00:05 - INFO  - MACBOOKFA.LOCAL: FILTER_CHANGED kind=folder value=/Users/test
 2026-08-29 22:00:08 - DEBUG - MACBOOKFA.LOCAL: FILTER_REJECTED kind=extension reason=no_extension value=".gitignore"
 2026-08-29 22:00:11 - INFO  - MACBOOKFA.LOCAL: HASH_COMPUTED algorithm=sha256 path=/Users/test/big.iso duration_ms=1823
@@ -216,7 +208,7 @@ Level: INFO on `match=true`, WARNING on `match=false`, DEBUG on rejection/failur
 
 ## Architecture
 
-### Module: `core/telemetry/events.py` — 7 new helpers
+### Module: `core/telemetry/events.py` — 6 new helpers
 
 Add to the existing module. Pattern mirrors existing helpers:
 
@@ -230,22 +222,17 @@ def file_revealed(
         logger.debug('FILE_REVEALED path=%s status="%s"', _quote(path), status)
 
 
-def folder_opened(
-    logger: logging.Logger, *, path: str, status: str, reason: str = "", error: str = ""
+def external_opened(
+    logger: logging.Logger, *,
+    kind: str, path: str, status: str,
+    reason: str = "", error: str = ""
 ) -> None:
-    parts = [f'path={_quote(path)}', f'status="{status}"']
+    parts = [f'kind="{kind}"', f'path={_quote(path)}', f'status="{status}"']
     if reason:
         parts.append(f'reason="{reason}"')
     if error:
         parts.append(f'error="{error}"')
-    logger.debug("FOLDER_OPENED %s", " ".join(parts))
-
-
-def terminal_opened(
-    logger: logging.Logger, *, path: str, status: str, reason: str = "", error: str = ""
-) -> None:
-    # same shape as folder_opened
-    ...
+    logger.debug("EXTERNAL_OPENED %s", " ".join(parts))
 
 
 def filter_changed(
@@ -328,40 +315,44 @@ Concrete before/after for each method:
 ```python
 # action_open_folder
   if not parent.is_dir():
-+     events.folder_opened(
-+         self.window._logger, path=str(parent),
++     events.external_opened(
++         self.window._logger, kind="folder", path=str(parent),
 +         status="rejected", reason="not_found",
 +     )
       messagebox.showwarning(...)
       return
   if not open_file_explorer(parent):
-+     events.folder_opened(
-+         self.window._logger, path=str(parent),
++     events.external_opened(
++         self.window._logger, kind="folder", path=str(parent),
 +         status="failed", error="open_file_explorer returned False",
 +     )
       messagebox.showerror(...)
       return
-+ events.folder_opened(self.window._logger, path=str(parent), status="ok")
++ events.external_opened(
++     self.window._logger, kind="folder", path=str(parent), status="ok",
++ )
 ```
 
 ```python
 # action_open_terminal
   result = open_terminal_in_directory(file_path.parent)
   if result.status is ActionStatus.SUCCESS:
-+     events.terminal_opened(
-+         self.window._logger, path=str(file_path.parent), status="ok",
++     events.external_opened(
++         self.window._logger, kind="terminal",
++         path=str(file_path.parent), status="ok",
 +     )
       return
   if result.status is ActionStatus.NOT_FOUND:
-+     events.terminal_opened(
-+         self.window._logger, path=str(file_path.parent), status="rejected",
++     events.external_opened(
++         self.window._logger, kind="terminal",
++         path=str(file_path.parent), status="rejected",
 +     )
       messagebox.showwarning(...)
       return
 - self.window._logger.error("Open terminal failed: %s", result.message)
-+ events.terminal_opened(
-+     self.window._logger, path=str(file_path.parent),
-+     status="failed", error=result.message,
++ events.external_opened(
++     self.window._logger, kind="terminal",
++     path=str(file_path.parent), status="failed", error=result.message,
 + )
   messagebox.showerror(...)
 ```
@@ -482,16 +473,31 @@ Concrete before/after for each method:
 ```
 
 ```python
-# action_launch (no change — actions.launch_selected_file already emits
-# FILE_LAUNCHED on success. Failures are silent in the menu (messagebox only).
-# Leave as-is.)
+# action_launch — add FILE_LAUNCH_FAILED emission in the failure paths.
+# Success is already covered by actions.launch_selected_file emitting
+# FILE_LAUNCHED.
+  result = actions.launch_selected_file(...)
+  if result.status is ActionStatus.NOT_FOUND:
++     events.file_launch_failed(
++         self.window._logger, path=str(file_path),
++         error=result.message,
++     )
+      messagebox.showwarning(...)
+      return
+  if result.status is ActionStatus.SUCCESS:
+      ...
+      return
++ events.file_launch_failed(
++     self.window._logger, path=str(file_path), error=result.message,
++ )
+  messagebox.showerror(...)
 ```
 
 ## Testing Strategy
 
 ### `tests/core/telemetry/test_events.py`
 
-Add one test class per new helper (7 classes, ~14 tests total — each helper has
+Add one test class per new helper (6 classes, ~12 tests total — each helper has
 the success path and at least one failure/reject path). Follow the same
 pattern as the existing tests in the file (assertion against `caplog.text`).
 
@@ -524,12 +530,12 @@ def test_filter_to_folder_emits_filter_changed(self):
 
 ## Documentation
 
-Update `docs/operations/log-format.md` — add the 7 new events to the catalogue table
+Update `docs/operations/log-format.md` — add the 6 new events to the catalogue table
 with their fields and example log lines.
 
 ## Rollout
 
-1. Add 7 helpers to `events.py` + 7 test classes to `test_events.py`. Land as one PR.
+1. Add 6 helpers to `events.py` + 6 test classes to `test_events.py`. Land as one PR.
 2. Migrate `context_menu.py` — 9 actions updated, ~50 lines of code. Land as a second PR.
 3. Update `docs/operations/log-format.md`. Land as a third PR (docs only).
 4. Bump `pyproject.toml` to `2026.8.1` to mark the catalogue extension.
