@@ -73,6 +73,11 @@ parts/
 sdist/
 var/
 wheels/
+
+# Briefcase native installer artifacts
+.briefcase/
+*.profile.macOS/
+src/profiles.dist-info/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
