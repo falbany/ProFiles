@@ -13,7 +13,7 @@ PYRIGHT := $(UV) run pyright
 # ============================================
 # Installation
 # ============================================
-.PHONY: install install-system install-system-dev install-uv install-poetry
+.PHONY: install install-system install-system-dev install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-clean
 
 install: ## Install with uv (recommended)
 	@echo "📦 Installing ProFiles with uv..."
@@ -39,6 +39,33 @@ install-poetry: ## Install poetry if not present
 	@echo "🔧 Installing poetry..."
 	powershell -ExecutionPolicy ByPass -c "irm https://install.python-poetry.org | python -"
 	@echo "✅ poetry installed! Restart your terminal to use it."
+
+# ============================================
+# Briefcase Native Installer
+# ============================================
+# See docs/superpowers/specs/2026-09-01-briefcase-installer-design.md
+
+BRIEFCASE := $(UV) run briefcase
+
+briefcase-dev: ## Run the app from source via Briefcase
+	@echo "🚀 Running ProFiles in dev mode (Briefcase)..."
+	$(BRIEFCASE) dev -d "$(UV)"
+
+briefcase-build: ## Build the platform-native Briefcase app bundle
+	@echo "🔨 Building native bundle via Briefcase..."
+	$(BRIEFCASE) build
+
+briefcase-run: ## Run the built Briefcase app bundle
+	@echo "▶️  Running Briefcase-built bundle..."
+	$(BRIEFCASE) run profiles
+
+briefcase-package: ## Package the native installer (.msi / .dmg / .deb)
+	@echo "📦 Packaging native installer via Briefcase..."
+	$(BRIEFCASE) package
+
+briefcase-clean: ## Remove Briefcase build artifacts
+	@echo "🧹 Cleaning Briefcase artifacts..."
+	$(BRIEFCASE) clean
 
 # ============================================
 # Testing
