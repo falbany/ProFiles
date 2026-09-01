@@ -698,6 +698,42 @@ profiles/
 
 ---
 
+## Méthode 4 : Installeur Natif (Briefcase)
+
+Des installeurs pré-construits sont produits par la pipeline CI
+Briefcase et joints à chaque release GitHub.
+
+### Télécharger l'artefact
+
+Depuis l'onglet [Actions](../../actions) ou la page
+[Releases](../../releases), téléchargez l'artefact correspondant à
+votre plateforme :
+
+- `ProFiles-windows` → `ProFiles-2026.8.0.msi`
+- `ProFiles-macos` → `ProFiles-2026.8.0.dmg`
+- `ProFiles-ubuntu` → `profiles_2026.8.0_amd64.deb` et
+  `ProFiles-2026.8.0.AppImage`
+
+### Installation
+
+- **macOS** : ouvrez le `.dmg`, glissez `ProFiles.app` dans
+  `/Applications`. Premier lancement : clic droit → **Ouvrir**
+  (contournement Gatekeeper ; les builds ne sont pas signés).
+- **Windows** : exécutez le `.msi`. Si SmartScreen affiche un
+  avertissement, cliquez sur **Informations complémentaires** →
+  **Exécuter quand même**.
+- **Linux (`.deb`)** : `sudo dpkg -i profiles_2026.8.0_amd64.deb`
+  puis `sudo apt-get install -f` en cas de dépendances manquantes.
+- **Linux (`.AppImage`)** : `chmod +x ProFiles-2026.8.0.AppImage`
+  puis double-clic. Aucune installation requise.
+
+### Lancement
+
+Depuis le menu Démarrer (Windows), `/Applications` (macOS), ou le
+lanceur d'applications de votre environnement de bureau (Linux).
+
+---
+
 ## Support
 
 Pour toute question ou problème, consultez :
