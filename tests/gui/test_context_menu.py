@@ -9,9 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from profiles.core.actions import ActionResult, ActionStatus
-from profiles.core.telemetry import events
 from profiles.gui.context_menu import FileContextMenu
 
 
@@ -55,10 +53,7 @@ def test_action_reveal_success_emits_event(caplog, mock_window, tmp_path):
     ):
         FileContextMenu(mock_window).action_reveal(file_path)
 
-    assert any(
-        "FILE_REVEALED" in r.message and 'status="ok"' in r.message
-        for r in caplog.records
-    )
+    assert any("FILE_REVEALED" in r.message and 'status="ok"' in r.message for r in caplog.records)
 
 
 def test_action_open_folder_success_emits_event(caplog, mock_window, tmp_path):
@@ -70,7 +65,8 @@ def test_action_open_folder_success_emits_event(caplog, mock_window, tmp_path):
     caplog.set_level(logging.DEBUG, logger="test_context_menu")
 
     with patch(
-        "profiles.gui.context_menu.open_file_explorer", return_value=True,
+        "profiles.gui.context_menu.open_file_explorer",
+        return_value=True,
     ):
         FileContextMenu(mock_window).action_open_folder(file_path)
 
@@ -89,16 +85,13 @@ def test_action_filter_to_folder_emits_event(caplog, mock_window, tmp_path):
     file_path = target / "test.txt"
     file_path.write_text("x")
     # Mock resolve to return a *different* path so "already_active" does not fire.
-    mock_window._dir_manager.resolve = MagicMock(
-        return_value=[str(tmp_path / "different")]
-    )
+    mock_window._dir_manager.resolve = MagicMock(return_value=[str(tmp_path / "different")])
     caplog.set_level(logging.INFO, logger="test_context_menu")
 
     FileContextMenu(mock_window).action_filter_to_folder(file_path)
 
     assert any(
-        "FILTER_CHANGED" in r.message and 'kind="folder"' in r.message
-        for r in caplog.records
+        "FILTER_CHANGED" in r.message and 'kind="folder"' in r.message for r in caplog.records
     )
 
 
@@ -111,8 +104,7 @@ def test_action_filter_by_extension_emits_event(caplog, mock_window, tmp_path):
     FileContextMenu(mock_window).action_filter_by_extension(file_path)
 
     assert any(
-        "FILTER_CHANGED" in r.message and 'kind="extension"' in r.message
-        for r in caplog.records
+        "FILTER_CHANGED" in r.message and 'kind="extension"' in r.message for r in caplog.records
     )
 
 
@@ -125,9 +117,7 @@ def test_action_hash_success_emits_event(caplog, mock_window, tmp_path):
     FileContextMenu(mock_window).action_hash(file_path, "md5")
 
     assert any(
-        "HASH_COMPUTED" in r.message
-        and 'status="ok"' in r.message
-        and "duration_ms=" in r.message
+        "HASH_COMPUTED" in r.message and 'status="ok"' in r.message and "duration_ms=" in r.message
         for r in caplog.records
     )
 
@@ -142,7 +132,4 @@ def test_action_verify_hash_match_emits_event(caplog, mock_window, tmp_path):
 
     FileContextMenu(mock_window).action_verify_hash(file_path, "md5")
 
-    assert any(
-        "HASH_VERIFIED" in r.message and "match=true" in r.message
-        for r in caplog.records
-    )
+    assert any("HASH_VERIFIED" in r.message and "match=true" in r.message for r in caplog.records)

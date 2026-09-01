@@ -152,9 +152,11 @@ that:
 ```python
 # src/profiles/core/telemetry/events.py
 
+
 def app_started(logger, *, version: str, headless: bool) -> None:
     """Emit APP_STARTED."""
     logger.info('APP_STARTED version="%s" headless=%s', version, _bool(headless))
+
 
 def scan_complete(
     logger,
@@ -170,14 +172,22 @@ def scan_complete(
     """Emit SCAN_COMPLETE at INFO and metrics at DEBUG."""
     logger.info(
         'SCAN_COMPLETE dir="%s" ext="%s" filter="%s" files=%d recursive=%s',
-        directory, extension, filter_text, files, _bool(recursive),
+        directory,
+        extension,
+        filter_text,
+        files,
+        _bool(recursive),
     )
     if logger.isEnabledFor(logging.DEBUG):
         rate = files / (duration_ms / 1000) if duration_ms > 0 else 0
         logger.debug(
             'SCAN_METRICS dir="%s" duration_ms=%.3f rate=%.2f errors=%d',
-            directory, duration_ms, rate, errors,
+            directory,
+            duration_ms,
+            rate,
+            errors,
         )
+
 
 # ... ~25 helpers, one per event in the catalogue
 ```
@@ -215,7 +225,10 @@ events.app_started(self._logger, version=__version__, headless=self._headless)
 # Before
 logger.info(
     "Scanned directory: %s | Extension: %s | Filter: %r | Files found: %d",
-    directory, extension, filter_text, file_count,
+    directory,
+    extension,
+    filter_text,
+    file_count,
 )
 
 # After

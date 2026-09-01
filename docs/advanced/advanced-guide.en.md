@@ -165,11 +165,9 @@ def scan():
         filter_text="",
     )
 
-    return jsonify([{
-        "filename": f.filename,
-        "version": f.version,
-        "path": f.path
-    } for f in results])
+    return jsonify(
+        [{"filename": f.filename, "version": f.version, "path": f.path} for f in results]
+    )
 
 
 @app.route("/launch", methods=["POST"])
@@ -183,11 +181,13 @@ def launch():
         username=data.get("username", "web"),
     )
 
-    return jsonify({
-        "status": result.status.value,
-        "message": result.message,
-        "path": result.path,
-    })
+    return jsonify(
+        {
+            "status": result.status.value,
+            "message": result.message,
+            "path": result.path,
+        }
+    )
 
 
 if __name__ == "__main__":
@@ -510,10 +510,7 @@ def safe_launch(directory, filename):
     """Launch with comprehensive error handling."""
     try:
         result = launch_selected_file(
-            directory=directory,
-            filename=filename,
-            release="v1.0",
-            username="system"
+            directory=directory, filename=filename, release="v1.0", username="system"
         )
 
         if result.status == ActionStatus.SUCCESS:
@@ -584,7 +581,7 @@ results = scan_and_process(
     directory="/large/dir",
     extension=".lnk",
     recursive=True,
-    filter_text="production"  # Narrow down results
+    filter_text="production",  # Narrow down results
 )
 ```
 

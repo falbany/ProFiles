@@ -60,25 +60,25 @@ conditional fields when provided).
 # Context menu — right-click actions
 # ---------------------------------------------------------------------------
 
-def file_revealed(
-    logger: logging.Logger, *, path: str, status: str, error: str = ""
-) -> None:
+
+def file_revealed(logger: logging.Logger, *, path: str, status: str, error: str = "") -> None:
     """Emit FILE_REVEALED. status is "ok" or "failed"."""
     if error:
         logger.debug(
             'FILE_REVEALED path=%s status="%s" error="%s"',
-            _quote(path), status, error,
+            _quote(path),
+            status,
+            error,
         )
     else:
         logger.debug('FILE_REVEALED path=%s status="%s"', _quote(path), status)
 
 
 def external_opened(
-    logger: logging.Logger, *,
-    kind: str, path: str, status: str, reason: str = "", error: str = ""
+    logger: logging.Logger, *, kind: str, path: str, status: str, reason: str = "", error: str = ""
 ) -> None:
     """Emit EXTERNAL_OPENED. kind is "folder" or "terminal"."""
-    parts = [f'kind="{kind}"', f'path={_quote(path)}', f'status="{status}"']
+    parts = [f'kind="{kind}"', f"path={_quote(path)}", f'status="{status}"']
     if reason:
         parts.append(f'reason="{reason}"')
     if error:
@@ -91,66 +91,87 @@ def filter_changed(logger: logging.Logger, *, kind: str, value: str) -> None:
     logger.info('FILTER_CHANGED kind="%s" value=%s', kind, _quote(value))
 
 
-def filter_rejected(
-    logger: logging.Logger, *, kind: str, reason: str, value: str
-) -> None:
+def filter_rejected(logger: logging.Logger, *, kind: str, reason: str, value: str) -> None:
     """Emit FILTER_REJECTED. reason describes why the filter was not applied."""
     logger.debug(
         'FILTER_REJECTED kind="%s" reason="%s" value=%s',
-        kind, reason, _quote(value),
+        kind,
+        reason,
+        _quote(value),
     )
 
 
 def hash_computed(
-    logger: logging.Logger, *,
-    algorithm: str, path: str, status: str,
-    duration_ms: float = 0.0, reason: str = "", error: str = ""
+    logger: logging.Logger,
+    *,
+    algorithm: str,
+    path: str,
+    status: str,
+    duration_ms: float = 0.0,
+    reason: str = "",
+    error: str = "",
 ) -> None:
     """Emit HASH_COMPUTED. status is "ok", "failed", or "rejected"."""
     if status == "ok":
         logger.info(
             'HASH_COMPUTED algorithm="%s" path=%s status="ok" duration_ms=%.3f',
-            algorithm, _quote(path), duration_ms,
+            algorithm,
+            _quote(path),
+            duration_ms,
         )
     elif status == "failed":
         logger.debug(
             'HASH_COMPUTED algorithm="%s" path=%s status="failed" error="%s"',
-            algorithm, _quote(path), error,
+            algorithm,
+            _quote(path),
+            error,
         )
     else:  # rejected
         logger.debug(
             'HASH_COMPUTED algorithm="%s" path=%s status="rejected" reason="%s"',
-            algorithm, _quote(path), reason,
+            algorithm,
+            _quote(path),
+            reason,
         )
 
 
 def hash_verified(
-    logger: logging.Logger, *,
-    algorithm: str, path: str,
+    logger: logging.Logger,
+    *,
+    algorithm: str,
+    path: str,
     match: bool | None = None,
-    status: str = "", reason: str = "", error: str = ""
+    status: str = "",
+    reason: str = "",
+    error: str = "",
 ) -> None:
     """Emit HASH_VERIFIED. match is True/False for verification outcomes;
     pass status="rejected" or status="failed" with reason/error for pre-checks."""
     if match is True:
         logger.info(
             'HASH_VERIFIED algorithm="%s" path=%s match=true',
-            algorithm, _quote(path),
+            algorithm,
+            _quote(path),
         )
     elif match is False:
         logger.warning(
             'HASH_VERIFIED algorithm="%s" path=%s match=false',
-            algorithm, _quote(path),
+            algorithm,
+            _quote(path),
         )
     elif status == "failed":
         logger.debug(
             'HASH_VERIFIED algorithm="%s" path=%s status="failed" error="%s"',
-            algorithm, _quote(path), error,
+            algorithm,
+            _quote(path),
+            error,
         )
     else:  # rejected
         logger.debug(
             'HASH_VERIFIED algorithm="%s" path=%s status="rejected" reason="%s"',
-            algorithm, _quote(path), reason,
+            algorithm,
+            _quote(path),
+            reason,
         )
 ```
 
@@ -212,6 +233,7 @@ from profiles.core.telemetry.events import (
 
 # Add new test classes at the end of the file:
 
+
 class TestFileRevealed:
     def test_ok(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_file_revealed_ok")
@@ -233,18 +255,30 @@ class TestExternalOpened:
     def test_terminal_failed(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_external_terminal_failed")
         external_opened(
-            logger, kind="terminal", path="/abs/parent",
-            status="failed", error="no shell",
+            logger,
+            kind="terminal",
+            path="/abs/parent",
+            status="failed",
+            error="no shell",
         )
-        assert 'EXTERNAL_OPENED kind="terminal" path=/abs/parent status="failed" error="no shell"' in caplog.text
+        assert (
+            'EXTERNAL_OPENED kind="terminal" path=/abs/parent status="failed" error="no shell"'
+            in caplog.text
+        )
 
     def test_rejected_with_reason(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_external_rejected")
         external_opened(
-            logger, kind="folder", path="/abs/parent",
-            status="rejected", reason="not_found",
+            logger,
+            kind="folder",
+            path="/abs/parent",
+            status="rejected",
+            reason="not_found",
         )
-        assert 'EXTERNAL_OPENED kind="folder" path=/abs/parent status="rejected" reason="not_found"' in caplog.text
+        assert (
+            'EXTERNAL_OPENED kind="folder" path=/abs/parent status="rejected" reason="not_found"'
+            in caplog.text
+        )
 
 
 class TestFilterChanged:
@@ -263,44 +297,68 @@ class TestFilterRejected:
     def test_already_active(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_filter_rej_already")
         filter_rejected(
-            logger, kind="folder",
-            reason="already_active", value="/abs/dir",
+            logger,
+            kind="folder",
+            reason="already_active",
+            value="/abs/dir",
         )
         assert 'FILTER_REJECTED kind="folder" reason="already_active" value=/abs/dir' in caplog.text
 
     def test_no_extension(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_filter_rej_ext")
         filter_rejected(
-            logger, kind="extension",
-            reason="no_extension", value=".gitignore",
+            logger,
+            kind="extension",
+            reason="no_extension",
+            value=".gitignore",
         )
-        assert 'FILTER_REJECTED kind="extension" reason="no_extension" value=.gitignore' in caplog.text
+        assert (
+            'FILTER_REJECTED kind="extension" reason="no_extension" value=.gitignore' in caplog.text
+        )
 
 
 class TestHashComputed:
     def test_ok_with_duration(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_hash_ok")
         hash_computed(
-            logger, algorithm="sha256", path="/a.bin",
-            status="ok", duration_ms=12.5,
+            logger,
+            algorithm="sha256",
+            path="/a.bin",
+            status="ok",
+            duration_ms=12.5,
         )
-        assert 'HASH_COMPUTED algorithm="sha256" path=/a.bin status="ok" duration_ms=12.500' in caplog.text
+        assert (
+            'HASH_COMPUTED algorithm="sha256" path=/a.bin status="ok" duration_ms=12.500'
+            in caplog.text
+        )
 
     def test_failed(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_hash_failed")
         hash_computed(
-            logger, algorithm="md5", path="/a.bin",
-            status="failed", error="permission denied",
+            logger,
+            algorithm="md5",
+            path="/a.bin",
+            status="failed",
+            error="permission denied",
         )
-        assert 'HASH_COMPUTED algorithm="md5" path=/a.bin status="failed" error="permission denied"' in caplog.text
+        assert (
+            'HASH_COMPUTED algorithm="md5" path=/a.bin status="failed" error="permission denied"'
+            in caplog.text
+        )
 
     def test_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_hash_rejected")
         hash_computed(
-            logger, algorithm="md5", path="/a.bin",
-            status="rejected", reason="not_found",
+            logger,
+            algorithm="md5",
+            path="/a.bin",
+            status="rejected",
+            reason="not_found",
         )
-        assert 'HASH_COMPUTED algorithm="md5" path=/a.bin status="rejected" reason="not_found"' in caplog.text
+        assert (
+            'HASH_COMPUTED algorithm="md5" path=/a.bin status="rejected" reason="not_found"'
+            in caplog.text
+        )
 
 
 class TestHashVerified:
@@ -317,10 +375,16 @@ class TestHashVerified:
     def test_rejected_empty_clipboard(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_verify_rejected")
         hash_verified(
-            logger, algorithm="md5", path="/a.zip",
-            status="rejected", reason="empty_clipboard",
+            logger,
+            algorithm="md5",
+            path="/a.zip",
+            status="rejected",
+            reason="empty_clipboard",
         )
-        assert 'HASH_VERIFIED algorithm="md5" path=/a.zip status="rejected" reason="empty_clipboard"' in caplog.text
+        assert (
+            'HASH_VERIFIED algorithm="md5" path=/a.zip status="rejected" reason="empty_clipboard"'
+            in caplog.text
+        )
 ```
 
 **Run**: `python3 -m pytest tests/core/telemetry/test_events.py -v --no-cov 2>&1 | tail -25`
@@ -383,21 +447,27 @@ def action_reveal(self, file_path: Path) -> None:
     result = reveal_in_file_manager(file_path)
     if result.status is ActionStatus.NOT_FOUND:
         events.file_revealed(
-            self.window._logger, path=str(file_path),
-            status="failed", error=result.message,
+            self.window._logger,
+            path=str(file_path),
+            status="failed",
+            error=result.message,
         )
         messagebox.showwarning("File Not Found", result.message)
         return
     if result.status is ActionStatus.FAILED:
         events.file_revealed(
-            self.window._logger, path=str(file_path),
-            status="failed", error=result.message,
+            self.window._logger,
+            path=str(file_path),
+            status="failed",
+            error=result.message,
         )
         # Last-resort fallback: open the parent folder.
         open_file_explorer(file_path.parent)
         return
     events.file_revealed(
-        self.window._logger, path=str(file_path), status="ok",
+        self.window._logger,
+        path=str(file_path),
+        status="ok",
     )
 ```
 
@@ -415,8 +485,11 @@ def action_open_folder(self, file_path: Path) -> None:
     parent = file_path.parent
     if not parent.is_dir():
         events.external_opened(
-            self.window._logger, kind="folder", path=str(parent),
-            status="rejected", reason="not_found",
+            self.window._logger,
+            kind="folder",
+            path=str(parent),
+            status="rejected",
+            reason="not_found",
         )
         messagebox.showwarning(
             "Folder Not Found",
@@ -425,8 +498,11 @@ def action_open_folder(self, file_path: Path) -> None:
         return
     if not open_file_explorer(parent):
         events.external_opened(
-            self.window._logger, kind="folder", path=str(parent),
-            status="failed", error="open_file_explorer returned False",
+            self.window._logger,
+            kind="folder",
+            path=str(parent),
+            status="failed",
+            error="open_file_explorer returned False",
         )
         messagebox.showerror(
             "Open Folder Error",
@@ -434,7 +510,10 @@ def action_open_folder(self, file_path: Path) -> None:
         )
         return
     events.external_opened(
-        self.window._logger, kind="folder", path=str(parent), status="ok",
+        self.window._logger,
+        kind="folder",
+        path=str(parent),
+        status="ok",
     )
 ```
 
@@ -448,20 +527,27 @@ def action_open_terminal(self, file_path: Path) -> None:
     result = open_terminal_in_directory(file_path.parent)
     if result.status is ActionStatus.SUCCESS:
         events.external_opened(
-            self.window._logger, kind="terminal",
-            path=str(file_path.parent), status="ok",
+            self.window._logger,
+            kind="terminal",
+            path=str(file_path.parent),
+            status="ok",
         )
         return
     if result.status is ActionStatus.NOT_FOUND:
         events.external_opened(
-            self.window._logger, kind="terminal",
-            path=str(file_path.parent), status="rejected",
+            self.window._logger,
+            kind="terminal",
+            path=str(file_path.parent),
+            status="rejected",
         )
         messagebox.showwarning("Folder Not Found", result.message)
         return
     events.external_opened(
-        self.window._logger, kind="terminal",
-        path=str(file_path.parent), status="failed", error=result.message,
+        self.window._logger,
+        kind="terminal",
+        path=str(file_path.parent),
+        status="failed",
+        error=result.message,
     )
     messagebox.showerror("Open Terminal Error", result.message)
 ```
@@ -480,14 +566,18 @@ def action_filter_to_folder(self, file_path: Path) -> None:
     current = Path(current_paths[0]) if current_paths else None
     if current is not None and parent == current:
         events.filter_rejected(
-            self.window._logger, kind="folder",
-            reason="already_active", value=str(parent),
+            self.window._logger,
+            kind="folder",
+            reason="already_active",
+            value=str(parent),
         )
         return
     if not parent.is_dir():
         events.filter_rejected(
-            self.window._logger, kind="folder",
-            reason="not_found", value=str(parent),
+            self.window._logger,
+            kind="folder",
+            reason="not_found",
+            value=str(parent),
         )
         messagebox.showwarning(
             "Folder Not Found",
@@ -498,7 +588,9 @@ def action_filter_to_folder(self, file_path: Path) -> None:
     self.window._apply_config_overrides()
     self.window._refresh_file_list()
     events.filter_changed(
-        self.window._logger, kind="folder", value=str(parent),
+        self.window._logger,
+        kind="folder",
+        value=str(parent),
     )
 ```
 
@@ -512,8 +604,10 @@ def action_filter_by_extension(self, file_path: Path) -> None:
     ext = file_path.suffix
     if not ext:
         events.filter_rejected(
-            self.window._logger, kind="extension",
-            reason="no_extension", value=file_path.name,
+            self.window._logger,
+            kind="extension",
+            reason="no_extension",
+            value=file_path.name,
         )
         messagebox.showwarning(
             "No Extension",
@@ -523,7 +617,9 @@ def action_filter_by_extension(self, file_path: Path) -> None:
     self.window._ext_var.set(ext)
     self.window._refresh_file_list()
     events.filter_changed(
-        self.window._logger, kind="extension", value=ext,
+        self.window._logger,
+        kind="extension",
+        value=ext,
     )
 ```
 
@@ -536,8 +632,11 @@ def action_hash(self, file_path: Path, algorithm: str, *, copy_only: bool = Fals
     """Compute the file's hash, show a dialog, and optionally copy it."""
     if not file_path.exists():
         events.hash_computed(
-            self.window._logger, algorithm=algorithm,
-            path=str(file_path), status="rejected", reason="not_found",
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            status="rejected",
+            reason="not_found",
         )
         messagebox.showwarning(
             "File Not Found",
@@ -549,15 +648,21 @@ def action_hash(self, file_path: Path, algorithm: str, *, copy_only: bool = Fals
         digest = hash_file(file_path, algorithm)
     except (OSError, ValueError) as exc:
         events.hash_computed(
-            self.window._logger, algorithm=algorithm,
-            path=str(file_path), status="failed", error=str(exc),
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            status="failed",
+            error=str(exc),
         )
         messagebox.showerror("Hash Error", f"Failed to hash file:\n{exc}")
         return
     duration_ms = (time.perf_counter() - start) * 1000
     events.hash_computed(
-        self.window._logger, algorithm=algorithm,
-        path=str(file_path), status="ok", duration_ms=duration_ms,
+        self.window._logger,
+        algorithm=algorithm,
+        path=str(file_path),
+        status="ok",
+        duration_ms=duration_ms,
     )
 
     if copy_only:
@@ -579,8 +684,11 @@ def action_verify_hash(self, file_path: Path, algorithm: str) -> None:
     """Compute the file's *algorithm* hash and compare it to the clipboard."""
     if not file_path.exists():
         events.hash_verified(
-            self.window._logger, algorithm=algorithm,
-            path=str(file_path), status="rejected", reason="not_found",
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            status="rejected",
+            reason="not_found",
         )
         messagebox.showwarning(
             "File Not Found",
@@ -593,8 +701,11 @@ def action_verify_hash(self, file_path: Path, algorithm: str) -> None:
         expected_clip = ""
     if not expected_clip:
         events.hash_verified(
-            self.window._logger, algorithm=algorithm,
-            path=str(file_path), status="rejected", reason="empty_clipboard",
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            status="rejected",
+            reason="empty_clipboard",
         )
         messagebox.showinfo(
             f"Verify {algorithm.upper()}",
@@ -605,16 +716,21 @@ def action_verify_hash(self, file_path: Path, algorithm: str) -> None:
         digest = hash_file(file_path, algorithm)
     except (OSError, ValueError) as exc:
         events.hash_verified(
-            self.window._logger, algorithm=algorithm,
-            path=str(file_path), status="failed", error=str(exc),
+            self.window._logger,
+            algorithm=algorithm,
+            path=str(file_path),
+            status="failed",
+            error=str(exc),
         )
         messagebox.showerror("Hash Error", f"Failed to hash file:\n{exc}")
         return
 
     match = digest.casefold() == expected_clip.casefold()
     events.hash_verified(
-        self.window._logger, algorithm=algorithm,
-        path=str(file_path), match=match,
+        self.window._logger,
+        algorithm=algorithm,
+        path=str(file_path),
+        match=match,
     )
     if match:
         messagebox.showinfo(
@@ -645,7 +761,8 @@ def action_launch(self, file_path: Path) -> None:
     )
     if result.status is ActionStatus.NOT_FOUND:
         events.file_launch_failed(
-            self.window._logger, path=str(file_path),
+            self.window._logger,
+            path=str(file_path),
             error=result.message,
         )
         messagebox.showwarning(
@@ -658,7 +775,9 @@ def action_launch(self, file_path: Path) -> None:
             self.window._root.after(500, self.window._on_close)
         return
     events.file_launch_failed(
-        self.window._logger, path=str(file_path), error=result.message,
+        self.window._logger,
+        path=str(file_path),
+        error=result.message,
     )
     messagebox.showerror("Execution Error", result.message)
 ```
@@ -686,9 +805,7 @@ def action_clear_file(self, file_path: Path) -> None:
     # Confirm before deleting
     if not messagebox.askyesno(
         "Delete File",
-        f"Are you you want to delete this file?\n\n"
-        f"{file_path}\n\n"
-        f"This action cannot be undone.",
+        f"Are you you want to delete this file?\n\n{file_path}\n\nThis action cannot be undone.",
     ):
         return
 
@@ -702,7 +819,9 @@ def action_clear_file(self, file_path: Path) -> None:
         self.window._refresh_file_list()
     except OSError as exc:
         events.file_delete_failed(
-            self.window._logger, path=str(file_path), error=str(exc),
+            self.window._logger,
+            path=str(file_path),
+            error=str(exc),
         )
         messagebox.showerror(
             "Delete File Error",
@@ -766,8 +885,9 @@ def mock_window(tmp_path: Path) -> MagicMock:
     window._ext_var = MagicMock(set=MagicMock())
     window._tree = MagicMock()
     window._tree_to_path = {}
-    window._theme = MagicMock(surface="white", on_surface="black",
-                              primary="blue", on_primary="white")
+    window._theme = MagicMock(
+        surface="white", on_surface="black", primary="blue", on_primary="white"
+    )
     window._refresh_file_list = MagicMock()
     window._apply_config_overrides = MagicMock()
     window._on_close = MagicMock()
@@ -789,8 +909,7 @@ def test_action_reveal_success_emits_event(caplog, mock_window, tmp_path):
     ):
         FileContextMenu(mock_window).action_reveal(file_path)
 
-    assert any("FILE_REVEALED" in r.message and "status=\"ok\"" in r.message
-               for r in caplog.records)
+    assert any("FILE_REVEALED" in r.message and 'status="ok"' in r.message for r in caplog.records)
 
 
 def test_action_open_folder_success_emits_event(caplog, mock_window, tmp_path):
@@ -802,14 +921,17 @@ def test_action_open_folder_success_emits_event(caplog, mock_window, tmp_path):
     caplog.set_level(logging.DEBUG, logger="test_context_menu")
 
     with __import__("unittest.mock", fromlist=["patch"]).patch(
-        "profiles.gui.context_menu.open_file_explorer", return_value=True,
+        "profiles.gui.context_menu.open_file_explorer",
+        return_value=True,
     ):
         FileContextMenu(mock_window).action_open_folder(file_path)
 
-    assert any("EXTERNAL_OPENED" in r.message
-               and "kind=\"folder\"" in r.message
-               and "status=\"ok\"" in r.message
-               for r in caplog.records)
+    assert any(
+        "EXTERNAL_OPENED" in r.message
+        and 'kind="folder"' in r.message
+        and 'status="ok"' in r.message
+        for r in caplog.records
+    )
 
 
 def test_action_filter_to_folder_emits_event(caplog, mock_window, tmp_path):
@@ -825,8 +947,9 @@ def test_action_filter_to_folder_emits_event(caplog, mock_window, tmp_path):
 
     FileContextMenu(mock_window).action_filter_to_folder(file_path)
 
-    assert any("FILTER_CHANGED" in r.message and "kind=\"folder\"" in r.message
-               for r in caplog.records)
+    assert any(
+        "FILTER_CHANGED" in r.message and 'kind="folder"' in r.message for r in caplog.records
+    )
 
 
 def test_action_filter_by_extension_emits_event(caplog, mock_window, tmp_path):
@@ -837,8 +960,9 @@ def test_action_filter_by_extension_emits_event(caplog, mock_window, tmp_path):
 
     FileContextMenu(mock_window).action_filter_by_extension(file_path)
 
-    assert any("FILTER_CHANGED" in r.message and "kind=\"extension\"" in r.message
-               for r in caplog.records)
+    assert any(
+        "FILTER_CHANGED" in r.message and 'kind="extension"' in r.message for r in caplog.records
+    )
 
 
 def test_action_hash_success_emits_event(caplog, mock_window, tmp_path):
@@ -849,15 +973,16 @@ def test_action_hash_success_emits_event(caplog, mock_window, tmp_path):
 
     FileContextMenu(mock_window).action_hash(file_path, "md5")
 
-    assert any("HASH_COMPUTED" in r.message
-               and "status=\"ok\"" in r.message
-               and "duration_ms=" in r.message
-               for r in caplog.records)
+    assert any(
+        "HASH_COMPUTED" in r.message and 'status="ok"' in r.message and "duration_ms=" in r.message
+        for r in caplog.records
+    )
 
 
 def test_action_verify_hash_match_emits_event(caplog, mock_window, tmp_path):
     """action_verify_hash emits HASH_VERIFIED match=true on a match."""
     import hashlib
+
     file_path = tmp_path / "test.txt"
     file_path.write_text("hello world")
     expected = hashlib.md5(b"hello world").hexdigest()
@@ -866,8 +991,7 @@ def test_action_verify_hash_match_emits_event(caplog, mock_window, tmp_path):
 
     FileContextMenu(mock_window).action_verify_hash(file_path, "md5")
 
-    assert any("HASH_VERIFIED" in r.message and "match=true" in r.message
-               for r in caplog.records)
+    assert any("HASH_VERIFIED" in r.message and "match=true" in r.message for r in caplog.records)
 ```
 
 **Run**: `python3 -m pytest tests/gui/test_context_menu.py -v --no-cov 2>&1 | tail -15`

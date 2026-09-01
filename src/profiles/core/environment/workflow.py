@@ -89,9 +89,11 @@ def run_workflow(
         # Handle 'ask' confirmation guard if present
         if step.ask:
             ask_content = _substitute_variables(
-                step.ask, file_path,
+                step.ask,
+                file_path,
                 action_content=step.content,
-                username=username, hostname=hostname,
+                username=username,
+                hostname=hostname,
             )
             choice: Literal["yes", "skip", "no"]
             if user_choice is not None:
@@ -104,15 +106,21 @@ def run_workflow(
             if choice == "no":
                 if logger is not None:
                     events.workflow_step(
-                        logger, index=i + 1, total=len(steps),
-                        action=step.action, result="aborted",
+                        logger,
+                        index=i + 1,
+                        total=len(steps),
+                        action=step.action,
+                        result="aborted",
                     )
                 return WorkflowOutcome.ABORT
             if choice == "skip":
                 if logger is not None:
                     events.workflow_step(
-                        logger, index=i + 1, total=len(steps),
-                        action=step.action, result="skipped-user",
+                        logger,
+                        index=i + 1,
+                        total=len(steps),
+                        action=step.action,
+                        result="skipped-user",
                     )
                 # If skipping the last step, return SKIP_LAUNCH
                 if i == len(steps) - 1:
@@ -124,8 +132,11 @@ def run_workflow(
         if not step.evaluate_condition(file_path):
             if logger is not None:
                 events.workflow_step(
-                    logger, index=i + 1, total=len(steps),
-                    action=step.action, result="skipped-condition",
+                    logger,
+                    index=i + 1,
+                    total=len(steps),
+                    action=step.action,
+                    result="skipped-condition",
                 )
             continue
 
@@ -177,7 +188,9 @@ def _resolve_failure(
         return WorkflowOutcome.ABORT
     if on_failure == "warn":
         if logger is not None:
-            events.workflow_step_failed(logger, failmode="on_failure=warn", action=step_content or "")
+            events.workflow_step_failed(
+                logger, failmode="on_failure=warn", action=step_content or ""
+            )
         return None
     if on_failure == "continue":
         return None
@@ -212,9 +225,7 @@ def _execute_step(
     logger: logging.Logger | None = None,
 ) -> WorkflowOutcome | None:
     """Execute a single step. Returns terminal WorkflowOutcome or None to continue."""
-    content = _substitute_variables(
-        step.content, file_path, username=username, hostname=hostname
-    )
+    content = _substitute_variables(step.content, file_path, username=username, hostname=hostname)
 
     if step.action == "notify":
         if notify_callback is not None:
@@ -227,9 +238,7 @@ def _execute_step(
 
     if step.action == "replace":
         if logger is not None:
-            events.workflow_step(
-                logger, index=0, total=1, action="replace", result=content
-            )
+            events.workflow_step(logger, index=0, total=1, action="replace", result=content)
         # Launch replace command instead of OS default file launch
         success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
         if logger is not None:
@@ -238,35 +247,35 @@ def _execute_step(
 
     if step.action == "run":
         if logger is not None:
-            events.workflow_step(
-                logger, index=0, total=1, action="run", result=content
-            )
+            events.workflow_step(logger, index=0, total=1, action="run", result=content)
         success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
         if not success:
             return _resolve_failure(
-                step.on_failure, failmode,
-                step_content=content, failure_context=failure_context, logger=logger,
+                step.on_failure,
+                failmode,
+                step_content=content,
+                failure_context=failure_context,
+                logger=logger,
             )
         return None
 
     if step.action == "run_after":
         if logger is not None:
-            events.workflow_step(
-                logger, index=0, total=1, action="run_after", result=content
-            )
+            events.workflow_step(logger, index=0, total=1, action="run_after", result=content)
         _run_command(content, wait=False, timeout=None, logger=logger)
         return None
 
     if step.action == "check":
         if logger is not None:
-            events.workflow_step(
-                logger, index=0, total=1, action="check", result=content
-            )
+            events.workflow_step(logger, index=0, total=1, action="check", result=content)
         success = _run_command(content, wait=True, timeout=timeout, logger=logger)
         if not success:
             return _resolve_failure(
-                step.on_failure, failmode,
-                step_content=content, failure_context=failure_context, logger=logger,
+                step.on_failure,
+                failmode,
+                step_content=content,
+                failure_context=failure_context,
+                logger=logger,
             )
         return None
 
@@ -309,9 +318,7 @@ def _run_command(
     """Run shell command."""
     try:
         if wait:
-            res = subprocess.run(
-                command, shell=True, check=False, timeout=timeout
-            )
+            res = subprocess.run(command, shell=True, check=False, timeout=timeout)
             if logger is not None:
                 events.command_exit(logger, code=res.returncode, command=command)
             return res.returncode == 0

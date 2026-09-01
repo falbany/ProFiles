@@ -69,6 +69,7 @@ from typing import Literal
 # Internal utilities
 # ---------------------------------------------------------------------------
 
+
 def _bool(b: bool) -> str:
     """Return lowercase boolean literal."""
     return "true" if b else "false"
@@ -87,12 +88,13 @@ def _quote(s: str) -> str:
 # Application lifecycle
 # ---------------------------------------------------------------------------
 
+
 def app_started(logger: logging.Logger, *, version: str, headless: bool) -> None:
     logger.info('APP_STARTED version="%s" headless=%s', version, _bool(headless))
 
 
 def app_closed(logger: logging.Logger, *, uptime_s: float) -> None:
-    logger.info('APP_CLOSED uptime_s=%.0f', uptime_s)
+    logger.info("APP_CLOSED uptime_s=%.0f", uptime_s)
 
 
 def app_restarting(logger: logging.Logger) -> None:
@@ -111,18 +113,17 @@ def app_gui_failed(logger: logging.Logger, *, error: str) -> None:
 # Configuration
 # ---------------------------------------------------------------------------
 
-def config_loaded(
-    logger: logging.Logger, *, path: str, mode: str, release: str
-) -> None:
+
+def config_loaded(logger: logging.Logger, *, path: str, mode: str, release: str) -> None:
     logger.info('CONFIG_LOADED path=%s mode="%s" release="%s"', _quote(path), mode, release)
 
 
 def config_reloaded(logger: logging.Logger, *, path: str) -> None:
-    logger.info('CONFIG_RELOADED path=%s', _quote(path))
+    logger.info("CONFIG_RELOADED path=%s", _quote(path))
 
 
 def config_created(logger: logging.Logger, *, path: str) -> None:
-    logger.info('CONFIG_CREATED path=%s', _quote(path))
+    logger.info("CONFIG_CREATED path=%s", _quote(path))
 
 
 def config_reload_failed(logger: logging.Logger, *, error: str) -> None:
@@ -137,6 +138,7 @@ def config_invalid(logger: logging.Logger, *, error: str) -> None:
 # Scanning
 # ---------------------------------------------------------------------------
 
+
 def scan_complete(
     logger: logging.Logger,
     *,
@@ -150,7 +152,7 @@ def scan_complete(
 ) -> None:
     """Emit SCAN_COMPLETE at INFO; SCAN_METRICS at DEBUG."""
     logger.info(
-        'SCAN_COMPLETE dir=%s ext=%s filter=%s files=%d recursive=%s',
+        "SCAN_COMPLETE dir=%s ext=%s filter=%s files=%d recursive=%s",
         _quote(directory),
         _quote(extension),
         _quote(filter_text),
@@ -160,7 +162,7 @@ def scan_complete(
     if logger.isEnabledFor(logging.DEBUG):
         rate = files / (duration_ms / 1000) if duration_ms > 0 else 0.0
         logger.debug(
-            'SCAN_METRICS dir=%s duration_ms=%.3f rate=%.2f errors=%d',
+            "SCAN_METRICS dir=%s duration_ms=%.3f rate=%.2f errors=%d",
             _quote(directory),
             duration_ms,
             rate,
@@ -176,6 +178,7 @@ def scan_failed(logger: logging.Logger, *, directory: str, error: str) -> None:
 # UI / Theme / Language
 # ---------------------------------------------------------------------------
 
+
 def theme_switched(logger: logging.Logger, *, value: str, warnings: int = 0) -> None:
     logger.info('THEME_SWITCHED value="%s" warnings=%d', value, warnings)
 
@@ -184,32 +187,29 @@ def lang_switched(logger: logging.Logger, *, value: str) -> None:
     logger.info('LANG_SWITCHED value="%s"', value)
 
 
-def wcag_contrast_faint(
-    logger: logging.Logger, *, pair: str, ratio: str, fg: str, bg: str
-) -> None:
-    logger.warning(
-        'WCAG_CONTRAST_FAINT pair="%s" ratio=%s fg=%s bg=%s', pair, ratio, fg, bg
-    )
+def wcag_contrast_faint(logger: logging.Logger, *, pair: str, ratio: str, fg: str, bg: str) -> None:
+    logger.warning('WCAG_CONTRAST_FAINT pair="%s" ratio=%s fg=%s bg=%s', pair, ratio, fg, bg)
 
 
 # ---------------------------------------------------------------------------
 # File operations
 # ---------------------------------------------------------------------------
 
+
 def file_open_config(logger: logging.Logger, *, path: str) -> None:
-    logger.info('FILE_OPEN_CONFIG path=%s', _quote(path))
+    logger.info("FILE_OPEN_CONFIG path=%s", _quote(path))
 
 
 def file_open_log(logger: logging.Logger, *, path: str) -> None:
-    logger.info('FILE_OPEN_LOG path=%s', _quote(path))
+    logger.info("FILE_OPEN_LOG path=%s", _quote(path))
 
 
 def file_not_found(logger: logging.Logger, *, path: str) -> None:
-    logger.warning('FILE_NOT_FOUND path=%s', _quote(path))
+    logger.warning("FILE_NOT_FOUND path=%s", _quote(path))
 
 
 def file_not_a_file(logger: logging.Logger, *, path: str) -> None:
-    logger.warning('FILE_NOT_A_FILE path=%s', _quote(path))
+    logger.warning("FILE_NOT_A_FILE path=%s", _quote(path))
 
 
 def file_launch_failed(logger: logging.Logger, *, path: str, error: str) -> None:
@@ -217,7 +217,7 @@ def file_launch_failed(logger: logging.Logger, *, path: str, error: str) -> None
 
 
 def file_deleted(logger: logging.Logger, *, path: str) -> None:
-    logger.info('FILE_DELETED path=%s', _quote(path))
+    logger.info("FILE_DELETED path=%s", _quote(path))
 
 
 def file_delete_failed(logger: logging.Logger, *, path: str, error: str) -> None:
@@ -228,19 +228,20 @@ def file_launched(
     logger: logging.Logger, *, path: str, version: str = "", user: str = "", args: str = ""
 ) -> None:
     """FILE_LAUNCHED merges the old USER=… audit line."""
-    parts = [f'path={_quote(path)}']
+    parts = [f"path={_quote(path)}"]
     if version:
         parts.append(f'version="{version}"')
     if user:
         parts.append(f'user="{user}"')
     if args:
         parts.append(f'args="{args}"')
-    logger.info('FILE_LAUNCHED %s', " ".join(parts))
+    logger.info("FILE_LAUNCHED %s", " ".join(parts))
 
 
 # ---------------------------------------------------------------------------
 # Configuration create failure
 # ---------------------------------------------------------------------------
+
 
 def config_create_failed(logger: logging.Logger, *, error: str) -> None:
     logger.error('CONFIG_CREATE_FAILED error="%s"', error)
@@ -250,12 +251,16 @@ def config_create_failed(logger: logging.Logger, *, error: str) -> None:
 # Workflow
 # ---------------------------------------------------------------------------
 
+
 def workflow_step(
     logger: logging.Logger, *, index: int, total: int, action: str, result: str
 ) -> None:
     logger.info(
         'WORKFLOW_STEP index=%d total=%d action="%s" result="%s"',
-        index, total, action, result,
+        index,
+        total,
+        action,
+        result,
     )
 
 
@@ -274,6 +279,7 @@ def processing_failed(logger: logging.Logger, *, path: str, error: str) -> None:
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
 
 def command_timeout(logger: logging.Logger, *, timeout_s: int, command: str) -> None:
     logger.warning('COMMAND_TIMEOUT timeout_s=%d command="%s"', timeout_s, command)
@@ -341,6 +347,7 @@ from profiles.core.telemetry.events import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class LogCapture:
     """Capture the formatted message from a logger."""
 
@@ -388,11 +395,12 @@ class TestQuote:
 # Event helpers — each test checks grammar
 # ---------------------------------------------------------------------------
 
+
 class TestAppEvents:
     def test_started(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_started")
         app_started(logger, version="1.0.0", headless=False)
-        assert "APP_STARTED version=\"1.0.0\" headless=false" in caplog.text
+        assert 'APP_STARTED version="1.0.0" headless=false' in caplog.text
 
     def test_closed(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_closed")
@@ -663,14 +671,15 @@ helper. The dataclass is unchanged.
 #   logger.debug("Scan metrics: %s", metrics.to_dict())
 # With:
 from profiles.core.telemetry import events as _events
+
 # ...inside __exit__:
 if self.start_time is not None and self.end_time is not None:
     duration_ms = (self.end_time - self.start_time) * 1000
     _events.scan_complete(
         logger,
         directory=self.directory,
-        extension="*",       # ScanTimer doesn't track extension
-        filter_text="",      # ScanTimer doesn't track filter
+        extension="*",  # ScanTimer doesn't track extension
+        filter_text="",  # ScanTimer doesn't track filter
         files=self.file_count,
         recursive=self.recursive,
         duration_ms=duration_ms,
@@ -694,28 +703,72 @@ Add the event helpers to the public export list:
 
 ```python
 from profiles.core.telemetry.events import (
-    app_started, app_closed, app_restarting, app_launched, app_gui_failed,
-    config_loaded, config_reloaded, config_created, config_reload_failed, config_invalid,
-    scan_complete, scan_failed,
-    theme_switched, lang_switched, wcag_contrast_faint,
-    file_open_config, file_open_log, file_not_found, file_not_a_file,
-    file_launch_failed, file_deleted, file_delete_failed, file_launched,
+    app_started,
+    app_closed,
+    app_restarting,
+    app_launched,
+    app_gui_failed,
+    config_loaded,
+    config_reloaded,
+    config_created,
+    config_reload_failed,
+    config_invalid,
+    scan_complete,
+    scan_failed,
+    theme_switched,
+    lang_switched,
+    wcag_contrast_faint,
+    file_open_config,
+    file_open_log,
+    file_not_found,
+    file_not_a_file,
+    file_launch_failed,
+    file_deleted,
+    file_delete_failed,
+    file_launched,
     config_create_failed,
-    workflow_step, workflow_step_failed, workflow_aborted, processing_failed,
-    command_timeout, command_exit, command_failed,
+    workflow_step,
+    workflow_step_failed,
+    workflow_aborted,
+    processing_failed,
+    command_timeout,
+    command_exit,
+    command_failed,
 )
 
 __all__ = [
     # ... existing entries ...
-    "app_started", "app_closed", "app_restarting", "app_launched", "app_gui_failed",
-    "config_loaded", "config_reloaded", "config_created", "config_reload_failed", "config_invalid",
-    "scan_complete", "scan_failed",
-    "theme_switched", "lang_switched", "wcag_contrast_faint",
-    "file_open_config", "file_open_log", "file_not_found", "file_not_a_file",
-    "file_launch_failed", "file_deleted", "file_delete_failed", "file_launched",
+    "app_started",
+    "app_closed",
+    "app_restarting",
+    "app_launched",
+    "app_gui_failed",
+    "config_loaded",
+    "config_reloaded",
+    "config_created",
+    "config_reload_failed",
+    "config_invalid",
+    "scan_complete",
+    "scan_failed",
+    "theme_switched",
+    "lang_switched",
+    "wcag_contrast_faint",
+    "file_open_config",
+    "file_open_log",
+    "file_not_found",
+    "file_not_a_file",
+    "file_launch_failed",
+    "file_deleted",
+    "file_delete_failed",
+    "file_launched",
     "config_create_failed",
-    "workflow_step", "workflow_step_failed", "workflow_aborted", "processing_failed",
-    "command_timeout", "command_exit", "command_failed",
+    "workflow_step",
+    "workflow_step_failed",
+    "workflow_aborted",
+    "processing_failed",
+    "command_timeout",
+    "command_exit",
+    "command_failed",
 ]
 ```
 
@@ -732,19 +785,19 @@ to confirm 70 unique call sites. Then migrate in 3 batches.
 
 **Files**: `src/profiles/app.py`
 
-| Old call | New call |
-|---|---|
-| `logger.info("ProFiles started")` | `events.app_started(logger, version=..., headless=...)` |
-| `logger.info("ProFiles closed")` | `events.app_closed(logger, uptime_s=...)` |
-| `logger.info("Restarting application...")` | `events.app_restarting(logger)` |
-| `logger.info("New instance launched via module: %s", cmd)` | `events.app_launched(logger, command=cmd)` |
-| `logger.error("Failed to create GUI: %s", exc)` | `events.app_gui_failed(logger, error=str(exc))` |
+| Old call                                                              | New call                                                              |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `logger.info("ProFiles started")`                                     | `events.app_started(logger, version=..., headless=...)`               |
+| `logger.info("ProFiles closed")`                                      | `events.app_closed(logger, uptime_s=...)`                             |
+| `logger.info("Restarting application...")`                            | `events.app_restarting(logger)`                                       |
+| `logger.info("New instance launched via module: %s", cmd)`            | `events.app_launched(logger, command=cmd)`                            |
+| `logger.error("Failed to create GUI: %s", exc)`                       | `events.app_gui_failed(logger, error=str(exc))`                       |
 | `logger.info("Configuration loaded: %s (release=%s)", path, release)` | `events.config_loaded(logger, path=path, mode=mode, release=release)` |
-| `logger.info("Configuration reloaded")` | `events.config_reloaded(logger, path=path)` |
-| `logger.info("Configuration file created: %s", target)` | `events.config_created(logger, path=target)` |
-| `logger.error("Failed to reload configuration: %s", exc)` | `events.config_reload_failed(logger, error=str(exc))` |
-| `logger.error("Invalid configuration: %s", exc)` | `events.config_invalid(logger, error=str(exc))` |
-| `logger.error("Failed to create config file: %s", exc)` | `events.config_create_failed(logger, error=str(exc))` |
+| `logger.info("Configuration reloaded")`                               | `events.config_reloaded(logger, path=path)`                           |
+| `logger.info("Configuration file created: %s", target)`               | `events.config_created(logger, path=target)`                          |
+| `logger.error("Failed to reload configuration: %s", exc)`             | `events.config_reload_failed(logger, error=str(exc))`                 |
+| `logger.error("Invalid configuration: %s", exc)`                      | `events.config_invalid(logger, error=str(exc))`                       |
+| `logger.error("Failed to create config file: %s", exc)`               | `events.config_create_failed(logger, error=str(exc))`                 |
 
 **`uptime_s` computation**: on `ProFiles closed`, compute `time.time() - self._start_time`.
 Store `self._start_time = time.time()` at `app_started`.
@@ -757,11 +810,11 @@ Store `self._start_time = time.time()` at `app_started`.
 
 **Files**: `src/profiles/core/processing/scanner.py`, `src/profiles/gui/main_window.py`
 
-| Old call | New call |
-|---|---|
-| `logger.debug("Scan metrics: %s", metrics.to_dict())` | Already migrated in Task 3 |
+| Old call                                                                                      | New call                                                                                                                             |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `logger.debug("Scan metrics: %s", metrics.to_dict())`                                         | Already migrated in Task 3                                                                                                           |
 | `logger.info("Scanned directory: %s \| Extension: %s \| Filter: %r \| Files found: %d", ...)` | `events.scan_complete(logger, directory=..., extension=..., filter_text=..., files=..., recursive=..., duration_ms=..., errors=...)` |
-| `logger.warning("Error scanning directory %s: %s", directory, e)` | `events.scan_failed(logger, directory=directory, error=str(e))` |
+| `logger.warning("Error scanning directory %s: %s", directory, e)`                             | `events.scan_failed(logger, directory=directory, error=str(e))`                                                                      |
 
 The `scan_and_process` function in `scanner.py` is the primary caller. It has `extension`,
 `filter_text`, `recursive`, `duration_ms`, `file_count`, `error_count` all available.
@@ -775,26 +828,26 @@ Extract them and pass to the helper.
 
 **Files**: `src/profiles/gui/main_window.py`, `src/profiles/gui/components/`, `src/profiles/core/actions.py`, `src/profiles/core/environment/workflow.py`, `src/profiles/core/environment/render.py`, others.
 
-| Old call | New call |
-|---|---|
-| `logger.info("Theme switched to: %s", theme_name)` | `events.theme_switched(logger, value=theme_name, warnings=n)` |
-| `logger.info("Language switched to: %s", new_lang)` | `events.lang_switched(logger, value=new_lang)` |
-| `logger.warning("WCAG contrast below AA threshold: …")` | `events.wcag_contrast_faint(...)` |
-| `logger.info("Opening configuration file: %s", path)` | `events.file_open_config(logger, path=path)` |
-| `logger.info("Opening log file: %s", path)` | `events.file_open_log(logger, path=path)` |
-| `logger.warning("File not found: %s", path)` | `events.file_not_found(logger, path=path)` |
-| `logger.warning("Not a file: %s", path)` | `events.file_not_a_file(logger, path=path)` |
-| `logger.error("Failed to launch file: %s", path)` | `events.file_launch_failed(logger, path=path, error=...)` |
-| `logger.info("File deleted: %s", path)` | `events.file_deleted(logger, path=path)` |
-| `logger.error("Failed to delete file: %s", exc)` | `events.file_delete_failed(logger, path=..., error=str(exc))` |
-| `"USER=%s,PROFILE_VERSION=%s,LAUNCH=%s,ARGS=%s" % (...)` | `events.file_launched(logger, path=..., version=..., user=..., args=...)` |
-| `logger.info("Executing step %d/%d (action: %s)", ...)` | `events.workflow_step(...)` |
-| `logger.warning("Step failed (failmode=…).")` | `events.workflow_step_failed(...)` |
-| `logger.error("Step failed and … Aborting.")` | `events.workflow_aborted(...)` |
-| `logger.error("Error processing file %s: %s", path, exc)` | `events.processing_failed(...)` |
-| `logger.warning("Command timed out after %ss: %s", ...)` | `events.command_timeout(...)` |
-| `logger.debug("Command exited with code %d", code)` | `events.command_exit(...)` |
-| `logger.error("Command execution failed: %s", e)` | `events.command_failed(...)` |
+| Old call                                                  | New call                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `logger.info("Theme switched to: %s", theme_name)`        | `events.theme_switched(logger, value=theme_name, warnings=n)`             |
+| `logger.info("Language switched to: %s", new_lang)`       | `events.lang_switched(logger, value=new_lang)`                            |
+| `logger.warning("WCAG contrast below AA threshold: …")`   | `events.wcag_contrast_faint(...)`                                         |
+| `logger.info("Opening configuration file: %s", path)`     | `events.file_open_config(logger, path=path)`                              |
+| `logger.info("Opening log file: %s", path)`               | `events.file_open_log(logger, path=path)`                                 |
+| `logger.warning("File not found: %s", path)`              | `events.file_not_found(logger, path=path)`                                |
+| `logger.warning("Not a file: %s", path)`                  | `events.file_not_a_file(logger, path=path)`                               |
+| `logger.error("Failed to launch file: %s", path)`         | `events.file_launch_failed(logger, path=path, error=...)`                 |
+| `logger.info("File deleted: %s", path)`                   | `events.file_deleted(logger, path=path)`                                  |
+| `logger.error("Failed to delete file: %s", exc)`          | `events.file_delete_failed(logger, path=..., error=str(exc))`             |
+| `"USER=%s,PROFILE_VERSION=%s,LAUNCH=%s,ARGS=%s" % (...)`  | `events.file_launched(logger, path=..., version=..., user=..., args=...)` |
+| `logger.info("Executing step %d/%d (action: %s)", ...)`   | `events.workflow_step(...)`                                               |
+| `logger.warning("Step failed (failmode=…).")`             | `events.workflow_step_failed(...)`                                        |
+| `logger.error("Step failed and … Aborting.")`             | `events.workflow_aborted(...)`                                            |
+| `logger.error("Error processing file %s: %s", path, exc)` | `events.processing_failed(...)`                                           |
+| `logger.warning("Command timed out after %ss: %s", ...)`  | `events.command_timeout(...)`                                             |
+| `logger.debug("Command exited with code %d", code)`       | `events.command_exit(...)`                                                |
+| `logger.error("Command execution failed: %s", e)`         | `events.command_failed(...)`                                              |
 
 **WCAG warning count**: `main_window.py` currently logs one warning per failing pair.
 Keep the per-pair event (so the user can see which pair failed). The count field in
@@ -816,25 +869,25 @@ Keep the per-pair event (so the user can see which pair failed). The count field
 
 ## Test Command Reference
 
-| Phase | Command |
-|---|---|
-| Task 1 | `python3 -m pytest tests/core/telemetry/test_events.py -v --no-cov` |
-| Tasks 1-4 | `python3 -m pytest tests/core/telemetry/ -v --no-cov` |
-| Batch A | `python3 -m pytest tests/test_app.py tests/core/config/ -v --no-cov` |
-| Batch B | `python3 -m pytest tests/core/processing/ -v --no-cov` |
-| Batch C | `python3 -m pytest tests/ -v --no-cov 2>&1 \| tail -30` |
-| Final | `python3 -m pytest tests/ --no-cov -q && python3 -m ruff check src/profiles/` |
+| Phase     | Command                                                                       |
+| --------- | ----------------------------------------------------------------------------- |
+| Task 1    | `python3 -m pytest tests/core/telemetry/test_events.py -v --no-cov`           |
+| Tasks 1-4 | `python3 -m pytest tests/core/telemetry/ -v --no-cov`                         |
+| Batch A   | `python3 -m pytest tests/test_app.py tests/core/config/ -v --no-cov`          |
+| Batch B   | `python3 -m pytest tests/core/processing/ -v --no-cov`                        |
+| Batch C   | `python3 -m pytest tests/ -v --no-cov 2>&1 \| tail -30`                       |
+| Final     | `python3 -m pytest tests/ --no-cov -q && python3 -m ruff check src/profiles/` |
 
 ---
 
 ## Commit Strategy
 
-| Commit | Scope |
-|---|---|
+| Commit  | Scope                                                               |
+| ------- | ------------------------------------------------------------------- |
 | Phase 1 | `core/telemetry/events.py` + `test_events.py` + metrics integration |
-| Batch A | App lifecycle + config call sites |
-| Batch B | Scanning call sites |
-| Batch C | UI / workflow / file ops call sites |
-| Phase 3 | Docs + cleanup + version bump |
+| Batch A | App lifecycle + config call sites                                   |
+| Batch B | Scanning call sites                                                 |
+| Batch C | UI / workflow / file ops call sites                                 |
+| Phase 3 | Docs + cleanup + version bump                                       |
 
 Each commit: working tests, no lint errors, one logical change.

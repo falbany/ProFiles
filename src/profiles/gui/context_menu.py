@@ -323,7 +323,9 @@ class FileContextMenu:
             open_file_explorer(file_path.parent)
             return
         events.file_revealed(
-            self.window._logger, path=str(file_path), status="ok",
+            self.window._logger,
+            path=str(file_path),
+            status="ok",
         )
 
     def action_copy(self, value: str) -> None:
@@ -399,7 +401,9 @@ class FileContextMenu:
         self.window._apply_config_overrides()
         self.window._refresh_file_list()
         events.filter_changed(
-            self.window._logger, kind="folder", value=str(parent),
+            self.window._logger,
+            kind="folder",
+            value=str(parent),
         )
 
     def action_hash(self, file_path: Path, algorithm: str, *, copy_only: bool = False) -> None:
@@ -475,7 +479,9 @@ class FileContextMenu:
         self.window._ext_var.set(ext)
         self.window._refresh_file_list()
         events.filter_changed(
-            self.window._logger, kind="extension", value=ext,
+            self.window._logger,
+            kind="extension",
+            value=ext,
         )
 
     def action_verify_hash(self, file_path: Path, algorithm: str) -> None:
@@ -598,7 +604,9 @@ class FileContextMenu:
             self.window._refresh_file_list()
         except OSError as exc:
             events.file_delete_failed(
-                self.window._logger, path=str(file_path), error=str(exc),
+                self.window._logger,
+                path=str(file_path),
+                error=str(exc),
             )
             messagebox.showerror(
                 "Delete File Error",

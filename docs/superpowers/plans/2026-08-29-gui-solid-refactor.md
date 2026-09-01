@@ -192,6 +192,7 @@ patterns. A `default` tag is always applied first; the first matching
 rule is appended after (ttk resolves priority alphabetically, so the
 appended tag wins).
 """
+
 from __future__ import annotations
 
 import re
@@ -221,8 +222,7 @@ class RowColorRules:
         # Compiled (lowercased_pattern, tag_name) pairs; case-insensitive
         # substring match, regex reserved for future expansion.
         self._compiled: list[tuple[str, str]] = [
-            (pattern.lower(), f"{tag_prefix}_rule_{i}")
-            for i, (pattern, _color) in enumerate(rules)
+            (pattern.lower(), f"{tag_prefix}_rule_{i}") for i, (pattern, _color) in enumerate(rules)
         ]
 
     @property
@@ -272,6 +272,7 @@ from profiles.gui.presentation.row_colors import RowColorRules
 # In __init__:
 self._row_color_rules_engine: RowColorRules | None = None
 
+
 # Replace _configure_row_colors body (keep signature, keep ttk tag config):
 def _configure_row_colors(self) -> None:
     self._row_color_rules_engine = RowColorRules(
@@ -280,6 +281,7 @@ def _configure_row_colors(self) -> None:
     # (Keep existing ttk tag configuration logic — it stays in MainWindow
     # because it touches the live Treeview; only the rule compilation
     # moves into RowColorRules.)
+
 
 # Replace _row_color_tags_for:
 def _row_color_tags_for(self, filename: str) -> tuple[str, ...]:
@@ -362,6 +364,7 @@ Decoupled from MainWindow: takes a `ScanView` adapter (the widgets it
 needs to update) instead of the full window. All dialog/error display
 remains in MainWindow.
 """
+
 from __future__ import annotations
 
 import logging
@@ -381,6 +384,7 @@ PROGRESS_TICK_MS = 10
 @dataclass(frozen=True)
 class ScanRequest:
     """Inputs to a single scan cycle."""
+
     directory_label: str
     scan_paths: list[str]
     extension: str
@@ -394,6 +398,7 @@ class ScanView:
     Implemented by MainWindow. Kept as a Protocol-like class for
     documentation (no runtime cost; duck-typed).
     """
+
     root: tk.Tk
     tree: ttk.Treeview
     count_label: ttk.Label
@@ -434,9 +439,7 @@ class ScanController:
         children = self._view.tree.get_children()
         if children:
             self._view.tree.delete(*children)
-        self._view.root.after(
-            0, self._bg_scan_and_process, scan_id, req
-        )
+        self._view.root.after(0, self._bg_scan_and_process, scan_id, req)
         # Schedule queue polling
         self._view.root.after(PROGRESS_TICK_MS, self._poll_queue)
         return scan_id
@@ -472,9 +475,7 @@ class ScanController:
             return
         self._start_chunked_insert(scan_id, items)
 
-    def _start_chunked_insert(
-        self, scan_id: int, items: list[ScannedFile]
-    ) -> None:
+    def _start_chunked_insert(self, scan_id: int, items: list[ScannedFile]) -> None:
         accumulated: list[Path] = []
         self._view.count_label.config(text="Files: 0")
         self._insert_chunk(scan_id, items, 0, accumulated)
@@ -491,7 +492,10 @@ class ScanController:
         end = min(start + CHUNK_SIZE, len(items))
         for sf in items[start:end]:
             iid = self._view.tree.insert(
-                "", "end", values=self._row_values(sf), tags=self._view.row_color_tags_for(sf.filename)
+                "",
+                "end",
+                values=self._row_values(sf),
+                tags=self._view.row_color_tags_for(sf.filename),
             )
             self._view.tree_to_path[iid] = sf.path
             self._view.tree_to_filename[iid] = sf.filename
@@ -534,9 +538,11 @@ from profiles.gui.controllers.scan_controller import ScanController, ScanRequest
 # In __init__, after widget creation:
 self._scan_controller = ScanController(view=self)
 
+
 # Remove the extracted methods from MainWindow and replace:
 def _on_search(self) -> None:
     self._refresh_file_list()
+
 
 def _refresh_file_list(self) -> None:
     req = ScanRequest(
@@ -547,6 +553,7 @@ def _refresh_file_list(self) -> None:
         recursive=self._recursive_var.get(),
     )
     self._scan_controller.start(req)
+
 
 # Add the adapter surface (these methods already exist; just keep them
 # public so ScanController can call them):
@@ -570,7 +577,8 @@ them via the adapter. The widgets they touch stay owned by `MainWindow`.
 from unittest.mock import MagicMock
 
 from profiles.gui.controllers.scan_controller import (
-    ScanController, ScanRequest,
+    ScanController,
+    ScanRequest,
 )
 
 
@@ -624,6 +632,7 @@ git commit -m "refactor(gui): extract ScanController"
 
 ```python
 """Directory combobox manager — populate, format, resolve, auto-select."""
+
 from __future__ import annotations
 
 import logging
@@ -639,6 +648,7 @@ from profiles.core.config.models import AppConfig, MachineConfiguration
 @dataclass(frozen=True)
 class DirectoryEntry:
     """One combobox entry."""
+
     label: str
     paths: tuple[str, ...]
 
@@ -656,7 +666,7 @@ def strip_dir_label(raw: str) -> str:
     """Strip icon prefix and ``(N paths)`` suffix from a combobox label."""
     for prefix in ("📁 ", "📄 "):
         if raw.startswith(prefix):
-            label = raw[len(prefix):]
+            label = raw[len(prefix) :]
             break
     else:
         label = raw
@@ -688,8 +698,7 @@ class DirectoryManager:
     def populate(self) -> None:
         """Reload entries from config; updates combobox values."""
         self._entries = [
-            DirectoryEntry(format_dir_entry(e), tuple(e.paths))
-            for e in self._config.directories
+            DirectoryEntry(format_dir_entry(e), tuple(e.paths)) for e in self._config.directories
         ]
         self._combo["values"] = [e.label for e in self._entries]
 
@@ -754,16 +763,35 @@ self._dir_manager = DirectoryManager(
     logger=self._logger,
 )
 
+
 # Replace extracted methods with delegations:
-def _populate_directories(self) -> None: self._dir_manager.populate()
-def _format_dir_entry(self, entry) -> str: return format_dir_entry(entry)
-def _resolve_dir_selection(self, label: str) -> list[str]: return self._dir_manager.resolve(label)
+def _populate_directories(self) -> None:
+    self._dir_manager.populate()
+
+
+def _format_dir_entry(self, entry) -> str:
+    return format_dir_entry(entry)
+
+
+def _resolve_dir_selection(self, label: str) -> list[str]:
+    return self._dir_manager.resolve(label)
+
+
 def _auto_select_directory(self) -> None:
     label = self._dir_manager.auto_select()
     self._dir_var.set(label)
-def _current_dir_label(self) -> str: return strip_dir_label(self._dir_var.get())
-def _find_active_config(self): return self._dir_manager.find_active_config()
-def _apply_config_overrides(self) -> None: self._dir_manager.apply_config_overrides()
+
+
+def _current_dir_label(self) -> str:
+    return strip_dir_label(self._dir_var.get())
+
+
+def _find_active_config(self):
+    return self._dir_manager.find_active_config()
+
+
+def _apply_config_overrides(self) -> None:
+    self._dir_manager.apply_config_overrides()
 ```
 
 ### Step 4.3: Tests
@@ -772,7 +800,9 @@ def _apply_config_overrides(self) -> None: self._dir_manager.apply_config_overri
 
 ```python
 from profiles.gui.controllers.directory_manager import (
-    DirectoryEntry, format_dir_entry, strip_dir_entry,
+    DirectoryEntry,
+    format_dir_entry,
+    strip_dir_entry,
 )
 from profiles.core.config.service import DirectoryEntry as CoreEntry  # for format test
 
@@ -825,6 +855,7 @@ git commit -m "refactor(gui): extract DirectoryManager controller"
 All `messagebox` calls live here. Each method returns the ActionResult
 so callers (or tests) can verify behavior.
 """
+
 from __future__ import annotations
 
 import logging
@@ -914,6 +945,7 @@ In `src/profiles/gui/components/context_menu.py`:
 
 ```python
 """Right-click context menu — decoupled from MainWindow via a selection facade."""
+
 from __future__ import annotations
 
 import os
@@ -938,6 +970,7 @@ class TreeSelectionProvider:
     Implemented by MainWindow. Lets the context menu avoid reaching
     into window._tree, window._config, etc.
     """
+
     tree: tk.Misc  # the actual Treeview (typed loosely to avoid Tk import cycle)
     user: str
     config_release: str
@@ -973,6 +1006,7 @@ in the new file; the trigger remains a `MainWindow` method.
 
 ```python
 """Keyboard shortcuts dialog."""
+
 from __future__ import annotations
 
 import tkinter as tk
@@ -997,7 +1031,9 @@ class ShortcutsDialog:
         top.title("Keyboard Shortcuts")
         top.transient(self._parent)
         for i, (key, desc) in enumerate(self.SHORTCUTS):
-            ttk.Label(top, text=key, font=("TkDefaultFont", 10, "bold")).grid(row=i, column=0, padx=8, pady=2, sticky="w")
+            ttk.Label(top, text=key, font=("TkDefaultFont", 10, "bold")).grid(
+                row=i, column=0, padx=8, pady=2, sticky="w"
+            )
             ttk.Label(top, text=desc).grid(row=i, column=1, padx=8, pady=2, sticky="w")
         top.grab_set()
 ```

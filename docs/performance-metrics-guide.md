@@ -274,11 +274,8 @@ import logging
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s [%(source)s] %(message)s',
-    handlers=[
-        logging.FileHandler('profiles.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s %(levelname)s [%(source)s] %(message)s",
+    handlers=[logging.FileHandler("profiles.log"), logging.StreamHandler()],
 )
 ```
 

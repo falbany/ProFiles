@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from profiles.core.config.io.yaml_io import find_config_file, read_yaml, write_value
 
 
@@ -24,7 +23,7 @@ class TestReadYaml:
     def test_invalid_yaml_raises(self, tmp_path: Path) -> None:
         conf = tmp_path / ".profiles"
         conf.write_text("defaults: [unclosed\n", encoding="utf-8")
-        with pytest.raises(Exception):
+        with pytest.raises((ValueError, Exception)):
             read_yaml(conf)
 
 

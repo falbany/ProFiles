@@ -117,10 +117,7 @@ def _scan_and_filter(
         Tuples of (absolute Path, display path str, full suffix str).
         When multiple directories are provided, files are deduplicated by their absolute path (so identical files reached via different paths will only be yielded once).
     """
-    if isinstance(directories, str):
-        directory_list = [directories]
-    else:
-        directory_list = list(directories)
+    directory_list = [directories] if isinstance(directories, str) else list(directories)
 
     ext_stripped = extension.strip()
     seen_paths: set[str] = set()

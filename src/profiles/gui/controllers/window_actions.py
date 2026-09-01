@@ -92,9 +92,7 @@ class WindowActions:
         python_executable = sys.executable
         try:
             subprocess.Popen([str(python_executable), "-m", "profiles"])
-            events.app_launched(
-                self._logger, command=f"{python_executable} -m profiles"
-            )
+            events.app_launched(self._logger, command=f"{python_executable} -m profiles")
         except OSError as exc:
             events.app_gui_failed(self._logger, error=f"restart failed: {exc}")
             messagebox.showerror(

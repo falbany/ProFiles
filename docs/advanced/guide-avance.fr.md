@@ -102,22 +102,19 @@ def main():
     parser.add_argument("--recursive", action="store_true", help="Scan récursif")
     parser.add_argument("--launch", type=str, help="Lancer un fichier spécifique par nom")
     parser.add_argument("--config", type=str, help="Chemin du fichier de configuration")
-    
+
     args = parser.parse_args()
-    
+
     # Charger la configuration (recherche automatiquement dans l'arborescence si le chemin est None)
     config = load_config(args.config)
-    
+
     # Déterminer le répertoire
     directory = args.directory or auto_select_directory(config, None)
-    
+
     if args.launch:
         # Lancer un fichier spécifique
         result = launch_selected_file(
-            directory=directory,
-            filename=args.launch,
-            release=config.release,
-            username="cli"
+            directory=directory, filename=args.launch, release=config.release, username="cli"
         )
         print(f"Résultat du lancement : {result.status}")
         return 0 if result.status == ActionStatus.SUCCESS else 1
@@ -127,9 +124,9 @@ def main():
             directory=directory,
             extension=args.extension,
             recursive=args.recursive,
-            filter_text=args.filter
+            filter_text=args.filter,
         )
-        
+
         print(f"Trouvé {len(results)} fichiers :")
         for file in results:
             print(f"  {file.filename} - {file.version}")
@@ -155,19 +152,14 @@ def scan():
     directory = request.args.get("directory", "/chemin/vers/rep")
     extension = request.args.get("extension", ".lnk")
     recursive = request.args.get("recursive", "false").lower() == "true"
-    
+
     results = scan_and_process(
-        directory=directory,
-        extension=extension,
-        recursive=recursive,
-        filter_text=""
+        directory=directory, extension=extension, recursive=recursive, filter_text=""
     )
-    
-    return jsonify([{
-        "filename": f.filename,
-        "version": f.version,
-        "path": f.path
-    } for f in results])
+
+    return jsonify(
+        [{"filename": f.filename, "version": f.version, "path": f.path} for f in results]
+    )
 
 
 @app.route("/launch", methods=["POST"])
@@ -178,14 +170,10 @@ def launch():
         directory=data["directory"],
         filename=data["filename"],
         release=data.get("release", "v1.0"),
-        username=data.get("username", "web")
+        username=data.get("username", "web"),
     )
-    
-    return jsonify({
-        "status": result.status.value,
-        "message": result.message,
-        "path": result.path
-    })
+
+    return jsonify({"status": result.status.value, "message": result.message, "path": result.path})
 
 
 if __name__ == "__main__":
@@ -240,27 +228,21 @@ from profiles.core import scan_and_process, launch_selected_file, ActionStatus
 def traiter_tous_les_fichiers(directory, extension=".lnk"):
     """Scanner et lancer tous les fichiers correspondants."""
     results = scan_and_process(
-        directory=directory,
-        extension=extension,
-        recursive=True,
-        filter_text=""
+        directory=directory, extension=extension, recursive=True, filter_text=""
     )
-    
+
     success_count = 0
     for file in results:
         result = launch_selected_file(
-            directory=directory,
-            filename=file.filename,
-            release="v1.0",
-            username="lot"
+            directory=directory, filename=file.filename, release="v1.0", username="lot"
         )
-        
+
         if result.status == ActionStatus.SUCCESS:
             success_count += 1
             print(f"✓ Lancé : {file.filename}")
         else:
             print(f"✗ Échoué : {file.filename} - {result.message}")
-    
+
     print(f"\nTerminé : {success_count}/{len(results)} réussites")
     return success_count == len(results)
 ```
@@ -274,25 +256,22 @@ from profiles.core import scan_and_process
 def scan_avance(directory, extension, version_min=None, motifs_exclusion=None):
     """Scanner avec logique de filtrage supplémentaire."""
     results = scan_and_process(
-        directory=directory,
-        extension=extension,
-        recursive=True,
-        filter_text=""
+        directory=directory, extension=extension, recursive=True, filter_text=""
     )
-    
+
     filtered = []
     for file in results:
         # Filtrer par version
         if version_min and file.version < version_min:
             continue
-        
+
         # Filtrer par motifs d'exclusion
         if motifs_exclusion:
             if any(motif in file.filename for motif in motifs_exclusion):
                 continue
-        
+
         filtered.append(file)
-    
+
     return filtered
 
 
@@ -301,7 +280,7 @@ fichiers = scan_avance(
     directory="/chemin/vers/rep",
     extension=".lnk",
     version_min="v2.0",
-    motifs_exclusion=["sauvegarde", "temporaire", "ancien"]
+    motifs_exclusion=["sauvegarde", "temporaire", "ancien"],
 )
 ```
 
@@ -319,7 +298,7 @@ Pour les répertoires avec >10 000 fichiers :
        directory="/grand/repertoire",
        extension=".lnk",  # Extension spécifique
        recursive=True,
-       filter_text=""
+       filter_text="",
    )
    ```
 
@@ -332,20 +311,12 @@ Pour les répertoires avec >10 000 fichiers :
 3. **Utiliser le mode non-récursif initialement** :
    ```python
    # Première passe : non-récursif
-   results = scan_and_process(
-       directory="/chemin",
-       extension=".lnk",
-       recursive=False,
-       filter_text=""
-   )
-   
+   results = scan_and_process(directory="/chemin", extension=".lnk", recursive=False, filter_text="")
+
    # Deuxième passe : récursif seulement si nécessaire
    if len(results) < expected_min:
        results = scan_and_process(
-           directory="/chemin",
-           extension=".lnk",
-           recursive=True,
-           filter_text=""
+           directory="/chemin", extension=".lnk", recursive=True, filter_text=""
        )
    ```
 
@@ -360,20 +331,17 @@ from profiles.core import scan_and_process
 def scan_avec_pagination(directory, extension, taille_page=100):
     """Scanner avec support de pagination."""
     all_results = scan_and_process(
-        directory=directory,
-        extension=extension,
-        recursive=True,
-        filter_text=""
+        directory=directory, extension=extension, recursive=True, filter_text=""
     )
-    
+
     # Retourner les résultats paginés
     total_pages = (len(all_results) + taille_page - 1) // taille_page
-    
+
     def get_page(num_page):
         start = num_page * taille_page
         end = start + taille_page
         return all_results[start:end], total_pages
-    
+
     return get_page
 ```
 
@@ -394,19 +362,16 @@ from profiles.core import scan_and_process
 def ci_cd_valider(directory, extension, fichiers_requis):
     """Valider que les fichiers requis existent dans le répertoire."""
     results = scan_and_process(
-        directory=directory,
-        extension=extension,
-        recursive=False,
-        filter_text=""
+        directory=directory, extension=extension, recursive=False, filter_text=""
     )
-    
+
     filenames = {f.filename for f in results}
     missing = set(fichiers_requis) - filenames
-    
+
     if missing:
         print(f"ERREUR : Fichiers requis manquants : {missing}")
         return False
-    
+
     print(f"✓ Tous les {len(fichiers_requis)} fichiers requis présents")
     return True
 
@@ -457,27 +422,24 @@ import time
 def surveiller_repertoire(directory, extension, intervalle=60):
     """Surveiller le répertoire pour les changements."""
     previous_files = set()
-    
+
     while True:
         results = scan_and_process(
-            directory=directory,
-            extension=extension,
-            recursive=False,
-            filter_text=""
+            directory=directory, extension=extension, recursive=False, filter_text=""
         )
-        
+
         current_files = {f.filename for f in results}
-        
+
         # Détecter les nouveaux fichiers
         new_files = current_files - previous_files
         if new_files:
             print(f"Nouveaux fichiers détectés : {new_files}")
-        
+
         # Détecter les fichiers supprimés
         removed_files = previous_files - current_files
         if removed_files:
             print(f"Fichiers supprimés : {removed_files}")
-        
+
         previous_files = current_files
         time.sleep(intervalle)
 ```
@@ -496,12 +458,9 @@ def lancement_securise(directory, nom_fichier):
     """Lancer avec gestion d'erreur complète."""
     try:
         result = launch_selected_file(
-            directory=directory,
-            filename=nom_fichier,
-            release="v1.0",
-            username="system"
+            directory=directory, filename=nom_fichier, release="v1.0", username="system"
         )
-        
+
         if result.status == ActionStatus.SUCCESS:
             return True, "Succès"
         elif result.status == ActionStatus.NOT_FOUND:
@@ -510,7 +469,7 @@ def lancement_securise(directory, nom_fichier):
             return False, f"Lancement échoué : {result.message}"
         else:
             return False, f"Statut inconnu : {result.status}"
-    
+
     except Exception as e:
         return False, f"Exception : {str(e)}"
 ```
@@ -570,7 +529,7 @@ results = scan_and_process(
     directory="/grand/rep",
     extension=".lnk",
     recursive=True,
-    filter_text="production"  # Réduire les résultats
+    filter_text="production",  # Réduire les résultats
 )
 ```
 

@@ -119,6 +119,7 @@ def test_launch(mocker):
     assert result is True
     mock_startfile.assert_called_once()
 
+
 # Or for macOS / Linux coverage:
 def test_launch_macos(mocker):
     mocker.patch("os.startfile", create=True)

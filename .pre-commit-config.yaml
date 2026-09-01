@@ -1,0 +1,42 @@
+# Pre-commit configuration for ProFiles
+# See https://pre-commit.com for more information
+
+repos:
+  # Pre-commit hooks for itself
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        files: \.(py|txt|yaml|yml|json)$
+      - id: end-of-file-fixer
+        files: \.(py|md|txt|yaml|yml|json)$
+      - id: check-yaml
+        exclude: mkdocs.yml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+
+  # Ruff - Linter et formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # # Check for secrets and sensitive data
+  # - repo: https://github.com/Yelp/detect-secrets
+  #   rev: v1.4.0
+  #   hooks:
+  #     - id: detect-secrets
+  #       args: ['--baseline', '.secrets.baseline']
+  #       exclude: package.lock.json
+
+  # # Verify requirements are up to date (optional)
+  # - repo: https://github.com/fpgmaas/deptry.git
+  #   rev: v0.22.0
+  #   hooks:
+  #     - id: deptry
+  #       args: ['--config', 'pyproject.toml']

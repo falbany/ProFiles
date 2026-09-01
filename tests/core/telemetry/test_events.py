@@ -4,7 +4,6 @@ import logging
 import re
 
 import pytest
-
 from profiles.core.telemetry.events import (
     _bool,
     _quote,
@@ -46,7 +45,6 @@ from profiles.core.telemetry.events import (
     workflow_step,
     workflow_step_failed,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -127,9 +125,7 @@ class TestConfigEvents:
     def test_loaded(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_loaded")
         with caplog.at_level(logging.INFO, logger=logger.name):
-            config_loaded(
-                logger, path="/a/b/.profiles", mode="auto", release="2026.7.0"
-            )
+            config_loaded(logger, path="/a/b/.profiles", mode="auto", release="2026.7.0")
         text = caplog.text
         assert "CONFIG_LOADED" in text
         assert "path=/a/b/.profiles" in text
@@ -436,6 +432,7 @@ class TestGrammarRegression:
 # Context menu event helpers (added 2026-08-29)
 # ---------------------------------------------------------------------------
 
+
 class TestFileRevealed:
     def test_ok(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_file_revealed_ok")
@@ -455,10 +452,7 @@ class TestExternalOpened:
         logger = logging.getLogger("test_external_folder_ok")
         caplog.set_level(logging.DEBUG, logger="test_external_folder_ok")
         external_opened(logger, kind="folder", path="/abs/parent", status="ok")
-        assert (
-            'EXTERNAL_OPENED kind="folder" path=/abs/parent status="ok"'
-            in caplog.text
-        )
+        assert 'EXTERNAL_OPENED kind="folder" path=/abs/parent status="ok"' in caplog.text
 
     def test_terminal_failed(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_external_terminal_failed")
@@ -510,22 +504,24 @@ class TestFilterRejected:
         logger = logging.getLogger("test_filter_rej_already")
         caplog.set_level(logging.DEBUG, logger="test_filter_rej_already")
         filter_rejected(
-            logger, kind="folder", reason="already_active", value="/abs/dir",
+            logger,
+            kind="folder",
+            reason="already_active",
+            value="/abs/dir",
         )
-        assert (
-            'FILTER_REJECTED kind="folder" reason="already_active" value=/abs/dir'
-            in caplog.text
-        )
+        assert 'FILTER_REJECTED kind="folder" reason="already_active" value=/abs/dir' in caplog.text
 
     def test_no_extension(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_filter_rej_ext")
         caplog.set_level(logging.DEBUG, logger="test_filter_rej_ext")
         filter_rejected(
-            logger, kind="extension", reason="no_extension", value=".gitignore",
+            logger,
+            kind="extension",
+            reason="no_extension",
+            value=".gitignore",
         )
         assert (
-            'FILTER_REJECTED kind="extension" reason="no_extension" value=.gitignore'
-            in caplog.text
+            'FILTER_REJECTED kind="extension" reason="no_extension" value=.gitignore' in caplog.text
         )
 
 
@@ -587,14 +583,9 @@ class TestHashVerified:
         logger = logging.getLogger("test_verify_mismatch")
         caplog.set_level(logging.WARNING, logger="test_verify_mismatch")
         hash_verified(logger, algorithm="sha256", path="/a.zip", match=False)
-        assert (
-            'HASH_VERIFIED algorithm="sha256" path=/a.zip match=false'
-            in caplog.text
-        )
+        assert 'HASH_VERIFIED algorithm="sha256" path=/a.zip match=false' in caplog.text
 
-    def test_rejected_empty_clipboard(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_rejected_empty_clipboard(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_verify_rejected")
         caplog.set_level(logging.DEBUG, logger="test_verify_rejected")
         hash_verified(

@@ -321,10 +321,7 @@ config_dir = config_service.auto_select_directory(None, "mon-ordinateur")
 
 # Scanner les fichiers
 results = scanner.scan_and_process(
-    directory=config_dir,
-    extension=".lnk",
-    recursive=True,
-    filter_text=""
+    directory=config_dir, extension=".lnk", recursive=True, filter_text=""
 )
 
 # Afficher les résultats

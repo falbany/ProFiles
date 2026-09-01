@@ -42,7 +42,7 @@ def app_started(logger: logging.Logger, *, version: str, headless: bool) -> None
 
 def app_closed(logger: logging.Logger, *, uptime_s: float) -> None:
     """Emit APP_CLOSED."""
-    logger.info('APP_CLOSED uptime_s=%.0f', uptime_s)
+    logger.info("APP_CLOSED uptime_s=%.0f", uptime_s)
 
 
 def app_restarting(logger: logging.Logger) -> None:
@@ -65,21 +65,19 @@ def app_gui_failed(logger: logging.Logger, *, error: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def config_loaded(
-    logger: logging.Logger, *, path: str, mode: str, release: str
-) -> None:
+def config_loaded(logger: logging.Logger, *, path: str, mode: str, release: str) -> None:
     """Emit CONFIG_LOADED."""
     logger.info('CONFIG_LOADED path=%s mode="%s" release="%s"', _quote(path), mode, release)
 
 
 def config_reloaded(logger: logging.Logger, *, path: str) -> None:
     """Emit CONFIG_RELOADED."""
-    logger.info('CONFIG_RELOADED path=%s', _quote(path))
+    logger.info("CONFIG_RELOADED path=%s", _quote(path))
 
 
 def config_created(logger: logging.Logger, *, path: str) -> None:
     """Emit CONFIG_CREATED."""
-    logger.info('CONFIG_CREATED path=%s', _quote(path))
+    logger.info("CONFIG_CREATED path=%s", _quote(path))
 
 
 def config_reload_failed(logger: logging.Logger, *, error: str) -> None:
@@ -115,7 +113,7 @@ def scan_complete(
 ) -> None:
     """Emit SCAN_COMPLETE at INFO; SCAN_METRICS at DEBUG."""
     logger.info(
-        'SCAN_COMPLETE dir=%s ext=%s filter=%s files=%d recursive=%s',
+        "SCAN_COMPLETE dir=%s ext=%s filter=%s files=%d recursive=%s",
         _quote(directory),
         _quote(extension),
         _quote(filter_text),
@@ -125,7 +123,7 @@ def scan_complete(
     if logger.isEnabledFor(logging.DEBUG):
         rate = files / (duration_ms / 1000) if duration_ms > 0 else 0.0
         logger.debug(
-            'SCAN_METRICS dir=%s duration_ms=%.3f rate=%.2f errors=%d',
+            "SCAN_METRICS dir=%s duration_ms=%.3f rate=%.2f errors=%d",
             _quote(directory),
             duration_ms,
             rate,
@@ -153,13 +151,9 @@ def lang_switched(logger: logging.Logger, *, value: str) -> None:
     logger.info('LANG_SWITCHED value="%s"', value)
 
 
-def wcag_contrast_faint(
-    logger: logging.Logger, *, pair: str, ratio: str, fg: str, bg: str
-) -> None:
+def wcag_contrast_faint(logger: logging.Logger, *, pair: str, ratio: str, fg: str, bg: str) -> None:
     """Emit WCAG_CONTRAST_FAINT."""
-    logger.warning(
-        'WCAG_CONTRAST_FAINT pair="%s" ratio=%s fg=%s bg=%s', pair, ratio, fg, bg
-    )
+    logger.warning('WCAG_CONTRAST_FAINT pair="%s" ratio=%s fg=%s bg=%s', pair, ratio, fg, bg)
 
 
 # ---------------------------------------------------------------------------
@@ -169,22 +163,22 @@ def wcag_contrast_faint(
 
 def file_open_config(logger: logging.Logger, *, path: str) -> None:
     """Emit FILE_OPEN_CONFIG."""
-    logger.info('FILE_OPEN_CONFIG path=%s', _quote(path))
+    logger.info("FILE_OPEN_CONFIG path=%s", _quote(path))
 
 
 def file_open_log(logger: logging.Logger, *, path: str) -> None:
     """Emit FILE_OPEN_LOG."""
-    logger.info('FILE_OPEN_LOG path=%s', _quote(path))
+    logger.info("FILE_OPEN_LOG path=%s", _quote(path))
 
 
 def file_not_found(logger: logging.Logger, *, path: str) -> None:
     """Emit FILE_NOT_FOUND."""
-    logger.warning('FILE_NOT_FOUND path=%s', _quote(path))
+    logger.warning("FILE_NOT_FOUND path=%s", _quote(path))
 
 
 def file_not_a_file(logger: logging.Logger, *, path: str) -> None:
     """Emit FILE_NOT_A_FILE."""
-    logger.warning('FILE_NOT_A_FILE path=%s', _quote(path))
+    logger.warning("FILE_NOT_A_FILE path=%s", _quote(path))
 
 
 def file_launch_failed(logger: logging.Logger, *, path: str, error: str) -> None:
@@ -194,7 +188,7 @@ def file_launch_failed(logger: logging.Logger, *, path: str, error: str) -> None
 
 def file_deleted(logger: logging.Logger, *, path: str) -> None:
     """Emit FILE_DELETED."""
-    logger.info('FILE_DELETED path=%s', _quote(path))
+    logger.info("FILE_DELETED path=%s", _quote(path))
 
 
 def file_delete_failed(logger: logging.Logger, *, path: str, error: str) -> None:
@@ -211,14 +205,14 @@ def file_launched(
     args: str = "",
 ) -> None:
     """Emit FILE_LAUNCHED (merges the old USER=… audit line)."""
-    parts = [f'path={_quote(path)}']
+    parts = [f"path={_quote(path)}"]
     if version:
         parts.append(f'version="{version}"')
     if user:
         parts.append(f'user="{user}"')
     if args:
         parts.append(f'args="{args}"')
-    logger.info('FILE_LAUNCHED %s', " ".join(parts))
+    logger.info("FILE_LAUNCHED %s", " ".join(parts))
 
 
 # ---------------------------------------------------------------------------
@@ -239,9 +233,7 @@ def workflow_step(
     )
 
 
-def workflow_step_failed(
-    logger: logging.Logger, *, failmode: str, action: str
-) -> None:
+def workflow_step_failed(logger: logging.Logger, *, failmode: str, action: str) -> None:
     """Emit WORKFLOW_STEP_FAILED."""
     logger.warning('WORKFLOW_STEP_FAILED failmode="%s" action="%s"', failmode, action)
 
@@ -280,25 +272,25 @@ def command_failed(logger: logging.Logger, *, error: str, command: str) -> None:
 # Context menu — right-click actions
 # ---------------------------------------------------------------------------
 
-def file_revealed(
-    logger: logging.Logger, *, path: str, status: str, error: str = ""
-) -> None:
+
+def file_revealed(logger: logging.Logger, *, path: str, status: str, error: str = "") -> None:
     """Emit FILE_REVEALED. status is "ok" or "failed"."""
     if error:
         logger.debug(
             'FILE_REVEALED path=%s status="%s" error="%s"',
-            _quote(path), status, error,
+            _quote(path),
+            status,
+            error,
         )
     else:
         logger.debug('FILE_REVEALED path=%s status="%s"', _quote(path), status)
 
 
 def external_opened(
-    logger: logging.Logger, *,
-    kind: str, path: str, status: str, reason: str = "", error: str = ""
+    logger: logging.Logger, *, kind: str, path: str, status: str, reason: str = "", error: str = ""
 ) -> None:
     """Emit EXTERNAL_OPENED. kind is "folder" or "terminal"."""
-    parts = [f'kind="{kind}"', f'path={_quote(path)}', f'status="{status}"']
+    parts = [f'kind="{kind}"', f"path={_quote(path)}", f'status="{status}"']
     if reason:
         parts.append(f'reason="{reason}"')
     if error:
@@ -311,64 +303,85 @@ def filter_changed(logger: logging.Logger, *, kind: str, value: str) -> None:
     logger.info('FILTER_CHANGED kind="%s" value=%s', kind, _quote(value))
 
 
-def filter_rejected(
-    logger: logging.Logger, *, kind: str, reason: str, value: str
-) -> None:
+def filter_rejected(logger: logging.Logger, *, kind: str, reason: str, value: str) -> None:
     """Emit FILTER_REJECTED. reason describes why the filter was not applied."""
     logger.debug(
         'FILTER_REJECTED kind="%s" reason="%s" value=%s',
-        kind, reason, _quote(value),
+        kind,
+        reason,
+        _quote(value),
     )
 
 
 def hash_computed(
-    logger: logging.Logger, *,
-    algorithm: str, path: str, status: str,
-    duration_ms: float = 0.0, reason: str = "", error: str = ""
+    logger: logging.Logger,
+    *,
+    algorithm: str,
+    path: str,
+    status: str,
+    duration_ms: float = 0.0,
+    reason: str = "",
+    error: str = "",
 ) -> None:
     """Emit HASH_COMPUTED. status is "ok", "failed", or "rejected"."""
     if status == "ok":
         logger.info(
             'HASH_COMPUTED algorithm="%s" path=%s status="ok" duration_ms=%.3f',
-            algorithm, _quote(path), duration_ms,
+            algorithm,
+            _quote(path),
+            duration_ms,
         )
     elif status == "failed":
         logger.debug(
             'HASH_COMPUTED algorithm="%s" path=%s status="failed" error="%s"',
-            algorithm, _quote(path), error,
+            algorithm,
+            _quote(path),
+            error,
         )
     else:  # rejected
         logger.debug(
             'HASH_COMPUTED algorithm="%s" path=%s status="rejected" reason="%s"',
-            algorithm, _quote(path), reason,
+            algorithm,
+            _quote(path),
+            reason,
         )
 
 
 def hash_verified(
-    logger: logging.Logger, *,
-    algorithm: str, path: str,
+    logger: logging.Logger,
+    *,
+    algorithm: str,
+    path: str,
     match: bool | None = None,
-    status: str = "", reason: str = "", error: str = ""
+    status: str = "",
+    reason: str = "",
+    error: str = "",
 ) -> None:
     """Emit HASH_VERIFIED. match is True/False for verification outcomes;
     pass status="rejected" or status="failed" with reason/error for pre-checks."""
     if match is True:
         logger.info(
             'HASH_VERIFIED algorithm="%s" path=%s match=true',
-            algorithm, _quote(path),
+            algorithm,
+            _quote(path),
         )
     elif match is False:
         logger.warning(
             'HASH_VERIFIED algorithm="%s" path=%s match=false',
-            algorithm, _quote(path),
+            algorithm,
+            _quote(path),
         )
     elif status == "failed":
         logger.debug(
             'HASH_VERIFIED algorithm="%s" path=%s status="failed" error="%s"',
-            algorithm, _quote(path), error,
+            algorithm,
+            _quote(path),
+            error,
         )
     else:  # rejected
         logger.debug(
             'HASH_VERIFIED algorithm="%s" path=%s status="rejected" reason="%s"',
-            algorithm, _quote(path), reason,
+            algorithm,
+            _quote(path),
+            reason,
         )

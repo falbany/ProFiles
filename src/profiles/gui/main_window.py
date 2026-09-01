@@ -1339,7 +1339,5 @@ class MainWindow:
     def run(self) -> None:
         """Start the application main loop."""
         self._start_time = time.time()
-        events.app_started(
-            self._logger, version=__version__, headless=False
-        )
+        events.app_started(self._logger, version=__version__, headless=False)
         self._root.mainloop()

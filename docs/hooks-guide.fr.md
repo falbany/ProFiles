@@ -655,9 +655,11 @@ def custom_ask_handler(message: str) -> Literal["yes", "skip", "no"]:
         return "skip"
     return "no"
 
+
 def custom_notify_handler(message: str, blocking: bool) -> None:
     """Notification personnalisée."""
     print(f"[NOTICE] {message}")
+
 
 # Utiliser les callbacks
 outcome = run_workflow(

@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 
@@ -44,12 +43,8 @@ def test_workflow_skip_step_over():
 
 def test_timeout_aborts_on_run_failure():
     """A timed-out command on a ``run`` step with on_failure=stop → ABORT."""
-    with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False
-    ) as mock_cmd:
-        steps = [
-            WorkflowStep(action="run", content="sleep 10", on_failure="stop")
-        ]
+    with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
+        steps = [WorkflowStep(action="run", content="sleep 10", on_failure="stop")]
         outcome = run_workflow(steps, None, timeout=1)
         assert outcome == WorkflowOutcome.ABORT
         mock_cmd.assert_called_once()
@@ -61,12 +56,8 @@ def test_failmode_abort_triggers_via_unknown_on_failure():
 
     (Python does not enforce Literal at runtime, so we pass a sentinel value.)
     """
-    with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False
-    ) as mock_cmd:
-        steps = [
-            WorkflowStep(action="run", content="false", on_failure="unknown_value")
-        ]
+    with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
+        steps = [WorkflowStep(action="run", content="false", on_failure="unknown_value")]
         outcome = run_workflow(steps, None, failmode="abort")
         assert outcome == WorkflowOutcome.ABORT
         mock_cmd.assert_called_once()
@@ -74,24 +65,16 @@ def test_failmode_abort_triggers_via_unknown_on_failure():
 
 def test_failmode_skip_triggers_via_unknown_on_failure():
     """An unknown on_failure value with failmode=skip → SKIP_LAUNCH."""
-    with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False
-    ):
-        steps = [
-            WorkflowStep(action="run", content="false", on_failure="unknown_value")
-        ]
+    with patch("profiles.core.environment.workflow._run_command", return_value=False):
+        steps = [WorkflowStep(action="run", content="false", on_failure="unknown_value")]
         outcome = run_workflow(steps, None, failmode="skip")
         assert outcome == WorkflowOutcome.SKIP_LAUNCH
 
 
 def test_failmode_warn_continues():
     """failmode=warn with on_failure=continue → CONTINUE."""
-    with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False
-    ) as mock_cmd:
-        steps = [
-            WorkflowStep(action="run", content="false", on_failure="continue")
-        ]
+    with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
+        steps = [WorkflowStep(action="run", content="false", on_failure="continue")]
         outcome = run_workflow(steps, None, failmode="warn")
         assert outcome == WorkflowOutcome.CONTINUE
         mock_cmd.assert_called_once()
@@ -107,12 +90,8 @@ def test_on_failure_warn_logs_continue():
     mock_logger.handlers[0].emit = lambda r: log_records.append(r)
     mock_logger.setLevel(logging.DEBUG)
 
-    with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False
-    ):
-        steps = [
-            WorkflowStep(action="run", content="false", on_failure="warn")
-        ]
+    with patch("profiles.core.environment.workflow._run_command", return_value=False):
+        steps = [WorkflowStep(action="run", content="false", on_failure="warn")]
         outcome = run_workflow(steps, None, failmode="abort", logger=mock_logger)
         assert outcome == WorkflowOutcome.CONTINUE
         assert any("on_failure=warn" in r.msg % r.args for r in log_records)
@@ -126,9 +105,7 @@ def test_username_hostname_token_substitution():
         "profiles.core.environment.workflow._run_command",
         side_effect=lambda cmd, **kw: captured.append(cmd) or True,
     ):
-        steps = [
-            WorkflowStep(action="run", content="echo {username}@{hostname}")
-        ]
+        steps = [WorkflowStep(action="run", content="echo {username}@{hostname}")]
         run_workflow(steps, None, username="alice", hostname="box.local")
 
     assert "echo alice@box.local" in captured[0]
@@ -152,11 +129,12 @@ def test_date_token_substitution():
 
 def test_username_in_ask_guard():
     """{username} token is substituted in ask prompts."""
-    with patch(
-        "profiles.core.environment.workflow.confirm_dialog_3way",
-        return_value="yes",
-    ) as mock_ask, patch(
-        "profiles.core.environment.workflow._run_command", return_value=True
+    with (
+        patch(
+            "profiles.core.environment.workflow.confirm_dialog_3way",
+            return_value="yes",
+        ) as mock_ask,
+        patch("profiles.core.environment.workflow._run_command", return_value=True),
     ):
         steps = [
             WorkflowStep(
@@ -180,7 +158,10 @@ def test_per_step_timeout_override():
         ]
         run_workflow(steps, None, timeout=30)
         mock_cmd.assert_called_once_with(
-            "echo hi", wait=True, timeout=3, logger=None,
+            "echo hi",
+            wait=True,
+            timeout=3,
+            logger=None,
         )
 
 
@@ -195,7 +176,9 @@ def test_if_env_var_set_condition_met():
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
-                    action="run", content="echo deploy", if_="env:DEPLOY_ENV",
+                    action="run",
+                    content="echo deploy",
+                    if_="env:DEPLOY_ENV",
                 ),
             ]
             run_workflow(steps, None)
@@ -215,7 +198,9 @@ def test_if_env_var_set_condition_not_met():
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
-                    action="run", content="echo deploy", if_="env:DEPLOY_ENV",
+                    action="run",
+                    content="echo deploy",
+                    if_="env:DEPLOY_ENV",
                 ),
             ]
             outcome = run_workflow(steps, None)
@@ -236,7 +221,9 @@ def test_if_env_var_equals_condition_met():
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
-                    action="run", content="echo build", if_="env:MODE=release",
+                    action="run",
+                    content="echo build",
+                    if_="env:MODE=release",
                 ),
             ]
             run_workflow(steps, None)
@@ -256,7 +243,9 @@ def test_if_env_var_equals_condition_not_met():
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
-                    action="run", content="echo build", if_="env:MODE=release",
+                    action="run",
+                    content="echo build",
+                    if_="env:MODE=release",
                 ),
             ]
             run_workflow(steps, None)
@@ -268,7 +257,8 @@ def test_if_env_var_equals_condition_not_met():
 def test_failure_context_populated_on_abort():
     """failure_context is populated with step content when a hook aborts."""
     with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False,
+        "profiles.core.environment.workflow._run_command",
+        return_value=False,
     ):
         steps = [
             WorkflowStep(
@@ -279,7 +269,9 @@ def test_failure_context_populated_on_abort():
         ]
         failure_context: list[str] = []
         outcome = run_workflow(
-            steps, None, failure_context=failure_context,
+            steps,
+            None,
+            failure_context=failure_context,
         )
         assert outcome == WorkflowOutcome.ABORT
         assert len(failure_context) > 0
@@ -297,7 +289,10 @@ def test_per_step_timeout_with_check_action():
         ]
         run_workflow(steps, None, timeout=60)
         mock_cmd.assert_called_once_with(
-            "verify.exe", wait=True, timeout=7, logger=None,
+            "verify.exe",
+            wait=True,
+            timeout=7,
+            logger=None,
         )
 
 
@@ -312,7 +307,10 @@ def test_global_timeout_used_when_no_per_step_timeout():
         ]
         run_workflow(steps, None, timeout=45)
         mock_cmd.assert_called_once_with(
-            "echo hi", wait=True, timeout=45, logger=None,
+            "echo hi",
+            wait=True,
+            timeout=45,
+            logger=None,
         )
 
 
@@ -327,7 +325,10 @@ def test_no_timeout_when_both_unset():
         ]
         run_workflow(steps, None)
         mock_cmd.assert_called_once_with(
-            "echo hi", wait=True, timeout=None, logger=None,
+            "echo hi",
+            wait=True,
+            timeout=None,
+            logger=None,
         )
 
 
@@ -375,7 +376,8 @@ def test_if_condition_multiple_steps_skips_only_failed():
 def test_failure_context_populated_on_failmode_abort():
     """failure_context is populated when an unknown on_failure triggers failmode=abort."""
     with patch(
-        "profiles.core.environment.workflow._run_command", return_value=False,
+        "profiles.core.environment.workflow._run_command",
+        return_value=False,
     ):
         steps = [
             WorkflowStep(
@@ -386,7 +388,10 @@ def test_failure_context_populated_on_failmode_abort():
         ]
         failure_context: list[str] = []
         outcome = run_workflow(
-            steps, None, failmode="abort", failure_context=failure_context,
+            steps,
+            None,
+            failmode="abort",
+            failure_context=failure_context,
         )
         assert outcome == WorkflowOutcome.ABORT
         assert len(failure_context) > 0
@@ -396,7 +401,8 @@ def test_failure_context_populated_on_failmode_abort():
 def test_failure_context_empty_when_no_failure():
     """failure_context remains empty when all steps succeed."""
     with patch(
-        "profiles.core.environment.workflow._run_command", return_value=True,
+        "profiles.core.environment.workflow._run_command",
+        return_value=True,
     ):
         steps = [
             WorkflowStep(action="run", content="echo ok"),

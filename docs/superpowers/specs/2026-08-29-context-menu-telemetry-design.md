@@ -213,9 +213,7 @@ Level: INFO on `match=true`, WARNING on `match=false`, DEBUG on rejection/failur
 Add to the existing module. Pattern mirrors existing helpers:
 
 ```python
-def file_revealed(
-    logger: logging.Logger, *, path: str, status: str, error: str = ""
-) -> None:
+def file_revealed(logger: logging.Logger, *, path: str, status: str, error: str = "") -> None:
     if error:
         logger.debug('FILE_REVEALED path=%s status="%s" error="%s"', _quote(path), status, error)
     else:
@@ -223,11 +221,9 @@ def file_revealed(
 
 
 def external_opened(
-    logger: logging.Logger, *,
-    kind: str, path: str, status: str,
-    reason: str = "", error: str = ""
+    logger: logging.Logger, *, kind: str, path: str, status: str, reason: str = "", error: str = ""
 ) -> None:
-    parts = [f'kind="{kind}"', f'path={_quote(path)}', f'status="{status}"']
+    parts = [f'kind="{kind}"', f"path={_quote(path)}", f'status="{status}"']
     if reason:
         parts.append(f'reason="{reason}"')
     if error:
@@ -235,56 +231,75 @@ def external_opened(
     logger.debug("EXTERNAL_OPENED %s", " ".join(parts))
 
 
-def filter_changed(
-    logger: logging.Logger, *, kind: str, value: str
-) -> None:
+def filter_changed(logger: logging.Logger, *, kind: str, value: str) -> None:
     logger.info('FILTER_CHANGED kind="%s" value=%s', kind, _quote(value))
 
 
-def filter_rejected(
-    logger: logging.Logger, *, kind: str, reason: str, value: str
-) -> None:
+def filter_rejected(logger: logging.Logger, *, kind: str, reason: str, value: str) -> None:
     logger.debug('FILTER_REJECTED kind="%s" reason="%s" value=%s', kind, reason, _quote(value))
 
 
 def hash_computed(
-    logger: logging.Logger, *,
-    algorithm: str, path: str, status: str,
-    duration_ms: float = 0.0, reason: str = "", error: str = ""
+    logger: logging.Logger,
+    *,
+    algorithm: str,
+    path: str,
+    status: str,
+    duration_ms: float = 0.0,
+    reason: str = "",
+    error: str = "",
 ) -> None:
     if status == "ok":
         logger.info(
             'HASH_COMPUTED algorithm="%s" path=%s status="ok" duration_ms=%.3f',
-            algorithm, _quote(path), duration_ms,
+            algorithm,
+            _quote(path),
+            duration_ms,
         )
     elif status == "failed":
         logger.debug(
             'HASH_COMPUTED algorithm="%s" path=%s status="failed" error="%s"',
-            algorithm, _quote(path), error,
+            algorithm,
+            _quote(path),
+            error,
         )
     else:  # rejected
         logger.debug(
             'HASH_COMPUTED algorithm="%s" path=%s status="rejected" reason="%s"',
-            algorithm, _quote(path), reason,
+            algorithm,
+            _quote(path),
+            reason,
         )
 
 
 def hash_verified(
-    logger: logging.Logger, *,
-    algorithm: str, path: str,
+    logger: logging.Logger,
+    *,
+    algorithm: str,
+    path: str,
     match: bool | None = None,  # None means pre-check failure
-    status: str = "", reason: str = "", error: str = ""
+    status: str = "",
+    reason: str = "",
+    error: str = "",
 ) -> None:
     if match is True:
         logger.info('HASH_VERIFIED algorithm="%s" path=%s match=true', algorithm, _quote(path))
     elif match is False:
         logger.warning('HASH_VERIFIED algorithm="%s" path=%s match=false', algorithm, _quote(path))
     elif status == "failed":
-        logger.debug('HASH_VERIFIED algorithm="%s" path=%s status="failed" error="%s"',
-                     algorithm, _quote(path), error)
+        logger.debug(
+            'HASH_VERIFIED algorithm="%s" path=%s status="failed" error="%s"',
+            algorithm,
+            _quote(path),
+            error,
+        )
     else:  # rejected
-        logger.debug('HASH_VERIFIED algorithm="%s" path=%s status="rejected" reason="%s"',
-                     algorithm, _quote(path), reason)
+        logger.debug(
+            'HASH_VERIFIED algorithm="%s" path=%s status="rejected" reason="%s"',
+            algorithm,
+            _quote(path),
+            reason,
+        )
 ```
 
 Add to `__all__` and to `core/telemetry/__init__.py` re-exports.
@@ -463,13 +478,13 @@ Concrete before/after for each method:
 
 ```python
 # action_clear_file (pre-checks stay silent; user said "yes" → existing event)
-  # Existing: self.window._logger.info("File deleted: %s", file_path)
-  # Existing: self.window._logger.error("Failed to delete file %s: %s", ...)
-  # Replace with existing event helpers; no new logic.
-- self.window._logger.info("File deleted: %s", file_path)
-+ events.file_deleted(self.window._logger, path=str(file_path))
-- self.window._logger.error("Failed to delete file %s: %s", file_path, exc)
-+ events.file_delete_failed(self.window._logger, path=str(file_path), error=str(exc))
+# Existing: self.window._logger.info("File deleted: %s", file_path)
+# Existing: self.window._logger.error("Failed to delete file %s: %s", ...)
+# Replace with existing event helpers; no new logic.
+-self.window._logger.info("File deleted: %s", file_path)
++events.file_deleted(self.window._logger, path=str(file_path))
+-self.window._logger.error("Failed to delete file %s: %s", file_path, exc)
++events.file_delete_failed(self.window._logger, path=str(file_path), error=str(exc))
 ```
 
 ```python

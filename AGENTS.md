@@ -181,21 +181,23 @@ def normalize_path(path: str) -> str:
 # ✅ CORRECT : SRP respecté
 class FileScanner:
     """Scan directories for files."""
-    
+
     def scan(self, directory: str) -> list[str]:
         """Scan directory and return file paths."""
         ...
 
+
 class FileFilter:
     """Filter files based on criteria."""
-    
+
     def filter(self, files: list[str], pattern: str) -> list[str]:
         """Filter files by pattern."""
         ...
 
+
 class FileLauncher:
     """Launch files via OS association."""
-    
+
     def launch(self, file_path: str) -> bool:
         """Launch file with default application."""
         ...
@@ -204,7 +206,7 @@ class FileLauncher:
 # ❌ WRONG : SRP violé
 class FileHandler:
     """Do everything with files."""
-    
+
     def scan_and_filter_and_launch(self, directory: str, pattern: str) -> None:
         """Scan, filter, and launch files - too many responsibilities."""
         files = self.scan(directory)
@@ -221,18 +223,19 @@ class FileHandler:
 # ✅ CORRECT : Logique centralisée
 def parse_extension_pattern(pattern: str) -> list[str]:
     """Parse extension pattern into list of extensions.
-    
+
     Handles: ".txt", ".py,.md", "OR(.txt,.py)"
     """
     # Centralized parsing logic
     ...
 
+
 class ExtensionFilter:
     """Filter files by extension."""
-    
+
     def __init__(self, pattern: str) -> None:
         self.extensions = parse_extension_pattern(pattern)
-    
+
     def matches(self, filename: str) -> bool:
         """Check if file matches any extension."""
         return any(filename.endswith(ext) for ext in self.extensions)
@@ -243,6 +246,7 @@ def scan_files(directory: str, pattern: str) -> list[str]:
     # Parse pattern inline
     extensions = [p.strip() for p in pattern.split(",")]
     ...
+
 
 def filter_files(files: list[str], pattern: str) -> list[str]:
     # Parse pattern again
@@ -287,20 +291,25 @@ def validate_extension_comprehensive(
 # config.py - Configuration only
 class AppConfig:
     """Application configuration."""
+
     def __init__(self, directory: str, extensions: list[str]) -> None:
         self.directory = directory
         self.extensions = extensions
 
+
 # logger.py - Logging only
 class LoggerFactory:
     """Create configured loggers."""
+
     def create(self, name: str) -> Logger:
         """Create logger with standard configuration."""
         ...
 
+
 # gui/main_window.py - UI only
 class MainWindow:
     """Main application window."""
+
     def __init__(self, config: AppConfig, logger: Logger) -> None:
         self.config = config
         self.logger = logger
@@ -310,12 +319,13 @@ class MainWindow:
 # ❌ WRONG : Concerns mélangés
 class MainWindow:
     """Main window with config and logging."""
+
     def __init__(self) -> None:
         # Bad: loading config in UI
         self.config = self._load_config()
         # Bad: creating logger in UI
         self.logger = self._create_logger()
-    
+
     def _load_config(self) -> AppConfig:
         """Load configuration - not UI's responsibility."""
         ...
@@ -381,6 +391,7 @@ def test_scan(tmp_path):
 import pytest
 from pathlib import Path
 
+
 @pytest.fixture
 def temp_directory(tmp_path: Path) -> Path:
     """Create a temporary directory with test files."""
@@ -389,6 +400,7 @@ def temp_directory(tmp_path: Path) -> Path:
     (test_dir / "file1.txt").write_text("content1")
     (test_dir / "file2.py").write_text("print('hello')")
     return test_dir
+
 
 @pytest.fixture
 def sample_config(temp_directory: Path) -> AppConfig:
@@ -457,12 +469,15 @@ def sample_config(temp_directory: Path) -> AppConfig:
 from dataclasses import dataclass
 from typing import Literal
 
+
 @dataclass
 class ActionResult:
     """Result of a domain action."""
+
     status: Literal["SUCCESS", "NOT_FOUND", "FAILED"]
     message: str
     path: str | None = None
+
 
 def launch_selected_file(
     directory: str,
@@ -471,18 +486,18 @@ def launch_selected_file(
     username: str,
 ) -> ActionResult:
     """Launch a file with OS association.
-    
+
     Returns:
         ActionResult with status and message (never raises)
     """
     file_path = os.path.join(directory, filename)
-    
+
     if not os.path.exists(file_path):
         return ActionResult(
             status="NOT_FOUND",
             message=f"File not found: {file_path}",
         )
-    
+
     try:
         os.startfile(file_path)  # Windows
         return ActionResult(
@@ -514,27 +529,31 @@ def launch_file(directory: str, filename: str) -> None:
 from abc import ABC, abstractmethod
 from typing import Protocol
 
+
 # ✅ CORRECT : Interface pour scanner extensible
 class FileScannerProtocol(Protocol):
     """Protocol for file scanners."""
-    
+
     def scan(self, directory: str, recursive: bool = True) -> list[str]:
         """Scan directory for files."""
         ...
 
+
 class DirectoryScanner:
     """Standard directory scanner."""
-    
+
     def scan(self, directory: str, recursive: bool = True) -> list[str]:
         """Scan directory using os.walk."""
         ...
 
+
 class GitAwareScanner:
     """Scanner that respects .gitignore."""
-    
+
     def scan(self, directory: str, recursive: bool = True) -> list[str]:
         """Scan directory ignoring gitignored files."""
         ...
+
 
 # Utilisation polymorphe
 def process_files(scanner: FileScannerProtocol, directory: str) -> None:
@@ -550,7 +569,7 @@ def process_files(scanner: FileScannerProtocol, directory: str) -> None:
 # ✅ CORRECT : DI pour testabilité
 class FileProcessor:
     """Process files with injectable dependencies."""
-    
+
     def __init__(
         self,
         scanner: FileScannerProtocol,
@@ -560,12 +579,13 @@ class FileProcessor:
         self.scanner = scanner
         self.logger = logger
         self.config = config
-    
+
     def process(self, directory: str) -> int:
         """Process all files in directory."""
         files = self.scanner.scan(directory)
         self.logger.info(f"Found {len(files)} files")
         return len(files)
+
 
 # Test avec mock
 def test_file_processor():
@@ -573,10 +593,10 @@ def test_file_processor():
     mock_scanner.scan.return_value = ["file1.txt", "file2.py"]
     mock_logger = Mock()
     mock_config = AppConfig("/tmp", [".txt"])
-    
+
     processor = FileProcessor(mock_scanner, mock_logger, mock_config)
     result = processor.process("/tmp")
-    
+
     assert result == 2
     mock_scanner.scan.assert_called_once_with("/tmp")
 ```
