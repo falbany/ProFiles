@@ -131,7 +131,7 @@ install-hooks: ## Install pre-commit hooks
 
 clean: ## Remove all build artifacts
 	@echo "🧹 Cleaning all build artifacts..."
-	rm -rf .venv __pycache__ .pytest_cache .mypy_cache htmlcov coverage.xml .ruff_cache .ty_cache
+	rm -rf .venv __pycache__ .pytest_cache .mypy_cache htmlcov coverage.xml .ruff_cache .ty_cache .coverage
 	@echo "✅ Cleanup complete!"
 
 clean-pycache: ## Remove only Python cache
@@ -151,7 +151,7 @@ clean-cov: ## Remove coverage reports
 
 clean-all: ## Clean everything including virtual environment
 	@echo "🧹 Cleaning everything (including .venv)..."
-	rm -rf .venv __pycache__ .pytest_cache .mypy_cache htmlcov coverage.xml .ruff_cache .ty_cache
+	rm -rf .venv __pycache__ .pytest_cache .mypy_cache htmlcov coverage.xml .ruff_cache .ty_cache .coverage
 	@echo "✅ Everything cleaned!"
 
 # ============================================
