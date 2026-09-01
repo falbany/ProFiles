@@ -9,6 +9,7 @@ PYTEST := $(UV) run pytest
 PYLINT := $(UV) run pylint
 RUFF := $(UV) run ruff
 PYRIGHT := $(UV) run pyright
+BRIEFCASE := $(UV) run briefcase
 
 # ============================================
 # Installation
@@ -43,13 +44,10 @@ install-poetry: ## Install poetry if not present
 # ============================================
 # Briefcase Native Installer
 # ============================================
-# See docs/superpowers/specs/2026-09-01-briefcase-installer-design.md
-
-BRIEFCASE := $(UV) run briefcase
 
 briefcase-dev: ## Run the app from source via Briefcase
 	@echo "🚀 Running ProFiles in dev mode (Briefcase)..."
-	$(BRIEFCASE) dev -d "$(UV)"
+	$(BRIEFCASE) dev
 
 briefcase-build: ## Build the platform-native Briefcase app bundle
 	@echo "🔨 Building native bundle via Briefcase..."
