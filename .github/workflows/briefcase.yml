@@ -1,0 +1,48 @@
+name: Briefcase Native Installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Install Briefcase
+        run: uv tool install briefcase
+
+      - name: Build (macOS / Windows / Linux)
+        run: |
+          briefcase build
+          briefcase package --no-input
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            briefcase package --no-input --format appimage
+          fi
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProFiles-${{ matrix.os }}
+          path: |
+            dist/ProFiles-*.msi
+            dist/ProFiles-*.dmg
+            dist/ProFiles-*.deb
+            dist/ProFiles-*.AppImage
+          if-no-files-found: warn
