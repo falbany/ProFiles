@@ -56,6 +56,28 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# ============================================
+# Briefcase — native installer config
+# ============================================
+# See docs/superpowers/specs/2026-09-01-briefcase-installer-design.md
+# Note: `version` below MUST stay in sync with [project].version above
+# (Briefcase does not read PEP 621 metadata).
+[tool.briefcase]
+project_name = "ProFiles"
+bundle = "com.github.falbany"
+version = "2026.8.0"
+url = "https://github.com/falbany/profiles"
+license = "MIT"
+author = "Florent ALBANY"
+author_email = "florent.albany@gmail.com"
+
+[tool.briefcase.app.profiles]
+formal_name = "ProFiles"
+description = "A modern GUI launcher for production test programs"
+icon = "img/profiles"
+sources = ["src/profiles"]
+requires = []
+
 [tool.pylint.MASTER]
 init-import = "yes"
 max-line-length = 100
