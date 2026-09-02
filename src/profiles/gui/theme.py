@@ -686,3 +686,69 @@ def apply_theme(root: tk.Tk, theme: Md3Theme) -> ttk.Style:
             )
 
     return style
+
+
+# ── QSS token conversion ────────────────────────────────────────────────────
+
+
+def to_qss_tokens(theme: Md3Theme) -> dict[str, str]:
+    """Flatten an Md3Theme into QSS-compatible variable names.
+
+    Converts the Md3Theme dataclass into a flat dictionary suitable for
+    QSS stylesheet generation. All keys are lowercase with underscores.
+
+    Example:
+        {"primary": "#6750A4", "on_primary": "#FFFFFF", ...}
+
+    Args:
+        theme: The Md3Theme instance to convert.
+
+    Returns:
+        Dictionary mapping QSS variable names to hex colour values.
+    """
+    return {
+        "primary": theme.primary,
+        "on_primary": theme.on_primary,
+        "primary_container": theme.primary_container,
+        "on_primary_container": theme.on_primary_container,
+        "secondary": theme.secondary,
+        "on_secondary": theme.on_secondary,
+        "surface": theme.surface,
+        "surface_container": theme.surface_container,
+        "surface_dim": theme.surface_dim,
+        "on_surface": theme.on_surface,
+        "on_surface_variant": theme.on_surface_variant,
+        "outline": theme.outline,
+        "outline_variant": theme.outline_variant,
+        "background": theme.background,
+        "on_background": theme.on_background,
+        "error": theme.error,
+        "on_error": theme.on_error,
+        "error_container": theme.error_container,
+        "status_info": theme.status_info,
+        "status_info_fg": theme.status_info_fg,
+        "status_warning": theme.status_warning,
+        "status_warning_fg": theme.status_warning_fg,
+        "status_error": theme.status_error,
+        "status_error_fg": theme.status_error_fg,
+        "status_success": theme.status_success,
+        "status_success_fg": theme.status_success_fg,
+        "link": theme.link,
+        "link_hover": theme.link_hover,
+        "elevation_0": theme.elevation_0,
+        "elevation_1": theme.elevation_1,
+        "header_bg": theme.header_bg,
+        "header_fg": theme.header_fg,
+        "status_bg": theme.status_bg,
+        "border": theme.border,
+        "prod": theme.prod,
+        "dev": theme.dev,
+        "green": theme.green,
+        "green_hover": theme.green_hover,
+        "hover": theme.hover,
+        "selected": theme.selected,
+        "tooltip_bg": theme.tooltip_bg,
+        "tooltip_fg": theme.tooltip_fg,
+        "tooltip_border": theme.tooltip_border,
+        "focus_ring": theme.focus_ring,
+    }

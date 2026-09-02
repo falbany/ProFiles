@@ -48,6 +48,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.0.0",
     "pytest-cov>=4.0.0",
+    "pytest-qt>=4.2.0",
     "pre-commit>=3.0.0",
     "pyright>=1.1.0",
     "deptry>=0.22.0",
