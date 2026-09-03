@@ -73,8 +73,10 @@ class ConfigReader:
         # No config file exists — use defaults
         if not self._config_path.exists():
             logger.debug(
-                f"Configuration file not found: {self._config_path}. "
-                f"Using defaults from current working directory: {Path.cwd()}"
+                "Configuration file not found: %s. "
+                "Using defaults from current working directory: %s",
+                self._config_path,
+                Path.cwd(),
             )
             self._build_column_configs(config)
             return config
@@ -83,17 +85,22 @@ class ConfigReader:
             raw = read_yaml(self._config_path)
         except FileNotFoundError:
             logger.warning(
-                f"Configuration file not found: {self._config_path}. "
-                f"Falling back to defaults from {Path.cwd()}"
+                "Configuration file not found: %s. " "Falling back to defaults from %s",
+                self._config_path,
+                Path.cwd(),
             )
             self._build_column_configs(config)
             return config
         except Exception as e:
             # Catch ALL YAML parsing errors (escape chars, syntax errors, etc.)
             logger.error(
-                f"Failed to parse configuration file: {self._config_path}\n"
-                f"Error: {type(e).__name__}: {e}\n"
-                f"Falling back to defaults from {Path.cwd()}"
+                "Failed to parse configuration file: %s\n"
+                "Error: %s: %s\n"
+                "Falling back to defaults from %s",
+                self._config_path,
+                type(e).__name__,
+                e,
+                Path.cwd(),
             )
             self._build_column_configs(config)
             return config

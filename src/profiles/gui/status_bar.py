@@ -348,6 +348,7 @@ class StatusBar:
             lang: Ignored; ``t()`` reads the current language. Present so
                 this method matches the i18n registry callback signature.
         """
+        del lang  # Intentionally unused - matches i18n callback signature
         with contextlib.suppress(tk.TclError):
             self._config_link.configure(text=t("status.config"))
             self._refresh_btn.configure(text=t("status.refresh"))

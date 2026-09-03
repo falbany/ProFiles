@@ -90,7 +90,7 @@ class ScanTimer:
 
         Args:
             file_count: Number of files found by the scan.
-            level: Logging level (default DEBUG).
+            level: Logging level (default DEBUG) - reserved for future use.
 
         Returns:
             The computed ScanMetrics, or ``None`` if the timer was
