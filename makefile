@@ -129,16 +129,16 @@ pylint: ## Run pylint analysis
 
 pre-commit: ## Run all pre-commit checks
 	@echo "🔒 Running pre-commit checks..."
-	$(RUFF) format --check .
 	$(RUFF) check .
+	$(RUFF) format --check .
 	$(PYRIGHT) src/ || @echo "⚠️  pyright check skipped (launcher issue)"
 	$(PYTEST) --cov --cov-fail-under=85
 	@echo "✅ All pre-commit checks passed!"
 
 pre-push: ## Run comprehensive checks before push
 	@echo "🔒 Running comprehensive pre-push checks..."
-	$(RUFF) format .
 	$(RUFF) check --fix .
+	$(RUFF) format .
 	$(PYLINT) src/profiles --fail-under=8.0
 	$(PYRIGHT) src/
 	$(PYTEST) --cov --cov-fail-under=85

@@ -13,15 +13,16 @@ repos:
       - id: check-yaml
         exclude: mkdocs.yml
       - id: check-json
+      - id: check-toml
       - id: check-added-large-files
         args: ['--maxkb=1024']
 
   # Ruff - Linter et formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
+    rev: v0.16.6
     hooks:
       # Run the linter
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       # Run the formatter
       - id: ruff-format
