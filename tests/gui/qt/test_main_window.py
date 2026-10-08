@@ -241,10 +241,10 @@ class TestMainWindow:
         with patch.object(MainWindow, "_setup_controller"):
             window = MainWindow(config, logger)
 
-            # Simulate directory change
-            window.directory_bar._on_dir_changed("/new/path")
+            # Simulate directory change using the setter
+            window.directory_bar.set_dir_text("/new/path")
 
-            # Verify signal was emitted
+            # Verify the text was set
             assert window.directory_bar.dir_text == "/new/path"
 
     def test_main_window_context_menu_shows_actions(self, qt_app):

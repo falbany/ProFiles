@@ -140,13 +140,28 @@ class DirectoryBar(QWidget):
         return self._filter_combo.currentText()
 
     def set_dir_text(self, text: str) -> None:
-        self._dir_combo.setCurrentText(text)
+        """Set directory text, adding item if not present."""
+        idx = self._dir_combo.findText(text)
+        if idx < 0:
+            self._dir_combo.addItem(text)
+            idx = self._dir_combo.count() - 1
+        self._dir_combo.setCurrentIndex(idx)
 
     def set_ext_text(self, text: str) -> None:
-        self._ext_combo.setCurrentText(text)
+        """Set extension text, adding item if not present."""
+        idx = self._ext_combo.findText(text)
+        if idx < 0:
+            self._ext_combo.addItem(text)
+            idx = self._ext_combo.count() - 1
+        self._ext_combo.setCurrentIndex(idx)
 
     def set_filter_text(self, text: str) -> None:
-        self._filter_combo.setCurrentText(text)
+        """Set filter text, adding item if not present."""
+        idx = self._filter_combo.findText(text)
+        if idx < 0:
+            self._filter_combo.addItem(text)
+            idx = self._filter_combo.count() - 1
+        self._filter_combo.setCurrentIndex(idx)
 
 
 class ActionBar(QWidget):
@@ -369,6 +384,10 @@ class MainWindow(QMainWindow):
         # Action bar
         self._action_bar = ActionBar()
         main_layout.addWidget(self._action_bar)
+
+        # Wire up action bar signals
+        self._action_bar.scan_button.clicked.connect(self._on_scan_clicked)
+        self._action_bar.execute_button.clicked.connect(self._on_execute_clicked)
 
         # File tree
         self._file_tree = FileTree()
