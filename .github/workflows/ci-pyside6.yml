@@ -1,0 +1,44 @@
+name: PySide6 Migration CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install deps
+        run: |
+          pip install -e ".[dev]"
+          pip install pytest-qt PySide6
+
+      - name: Lint
+        run: ruff check src/
+
+      - name: Test Tk backend
+        run: pytest tests/ -v
+        env:
+          PROFILES_GUI_BACKEND: tk
+
+      - name: Test Qt backend
+        run: pytest tests/gui/qt/ -v
+        env:
+          PROFILES_GUI_BACKEND: qt
+
+      - name: Check no cross-imports
+        run: |
+          if grep -r "from profiles.gui.qt" src/profiles/gui/tk/ 2>/dev/null; then
+            echo "ERROR: Cross-import detected"
+            exit 1
+          fi
