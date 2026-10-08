@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, override
+from typing import Any
+
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut

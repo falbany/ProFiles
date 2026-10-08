@@ -938,7 +938,7 @@ hooks:
 
 ## 📊 Estimation Totale
 
-| Milestone | Estimation | Priorité |
+|| Milestone | Estimation | Priorité |
 |-----------|------------|----------|
 | 1. Autocomplétion | 3-4 jours | Moyenne |
 | 2. Filtres graphiques | 2-3 jours | Faible |
@@ -948,6 +948,22 @@ hooks:
 | 6. Workflow Builder Visuel | 5-7 jours | Haute |
 
 **Total** : 19-26 jours (hors recherche contenu : 15-21 jours)
+
+---
+
+## 2026-10-08: PySide6 Migration Complete
+
+- Default GUI backend switched to PySide6
+- Tkinter backend deprecated (will be removed in v3.0)
+- Set `PROFILES_GUI_BACKEND=tk` to use legacy backend
+
+---
+
+## 2026-10-08: Tkinter Backend Removed
+
+- Tkinter backend deleted (was deprecated since v2.5.0)
+- PySide6 is now the only GUI backend
+- `PROFILES_GUI_BACKEND` env var no longer supported
 
 ---
 

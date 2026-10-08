@@ -59,7 +59,7 @@
 
 ## 🚀 Installation
 
-Requires **Python 3.11+**. Minimal dependencies: `sv-ttk` (Material Design 3 theme), `darkdetect` (system theme detection).
+Requires **Python 3.11+**. Minimal dependencies: `PySide6` (GUI framework), `qdarkstyle` (dark theme), `qtawesome` (icon library).
 
 ### Quick Install (Recommended)
 ```bash

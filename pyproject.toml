@@ -9,8 +9,6 @@ description = "ProFiles - A modern GUI launcher for production test programs"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "sv-ttk>=2.5.0",
-    "darkdetect>=0.8.0",
     "ruamel.yaml>=0.18.0",
     "pydantic>=2.0.0",
 ]

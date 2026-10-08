@@ -9,15 +9,16 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-import tkinter as tk
 from pathlib import Path
+
+from PySide6.QtWidgets import QApplication
 
 from profiles.core import AppConfig, actions, load_config
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry import events
 from profiles.core.telemetry.diagnostics import configure_logger
-from profiles.gui.main_window import MainWindow
+from profiles.gui import MainWindow
 from profiles.utils.network import get_hostname, get_username
 
 
@@ -169,9 +170,15 @@ class ProFileApp:
         Exits:
             SystemExit(1) if GUI initialization fails.
         """
+
+        # Ensure QApplication exists
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+
         try:
-            self._window = MainWindow(config=self._config)
-        except (RuntimeError, tk.TclError) as exc:
+            self._window = MainWindow(config=self._config, logger=self._logger)
+        except (RuntimeError, Exception) as exc:
             error_msg = str(exc).lower()
             if "screen" in error_msg or "display" in error_msg:
                 events.app_gui_failed(
