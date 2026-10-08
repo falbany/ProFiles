@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, override
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
@@ -333,9 +333,17 @@ class MainWindow(QMainWindow):
         self._config = config
         self._logger = logger
         self._context_menu: ContextMenu | None = None
+        self._shortcuts_setup: bool = False
         self._setup_ui()
-        self._setup_shortcuts()
         self._setup_controller()
+
+    @override
+    def showEvent(self, event) -> None:
+        """Override showEvent to defer shortcut creation until window is shown."""
+        super().showEvent(event)
+        if not self._shortcuts_setup:
+            self._setup_shortcuts()
+            self._shortcuts_setup = True
 
     def _setup_ui(self) -> None:
         self.setWindowTitle("ProFiles")

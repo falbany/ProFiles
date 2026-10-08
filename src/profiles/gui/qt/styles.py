@@ -5,6 +5,8 @@ from typing import Literal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
+from profiles.gui.theme import DARK_THEME, LIGHT_THEME, to_qss_tokens
+
 ThemeName = Literal["light", "dark", "auto"]
 
 
@@ -85,40 +87,78 @@ def _generate_qss(theme: ThemeName) -> str:
 
 
 def _get_light_qss() -> str:
-    """Generate light theme QSS."""
-    return """
-        QMainWindow {
-            background-color: #f0f0f0;
-        }
-        QMenuBar {
-            background-color: #f0f0f0;
-            color: #000000;
-        }
-        QMenuBar::item:selected {
-            background-color: #d0d0d0;
-        }
-        QStatusBar {
-            background-color: #f0f0f0;
-            color: #000000;
-        }
+    """Generate light theme QSS using MD3 tokens."""
+    tokens = to_qss_tokens(LIGHT_THEME)
+    return f"""
+        QMainWindow {{
+            background-color: {tokens["surface"]};
+            color: {tokens["on_surface"]};
+        }}
+        QMenuBar {{
+            background-color: {tokens["surface"]};
+            color: {tokens["on_surface"]};
+            border: 1px solid {tokens["outline_variant"]};
+        }}
+        QMenuBar::item:selected {{
+            background-color: {tokens["surface_container"]};
+        }}
+        QMenuBar::item:pressed {{
+            background-color: {tokens["surface_container"]};
+        }}
+        QStatusBar {{
+            background-color: {tokens["status_bg"]};
+            color: {tokens["on_surface"]};
+        }}
+        QMenu {{
+            background-color: {tokens["surface"]};
+            color: {tokens["on_surface"]};
+            border: 1px solid {tokens["outline"]};
+        }}
+        QMenu::item:selected {{
+            background-color: {tokens["hover"]};
+        }}
+        QToolTip {{
+            background-color: {tokens["tooltip_bg"]};
+            color: {tokens["tooltip_fg"]};
+            border: 1px solid {tokens["tooltip_border"]};
+        }}
     """
 
 
 def _get_dark_qss() -> str:
-    """Generate dark theme QSS."""
-    return """
-        QMainWindow {
-            background-color: #2b2b2b;
-        }
-        QMenuBar {
-            background-color: #2b2b2b;
-            color: #ffffff;
-        }
-        QMenuBar::item:selected {
-            background-color: #3b3b3b;
-        }
-        QStatusBar {
-            background-color: #2b2b2b;
-            color: #ffffff;
-        }
+    """Generate dark theme QSS using MD3 tokens."""
+    tokens = to_qss_tokens(DARK_THEME)
+    return f"""
+        QMainWindow {{
+            background-color: {tokens["surface"]};
+            color: {tokens["on_surface"]};
+        }}
+        QMenuBar {{
+            background-color: {tokens["surface"]};
+            color: {tokens["on_surface"]};
+            border: 1px solid {tokens["outline_variant"]};
+        }}
+        QMenuBar::item:selected {{
+            background-color: {tokens["surface_container"]};
+        }}
+        QMenuBar::item:pressed {{
+            background-color: {tokens["surface_container"]};
+        }}
+        QStatusBar {{
+            background-color: {tokens["status_bg"]};
+            color: {tokens["on_surface"]};
+        }}
+        QMenu {{
+            background-color: {tokens["surface"]};
+            color: {tokens["on_surface"]};
+            border: 1px solid {tokens["outline"]};
+        }}
+        QMenu::item:selected {{
+            background-color: {tokens["hover"]};
+        }}
+        QToolTip {{
+            background-color: {tokens["tooltip_bg"]};
+            color: {tokens["tooltip_fg"]};
+            border: 1px solid {tokens["tooltip_border"]};
+        }}
     """
