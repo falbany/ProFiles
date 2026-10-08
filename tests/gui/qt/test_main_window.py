@@ -97,6 +97,11 @@ class TestDirectoryBar:
     def test_directory_bar_properties(self, qt_app):
         """Test DirectoryBar property accessors."""
         bar = DirectoryBar()
+        # Add items to combo boxes before setting text
+        bar.dir_combo.addItem("/test")
+        bar.ext_combo.addItem(".txt")
+        bar.filter_combo.addItem("keyword")
+        # Now set the current text
         bar.set_dir_text("/test")
         bar.set_ext_text(".txt")
         bar.set_filter_text("keyword")

@@ -228,11 +228,11 @@ class ProFileApp:
         # If file_path is not provided, scan all configured directories
         if not file_path:
             for cfg in _config.configurations:
-                if cfg.directory:
+                for directory in cfg.scan:  # scan is a tuple of directories
                     ext = _config.extensions[0] if _config.extensions else "All"
                     # Use scan_and_process to enable metrics logging
                     scanned_files = scan_and_process(
-                        cfg.directory,
+                        directory,
                         extension=ext,
                         exclude_dirs=_config.search_exclude_dirs,
                         exclude_files=cfg.search_exclude_files,

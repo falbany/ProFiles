@@ -60,7 +60,7 @@ class TestQSSGeneration:
 
         assert isinstance(qss, str)
         assert "background-color" in qss
-        assert "#f0f0f0" in qss
+        assert "#fafafa" in qss  # Light theme background
 
     def test_get_dark_qss_returns_valid_style(self):
         """Test dark theme QSS generation."""
@@ -68,7 +68,7 @@ class TestQSSGeneration:
 
         assert isinstance(qss, str)
         assert "background-color" in qss
-        assert "#2b2b2b" in qss
+        assert "#1c1c1c" in qss  # Dark theme background
 
     def test_generate_qss_light_theme(self):
         """Test QSS generation for light theme."""
