@@ -85,7 +85,7 @@ class ConfigReader:
             raw = read_yaml(self._config_path)
         except FileNotFoundError:
             logger.warning(
-                "Configuration file not found: %s. " "Falling back to defaults from %s",
+                "Configuration file not found: %s. Falling back to defaults from %s",
                 self._config_path,
                 Path.cwd(),
             )

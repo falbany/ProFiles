@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from profiles.core.config.io.yaml_io import find_config_file, read_yaml, write_value
 
 

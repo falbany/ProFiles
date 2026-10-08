@@ -314,3 +314,315 @@ class TestMainWindow:
             # Verify controller stop was called
             window._controller.stop_scan.assert_called_once()
             event.accept.assert_called_once()
+
+
+class TestShortcuts:
+    """Tests for keyboard shortcuts."""
+
+    def test_shortcut_f5_triggers_scan(self, qt_app):
+        """Test that F5 triggers scan/refresh."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._controller = MagicMock()
+            # Manually setup shortcuts (avoid show() which causes access violations in tests)
+            window._setup_shortcuts()
+
+            # Trigger F5 shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "F5":
+                    shortcut.activated.emit()
+                    break
+
+            # Verify controller start_scan was called
+            window._controller.start_scan.assert_called_once()
+
+    def test_shortcut_ctrl_r_triggers_scan(self, qt_app):
+        """Test that Ctrl+R triggers scan/refresh."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._controller = MagicMock()
+            window._setup_shortcuts()
+
+            # Trigger the Ctrl+R shortcut directly
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Ctrl+R":
+                    shortcut.activated.emit()
+                    break
+
+            window._controller.start_scan.assert_called_once()
+
+    def test_shortcut_return_executes_file(self, qt_app):
+        """Test that Return key triggers execute."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Mock the execute method
+            with patch.object(window, "_on_execute_clicked") as mock_execute:
+                # Trigger Return shortcut
+                for shortcut in window.findChildren(QShortcut):
+                    if shortcut.key().toString() == "Return":
+                        shortcut.activated.emit()
+                        break
+
+                mock_execute.assert_called_once()
+
+    def test_shortcut_delete_clears_filter(self, qt_app):
+        """Test that Delete key clears filter."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Set a filter value
+            window.directory_bar.filter_combo.setEditText("test")
+            assert window.directory_bar.filter_text == "test"
+
+            # Trigger Delete shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Delete":
+                    shortcut.activated.emit()
+                    break
+
+            # Verify filter was cleared
+            assert window.directory_bar.filter_text == ""
+
+    def test_shortcut_escape_clears_filter(self, qt_app):
+        """Test that Escape key clears filter."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Set a filter value
+            window.directory_bar.filter_combo.setEditText("test")
+            assert window.directory_bar.filter_text == "test"
+
+            # Trigger Escape shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Escape":
+                    shortcut.activated.emit()
+                    break
+
+            # Verify filter was cleared
+            assert window.directory_bar.filter_text == ""
+
+    def test_shortcut_ctrl_f_focuses_filter(self, qt_app):
+        """Test that Ctrl+F focuses filter field."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Trigger Ctrl+F shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Ctrl+F":
+                    shortcut.activated.emit()
+                    break
+
+            # Verify filter combo has focus
+            assert window.directory_bar.filter_combo.hasFocus()
+
+    def test_shortcut_ctrl_e_focuses_extension(self, qt_app):
+        """Test that Ctrl+E focuses extension field."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Trigger Ctrl+E shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Ctrl+E":
+                    shortcut.activated.emit()
+                    break
+
+            # Verify extension combo has focus
+            assert window.directory_bar.ext_combo.hasFocus()
+
+    def test_shortcut_ctrl_l_focuses_tree(self, qt_app):
+        """Test that Ctrl+L focuses file tree."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Trigger Ctrl+L shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Ctrl+L":
+                    shortcut.activated.emit()
+                    break
+
+            # Verify tree view has focus
+            assert window.file_tree.tree_view.hasFocus()
+
+    def test_shortcut_ctrl_q_quits(self, qt_app):
+        """Test that Ctrl+Q quits the application."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Track if close was called
+            close_called = []
+
+            def mock_close():
+                close_called.append(True)
+
+            window.close = mock_close
+
+            # Trigger Ctrl+Q shortcut
+            for shortcut in window.findChildren(QShortcut):
+                if shortcut.key().toString() == "Ctrl+Q":
+                    shortcut.activated.emit()
+                    break
+
+            assert len(close_called) == 1
+
+    def test_shortcut_ctrl_shift_t_cycles_theme(self, qt_app):
+        """Test that Ctrl+Shift+T cycles theme."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Mock the theme toggle
+            with patch.object(window, "_on_toggle_theme") as mock_toggle:
+                # Trigger Ctrl+Shift+T shortcut
+                for shortcut in window.findChildren(QShortcut):
+                    if shortcut.key().toString() == "Ctrl+Shift+T":
+                        shortcut.activated.emit()
+                        break
+
+                mock_toggle.assert_called_once()
+
+    def test_shortcut_ctrl_question_shows_help(self, qt_app):
+        """Test that Ctrl+? shows shortcuts help."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Mock QMessageBox to avoid actual dialog
+            with patch("profiles.gui.qt.main_window.QMessageBox") as mock_msgbox:
+                # Trigger Ctrl+/ shortcut (Ctrl+?)
+                for shortcut in window.findChildren(QShortcut):
+                    if shortcut.key().toString() == "Ctrl+/":
+                        shortcut.activated.emit()
+                        break
+
+                # Verify QMessageBox was used
+                assert mock_msgbox.called
+
+    def test_shortcut_ctrl_d_executes_file(self, qt_app):
+        """Test that Ctrl+D executes selected file."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Mock the execute method
+            with patch.object(window, "_on_execute_clicked") as mock_execute:
+                # Trigger Ctrl+D shortcut
+                for shortcut in window.findChildren(QShortcut):
+                    if shortcut.key().toString() == "Ctrl+D":
+                        shortcut.activated.emit()
+                        break
+
+                mock_execute.assert_called_once()
+
+    def test_shortcut_ctrl_shift_l_launches_with_args(self, qt_app):
+        """Test that Ctrl+Shift+L launches with arguments."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Mock the launch_with_args method
+            with patch.object(window, "_launch_with_args") as mock_launch:
+                # Trigger Ctrl+Shift+L shortcut
+                for shortcut in window.findChildren(QShortcut):
+                    if shortcut.key().toString() == "Ctrl+Shift+L":
+                        shortcut.activated.emit()
+                        break
+
+                mock_launch.assert_called_once()
+
+    def test_shortcut_ctrl_comma_opens_preferences(self, qt_app):
+        """Test that Ctrl+, opens preferences."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            # Mock the open_preferences method
+            with patch.object(window, "_open_preferences") as mock_prefs:
+                # Trigger Ctrl+, shortcut
+                for shortcut in window.findChildren(QShortcut):
+                    if shortcut.key().toString() == "Ctrl+,":
+                        shortcut.activated.emit()
+                        break
+
+                mock_prefs.assert_called_once()
+
+    def test_all_shortcuts_created(self, qt_app):
+        """Test that all expected shortcuts are created."""
+        config = AppConfig()
+        logger = logging.getLogger("test")
+
+        with patch.object(MainWindow, "_setup_controller"):
+            window = MainWindow(config, logger)
+            window._setup_shortcuts()
+
+            shortcuts = window.findChildren(QShortcut)
+            shortcut_keys = [s.key().toString() for s in shortcuts]
+
+            expected_shortcuts = [
+                "F5",
+                "Ctrl+R",
+                "Ctrl+D",
+                "Ctrl+E",
+                "Ctrl+L",
+                "Return",
+                "Delete",
+                "Ctrl+Shift+L",
+                "Ctrl+,",
+                "Ctrl+Shift+T",
+                "Ctrl+/",
+                "Ctrl+Q",
+                "Escape",
+                "Ctrl+F",
+            ]
+
+            for expected in expected_shortcuts:
+                assert expected in shortcut_keys, f"Missing shortcut: {expected}"

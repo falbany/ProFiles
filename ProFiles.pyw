@@ -59,15 +59,20 @@ def _system_python() -> str:
             if path:
                 # Verify it's Python 3.11+ (required for StrEnum)
                 import subprocess
+
                 result = subprocess.run(
-                    [path, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                    [
+                        path,
+                        "-c",
+                        "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
+                    ],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
                 )
                 if result.returncode == 0:
                     version = result.stdout.strip()
-                    major, minor = map(int, version.split('.'))
+                    major, minor = map(int, version.split("."))
                     if major > 3 or (major == 3 and minor >= 11):
                         return path
         except Exception:
@@ -116,6 +121,7 @@ def _run() -> None:
     except Exception as e:
         print(f"ERROR: Failed to import profiles: {e}")
         import traceback
+
         traceback.print_exc()
         print("\nPress Enter to exit...")
         input()
@@ -127,6 +133,7 @@ def _run() -> None:
     except Exception as e:
         print(f"ERROR: Application failed to start: {e}")
         import traceback
+
         traceback.print_exc()
         print("\nPress Enter to exit...")
         input()
@@ -155,6 +162,7 @@ if __name__ == "__main__":
         # This prevents the terminal from closing immediately on double-click
         print(f"ERROR: ProFiles failed to start: {e}")
         import traceback
+
         traceback.print_exc()
         print("\nPress Enter to exit...")
         input()  # Wait for user to press Enter

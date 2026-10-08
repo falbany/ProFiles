@@ -365,6 +365,7 @@ version = "2026.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "pyside6" },
     { name = "ruamel-yaml" },
 ]
 
@@ -374,7 +375,6 @@ dev = [
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pyright" },
-    { name = "pyside6" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
@@ -401,7 +401,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
-    { name = "pyside6", marker = "extra == 'dev'", specifier = ">=6.7" },
+    { name = "pyside6", specifier = ">=6.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.0.0" },

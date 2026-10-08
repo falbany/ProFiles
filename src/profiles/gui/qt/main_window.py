@@ -10,7 +10,7 @@ try:
 except ImportError:
     from typing_extensions import override
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from profiles.core.actions import ActionStatus
+from profiles.core.actions import launch_selected_file as actions_launch_file
 from profiles.core.config.models import AppConfig
 from profiles.gui.qt.controllers.scan_controller import ScanController
 from profiles.gui.qt.ui import create_horizontal_layout, create_vertical_layout
@@ -407,16 +409,73 @@ class MainWindow(QMainWindow):
         )
 
     def _setup_shortcuts(self) -> None:
+        """Set up all keyboard shortcuts to match Tkinter behavior.
+
+        Shortcuts are created only when QApplication is available (deferred until
+        showEvent to avoid access violations on Windows).
+        """
         try:
             from PySide6.QtWidgets import QApplication
 
             if QApplication.instance() is None:
                 return
+
+            # F5 - Scan/Refresh
+            f5 = QShortcut(QKeySequence("F5"), self)
+            f5.activated.connect(self._on_scan_requested)
+
+            # Ctrl+D - Execute (matches Tkinter's Ctrl+D for execute)
+            ctrl_d = QShortcut(QKeySequence("Ctrl+D"), self)
+            ctrl_d.activated.connect(self._on_execute_shortcut)
+
+            # Ctrl+E - Filter extension (focus ext field)
+            ctrl_e = QShortcut(QKeySequence("Ctrl+E"), self)
+            ctrl_e.activated.connect(self._focus_extension)
+
+            # Ctrl+L - Filter folder (focus file tree/list)
+            ctrl_l = QShortcut(QKeySequence("Ctrl+L"), self)
+            ctrl_l.activated.connect(self._focus_file_tree)
+
+            # Return - Execute selected file
+            return_key = QShortcut(QKeySequence("Return"), self)
+            return_key.activated.connect(self._on_execute_shortcut)
+
+            # Delete - Clear filter text
+            delete_key = QShortcut(QKeySequence("Delete"), self)
+            delete_key.activated.connect(self._clear_filter)
+
+            # Ctrl+Shift+L - Launch with args (open log in Tkinter, but we use for launch with args)
+            ctrl_shift_l = QShortcut(QKeySequence("Ctrl+Shift+L"), self)
+            ctrl_shift_l.activated.connect(self._launch_with_args)
+
+            # Ctrl+Comma - Preferences (open config file)
+            ctrl_comma = QShortcut(QKeySequence("Ctrl+,"), self)
+            ctrl_comma.activated.connect(self._open_preferences)
+
+            # Ctrl+Shift+T - Terminal (cycle theme in Tkinter)
+            ctrl_shift_t = QShortcut(QKeySequence("Ctrl+Shift+T"), self)
+            ctrl_shift_t.activated.connect(self._on_toggle_theme)
+
+            # Ctrl+? - Help (show shortcuts dialog)
+            ctrl_question = QShortcut(QKeySequence("Ctrl+/"), self)
+            ctrl_question.activated.connect(self._show_shortcuts_help)
+
+            # Ctrl+Q - Quit
+            ctrl_q = QShortcut(QKeySequence("Ctrl+Q"), self)
+            ctrl_q.activated.connect(self.close)
+
+            # Escape - Clear filter (same as Delete)
+            escape_key = QShortcut(QKeySequence("Escape"), self)
+            escape_key.activated.connect(self._clear_filter)
+
+            # Ctrl+F - Focus filter (already existed, keeping for compatibility)
+            ctrl_f = QShortcut(QKeySequence("Ctrl+F"), self)
+            ctrl_f.activated.connect(self._focus_filter)
+
+            # Ctrl+R - Scan/Refresh (already existed, keeping for compatibility)
             ctrl_r = QShortcut(QKeySequence("Ctrl+R"), self)
             ctrl_r.activated.connect(self._on_scan_requested)
 
-            ctrl_f = QShortcut(QKeySequence("Ctrl+F"), self)
-            ctrl_f.activated.connect(self._focus_filter)
         except Exception:
             # QShortcut requires a valid QWidget parent with QApplication
             # Skip shortcuts if QApplication not available (e.g., in tests)
@@ -449,7 +508,62 @@ class MainWindow(QMainWindow):
         self._on_scan_requested()
 
     def _on_execute_clicked(self) -> None:
-        self._status_bar.set_message("Execute not implemented yet")
+        """Handle file execution on selected row.
+
+        Calls actions.launch_selected_file() with proper parameters,
+        handles all ActionResult statuses, closes window after 500ms
+        if close_after_execute is set, and emits telemetry events
+        (file_launched, file_launch_failed) via the action.
+        """
+        # Get selected index from tree view
+        selection = self._file_tree.tree_view.selection()
+        if not selection:
+            self._status_bar.set_message("No file selected")
+            return
+
+        # Get the selected item data
+        selected_item = selection[0]
+        item_data = self._file_tree.tree_view.item(selected_item)
+        values = item_data["values"]
+
+        # Extract filename from first column (File column)
+        if not values or len(values) < 1:
+            self._status_bar.set_message("Invalid selection")
+            return
+
+        filename = values[0]
+
+        # Get directory from directory bar
+        directory = self._directory_bar.dir_text
+
+        # Get config values
+        release = self._config.release
+        username = self._config.title or "unknown"
+        close_after = self._config.close_after_execute
+
+        # Call the action
+        result = actions_launch_file(
+            directory=directory,
+            filename=filename,
+            release=release,
+            username=username,
+            config=self._config,
+            logger=self._logger,
+        )
+
+        # Handle result
+        if result.status == ActionStatus.SUCCESS:
+            self._status_bar.set_message(f"Launched: {filename}")
+        elif result.status == ActionStatus.NOT_FOUND:
+            self._status_bar.set_message(f"File not found: {filename}")
+            QMessageBox.warning(self, "File Not Found", result.message)
+        elif result.status == ActionStatus.FAILED:
+            self._status_bar.set_message(f"Launch failed: {filename}")
+            QMessageBox.critical(self, "Launch Failed", result.message)
+
+        # Close window after 500ms if configured
+        if close_after:
+            QTimer.singleShot(500, self.close)
 
     def _on_scan_finished(self, items: list) -> None:
         self._action_bar.set_scanning(False)
@@ -466,6 +580,137 @@ class MainWindow(QMainWindow):
 
     def _focus_filter(self) -> None:
         self._directory_bar.filter_combo.setFocus()
+
+    def _focus_extension(self) -> None:
+        """Focus the extension combobox (Ctrl+E)."""
+        self._directory_bar.ext_combo.setFocus()
+
+    def _focus_file_tree(self) -> None:
+        """Focus the file tree view (Ctrl+L)."""
+        self._file_tree.tree_view.setFocus()
+
+    def _clear_filter(self) -> None:
+        """Clear the filter text (Delete or Escape)."""
+        self._directory_bar.filter_combo.setCurrentIndex(-1)
+        self._directory_bar.filter_combo.setEditText("")
+
+    def _on_execute_shortcut(self) -> None:
+        """Execute selected file (Return or Ctrl+D).
+
+        Same handler as _on_execute_clicked, extracted for shortcut binding.
+        """
+        self._on_execute_clicked()
+
+    def _launch_with_args(self) -> None:
+        """Launch selected file with arguments (Ctrl+Shift+L).
+
+        Prompts for arguments via QMessageBox, then executes with those args.
+        """
+        from PySide6.QtWidgets import QInputDialog
+
+        # Get selected file
+        selection = self._file_tree.tree_view.selection()
+        if not selection:
+            self._status_bar.set_message("No file selected")
+            return
+
+        selected_item = selection[0]
+        item_data = self._file_tree.tree_view.item(selected_item)
+        values = item_data["values"]
+
+        if not values or len(values) < 1:
+            self._status_bar.set_message("Invalid selection")
+            return
+
+        filename = values[0]
+        directory = self._directory_bar.dir_text
+
+        # Prompt for arguments
+        args, ok = QInputDialog.getText(
+            self,
+            "Launch with Arguments",
+            f"Arguments for {filename}:",
+        )
+
+        if not ok or not args:
+            return
+
+        # Get config values
+        release = self._config.release
+        username = self._config.title or "unknown"
+        close_after = self._config.close_after_execute
+
+        # Call the action with args
+        result = actions_launch_file(
+            directory=directory,
+            filename=filename,
+            release=release,
+            username=username,
+            args=args,
+            config=self._config,
+            logger=self._logger,
+        )
+
+        # Handle result
+        if result.status == ActionStatus.SUCCESS:
+            self._status_bar.set_message(f"Launched: {filename} with args: {args}")
+        elif result.status == ActionStatus.NOT_FOUND:
+            self._status_bar.set_message(f"File not found: {filename}")
+            QMessageBox.warning(self, "File Not Found", result.message)
+        elif result.status == ActionStatus.FAILED:
+            self._status_bar.set_message(f"Launch failed: {filename}")
+            QMessageBox.critical(self, "Launch Failed", result.message)
+
+        # Close window after 500ms if configured
+        if close_after:
+            QTimer.singleShot(500, self.close)
+
+    def _open_preferences(self) -> None:
+        """Open preferences/config file (Ctrl+Comma).
+
+        Opens the config file in the default editor.
+        """
+        import os
+        from pathlib import Path
+
+        config_path = Path(self._config.config_path)
+        if config_path.exists():
+            try:
+                os.startfile(str(config_path))  # Windows
+            except AttributeError:
+                try:
+                    import subprocess
+
+                    subprocess.run(["xdg-open", str(config_path)])  # Linux
+                except Exception:
+                    self._status_bar.set_message(f"Config file: {config_path}")
+        else:
+            self._status_bar.set_message("Config file not found")
+
+    def _show_shortcuts_help(self) -> None:
+        """Show keyboard shortcuts help dialog (Ctrl+?)."""
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Keyboard Shortcuts")
+        dlg.setIcon(QMessageBox.Icon.Information)
+
+        shortcuts_text = """
+F5              : Scan/Refresh
+Ctrl+R          : Scan/Refresh
+Ctrl+D          : Execute selected file
+Return          : Execute selected file
+Ctrl+E          : Focus extension field
+Ctrl+L          : Focus file tree
+Delete/Escape   : Clear filter text
+Ctrl+Shift+L    : Launch with arguments
+Ctrl+,          : Open preferences/config
+Ctrl+Shift+T    : Cycle theme
+Ctrl+?          : Show this help
+Ctrl+Q          : Quit application
+Ctrl+F          : Focus filter field
+        """.strip()
+
+        dlg.setText(shortcuts_text)
+        dlg.exec()
 
     @override
     def closeEvent(self, event: QCloseEvent) -> None:
