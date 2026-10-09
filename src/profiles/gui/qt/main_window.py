@@ -10,7 +10,8 @@ try:
 except ImportError:
     from typing_extensions import override
 
-from PySide6.QtCore import Qt, QTimer, QEvent, Signal, QCoreApplication, QCursor
+from PySide6.QtCore import Qt, QTimer, QEvent, Signal, QCoreApplication
+from PySide6.QtGui import QCursor
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
