@@ -50,7 +50,8 @@ DirectoryBar = qt_main_window.DirectoryBar
 ActionBar = qt_main_window.ActionBar
 FileTree = qt_main_window.FileTree
 StatusBar = qt_main_window.StatusBar
-ContextMenu = qt_main_window.ContextMenu
+# ContextMenu moved to qt.context_menu module
+from profiles.gui.qt.context_menu import ContextMenu
 
 
 # pytest-qt fixture for QApplication

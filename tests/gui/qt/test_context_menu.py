@@ -18,7 +18,7 @@ def qt_app():
 
 
 def test_context_menu_shows_expected_actions(qt_app):
-    """Verify context menu has all 5 expected actions."""
+    """Verify context menu has all 12 expected actions."""
     menu = ContextMenu()
     menu.build_for_file(
         file_path="C:/test/file.txt",
@@ -30,12 +30,18 @@ def test_context_menu_shows_expected_actions(qt_app):
     # Filter out separator actions
     text_actions = [a.text() for a in actions if a.text()]
 
-    assert len(text_actions) == 5
-    assert "Copy Path" in text_actions
-    assert "Copy Name" in text_actions
-    assert "Open" in text_actions
-    assert "Reveal in Explorer" in text_actions
-    assert "Refresh" in text_actions
+    assert len(text_actions) == 12
+    assert "▶  Launch" in text_actions
+    assert "🚀  Launch with args" in text_actions
+    assert "📂  Reveal in Explorer" in text_actions
+    assert "📁  Open folder" in text_actions
+    assert "🖥  Open terminal" in text_actions
+    assert "🔎  Filter to folder" in text_actions
+    assert "📋  Copy" in text_actions
+    assert "#  Hash" in text_actions
+    assert "ℹ  Properties" in text_actions
+    assert "🗑  Delete" in text_actions
+    assert "🔄 Refresh" in text_actions
 
 
 def test_context_menu_copy_path_copies_to_clipboard(qt_app):
@@ -64,8 +70,8 @@ def test_context_menu_copy_name_copies_to_clipboard(qt_app):
         directory="C:/test",
     )
 
-    # Trigger copy name
-    menu._on_copy_name()
+    # Trigger copy name (with extension)
+    menu._on_copy_name_with_ext()
 
     # Verify clipboard content
     clipboard = QApplication.clipboard()
@@ -73,7 +79,9 @@ def test_context_menu_copy_name_copies_to_clipboard(qt_app):
 
 
 def test_context_menu_open_emits_signal(qt_app):
-    """Test that Open action emits signal with correct parameters."""
+    """Test that Launch action emits signal with correct parameters."""
+    from unittest.mock import patch
+    
     menu = ContextMenu()
     menu.build_for_file(
         file_path="C:/test/file.txt",
@@ -90,10 +98,12 @@ def test_context_menu_open_emits_signal(qt_app):
         emitted_dir = directory
         emitted_filename = filename
 
-    menu.open_triggered.connect(capture)
+    menu.launch_triggered.connect(capture)
 
-    # Trigger open
-    menu._on_open()
+    # Mock launch_file to return True (simulating successful launch)
+    with patch("profiles.gui.qt.context_menu.launch_file", return_value=True):
+        # Trigger launch
+        menu._on_launch()
 
     # Verify signal was emitted with correct parameters
     assert emitted_dir == "C:/test"
