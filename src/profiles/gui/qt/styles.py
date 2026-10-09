@@ -122,6 +122,18 @@ def _get_light_qss() -> str:
             color: {tokens["tooltip_fg"]};
             border: 1px solid {tokens["tooltip_border"]};
         }}
+        QPushButton.Execute {{
+            padding: 24px 8px;
+        }}
+        QPushButton.SearchBar {{
+            padding: 14px 5px;
+        }}
+        QPushButton.Value {{
+            padding: 8px 3px;
+        }}
+        QPushButton.Link {{
+            padding: 0px 0px;
+        }}
     """
 
 
@@ -160,5 +172,17 @@ def _get_dark_qss() -> str:
             background-color: {tokens["tooltip_bg"]};
             color: {tokens["tooltip_fg"]};
             border: 1px solid {tokens["tooltip_border"]};
+        }}
+        QPushButton.Execute {{
+            padding: 24px 8px;
+        }}
+        QPushButton.SearchBar {{
+            padding: 14px 5px;
+        }}
+        QPushButton.Value {{
+            padding: 8px 3px;
+        }}
+        QPushButton.Link {{
+            padding: 0px 0px;
         }}
     """

@@ -10,7 +10,7 @@ try:
 except ImportError:
     from typing_extensions import override
 
-from PySide6.QtCore import Qt, QTimer, QEvent, Signal, QCoreApplication
+from PySide6.QtCore import Qt, QTimer, QEvent, Signal, QCoreApplication, QCursor
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QWidget,
 )
+from pathlib import Path
 
 # Sort indicator arrows (matching Tkinter behavior)
 _SORT_ASC = " \u25b2"  # Up arrow ▲
@@ -43,6 +44,7 @@ from profiles.gui.qt.controllers.chunked_file_list_controller import (
 from profiles.gui.qt.controllers.scan_controller import ScanController
 from profiles.gui.qt.ui import create_horizontal_layout, create_vertical_layout
 from profiles.gui.theme import DARK_THEME, LIGHT_THEME, THEME_LABELS, to_qss_tokens, resolve_theme_name_qt
+from profiles.gui.qt.context_menu import ContextMenu as FullContextMenu
 
 # ── Sub-widgets ──────────────────────────────────────────────────
 
@@ -205,23 +207,38 @@ class DirectoryBar(QWidget):
         """Event filter for focus ring styling on comboboxes."""
         if event.type() == QEvent.FocusIn:
             if isinstance(obj, QComboBox):
+                # Use theme-aware focus ring color from current theme
+                focus_color = DARK_THEME.focus_ring if self._is_dark_theme() else LIGHT_THEME.focus_ring
+                
                 obj.setStyleSheet(
-                    "QComboBox {"
-                    "    border: 2px solid #005fb8;"
-                    "    border-radius: 4px;"
-                    "    padding: 4px 8px;"
-                    "}"
+                    f"QComboBox {{ "
+                    f"    border: 2px solid {focus_color}; "
+                    f"    border-radius: 4px; "
+                    f"    padding: 4px 8px; "
+                    f"}} "
                 )
         elif event.type() == QEvent.FocusOut:
             if isinstance(obj, QComboBox):
+                # Use theme-aware border color from current theme
+                border_color = DARK_THEME.outline if self._is_dark_theme() else LIGHT_THEME.outline
+                
                 obj.setStyleSheet(
-                    "QComboBox {"
-                    "    border: 1px solid #888;"
-                    "    border-radius: 4px;"
-                    "    padding: 4px 8px;"
-                    "}"
+                    f"QComboBox {{ "
+                    f"    border: 1px solid {border_color}; "
+                    f"    border-radius: 4px; "
+                    f"    padding: 4px 8px; "
+                    f"}} "
                 )
         return super().eventFilter(obj, event)
+
+    def _is_dark_theme(self) -> bool:
+        """Check if current theme is dark using Qt's color scheme detection."""
+        from PySide6.QtWidgets import QApplication
+        
+        app = QApplication.instance()
+        if app is None:
+            return False
+        return app.styleHints().colorScheme().value == 1
 
 
 class ActionBar(QWidget):
@@ -303,6 +320,7 @@ class FileTree(QWidget):
 
     selection_changed = Signal(list)
     reset_filters_requested = Signal()
+    context_menu_requested = Signal(str, str, str)  # file_path, filename, directory
 
     def __init__(self, config: AppConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -310,6 +328,7 @@ class FileTree(QWidget):
         self._empty_state_widget: QWidget | None = None
         self._sort_column: int = -1
         self._sort_direction: str = "asc"
+        self._directory: str = ""
         self._setup_ui()
 
     def eventFilter(self, obj: object, event: QEvent) -> bool:
@@ -361,6 +380,7 @@ class FileTree(QWidget):
         self._table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table_widget.doubleClicked.connect(self._on_double_click)
+        self._table_widget.verticalHeader().setDefaultSectionSize(36)
 
         # Install event filter on header for double-click auto-fit
         header = self._table_widget.horizontalHeader()
@@ -369,6 +389,9 @@ class FileTree(QWidget):
         
         # Connect sort signal for click handling
         header.sectionClicked.connect(self._on_header_clicked)
+
+        # Connect context menu signal
+        self._table_widget.customContextMenuRequested.connect(self._on_context_menu)
 
         # Build columns dynamically from config
         self._setup_columns()
@@ -562,6 +585,30 @@ class FileTree(QWidget):
     def _on_double_click(self, index: Any) -> None:
         self.selection_changed.emit([index])
 
+    def _on_context_menu(self, pos) -> None:
+        """Handle right-click context menu request."""
+        index = self._table_widget.indexAt(pos)
+        if not index.isValid():
+            return
+        
+        row = index.row()
+        column_names = self._config.column_names or ("File",)
+        
+        # Get filename from first column
+        filename_item = self._table_widget.item(row, 0)
+        if not filename_item:
+            return
+        filename = filename_item.text()
+        
+        # Get directory from directory bar (passed from parent)
+        directory = getattr(self, '_directory', '')
+        
+        # Build full path
+        file_path = str(Path(directory) / filename) if directory else filename
+        
+        # Emit signal for MainWindow to build and show menu
+        self.context_menu_requested.emit(file_path, filename, directory)
+
     @property
     def table_widget(self) -> QTableWidget:
         return self._table_widget
@@ -569,6 +616,10 @@ class FileTree(QWidget):
     def set_model(self, model: Any) -> None:
         """Placeholder for compatibility - not used with QTableWidget."""
         pass
+
+    def set_directory(self, directory: str) -> None:
+        """Set the directory path for context menu path building."""
+        self._directory = directory
 
     def set_row_colors(self, rules: Any, theme: Any = None) -> None:
         """Configure row colour rules using row_colors module.
@@ -721,46 +772,6 @@ class StatusBar(QStatusBar):
             self._message_label.setText("Ready")
 
 
-class ContextMenu:
-    """Right-click context menu for the file table."""
-
-    def __init__(self, table_widget: QTableWidget, logger: logging.Logger) -> None:
-        self._table_widget = table_widget
-        self._logger = logger
-        self._menu = QMenu()
-        self._setup_menu()
-
-    def _setup_menu(self) -> None:
-        self._copy_path_action = self._menu.addAction("Copy Path")
-        self._copy_name_action = self._menu.addAction("Copy Name")
-        self._menu.addSeparator()
-        self._open_action = self._menu.addAction("Open")
-        self._menu.addSeparator()
-        self._refresh_action = self._menu.addAction("Refresh")
-
-    def show_event(self, event: Any) -> None:
-        """Show context menu at event position."""
-        index = self._table_widget.indexAt(event.pos())
-        if index.isValid():
-            self._menu.exec(event.globalPos())
-
-    @property
-    def copy_path_action(self) -> Any:
-        return self._copy_path_action
-
-    @property
-    def copy_name_action(self) -> Any:
-        return self._copy_name_action
-
-    @property
-    def open_action(self) -> Any:
-        return self._open_action
-
-    @property
-    def refresh_action(self) -> Any:
-        return self._refresh_action
-
-
 # ── Main Window ──────────────────────────────────────────────────
 
 
@@ -771,9 +782,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._config = config
         self._logger = logger
-        self._context_menu: ContextMenu | None = None
         self._shortcuts_setup: bool = False
         self._theme_name: str = config.theme if hasattr(config, 'theme') else "light"
+        self._pending_launch: dict | None = None
         self._setup_ui()
         self._setup_controller()
         self._apply_theme(self._theme_name)
@@ -827,14 +838,103 @@ class MainWindow(QMainWindow):
         # Wire up directory bar signals for row color re-application
         self._directory_bar.directory_changed.connect(self._on_directory_changed)
 
-        # Context menu
-        self._context_menu = ContextMenu(self._file_tree.table_widget, self._logger)
-        self._file_tree.table_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._file_tree.table_widget.customContextMenuRequested.connect(
-            lambda pos: self._context_menu.show_event(
-                type("Event", (), {"pos": pos, "globalPos": lambda: self.mapToGlobal(pos)})()
-            )
-        )
+        # Wire up FileTree context menu signal
+        self._file_tree.context_menu_requested.connect(self._show_context_menu)
+
+    def _show_context_menu(self, file_path: str, filename: str, directory: str) -> None:
+        """Build and show full context menu for a file."""
+        # Create full context menu
+        context_menu = FullContextMenu(self)
+        context_menu.build_for_file(file_path, filename, directory)
+        
+        # Connect all signals to handlers
+        context_menu.copy_path_triggered.connect(self._on_copy_path)
+        context_menu.copy_name_triggered.connect(self._on_copy_name)
+        context_menu.open_triggered.connect(self._on_context_menu_open)
+        context_menu.refresh_triggered.connect(self._on_scan_requested)
+        context_menu.reveal_triggered.connect(self._on_reveal_in_explorer)
+        context_menu.delete_triggered.connect(self._on_context_menu_delete)
+        context_menu.filter_folder_triggered.connect(self._on_filter_to_folder)
+        context_menu.filter_extension_triggered.connect(self._on_filter_by_extension)
+        context_menu.open_folder_triggered.connect(self._on_open_folder)
+        context_menu.open_terminal_triggered.connect(self._on_open_terminal)
+        context_menu.properties_triggered.connect(self._on_show_properties)
+        context_menu.launch_triggered.connect(self._on_context_menu_launch)
+        context_menu.launch_with_args_triggered.connect(self._on_context_menu_launch_with_args)
+        context_menu.hash_triggered.connect(self._on_hash_result)
+        context_menu.verify_hash_triggered.connect(self._on_verify_hash_result)
+        
+        # Show menu at cursor position
+        context_menu.exec(QCursor.pos())
+
+    def _on_copy_path(self, path: str) -> None:
+        """Handle copy path action."""
+        self._status_bar.set_message(f"Path copied: {path}")
+
+    def _on_copy_name(self, name: str) -> None:
+        """Handle copy name action."""
+        self._status_bar.set_message(f"Name copied: {name}")
+
+    def _on_context_menu_open(self, directory: str, filename: str) -> None:
+        """Handle open action from context menu."""
+        self._execute_file(directory, filename)
+
+    def _on_reveal_in_explorer(self, file_path: str) -> None:
+        """Handle reveal in explorer action."""
+        self._status_bar.set_message(f"Revealed: {file_path}")
+
+    def _on_context_menu_delete(self, file_path: str) -> None:
+        """Handle delete action from context menu."""
+        self._status_bar.set_message(f"Deleted: {file_path}")
+        # Trigger refresh
+        self._on_scan_requested()
+
+    def _on_filter_to_folder(self, directory: str) -> None:
+        """Handle filter to folder action."""
+        self._directory_bar.set_dir_text(directory)
+        self._on_scan_requested()
+
+    def _on_filter_by_extension(self, extension: str) -> None:
+        """Handle filter by extension action."""
+        self._directory_bar.set_ext_text(extension)
+        self._on_scan_requested()
+
+    def _on_open_folder(self, directory: str) -> None:
+        """Handle open folder action."""
+        self._status_bar.set_message(f"Opened folder: {directory}")
+
+    def _on_open_terminal(self, directory: str) -> None:
+        """Handle open terminal action."""
+        self._status_bar.set_message(f"Terminal opened in: {directory}")
+
+    def _on_show_properties(self, file_path: str) -> None:
+        """Handle show properties action."""
+        self._status_bar.set_message(f"Properties: {file_path}")
+
+    def _on_context_menu_launch(self, directory: str, filename: str) -> None:
+        """Handle launch action from context menu."""
+        self._execute_file(directory, filename)
+
+    def _on_context_menu_launch_with_args(self, directory: str, filename: str, args: str) -> None:
+        """Handle launch with args action from context menu."""
+        self._execute_file(directory, filename, args)
+
+    def _on_hash_result(self, file_path: str, algorithm: str, digest: str) -> None:
+        """Handle hash computation result."""
+        self._status_bar.set_message(f"{algorithm.upper()}: {digest[:16]}...")
+
+    def _on_verify_hash_result(self, file_path: str, algorithm: str, match: bool) -> None:
+        """Handle hash verification result."""
+        if match:
+            self._status_bar.set_message(f"{algorithm.upper()} verification: ✓ Match")
+        else:
+            self._status_bar.set_message(f"{algorithm.upper()} verification: ✗ Mismatch")
+
+    def _execute_file(self, directory: str, filename: str, args: str = None) -> None:
+        """Execute a file with optional arguments."""
+        # Store current selection and execute
+        self._pending_launch = {"directory": directory, "filename": filename, "args": args}
+        self._on_execute_clicked()
 
     def _setup_shortcuts(self) -> None:
         """Set up all keyboard shortcuts to match Tkinter behavior.
@@ -917,6 +1017,8 @@ class MainWindow(QMainWindow):
 
     def _on_directory_changed(self, directory: str) -> None:
         """Handle directory change: re-apply row colors based on new config."""
+        # Set directory on file tree for context menu path building
+        self._file_tree.set_directory(directory)
         # Re-configure row colors for the new directory/config
         self._configure_row_colors()
         
@@ -973,44 +1075,53 @@ class MainWindow(QMainWindow):
         if close_after_execute is set, and emits telemetry events
         (file_launched, file_launch_failed) via the action.
         """
-        # Get selected row from table widget
-        selected_rows = self._file_tree.table_widget.selectedItems()
-        if not selected_rows:
-            self._status_bar.set_message("No file selected")
-            return
+        # Check for pending launch from context menu (with args)
+        if hasattr(self, '_pending_launch') and self._pending_launch:
+            directory = self._pending_launch.get('directory', self._directory_bar.dir_text)
+            filename = self._pending_launch.get('filename', '')
+            args = self._pending_launch.get('args')
+            # Clear pending launch
+            self._pending_launch = None
+        else:
+            # Get selected row from table widget
+            selected_rows = self._file_tree.table_widget.selectedItems()
+            if not selected_rows:
+                self._status_bar.set_message("No file selected")
+                return
 
-        # Get the selected row index
-        row = selected_rows[0].row()
+            # Get the selected row index
+            row = selected_rows[0].row()
 
-        # Extract filename from first column (File column)
-        filename_item = self._file_tree.table_widget.item(row, 0)
-        if not filename_item:
-            self._status_bar.set_message("Invalid selection")
-            return
+            # Extract filename from first column (File column)
+            filename_item = self._file_tree.table_widget.item(row, 0)
+            if not filename_item:
+                self._status_bar.set_message("Invalid selection")
+                return
 
-        filename = filename_item.text()
-
-        # Get directory from directory bar
-        directory = self._directory_bar.dir_text
+            filename = filename_item.text()
+            # Get directory from directory bar
+            directory = self._directory_bar.dir_text
+            args = None
 
         # Get config values
         release = self._config.release
         username = self._config.title or "unknown"
         close_after = self._config.close_after_execute
 
-        # Call the action
+        # Call the action with optional args
         result = actions_launch_file(
             directory=directory,
             filename=filename,
             release=release,
             username=username,
+            args=args,
             config=self._config,
             logger=self._logger,
         )
 
         # Handle result
         if result.status == ActionStatus.SUCCESS:
-            self._status_bar.set_message(f"Launched: {filename}")
+            self._status_bar.set_message(f"Launched: {filename}" + (f" with args: {args}" if args else ""))
         elif result.status == ActionStatus.NOT_FOUND:
             self._status_bar.set_message(f"File not found: {filename}")
             QMessageBox.warning(self, "File Not Found", result.message)
