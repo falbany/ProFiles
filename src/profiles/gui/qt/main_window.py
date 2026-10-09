@@ -1053,10 +1053,10 @@ class MainWindow(QMainWindow):
         for i, item in enumerate(chunk):
             row = current_row_count + i
             for col in range(num_columns):
-                if col < len(item.values):
-                    value = str(item.values[col]) if item.values[col] is not None else ""
-                    table_item = QTableWidgetItem(value)
-                    table.setItem(row, col, table_item)
+                col_name = column_names[col] if col < len(column_names) else ""
+                value = item.column_values.get(col_name, "") if item.column_values else ""
+                table_item = QTableWidgetItem(str(value) if value else "")
+                table.setItem(row, col, table_item)
 
     def _on_chunk_progress(self, current: int, total: int) -> None:
         """Handle progress update (called on main thread)."""

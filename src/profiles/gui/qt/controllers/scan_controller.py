@@ -178,17 +178,28 @@ class ScanController:
         This method attempts to gracefully stop the worker thread.
         If the thread doesn't quit within 5 seconds, it's terminated.
         """
-        if self._thread is None or not self._thread.isRunning():
+        # Guard against accessing deleted C++ objects
+        if self._thread is None:
             return
-        # Request quit with timeout - force terminate if timeout exceeded
-        if not self._thread.wait(5000):
-            # Force termination if timeout exceeded
-            self._thread.terminate()
-            self._thread.wait(1000)
+        try:
+            if not self._thread.isRunning():
+                return
+            # Request quit with timeout - force terminate if timeout exceeded
+            if not self._thread.wait(5000):
+                # Force termination if timeout exceeded
+                self._thread.terminate()
+                self._thread.wait(1000)
+        except RuntimeError:
+            # Thread object already deleted - ignore
+            pass
 
         # Clean up worker
         if self._worker is not None:
-            self._worker.deleteLater()
+            try:
+                self._worker.deleteLater()
+            except RuntimeError:
+                # Worker object already deleted - ignore
+                pass
             self._worker = None
 
         self._thread = None
