@@ -10,11 +10,12 @@ try:
 except ImportError:
     from typing_extensions import override
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, QEvent, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QHeaderView,
     QLabel,
     QMainWindow,
@@ -80,6 +81,12 @@ class DirectoryBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._setup_ui()
+        self._install_focus_ring()
+
+    def _install_focus_ring(self) -> None:
+        """Install event filter on comboboxes for focus ring styling."""
+        for combo in (self._dir_combo, self._ext_combo, self._filter_combo):
+            combo.installEventFilter(self)
 
     def _setup_ui(self) -> None:
         layout = create_vertical_layout(self, spacing=6, margin=8)
@@ -90,8 +97,16 @@ class DirectoryBar(QWidget):
         self._dir_combo = QComboBox()
         self._dir_combo.setMinimumHeight(28)
         self._dir_combo.currentTextChanged.connect(self._on_dir_changed)
+        
+        # Browse button
+        browse_btn = QPushButton("...")
+        browse_btn.setFixedWidth(32)
+        browse_btn.clicked.connect(self._on_browse_directory)
+        
         dir_layout.addWidget(dir_label)
         dir_layout.addWidget(self._dir_combo, 1)
+        dir_layout.addWidget(browse_btn)
+        
         layout.addLayout(dir_layout)
 
         # Extension combobox
@@ -117,6 +132,15 @@ class DirectoryBar(QWidget):
 
     def _on_dir_changed(self, text: str) -> None:
         self.directory_changed.emit(text)
+
+    def _on_browse_directory(self) -> None:
+        """Open directory picker dialog and update combobox."""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Launcher Directory", ""
+        )
+        if directory:
+            self.set_dir_text(directory)
+            self.directory_changed.emit(directory)
 
     def _on_ext_changed(self, text: str) -> None:
         self.extension_changed.emit(text)
@@ -171,6 +195,28 @@ class DirectoryBar(QWidget):
             self._filter_combo.addItem(text)
             idx = self._filter_combo.count() - 1
         self._filter_combo.setCurrentIndex(idx)
+
+    def eventFilter(self, obj: object, event: QEvent) -> bool:
+        """Event filter for focus ring styling on comboboxes."""
+        if event.type() == QEvent.FocusIn:
+            if isinstance(obj, QComboBox):
+                obj.setStyleSheet(
+                    "QComboBox {"
+                    "    border: 2px solid #005fb8;"
+                    "    border-radius: 4px;"
+                    "    padding: 4px 8px;"
+                    "}"
+                )
+        elif event.type() == QEvent.FocusOut:
+            if isinstance(obj, QComboBox):
+                obj.setStyleSheet(
+                    "QComboBox {"
+                    "    border: 1px solid #888;"
+                    "    border-radius: 4px;"
+                    "    padding: 4px 8px;"
+                    "}"
+                )
+        return super().eventFilter(obj, event)
 
 
 class ActionBar(QWidget):
@@ -285,14 +331,77 @@ class FileTree(QWidget):
         """Placeholder for compatibility - not used with QTableWidget."""
         pass
 
-    def set_row_colors(self, rules: Any) -> None:
-        """Configure row colour rules using row_colors module."""
+    def set_row_colors(self, rules: Any, theme: Any = None) -> None:
+        """Configure row colour rules using row_colors module.
+        
+        Args:
+            rules: RowColorRules instance or raw list of (pattern, color) tuples.
+            theme: Md3Theme instance for WCAG contrast fallback (optional).
+        """
         from profiles.gui.presentation.row_colors import RowColorRules
 
         if isinstance(rules, RowColorRules):
             self._row_rules = rules
         else:
             self._row_rules = rules
+        self._theme = theme
+        self._apply_row_colors()
+
+    def _apply_row_colors(self) -> None:
+        """Apply row colors to all existing rows using theme-aware colors with WCAG fallback."""
+        if not hasattr(self, '_row_rules') or self._row_rules is None:
+            return
+        if self._theme is None:
+            return
+            
+        from profiles.gui.theme import contrast_ratio
+        
+        table = self._table_widget
+        row_count = table.rowCount()
+        
+        # Get row color rules - they should be (pattern, color) tuples
+        rules = self._row_rules
+        if hasattr(rules, '_compiled'):
+            # RowColorRules instance - use its compiled rules
+            compiled_rules = rules._compiled
+        else:
+            # Raw list of (pattern, color) tuples
+            compiled_rules = [(p.lower(), c) for p, c in rules if p and c]
+        
+        for row_idx in range(row_count):
+            # Get filename from first column
+            first_item = table.item(row_idx, 0)
+            if not first_item:
+                continue
+            filename = first_item.text()
+            
+            # Find matching rule (first match wins)
+            matched_color = None
+            for pattern_lower, color in compiled_rules:
+                if pattern_lower in filename.lower():
+                    matched_color = color
+                    break
+            
+            if matched_color is None:
+                # No match - use default text color
+                continue
+                
+            # WCAG contrast check: if color has poor contrast against surface, use on_surface
+            bg_color = self._theme.surface
+            if contrast_ratio(matched_color, bg_color) < 4.5:
+                # Use theme's on_surface color for readability
+                apply_color = self._theme.on_surface
+            else:
+                apply_color = matched_color
+            
+            # Apply color to all items in this row
+            col_count = table.columnCount()
+            for col_idx in range(col_count):
+                item = table.item(row_idx, col_idx)
+                if item:
+                    from PySide6.QtGui import QColor
+                    color = QColor(apply_color)
+                    item.setForeground(color)
 
     def populate(self, items: list) -> None:
         """Populate the table with scanned file items.
@@ -469,6 +578,9 @@ class MainWindow(QMainWindow):
         
         # Wire up status bar theme toggle signal
         self._status_bar.theme_toggled.connect(self._on_toggle_theme)
+        
+        # Wire up directory bar signals for row color re-application
+        self._directory_bar.directory_changed.connect(self._on_directory_changed)
 
         # Context menu
         self._context_menu = ContextMenu(self._file_tree.table_widget, self._logger)
@@ -556,6 +668,34 @@ class MainWindow(QMainWindow):
         self._controller = ScanController(self._config, self._logger)
         self._chunked_controller = ChunkedFileListController()
         self._scan_items: list[ScannedFileDynamic] = []
+        self._row_rules = None
+
+    def _on_directory_changed(self, directory: str) -> None:
+        """Handle directory change: re-apply row colors based on new config."""
+        # Re-configure row colors for the new directory/config
+        self._configure_row_colors()
+        
+    def _configure_row_colors(self) -> None:
+        """Configure row color rules based on active configuration.
+        
+        Matches Tkinter's _configure_row_colors: uses active config row_colors
+        if found, otherwise falls back to [LAUNCHER] row_colors. Applies WCAG
+        contrast fallback when colors are invisible against the theme surface.
+        """
+        from profiles.gui.presentation.row_colors import RowColorRules
+        
+        # Find active config (matching directory)
+        active_config = self._config  # For now, use current config; can be enhanced
+        
+        # Get row colors from active config or fallback to defaults
+        row_colors_to_use = active_config.row_colors if hasattr(active_config, 'row_colors') and active_config.row_colors else self._config.row_colors
+        
+        # Build RowColorRules engine
+        self._row_rules = RowColorRules(row_colors_to_use, "rowcolor")
+        
+        # Apply colors with current theme
+        if hasattr(self._file_tree, '_theme'):
+            self._file_tree.set_row_colors(self._row_rules, self._theme)
 
     def _on_scan_requested(self) -> None:
         self._action_bar.set_scanning(True)
@@ -684,6 +824,10 @@ class MainWindow(QMainWindow):
         total = len(self._scan_items)
         self._status_bar.set_message(f"Scan complete: {total} items")
         self._logger.info(f"Scan finished: {total} items")
+        
+        # Re-apply row colors after all items are inserted
+        if hasattr(self, '_row_rules') and self._row_rules is not None:
+            self._file_tree._apply_row_colors()
 
     def _on_scan_failed(self, error: str) -> None:
         self._action_bar.set_scanning(False)
@@ -852,6 +996,13 @@ Ctrl+F          : Focus filter field
         # Build QSS from tokens - map to Qt properties
         qss = self._build_qss_from_tokens(qss_tokens)
         self.setStyleSheet(qss)
+
+        # Re-apply row colors with new theme
+        if hasattr(self, '_row_rules') and self._row_rules is not None:
+            self._file_tree.set_row_colors(self._row_rules, theme)
+        elif hasattr(self, '_configure_row_colors'):
+            # First time: configure row colors
+            self._configure_row_colors()
 
         # Update status bar theme label
         self._status_bar.set_message(f"Theme: {THEME_LABELS.get(theme_name, 'Light')}")
