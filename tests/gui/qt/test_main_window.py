@@ -18,6 +18,7 @@ os.environ["PROFILES_GUI_BACKEND"] = "qt"
 import importlib.util
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QShortcut
 
 test_dir = Path(__file__).parent
 src_path = test_dir.parent.parent.parent / "src"

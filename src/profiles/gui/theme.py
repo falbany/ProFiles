@@ -252,6 +252,49 @@ def resolve_theme_name(config_theme: str) -> str:
     return config_theme
 
 
+def resolve_theme_name_qt(config_theme: str) -> str:
+    """Resolve theme name for Qt, handling 'auto' via QStyleHints.colorScheme().
+    
+    Uses Qt 6.5+ QStyleHints.colorScheme() for system theme detection when available,
+    falls back to darkdetect library, then defaults to light.
+    
+    Args:
+        config_theme: The configured theme name ("light", "dark", or "auto").
+        
+    Returns:
+        Resolved theme name ("light" or "dark").
+    """
+    if config_theme != "auto":
+        return config_theme
+    
+    # Try Qt 6.5+ QStyleHints.colorScheme() first
+    try:
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtGui import QPalette
+        
+        app = QApplication.instance()
+        if app is not None:
+            color_scheme = app.styleHints().colorScheme()
+            # QPalette.ColorScheme.Dark = 1, QPalette.ColorScheme.Light = 0
+            if color_scheme.value == 1:  # Dark
+                return "dark"
+            return "light"
+    except Exception:
+        pass
+    
+    # Fall back to darkdetect
+    try:
+        import darkdetect
+
+        detect_val = darkdetect.theme()
+        if detect_val and detect_val.lower() == "dark":
+            return "dark"
+    except Exception:
+        pass
+    
+    return "light"
+
+
 # ── WCAG contrast helpers ───────────────────────────────────────────────────
 
 

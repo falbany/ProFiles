@@ -15,21 +15,28 @@ from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QHeaderView,
     QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
     QPushButton,
     QStatusBar,
-    QTreeView,
+    QTableWidget,
+    QTableWidgetItem,
     QWidget,
 )
 
 from profiles.core.actions import ActionStatus
 from profiles.core.actions import launch_selected_file as actions_launch_file
 from profiles.core.config.models import AppConfig
+from profiles.core.processing.scanner import ScannedFileDynamic
+from profiles.gui.qt.controllers.chunked_file_list_controller import (
+    ChunkedFileListController,
+)
 from profiles.gui.qt.controllers.scan_controller import ScanController
 from profiles.gui.qt.ui import create_horizontal_layout, create_vertical_layout
+from profiles.gui.theme import DARK_THEME, LIGHT_THEME, THEME_LABELS, to_qss_tokens, resolve_theme_name_qt
 
 # ── Sub-widgets ──────────────────────────────────────────────────
 
@@ -213,36 +220,70 @@ class ActionBar(QWidget):
 
 
 class FileTree(QWidget):
-    """QTreeView with row colours support."""
+    """QTableWidget with dynamic columns from AppConfig."""
 
     selection_changed = Signal(list)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, config: AppConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._config = config
         self._setup_ui()
 
     def _setup_ui(self) -> None:
         layout = create_vertical_layout(self, spacing=0, margin=0)
 
-        self._tree_view = QTreeView()
-        self._tree_view.setAlternatingRowColors(True)
-        self._tree_view.setRootIsDecorated(True)
-        self._tree_view.setHeaderHidden(False)
-        self._tree_view.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
-        self._tree_view.setSelectionBehavior(QTreeView.SelectionBehavior.SelectRows)
-        self._tree_view.doubleClicked.connect(self._on_double_click)
+        self._table_widget = QTableWidget()
+        self._table_widget.setAlternatingRowColors(True)
+        self._table_widget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table_widget.doubleClicked.connect(self._on_double_click)
 
-        layout.addWidget(self._tree_view)
+        # Build columns dynamically from config
+        self._setup_columns()
+
+        layout.addWidget(self._table_widget)
+
+    def _setup_columns(self) -> None:
+        """Configure table columns from AppConfig."""
+        column_names = self._config.column_names or ("File",)
+        column_headers = self._config.column_headers or column_names
+        column_widths = self._config.column_widths or (200,) * len(column_names)
+        column_stretches = self._config.column_stretches or (False,) * len(column_names)
+
+        # Ensure all tuples have matching lengths
+        num_columns = len(column_names)
+        if len(column_headers) != num_columns:
+            column_headers = column_names
+        if len(column_widths) != num_columns:
+            column_widths = (200,) * num_columns
+        if len(column_stretches) != num_columns:
+            column_stretches = (False,) * num_columns
+
+        # Set column count and headers
+        self._table_widget.setColumnCount(num_columns)
+        for i, header in enumerate(column_headers):
+            self._table_widget.setHorizontalHeaderItem(i, QTableWidgetItem(header))
+
+        # Configure column widths and stretches
+        header = self._table_widget.horizontalHeader()
+        for i, (width, stretch) in enumerate(zip(column_widths, column_stretches, strict=False)):
+            if stretch:
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+            else:
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+                self._table_widget.setColumnWidth(i, width)
 
     def _on_double_click(self, index: Any) -> None:
         self.selection_changed.emit([index])
 
     @property
-    def tree_view(self) -> QTreeView:
-        return self._tree_view
+    def table_widget(self) -> QTableWidget:
+        return self._table_widget
 
     def set_model(self, model: Any) -> None:
-        self._tree_view.setModel(model)
+        """Placeholder for compatibility - not used with QTableWidget."""
+        pass
 
     def set_row_colors(self, rules: Any) -> None:
         """Configure row colour rules using row_colors module."""
@@ -252,6 +293,31 @@ class FileTree(QWidget):
             self._row_rules = rules
         else:
             self._row_rules = rules
+
+    def populate(self, items: list) -> None:
+        """Populate the table with scanned file items.
+
+        Args:
+            items: List of ScannedFileDynamic objects with column_values.
+        """
+        # Clear existing rows
+        self._table_widget.setRowCount(0)
+
+        if not items:
+            return
+
+        # Get column names from config
+        column_names = self._config.column_names or ("File",)
+
+        # Set row count
+        self._table_widget.setRowCount(len(items))
+
+        # Populate rows
+        for row_idx, scanned_file in enumerate(items):
+            for col_idx, col_name in enumerate(column_names):
+                value = scanned_file.column_values.get(col_name, "")
+                item = QTableWidgetItem(str(value) if value else "")
+                self._table_widget.setItem(row_idx, col_idx, item)
 
 
 class StatusBar(QStatusBar):
@@ -305,10 +371,10 @@ class StatusBar(QStatusBar):
 
 
 class ContextMenu:
-    """Right-click context menu for the file tree."""
+    """Right-click context menu for the file table."""
 
-    def __init__(self, tree_view: QTreeView, logger: logging.Logger) -> None:
-        self._tree_view = tree_view
+    def __init__(self, table_widget: QTableWidget, logger: logging.Logger) -> None:
+        self._table_widget = table_widget
         self._logger = logger
         self._menu = QMenu()
         self._setup_menu()
@@ -323,7 +389,7 @@ class ContextMenu:
 
     def show_event(self, event: Any) -> None:
         """Show context menu at event position."""
-        index = self._tree_view.indexAt(event.pos())
+        index = self._table_widget.indexAt(event.pos())
         if index.isValid():
             self._menu.exec(event.globalPos())
 
@@ -356,8 +422,10 @@ class MainWindow(QMainWindow):
         self._logger = logger
         self._context_menu: ContextMenu | None = None
         self._shortcuts_setup: bool = False
+        self._theme_name: str = config.theme if hasattr(config, 'theme') else "light"
         self._setup_ui()
         self._setup_controller()
+        self._apply_theme(self._theme_name)
 
     @override
     def showEvent(self, event) -> None:
@@ -392,17 +460,20 @@ class MainWindow(QMainWindow):
         self._action_bar.execute_button.clicked.connect(self._on_execute_clicked)
 
         # File tree
-        self._file_tree = FileTree()
+        self._file_tree = FileTree(self._config)
         main_layout.addWidget(self._file_tree, 1)
 
         # Status bar
         self._status_bar = StatusBar()
         self.setStatusBar(self._status_bar)
+        
+        # Wire up status bar theme toggle signal
+        self._status_bar.theme_toggled.connect(self._on_toggle_theme)
 
         # Context menu
-        self._context_menu = ContextMenu(self._file_tree.tree_view, self._logger)
-        self._file_tree.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._file_tree.tree_view.customContextMenuRequested.connect(
+        self._context_menu = ContextMenu(self._file_tree.table_widget, self._logger)
+        self._file_tree.table_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._file_tree.table_widget.customContextMenuRequested.connect(
             lambda pos: self._context_menu.show_event(
                 type("Event", (), {"pos": pos, "globalPos": lambda: self.mapToGlobal(pos)})()
             )
@@ -483,6 +554,8 @@ class MainWindow(QMainWindow):
 
     def _setup_controller(self) -> None:
         self._controller = ScanController(self._config, self._logger)
+        self._chunked_controller = ChunkedFileListController()
+        self._scan_items: list[ScannedFileDynamic] = []
 
     def _on_scan_requested(self) -> None:
         self._action_bar.set_scanning(True)
@@ -515,23 +588,22 @@ class MainWindow(QMainWindow):
         if close_after_execute is set, and emits telemetry events
         (file_launched, file_launch_failed) via the action.
         """
-        # Get selected index from tree view
-        selection = self._file_tree.tree_view.selection()
-        if not selection:
+        # Get selected row from table widget
+        selected_rows = self._file_tree.table_widget.selectedItems()
+        if not selected_rows:
             self._status_bar.set_message("No file selected")
             return
 
-        # Get the selected item data
-        selected_item = selection[0]
-        item_data = self._file_tree.tree_view.item(selected_item)
-        values = item_data["values"]
+        # Get the selected row index
+        row = selected_rows[0].row()
 
         # Extract filename from first column (File column)
-        if not values or len(values) < 1:
+        filename_item = self._file_tree.table_widget.item(row, 0)
+        if not filename_item:
             self._status_bar.set_message("Invalid selection")
             return
 
-        filename = values[0]
+        filename = filename_item.text()
 
         # Get directory from directory bar
         directory = self._directory_bar.dir_text
@@ -566,10 +638,52 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(500, self.close)
 
     def _on_scan_finished(self, items: list) -> None:
+        """Handle scan completion and start chunked insertion."""
+        self._scan_items = items
+        column_names = self._config.column_names or ("File",)
+        
+        # Start chunked insertion
+        self._chunked_controller.start_chunked_insert(
+            items=items,
+            column_names=column_names,
+            on_chunk_ready=self._on_chunk_ready,
+            on_finished=self._on_chunked_insert_finished,
+            on_progress=self._on_chunk_progress,
+        )
+
+    def _on_chunk_ready(self, chunk: list[ScannedFileDynamic]) -> None:
+        """Handle a chunk of items ready for insertion (called on main thread)."""
+        table = self._file_tree.table_widget
+        column_names = self._config.column_names or ("File",)
+        num_columns = len(column_names)
+        
+        # Get current row count
+        current_row_count = table.rowCount()
+        new_row_count = current_row_count + len(chunk)
+        
+        # Set row count to accommodate new items
+        table.setRowCount(new_row_count)
+        
+        # Insert items into table
+        for i, item in enumerate(chunk):
+            row = current_row_count + i
+            for col in range(num_columns):
+                if col < len(item.values):
+                    value = str(item.values[col]) if item.values[col] is not None else ""
+                    table_item = QTableWidgetItem(value)
+                    table.setItem(row, col, table_item)
+
+    def _on_chunk_progress(self, current: int, total: int) -> None:
+        """Handle progress update (called on main thread)."""
+        self._status_bar.set_message(f"Loading files: {current}/{total}")
+
+    def _on_chunked_insert_finished(self) -> None:
+        """Handle completion of chunked insertion (called on main thread)."""
         self._action_bar.set_scanning(False)
         self._status_bar.set_scanning(False)
-        self._status_bar.set_message(f"Scan complete: {len(items)} items")
-        self._logger.info(f"Scan finished: {len(items)} items")
+        total = len(self._scan_items)
+        self._status_bar.set_message(f"Scan complete: {total} items")
+        self._logger.info(f"Scan finished: {total} items")
 
     def _on_scan_failed(self, error: str) -> None:
         self._action_bar.set_scanning(False)
@@ -586,8 +700,8 @@ class MainWindow(QMainWindow):
         self._directory_bar.ext_combo.setFocus()
 
     def _focus_file_tree(self) -> None:
-        """Focus the file tree view (Ctrl+L)."""
-        self._file_tree.tree_view.setFocus()
+        """Focus the file table (Ctrl+L)."""
+        self._file_tree.table_widget.setFocus()
 
     def _clear_filter(self) -> None:
         """Clear the filter text (Delete or Escape)."""
@@ -609,20 +723,18 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QInputDialog
 
         # Get selected file
-        selection = self._file_tree.tree_view.selection()
-        if not selection:
+        selected_rows = self._file_tree.table_widget.selectedItems()
+        if not selected_rows:
             self._status_bar.set_message("No file selected")
             return
 
-        selected_item = selection[0]
-        item_data = self._file_tree.tree_view.item(selected_item)
-        values = item_data["values"]
-
-        if not values or len(values) < 1:
+        row = selected_rows[0].row()
+        filename_item = self._file_tree.table_widget.item(row, 0)
+        if not filename_item:
             self._status_bar.set_message("Invalid selection")
             return
 
-        filename = values[0]
+        filename = filename_item.text()
         directory = self._directory_bar.dir_text
 
         # Prompt for arguments
@@ -712,9 +824,161 @@ Ctrl+F          : Focus filter field
         dlg.setText(shortcuts_text)
         dlg.exec()
 
+    def _on_toggle_theme(self) -> None:
+        """Toggle between light, dark, and auto themes (matches Tkinter)."""
+        if self._theme_name == "light":
+            new_name = "dark"
+        elif self._theme_name == "dark":
+            new_name = "auto"
+        else:
+            new_name = "light"
+        self._apply_theme(new_name)
+
+    def _apply_theme(self, theme_name: str) -> None:
+        """Apply the named theme to the entire Qt GUI.
+        
+        Args:
+            theme_name: One of "light", "dark", or "auto".
+        """
+        # Resolve the actual theme name (auto -> light/dark based on system)
+        resolved_name = resolve_theme_name_qt(theme_name)
+        theme = DARK_THEME if resolved_name == "dark" else LIGHT_THEME
+        self._theme = theme
+        self._theme_name = theme_name
+
+        # Convert theme to QSS tokens and apply stylesheet
+        qss_tokens = to_qss_tokens(theme)
+        
+        # Build QSS from tokens - map to Qt properties
+        qss = self._build_qss_from_tokens(qss_tokens)
+        self.setStyleSheet(qss)
+
+        # Update status bar theme label
+        self._status_bar.set_message(f"Theme: {THEME_LABELS.get(theme_name, 'Light')}")
+
+        # Persist to config
+        try:
+            from profiles.core.config.io.yaml_io import write_value
+            write_value(self._config.config_path, "defaults.theme", theme_name)
+        except Exception as e:
+            self._logger.warning(f"Failed to persist theme: {e}")
+
+    def _build_qss_from_tokens(self, tokens: dict[str, str]) -> str:
+        """Build QSS stylesheet from theme tokens.
+        
+        Args:
+            tokens: Dictionary of theme colour values.
+            
+        Returns:
+            QSS stylesheet string.
+        """
+        # Build QSS with variable substitutions
+        qss_parts = []
+        
+        # Define QSS variables
+        qss_parts.append("QMainWindow {")
+        qss_parts.append(f"    background-color: {tokens['background']};")
+        qss_parts.append(f"    color: {tokens['on_background']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QWidget {")
+        qss_parts.append(f"    background-color: {tokens['surface']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append(f"    border-color: {tokens['outline_variant']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QPushButton {")
+        qss_parts.append(f"    background-color: {tokens['surface_container']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append(f"    border: 1px solid {tokens['outline_variant']};")
+        qss_parts.append(f"    border-radius: 4px;")
+        qss_parts.append(f"    padding: 6px 12px;")
+        qss_parts.append("}")
+        
+        qss_parts.append("QPushButton:hover {")
+        qss_parts.append(f"    background-color: {tokens['hover']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QPushButton:pressed {")
+        qss_parts.append(f"    background-color: {tokens['surface_dim']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QComboBox {")
+        qss_parts.append(f"    background-color: {tokens['surface']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append(f"    border: 1px solid {tokens['outline_variant']};")
+        qss_parts.append(f"    border-radius: 4px;")
+        qss_parts.append(f"    padding: 4px;")
+        qss_parts.append("}")
+        
+        qss_parts.append("QComboBox::drop-down {")
+        qss_parts.append(f"    border: none;")
+        qss_parts.append(f"    width: 20px;")
+        qss_parts.append("}")
+        
+        qss_parts.append("QComboBox QAbstractItemView {")
+        qss_parts.append(f"    background-color: {tokens['surface']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append(f"    selection-background-color: {tokens['primary']};")
+        qss_parts.append(f"    selection-color: {tokens['on_primary']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QTreeView {")
+        qss_parts.append(f"    background-color: {tokens['surface']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append(f"    border: none;")
+        qss_parts.append(f"    alternate-background-color: {tokens['surface_container']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QTreeView::item {")
+        qss_parts.append(f"    padding: 8px;")
+        qss_parts.append(f"    border: 1px solid transparent;")
+        qss_parts.append("}")
+        
+        qss_parts.append("QTreeView::item:selected {")
+        qss_parts.append(f"    background-color: {tokens['primary']};")
+        qss_parts.append(f"    color: {tokens['on_primary']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QTreeView::item:hover {")
+        qss_parts.append(f"    background-color: {tokens['hover']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QHeaderView::section {")
+        qss_parts.append(f"    background-color: {tokens['surface_container']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append(f"    padding: 6px;")
+        qss_parts.append(f"    border: none;")
+        qss_parts.append(f"    border-bottom: 1px solid {tokens['outline_variant']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QStatusBar {")
+        qss_parts.append(f"    background-color: {tokens['status_bg']};")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QStatusBar QLabel {")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QStatusBar a {")
+        qss_parts.append(f"    color: {tokens['primary']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QCheckBox {")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append("}")
+        
+        qss_parts.append("QLabel {")
+        qss_parts.append(f"    color: {tokens['on_surface']};")
+        qss_parts.append("}")
+        
+        return "\n".join(qss_parts)
+
     @override
     def closeEvent(self, event: QCloseEvent) -> None:
         self._controller.stop_scan()
+        self._chunked_controller.stop_chunked_insert()
         event.accept()
 
     def run(self) -> int:
