@@ -138,7 +138,16 @@ class ChunkedFileListController:
 
     def stop_chunked_insert(self) -> None:
         """Stop the current chunked insertion safely with timeout."""
-        if self._thread is None or not self._thread.isRunning():
+        if self._thread is None:
+            return
+        
+        # Check if thread is running (handle deleted C++ objects)
+        try:
+            if not self._thread.isRunning():
+                return
+        except RuntimeError:
+            # C++ object already deleted
+            self._thread = None
             return
 
         # Request cancel
