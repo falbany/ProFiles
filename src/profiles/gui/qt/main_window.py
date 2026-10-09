@@ -10,7 +10,7 @@ try:
 except ImportError:
     from typing_extensions import override
 
-from PySide6.QtCore import Qt, QTimer, QEvent, Signal
+from PySide6.QtCore import Qt, QTimer, QEvent, Signal, QCoreApplication
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -21,12 +21,17 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
     QWidget,
 )
+
+# Sort indicator arrows (matching Tkinter behavior)
+_SORT_ASC = " \u25b2"  # Up arrow ▲
+_SORT_DESC = " \u25bc"  # Down arrow ▼
 
 from profiles.core.actions import ActionStatus
 from profiles.core.actions import launch_selected_file as actions_launch_file
@@ -220,7 +225,7 @@ class DirectoryBar(QWidget):
 
 
 class ActionBar(QWidget):
-    """Recursive checkbox and scan/execute buttons."""
+    """Recursive checkbox and scan/execute buttons with progress indicator."""
 
     scan_requested = Signal()
     execute_requested = Signal()
@@ -228,6 +233,7 @@ class ActionBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._setup_ui()
+        self._scan_timer: QTimer | None = None
 
     def _setup_ui(self) -> None:
         layout = create_horizontal_layout(self, spacing=12, margin=8)
@@ -243,10 +249,17 @@ class ActionBar(QWidget):
         self._execute_button.setMinimumHeight(28)
         self._execute_button.clicked.connect(self.execute_requested.emit)
 
+        # Progress bar (indeterminate, hidden by default)
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setMinimumHeight(28)
+        self._progress_bar.setVisible(False)
+        self._progress_bar.setRange(0, 0)  # Indeterminate mode
+
         layout.addWidget(self._recursive_check)
         layout.addStretch()
         layout.addWidget(self._scan_button)
         layout.addWidget(self._execute_button)
+        layout.addWidget(self._progress_bar)
 
     @property
     def recursive_check(self) -> QCheckBox:
@@ -260,20 +273,84 @@ class ActionBar(QWidget):
     def execute_button(self) -> QPushButton:
         return self._execute_button
 
+    @property
+    def progress_bar(self) -> QProgressBar:
+        return self._progress_bar
+
     def set_scanning(self, scanning: bool) -> None:
         self._scan_button.setEnabled(not scanning)
         self._execute_button.setEnabled(not scanning)
+        if scanning:
+            # Start progress bar after 200ms delay to avoid flicker on quick scans
+            self._scan_timer = QTimer()
+            self._scan_timer.setSingleShot(True)
+            self._scan_timer.timeout.connect(self._start_progress)
+            self._scan_timer.start(200)
+        else:
+            # Stop progress bar
+            if self._scan_timer:
+                self._scan_timer.stop()
+                self._scan_timer = None
+            self._progress_bar.setVisible(False)
+
+    def _start_progress(self) -> None:
+        """Start the indeterminate progress bar."""
+        self._progress_bar.setVisible(True)
 
 
 class FileTree(QWidget):
     """QTableWidget with dynamic columns from AppConfig."""
 
     selection_changed = Signal(list)
+    reset_filters_requested = Signal()
 
     def __init__(self, config: AppConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._config = config
+        self._empty_state_widget: QWidget | None = None
+        self._sort_column: int = -1
+        self._sort_direction: str = "asc"
         self._setup_ui()
+
+    def eventFilter(self, obj: object, event: QEvent) -> bool:
+        """Event filter for header double-click auto-fit."""
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            header = self._table_widget.horizontalHeader()
+            if obj == header:
+                # Get the column under the cursor
+                pos = event.position()
+                logical_index = header.logicalIndexAt(int(pos.x()))
+                if logical_index >= 0:
+                    # Auto-fit the clicked column
+                    header.resizeSectionToContents(logical_index)
+                    return True
+        return super().eventFilter(obj, event)
+
+    def keyPressEvent(self, event) -> None:
+        """Handle keyboard navigation: PageUp, PageDown, Home, End."""
+        table = self._table_widget
+        row_count = table.rowCount()
+        
+        if row_count == 0:
+            super().keyPressEvent(event)
+            return
+            
+        current_row = table.currentRow()
+        
+        if event.key() == 16777234:  # PageUp
+            visible_rows = table.viewport().height() // table.rowHeight(0) if row_count > 0 else 10
+            new_row = max(0, current_row - visible_rows)
+            table.setCurrentCell(new_row, 0)
+        elif event.key() == 16777235:  # PageDown
+            visible_rows = table.viewport().height() // table.rowHeight(0) if row_count > 0 else 10
+            new_row = min(row_count - 1, current_row + visible_rows)
+            table.setCurrentCell(new_row, 0)
+        elif event.key() == 16777232:  # Home
+            table.setCurrentCell(0, 0)
+        elif event.key() == 16777233:  # End
+            table.setCurrentCell(row_count - 1, 0)
+        else:
+            super().keyPressEvent(event)
 
     def _setup_ui(self) -> None:
         layout = create_vertical_layout(self, spacing=0, margin=0)
@@ -285,10 +362,23 @@ class FileTree(QWidget):
         self._table_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table_widget.doubleClicked.connect(self._on_double_click)
 
+        # Install event filter on header for double-click auto-fit
+        header = self._table_widget.horizontalHeader()
+        header.setSectionsMovable(True)
+        header.installEventFilter(self)
+        
+        # Connect sort signal for click handling
+        header.sectionClicked.connect(self._on_header_clicked)
+
         # Build columns dynamically from config
         self._setup_columns()
 
+        # Empty state overlay widget (initially hidden)
+        self._empty_state_widget = self._create_empty_state_widget()
+        self._empty_state_widget.setVisible(False)
+
         layout.addWidget(self._table_widget)
+        layout.addWidget(self._empty_state_widget)
 
     def _setup_columns(self) -> None:
         """Configure table columns from AppConfig."""
@@ -319,6 +409,155 @@ class FileTree(QWidget):
             else:
                 header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
                 self._table_widget.setColumnWidth(i, width)
+    
+    def _on_header_clicked(self, logical_index: int) -> None:
+        """Handle header click for sorting (matching Tkinter behavior)."""
+        self._sort_by_column(logical_index)
+    
+    def _sort_by_column(self, col_index: int) -> None:
+        """Sort the table rows by column index, toggling direction.
+        
+        Matches Tkinter _sort_treeview behavior:
+        - First click: ascending (▲)
+        - Second click on same column: descending (▼)
+        - Click on different column: reset to ascending
+        """
+        table = self._table_widget
+        row_count = table.rowCount()
+        if row_count == 0:
+            return
+        
+        # Determine sort direction
+        if col_index == self._sort_column:
+            # Toggle direction on same column
+            self._sort_direction = "desc" if self._sort_direction == "asc" else "asc"
+        else:
+            # New column, start with ascending
+            self._sort_column = col_index
+            self._sort_direction = "asc"
+        
+        reverse = self._sort_direction == "desc"
+        
+        # Collect all rows with sort values
+        items_data = []
+        for row in range(row_count):
+            item = table.item(row, col_index)
+            val = item.text() if item else ""
+            sort_val = val.lower()
+            items_data.append((sort_val, row))
+        
+        # Sort the data
+        items_data.sort(key=lambda x: x[0], reverse=reverse)
+        
+        # Reorder rows using takeItem/setItem to preserve data
+        # Store all row data first
+        row_data = []
+        for row in range(row_count):
+            row_items = []
+            for col in range(table.columnCount()):
+                item = table.item(row, col)
+                row_items.append(item.text() if item else "")
+            row_data.append(row_items)
+        
+        # Clear table and repopulate in sorted order
+        table.setRowCount(0)
+        table.setRowCount(row_count)
+        
+        for new_row, (_, old_row) in enumerate(items_data):
+            for col in range(table.columnCount()):
+                text = row_data[old_row][col]
+                if text:
+                    item = QTableWidgetItem(text)
+                    table.setItem(new_row, col, item)
+        
+        # Update header indicators
+        self._update_sort_indicators()
+    
+    def _update_sort_indicators(self) -> None:
+        """Update column header text with sort arrows (matching Tkinter)."""
+        column_names = self._config.column_names or ("File",)
+        column_headers = self._config.column_headers or column_names
+        
+        for i, base_header in enumerate(column_headers):
+            # Remove any existing arrow
+            clean_header = base_header.rstrip(" ▲▼\u25b2\u25bc")
+            
+            # Add arrow for sorted column
+            if i == self._sort_column:
+                arrow = _SORT_ASC if self._sort_direction == "asc" else _SORT_DESC
+                final_header = clean_header + arrow
+            else:
+                final_header = clean_header
+            
+            # Update header item
+            item = QTableWidgetItem(final_header)
+            self._table_widget.setHorizontalHeaderItem(i, item)
+    
+    def clear_sort_state(self) -> None:
+        """Reset sort state when data is repopulated."""
+        self._sort_column = -1
+        self._sort_direction = "asc"
+        # Clear arrows from all headers
+        column_names = self._config.column_names or ("File",)
+        column_headers = self._config.column_headers or column_names
+        for i, header in enumerate(column_headers):
+            clean_header = header.rstrip(" ▲▼\u25b2\u25bc")
+            item = QTableWidgetItem(clean_header)
+            self._table_widget.setHorizontalHeaderItem(i, item)
+    
+    def _create_empty_state_widget(self) -> QWidget:
+        """Create the empty state overlay widget with banner and reset button."""
+        container = QWidget()
+        container.setStyleSheet(
+            "QWidget {"
+            "    background-color: transparent;"
+            "}"
+        )
+        
+        layout = create_vertical_layout(container, spacing=12, margin=0)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Banner label
+        banner_label = QLabel("📂 No matching files")
+        banner_label.setStyleSheet(
+            "font-size: 16px;"
+            "font-weight: bold;"
+            "color: #999;"
+            "padding: 20px;"
+        )
+        banner_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(banner_label)
+        
+        # Reset filters button
+        reset_button = QPushButton("Reset filters")
+        reset_button.setStyleSheet(
+            "QPushButton {"
+            "    background-color: #1976D2;"
+            "    color: white;"
+            "    border: none;"
+            "    padding: 8px 16px;"
+            "    border-radius: 4px;"
+            "    font-size: 14px;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: #1565C0;"
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: #0D47A1;"
+            "}"
+        )
+        reset_button.clicked.connect(lambda: self.reset_filters_requested.emit())
+        layout.addWidget(reset_button)
+        
+        layout.addStretch()
+        
+        return container
+
+    def _update_empty_state(self, show: bool) -> None:
+        """Show or hide the empty state overlay."""
+        if self._empty_state_widget:
+            self._empty_state_widget.setVisible(show)
+            self._table_widget.setVisible(not show)
 
     def _on_double_click(self, index: Any) -> None:
         self.selection_changed.emit([index])
@@ -413,7 +652,10 @@ class FileTree(QWidget):
         self._table_widget.setRowCount(0)
 
         if not items:
+            self._update_empty_state(True)
             return
+
+        self._update_empty_state(False)
 
         # Get column names from config
         column_names = self._config.column_names or ("File",)
@@ -571,6 +813,9 @@ class MainWindow(QMainWindow):
         # File tree
         self._file_tree = FileTree(self._config)
         main_layout.addWidget(self._file_tree, 1)
+        
+        # Wire up empty state reset signal
+        self._file_tree.reset_filters_requested.connect(self._on_reset_filters_requested)
 
         # Status bar
         self._status_bar = StatusBar()
@@ -822,6 +1067,8 @@ class MainWindow(QMainWindow):
         self._action_bar.set_scanning(False)
         self._status_bar.set_scanning(False)
         total = len(self._scan_items)
+        # Clear sort state when new data is loaded
+        self._file_tree.clear_sort_state()
         self._status_bar.set_message(f"Scan complete: {total} items")
         self._logger.info(f"Scan finished: {total} items")
         
@@ -851,6 +1098,19 @@ class MainWindow(QMainWindow):
         """Clear the filter text (Delete or Escape)."""
         self._directory_bar.filter_combo.setCurrentIndex(-1)
         self._directory_bar.filter_combo.setEditText("")
+
+    def _on_reset_filters_requested(self) -> None:
+        """Handle reset filters request from empty state banner."""
+        # Reset extension and filter to first values
+        ext_values = self._directory_bar.ext_combo.currentText()
+        filter_values = self._directory_bar.filter_combo.currentText()
+        
+        # Clear filter text
+        self._directory_bar.filter_combo.setCurrentIndex(-1)
+        self._directory_bar.filter_combo.setEditText("")
+        
+        # Trigger a rescan
+        self._on_scan_requested()
 
     def _on_execute_shortcut(self) -> None:
         """Execute selected file (Return or Ctrl+D).
