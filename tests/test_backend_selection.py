@@ -9,18 +9,18 @@ from profiles.app import ProFileApp
 from profiles.core.config.models import AppConfig
 
 
-def test_backend_selection_default_tk() -> None:
+def test_backend_selection_default_web() -> None:
     with patch.dict(os.environ, {}, clear=True):
         app = ProFileApp(headless=False)
         backend = app.resolve_gui_backend()
-        assert backend == "tk"
+        assert backend == "web"
 
 
-def test_backend_selection_env_web() -> None:
-    with patch.dict(os.environ, {"PROFILES_GUI_BACKEND": "web"}):
+def test_backend_selection_env_tk() -> None:
+    with patch.dict(os.environ, {"PROFILES_GUI_BACKEND": "tk"}):
         app = ProFileApp(headless=False)
         backend = app.resolve_gui_backend()
-        assert backend == "web"
+        assert backend == "tk"
 
 
 def test_launch_web_backend_calls_desktop() -> None:

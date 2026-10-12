@@ -167,10 +167,10 @@ class ProFileApp:
 
     @staticmethod
     def resolve_gui_backend() -> str:
-        """Resolve active GUI backend ('tk' or 'web')."""
+        """Resolve active GUI backend ('tk' or 'web'). Defaults to 'web'."""
         import os
 
-        return os.environ.get("PROFILES_GUI_BACKEND", "tk").lower()
+        return os.environ.get("PROFILES_GUI_BACKEND", "web").lower()
 
     def _run_web_gui(self, port: int = 8088, host: str = "127.0.0.1") -> None:
         """Launch web backend via PyWebView desktop shell."""
