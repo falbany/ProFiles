@@ -67,3 +67,59 @@ export async function revealFile(filePath: string): Promise<{ success: boolean }
   if (!res.ok) throw new Error("Failed to reveal file");
   return res.json();
 }
+
+export async function openFolder(filePath: string): Promise<{ success: boolean }> {
+  const res = await fetch("/api/actions/open-folder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error("Failed to open folder");
+  return res.json();
+}
+
+export async function openTerminal(filePath: string): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/actions/open-terminal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error("Failed to open terminal");
+  return res.json();
+}
+
+export async function launchWithArgs(filePath: string, args: string): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/actions/launch-with-args", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath, args }),
+  });
+  if (!res.ok) throw new Error("Failed to launch with arguments");
+  return res.json();
+}
+
+export async function computeHash(filePath: string, algorithm: "md5" | "sha256"): Promise<{ algorithm: string; hash: string }> {
+  const res = await fetch("/api/actions/hash", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath, algorithm }),
+  });
+  if (!res.ok) throw new Error("Failed to compute hash");
+  return res.json();
+}
+
+export async function openLogFile(): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/actions/open-log", {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to open log file");
+  return res.json();
+}
+
+export async function openConfigFile(): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/actions/open-config", {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to open config file");
+  return res.json();
+}

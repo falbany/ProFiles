@@ -8,6 +8,7 @@ interface FileListTableProps {
   selectedIndex: number;
   onSelectIndex: (idx: number) => void;
   onLaunch: (file: ScannedFileItem) => void;
+  onContextMenu: (e: React.MouseEvent, file: ScannedFileItem, index: number) => void;
   rowColors: [string, string][];
 }
 
@@ -18,6 +19,7 @@ export function FileListTable({
   selectedIndex,
   onSelectIndex,
   onLaunch,
+  onContextMenu,
   rowColors,
 }: FileListTableProps) {
   const headers = columnHeaders.length > 0 ? columnHeaders : ["File"];
@@ -64,6 +66,7 @@ export function FileListTable({
                   key={file.path || idx}
                   onClick={() => onSelectIndex(idx)}
                   onDoubleClick={() => onLaunch(file)}
+                  onContextMenu={(e) => onContextMenu(e, file, idx)}
                   className={`cursor-pointer transition-colors ${getRowStyle(file.filename, isSelected)}`}
                 >
                   <td className="px-3 py-2 text-slate-500">

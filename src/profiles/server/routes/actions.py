@@ -22,8 +22,75 @@ class LaunchRequest(BaseModel):
     args: str = ""
 
 
-class RevealRequest(BaseModel):
+class PathRequest(BaseModel):
     file_path: str
+
+
+class LaunchWithArgsRequest(BaseModel):
+    file_path: str
+    args: str = ""
+
+
+@router.post("/open-folder")
+async def open_folder(payload: PathRequest) -> dict:
+    """Open folder in host file manager."""
+    path = Path(payload.file_path).expanduser().resolve()
+    target_dir = path if path.is_dir() else path.parent
+    if not target_dir.exists():
+        raise HTTPException(status_code=404, detail="Directory does not exist")
+    success = open_file_explorer(str(target_dir))
+    return {"success": success}
+
+
+@router.post("/open-terminal")
+async def open_terminal(payload: PathRequest) -> dict:
+    """Open host terminal in file's directory."""
+    path = Path(payload.file_path).expanduser().resolve()
+    target_dir = path if path.is_dir() else path.parent
+    if not target_dir.exists():
+        raise HTTPException(status_code=404, detail="Directory does not exist")
+    res = actions.open_terminal_in_directory(target_dir)
+    return {
+        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
+        "message": res.message,
+    }
+
+
+@router.post("/launch-with-args")
+async def launch_with_args(payload: LaunchWithArgsRequest) -> dict:
+    """Launch file with explicit arguments."""
+    path = Path(payload.file_path).expanduser().resolve()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+    res = actions.launch_file_with_args(path, payload.args)
+    if res.status != actions.ActionStatus.SUCCESS:
+        raise HTTPException(status_code=400, detail=res.message)
+    return {
+        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
+        "message": res.message,
+    }
+
+
+@router.post("/open-log")
+async def open_log() -> dict:
+    """Open log file in default application."""
+    log_path = Path.cwd() / "profiles.log"
+    res = actions.open_log_file(log_path)
+    return {
+        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
+        "message": res.message,
+    }
+
+
+@router.post("/open-config")
+async def open_config() -> dict:
+    """Open configuration file in default application."""
+    config_path = Path.cwd() / ".profiles"
+    res = actions.open_config_file(config_path)
+    return {
+        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
+        "message": res.message,
+    }
 
 
 class HashRequest(BaseModel):
@@ -51,7 +118,7 @@ async def launch_file(payload: LaunchRequest) -> dict:
 
 
 @router.post("/reveal")
-async def reveal_file(payload: RevealRequest) -> dict:
+async def reveal_file(payload: PathRequest) -> dict:
     """Reveal file in host file explorer."""
     path = Path(payload.file_path).expanduser().resolve()
     if not path.exists():

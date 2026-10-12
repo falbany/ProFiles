@@ -65,17 +65,21 @@ export function ControlsBar({
 
         <div className="flex items-center gap-1.5">
           <span className="text-slate-400">Ext:</span>
-          <select
-            value={activeExtension}
-            onChange={(e) => onExtensionChange(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 font-mono text-slate-200 outline-none focus:border-indigo-500"
-          >
-            {extensions.map((ext) => (
-              <option key={ext} value={ext}>
-                {ext}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              list="extensions-list"
+              value={activeExtension}
+              onChange={(e) => onExtensionChange(e.target.value)}
+              placeholder="e.g. .mttl, .py"
+              className="w-28 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 font-mono text-slate-200 outline-none focus:border-indigo-500"
+            />
+            <datalist id="extensions-list">
+              {extensions.map((ext) => (
+                <option key={ext} value={ext} />
+              ))}
+            </datalist>
+          </div>
         </div>
 
         <label className="flex cursor-pointer select-none items-center gap-1.5 text-slate-300">
