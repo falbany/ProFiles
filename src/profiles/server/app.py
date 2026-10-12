@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from profiles.server.routes.config import router as config_router
+from profiles.server.routes.fs import router as fs_router
 from profiles.server.routes.system import router as system_router
 from profiles.server.state import ServerState
 
@@ -30,5 +32,7 @@ def create_app(state: ServerState) -> FastAPI:
     )
 
     app.include_router(system_router)
+    app.include_router(config_router)
+    app.include_router(fs_router)
 
     return app
