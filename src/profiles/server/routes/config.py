@@ -22,12 +22,23 @@ async def get_config(request: Request) -> dict:
     state: ServerState = request.app.state.server_state
     cfg = state.config
 
-    available_dirs = []
-    if cfg.search_dir:
-        available_dirs.append(cfg.search_dir)
-    for m in cfg.configurations:
-        if m.directory and m.directory not in available_dirs:
-            available_dirs.append(m.directory)
+    from profiles.core.config import service as config_service
+    from profiles.utils.network import get_hostname
+
+    available_dirs = config_service.get_unique_directories(cfg)
+
+    # Ensure active directory is set
+    if not state.active_directory:
+        selected = config_service.auto_select_directory(cfg, get_hostname())
+        if selected and Path(selected).exists():
+            state.active_directory = Path(selected)
+        elif available_dirs:
+            state.active_directory = Path(available_dirs[0])
+        else:
+            state.active_directory = Path.cwd()
+
+    if not available_dirs:
+        available_dirs = [str(state.active_directory)]
 
     return {
         "title": cfg.title,

@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/scan", tags=["scan"])
 
 
 class ScanRequest(BaseModel):
+    directory: str = ""
     extension: str = ""
     filter_text: str = ""
     recursive: bool = True
@@ -25,8 +26,19 @@ class ScanRequest(BaseModel):
 async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     """Execute dynamic scan on the active directory and cache results."""
     state: ServerState = request.app.state.server_state
-    if not state.active_directory or not state.active_directory.exists():
-        raise HTTPException(status_code=400, detail="Active directory is not set or does not exist")
+    if payload.directory:
+        state.active_directory = Path(payload.directory).expanduser().resolve()
+
+    if not state.active_directory:
+        raise HTTPException(status_code=400, detail="Active directory is not set")
+
+    if not state.active_directory.exists():
+        state.cached_results = []
+        return {
+            "count": 0,
+            "directory": str(state.active_directory),
+            "warning": "Directory does not exist",
+        }
 
     state.scan_in_progress = True
     try:

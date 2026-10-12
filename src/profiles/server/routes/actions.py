@@ -39,10 +39,15 @@ async def launch_file(payload: LaunchRequest) -> dict:
         filename=payload.filename,
         release=payload.release,
         username=get_username(),
+        args=payload.args,
     )
-    if res.status != "SUCCESS":
+    if res.status != actions.ActionStatus.SUCCESS:
         raise HTTPException(status_code=400, detail=res.message)
-    return {"status": res.status, "message": res.message, "path": res.path}
+    return {
+        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
+        "message": res.message,
+        "path": str(res.path) if res.path else None,
+    }
 
 
 @router.post("/reveal")

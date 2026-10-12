@@ -23,6 +23,7 @@ export async function selectDirectory(directory: string): Promise<{ active_direc
 }
 
 export async function executeScan(params: {
+  directory?: string;
   extension: string;
   filter_text: string;
   recursive: boolean;

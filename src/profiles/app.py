@@ -43,6 +43,7 @@ class ProFileApp:
         config_path: str | Path | None = None,
         log_path: str | Path = "profiles.log",
         headless: bool = False,
+        server_only: bool = False,
     ) -> None:
         """Initialize the application.
 
@@ -51,10 +52,12 @@ class ProFileApp:
                 If None, the config loader searches the folder tree.
             log_path: Path to the log file.
             headless: Run without GUI (CLI mode).
+            server_only: Run only the web server without opening desktop window.
         """
         self._config_path = Path(config_path) if config_path is not None else None
         self._log_path = Path(log_path)
         self._headless = headless
+        self._server_only = server_only
         self._config: AppConfig | None = None
         self._window: MainWindow | None = None
         self._logger: logging.Logger | None = None
@@ -158,6 +161,10 @@ class ProFileApp:
                     handler.close()
                     self._logger.removeHandler(handler)
 
+        if getattr(self, "_server_only", False):
+            self._run_server_only()
+            return
+
         # Step 5: Create and run the GUI
         backend = self.resolve_gui_backend()
         if backend == "web":
@@ -171,6 +178,24 @@ class ProFileApp:
         import os
 
         return os.environ.get("PROFILES_GUI_BACKEND", "web").lower()
+
+    def _run_server_only(self, port: int = 8088, host: str = "127.0.0.1") -> None:
+        """Run only the FastAPI background server without opening PyWebView."""
+        import time
+
+        from profiles.desktop.lifecycle import BackgroundServer
+
+        assert self._config is not None
+        server = BackgroundServer(config=self._config, host=host, port=port)
+        server.start()
+        print(f"ProFiles server running at http://{host}:{server.port} (press Ctrl+C to stop)")
+        try:
+            while server.is_running:
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            print("\nShutting down ProFiles server...")
+        finally:
+            server.stop()
 
     def _run_web_gui(self, port: int = 8088, host: str = "127.0.0.1") -> None:
         """Launch web backend via PyWebView desktop shell."""
@@ -371,6 +396,11 @@ Examples:
         help="Run in headless mode (no GUI)",
     )
     parser.add_argument(
+        "--server-only",
+        action="store_true",
+        help="Run local FastAPI server only (no desktop window, for browser/PWA use)",
+    )
+    parser.add_argument(
         "file",
         nargs="?",
         default=None,
@@ -383,7 +413,11 @@ Examples:
         init_default_config()
         return
 
-    app = ProFileApp(config_path=args.config, headless=args.headless)
+    app = ProFileApp(
+        config_path=args.config,
+        headless=args.headless,
+        server_only=args.server_only,
+    )
     app.run(file=args.file)
 
 

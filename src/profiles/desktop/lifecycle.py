@@ -36,9 +36,29 @@ class BackgroundServer:
         self.config = config
         self.host = host
         self.port = port if port != 0 else find_available_port(8088)
+
+        active_dir = None
+        if config.search_dir and Path(config.search_dir).exists():
+            active_dir = Path(config.search_dir)
+        else:
+            from profiles.core.config import service as config_service
+            from profiles.utils.network import get_hostname
+
+            selected = config_service.auto_select_directory(config, get_hostname())
+            if selected and Path(selected).exists():
+                active_dir = Path(selected)
+            else:
+                for m in config.configurations:
+                    for s in m.scan:
+                        if Path(s).exists():
+                            active_dir = Path(s)
+                            break
+                    if active_dir:
+                        break
+
         self.state = ServerState(
             config=config,
-            active_directory=Path(config.search_dir) if config.search_dir else None,
+            active_directory=active_dir or Path.cwd(),
         )
         self._app = create_app(self.state)
         self._server: uvicorn.Server | None = None
