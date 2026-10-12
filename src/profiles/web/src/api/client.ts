@@ -1,0 +1,68 @@
+import type { AppConfigData, ScanResultsResponse, SystemInfo } from "./types";
+
+export async function fetchSystemInfo(): Promise<SystemInfo> {
+  const res = await fetch("/api/system");
+  if (!res.ok) throw new Error("Failed to fetch system info");
+  return res.json();
+}
+
+export async function fetchConfig(): Promise<AppConfigData> {
+  const res = await fetch("/api/config");
+  if (!res.ok) throw new Error("Failed to fetch app configuration");
+  return res.json();
+}
+
+export async function selectDirectory(directory: string): Promise<{ active_directory: string }> {
+  const res = await fetch("/api/config/select-directory", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ directory }),
+  });
+  if (!res.ok) throw new Error("Failed to select directory");
+  return res.json();
+}
+
+export async function executeScan(params: {
+  extension: string;
+  filter_text: string;
+  recursive: boolean;
+}): Promise<{ count: number; directory: string }> {
+  const res = await fetch("/api/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error("Failed to execute scan");
+  return res.json();
+}
+
+export async function fetchScanResults(): Promise<ScanResultsResponse> {
+  const res = await fetch("/api/scan/results");
+  if (!res.ok) throw new Error("Failed to fetch scan results");
+  return res.json();
+}
+
+export async function launchFile(params: {
+  directory: string;
+  filename: string;
+  release?: string;
+  args?: string;
+}): Promise<{ status: string; message: string; path?: string }> {
+  const res = await fetch("/api/actions/launch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error("Failed to launch file");
+  return res.json();
+}
+
+export async function revealFile(filePath: string): Promise<{ success: boolean }> {
+  const res = await fetch("/api/actions/reveal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error("Failed to reveal file");
+  return res.json();
+}
