@@ -159,7 +159,25 @@ class ProFileApp:
                     self._logger.removeHandler(handler)
 
         # Step 5: Create and run the GUI
-        self._run_gui()
+        backend = self.resolve_gui_backend()
+        if backend == "web":
+            self._run_web_gui()
+        else:
+            self._run_gui()
+
+    @staticmethod
+    def resolve_gui_backend() -> str:
+        """Resolve active GUI backend ('tk' or 'web')."""
+        import os
+
+        return os.environ.get("PROFILES_GUI_BACKEND", "tk").lower()
+
+    def _run_web_gui(self, port: int = 8088, host: str = "127.0.0.1") -> None:
+        """Launch web backend via PyWebView desktop shell."""
+        from profiles.desktop.launcher import launch_desktop_window
+
+        assert self._config is not None
+        launch_desktop_window(self._config, port=port, host=host)
 
     def _run_gui(self) -> None:
         """Create and run the GUI.
