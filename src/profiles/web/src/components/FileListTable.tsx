@@ -1,6 +1,31 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { FileCode } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUpDown, FileCode, Loader2 } from "lucide-react";
 import type { ScannedFileItem } from "../api/types";
+
+interface ScrollableStickyHeaderItem {
+  label: string;
+  icon?: React.ReactNode;
+  /** flex-grow weight; `1` by default so columns share the width evenly. */
+  weight?: number;
+}
+
+function ScrollableStickyHeader({ items }: { items: ScrollableStickyHeaderItem[] }) {
+  return (
+    <div className="sticky top-0 z-10 flex select-none items-center border-b border-line bg-surface font-medium text-ink-muted">
+      {items.map((item, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-1.5 truncate px-3 py-2"
+          style={{ flex: item.weight ?? 1, minWidth: 0 }}
+        >
+          {item.icon}
+          <span className="truncate">{item.label}</span>
+          {i > 0 && <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 opacity-40" />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface FileListTableProps {
   files: ScannedFileItem[];
@@ -18,25 +43,32 @@ interface FileListTableProps {
   rowColors: [string, string][];
 }
 
-/** Fixed row height (px). `text-xs` cells + `py-2` → 26px; 28 keeps math clean. */
+/** Fixed row height (px) — `text-xs` + `py-2` lands on 28px. */
 const ROW_HEIGHT = 28;
 /** Rows rendered above/below the visible window. */
 const OVERSCAN = 12;
 /** Page size requested from the backend when paging is enabled. */
 const PAGE_SIZE = 500;
 
+/** Column weights so Path gets more room than Type/Version. */
+const COLUMN_WEIGHTS: Record<string, number> = { File: 2, Path: 3, FileName: 1, Type: 1, Version: 1 };
+
 /**
- * Windowed (virtualized) file table.
+ * Windowed (virtualized) file list.
  *
  * A scan can return tens of thousands of rows. Rendering them all as DOM nodes
  * makes the UI unusable, and shipping them all as JSON makes every scan feel
  * slow. This component therefore does both:
  *
  * - **Virtualization** — only rows inside the scroll viewport (plus a small
- *   overscan buffer) are mounted; a spacer keeps the scrollbar meaningful.
+ *   overscan buffer) are mounted. The scrollbar keeps the full height via a
+ *   spacer, so the native scroll position stays meaningful.
  * - **Progressive paging** — rows are fetched in pages of `PAGE_SIZE` from the
  *   backend, and a new page is requested whenever the viewport approaches the
  *   end of the loaded window.
+ *
+ * Rows are flex containers (not `<tr>`) on purpose: CSS transforms are ignored
+ * on table row groups, which would make windowing impossible with a `<table>`.
  */
 export function FileListTable({
   files,
@@ -80,33 +112,18 @@ export function FileListTable({
     return () => observer.disconnect();
   }, []);
 
-  // Keep the selected row in view when it changes via keyboard navigation.
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || loadedCount === 0) return;
-    const rowTop = selectedIndex * ROW_HEIGHT;
-    const rowBottom = rowTop + ROW_HEIGHT;
-    const viewTop = el.scrollTop;
-    const viewBottom = viewTop + el.clientHeight;
-    if (rowTop < viewTop) {
-      el.scrollTop = rowTop;
-    } else if (rowBottom > viewBottom) {
-      el.scrollTop = rowBottom - el.clientHeight;
-    }
-  }, [selectedIndex, loadedCount]);
-
   /**
    * Fetch the next page when the user approaches the end of the loaded rows.
-   * Uses a plain scroll listener (not React state) so the request starts on
-   * the very first relevant scroll event without waiting for a re-render.
+   *
+   * Runs as a **scroll listener** so the request starts immediately, and again
+   * as a **render-time check** so the list still fills if the scroll event was
+   * missed (e.g. a jump straight to the bottom of the scrollbar).
    */
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    let cancelled = false;
 
     const maybeLoadMore = () => {
-      if (cancelled) return;
       if (loadingRef.current) return;
       if (!hasMore || !onLoadMore) return;
       const viewEnd = el.scrollTop + el.clientHeight;
@@ -114,26 +131,29 @@ export function FileListTable({
       const distanceToEnd = loadedCount * ROW_HEIGHT - viewEnd;
       if (distanceToEnd < OVERSCAN * ROW_HEIGHT) {
         loadingRef.current = true;
+        window.setTimeout(() => {
+          loadingRef.current = false;
+        }, 200);
         onLoadMore();
       }
     };
 
     el.addEventListener("scroll", maybeLoadMore, { passive: true });
     return () => {
-      cancelled = true;
       el.removeEventListener("scroll", maybeLoadMore);
     };
-  }, [hasMore, onLoadMore, loadedCount]);
+  }, [files, hasMore, onLoadMore, loadedCount]);
 
-  // Release the request lock once the parent has appended (or failed to
-  // append) the new page, so subsequent scrolls can trigger another fetch.
+  // Render-time fallback: covers the case where the appended page still leaves
+  // the viewport near the end (e.g. a large jump) with no further scroll.
   useEffect(() => {
-    if (loadingMore) return;
-    const t = setTimeout(() => {
-      loadingRef.current = false;
-    }, 100);
-    return () => clearTimeout(t);
-  }, [loadingMore, loadedCount]);
+    if (loadingRef.current) return;
+    if (!hasMore || !onLoadMore) return;
+    const distanceToEnd = loadedCount * ROW_HEIGHT - (scrollTop + viewportHeight);
+    if (distanceToEnd < OVERSCAN * ROW_HEIGHT) {
+      onLoadMore();
+    }
+  });
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
@@ -143,7 +163,7 @@ export function FileListTable({
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
   // Never render past what is actually loaded — the window is clipped to the
-  // loaded page, so the bottom of the scroll area stays reachable.
+  // loaded page so the bottom of the list stays reachable while paging.
   const endIndex = Math.min(loadedCount, startIndex + visibleCount);
   const offsetY = startIndex * ROW_HEIGHT;
 
@@ -156,73 +176,90 @@ export function FileListTable({
         return `hover:bg-elevated border-l-2 border-[${color}] text-ink`;
       }
     }
-    return "border-l-2 border-transparent hover:bg-elevated/60 text-ink-secondary";
+    return "border-l-2 border-transparent text-ink-secondary hover:bg-elevated/60";
   };
 
-  // The full scroll height assumes every row is loaded; while paging, the
-  // spacer grows so the user can keep scrolling to trigger the next page.
-  const spacerHeight = hasMore ? Math.max(total, loadedCount + visibleCount) * ROW_HEIGHT : total * ROW_HEIGHT;
+  // While paging, reserve room past the loaded rows so the user can keep
+  // scrolling to trigger the next page instead of hitting a dead end.
+  const spacerHeight = (hasMore ? Math.max(total, loadedCount + visibleCount) : total) * ROW_HEIGHT;
 
   return (
     <div
       ref={scrollRef}
       onScroll={handleScroll}
       className="flex-1 overflow-auto bg-app text-xs"
+      data-testid="file-list"
+      data-loaded-count={loadedCount}
     >
-      <div className="relative" style={{ height: spacerHeight }}>
-        <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 z-10 border-b border-line bg-surface font-medium text-ink-muted">
-            <tr>
-              <th className="w-8 px-3 py-2"></th>
-              {headers.map((h, i) => (
-                <th key={i} className="px-3 py-2">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          {loadedCount === 0 ? (
-            <tbody>
-              <tr>
-                <td colSpan={headers.length + 1} className="p-8 text-center text-ink-faint">
-                  No matching files found. Click "Scan" to refresh.
-                </td>
-              </tr>
-            </tbody>
-          ) : (
-            <tbody style={{ transform: `translateY(${offsetY}px)` }}>
-              {files.slice(startIndex, endIndex).map((file, i) => {
-                const idx = startIndex + i;
-                const isSelected = idx === selectedIndex;
-                return (
-                  <tr
-                    key={file.path || idx}
-                    style={{ height: ROW_HEIGHT }}
-                    onClick={() => onSelectIndex(idx)}
-                    onDoubleClick={() => onLaunch(file)}
-                    onContextMenu={(e) => onContextMenu(e, file, idx)}
-                    className={`cursor-pointer transition-colors ${getRowStyle(file.filename, isSelected)}`}
-                  >
-                    <td className="px-3 py-2 text-ink-faint">
-                      <FileCode className="h-3.5 w-3.5 text-ink-muted" />
-                    </td>
-                    {keys.map((key, kIdx) => (
-                      <td key={kIdx} className="overflow-hidden px-3 py-2 font-mono">
-                        {file.column_values[key] || (key === "File" ? file.filename : "-")}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
+      <ScrollableStickyHeader
+        items={
+          [
+            { label: "#", icon: <FileCode className="h-3.5 w-3.5" /> },
+            ...headers.map((h, i) => ({ label: h, weight: COLUMN_WEIGHTS[keys[i]] })),
+          ] satisfies ScrollableStickyHeaderItem[]
+        }
+      />
+
+      {loadedCount === 0 ? (
+        <div className="p-8 text-center text-ink-faint" data-testid="file-list-empty">
+          No matching files found. Click "Scan" to refresh.
+        </div>
+      ) : (
+        /* Spacer reserves the full scroll height. */
+        <div className="relative" style={{ height: spacerHeight }}>
+          {loadingMore && (
+            <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2">
+              <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+            </div>
           )}
-        </table>
-        {hasMore && (
-          <div className="pointer-events-none sticky bottom-2 mx-auto w-fit rounded-full border border-line bg-surface-strong px-3 py-1 text-[11px] text-ink-muted shadow">
-            Loading more… ({loadedCount} of {grandTotal})
+          {/* The virtualized window, shifted into position by the transform. */}
+          <div style={{ transform: `translateY(${offsetY}px)` }} data-testid="file-list-window">
+            {files.slice(startIndex, endIndex).map((file, i) => {
+              const idx = startIndex + i;
+              const isSelected = idx === selectedIndex;
+              return (
+                <div
+                  key={file.path || idx}
+                  onClick={() => onSelectIndex(idx)}
+                  onDoubleClick={() => onLaunch(file)}
+                  onContextMenu={(e) => onContextMenu(e, file, idx)}
+                  className={`flex cursor-pointer items-center transition-colors ${getRowStyle(
+                    file.filename,
+                    isSelected,
+                  )}`}
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  <div className="shrink-0 px-3 text-right font-mono text-ink-faint">
+                    <span className="hidden sm:inline">{idx + 1}</span>
+                  </div>
+                  {keys.map((key, kIdx) => (
+                    <div
+                      key={kIdx}
+                      className="truncate px-3 font-mono"
+                      style={{
+                        flex: COLUMN_WEIGHTS[key] ?? 1,
+                        minWidth: 0,
+                      }}
+                      title={key === "Path" ? file.path : undefined}
+                    >
+                      {file.column_values[key] || (key === "File" ? file.filename : "-")}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+          {hasMore && (
+            <div
+              className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-line bg-surface-strong px-3 py-1 text-[11px] text-ink-muted shadow"
+              data-testid="file-list-paging"
+            >
+              {loadingMore ? "Loading more… " : ""}
+              ({loadedCount} of {grandTotal} loaded)
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
