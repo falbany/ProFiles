@@ -63,7 +63,11 @@ __pycache__/
 .Python
 build/
 develop-eggs/
+# The frontend build output IS tracked — it ships with the package so that
+# `pip install .` produces a working UI without a Node.js toolchain.
+# (See src/profiles/web/.gitignore, which negates this entry.)
 dist/
+!src/profiles/web/dist/
 downloads/
 eggs/
 .eggs/

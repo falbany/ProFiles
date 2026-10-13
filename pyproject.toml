@@ -60,6 +60,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["profiles", "profiles.*"]
 
 # ============================================
 # Briefcase — native installer config
@@ -121,6 +122,10 @@ max-statements = 60
 
 [tool.setuptools.package-data]
 "profiles" = ["py.typed"]
+# The React/Vite frontend is built with `npm run build` (see src/profiles/web)
+# and the resulting dist/ is committed to the repository so that
+# `pip install .` yields a working app without needing a Node.js toolchain.
+"profiles.web" = ["dist/**/*"]
 
 [tool.ruff]
 target-version = "py311"
