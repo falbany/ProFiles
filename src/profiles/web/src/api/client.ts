@@ -37,8 +37,16 @@ export async function executeScan(params: {
   return res.json();
 }
 
-export async function fetchScanResults(): Promise<ScanResultsResponse> {
-  const res = await fetch("/api/scan/results");
+export async function fetchScanResults(params?: {
+  offset?: number;
+  limit?: number;
+}): Promise<ScanResultsResponse> {
+  const search = new URLSearchParams();
+  if (params?.offset != null) search.set("offset", String(params.offset));
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  const url = `/api/scan/results${qs ? `?${qs}` : ""}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch scan results");
   return res.json();
 }

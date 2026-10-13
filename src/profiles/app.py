@@ -205,9 +205,20 @@ class ProFileApp:
     def _run_web_gui(self, port: int = 8088, host: str = "127.0.0.1") -> None:
         """Launch web backend via PyWebView desktop shell."""
         from profiles.desktop.launcher import launch_desktop_window
+        from profiles.desktop.lifecycle import ServerStartError
 
         assert self._config is not None
-        launch_desktop_window(self._config, port=port, host=host)
+        try:
+            launch_desktop_window(self._config, port=port, host=host)
+        except ServerStartError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            print(
+                "Another process is already using this port. Stop the other "
+                "ProFiles instance (or run 'profiles --server-only' elsewhere) "
+                "and try again.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1) from exc
 
     def _run_gui(self) -> None:
         """Create and run the GUI.

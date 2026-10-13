@@ -29,4 +29,7 @@ export interface ScanResultsResponse {
   count: number;
   in_progress: boolean;
   items: ScannedFileItem[];
+  offset?: number;
+  limit?: number;
+  has_more?: boolean;
 }

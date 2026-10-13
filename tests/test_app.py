@@ -13,6 +13,7 @@ import pytest
 
 import profiles
 from profiles.app import ProFileApp, init_default_config, main
+from profiles.desktop.lifecycle import ServerStartError
 from profiles.gui.main_window import MainWindow
 
 # ── Tkinter availability guard ──────────────────────────────────────────────
@@ -295,6 +296,27 @@ class TestRun:
         app = ProFileApp()
         with pytest.raises(SystemExit):
             app.run()
+
+    def test_web_gui_startup_failure_exits_cleanly(self, mocker, capsys) -> None:  # type: ignore[no-untyped-def]
+        """A port collision exits 1 with an actionable message, no traceback."""
+        mocker.patch("profiles.app.configure_logger")
+        mock_config = mocker.MagicMock()
+        mock_config.verbose = "INFO"
+        mocker.patch("profiles.app.load_config", return_value=mock_config)
+        mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=ServerStartError("ProFiles server failed to start on 127.0.0.1:8088: 3"),
+        )
+
+        app = ProFileApp()
+        app._config = mock_config
+        with pytest.raises(SystemExit) as excinfo:
+            app._run_web_gui()
+
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "failed to start on 127.0.0.1:8088" in err
+        assert "another process is already using this port" in err.lower()
 
 
 # ── init_default_config ─────────────────────────────────────────────────────

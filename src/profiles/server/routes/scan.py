@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -57,11 +57,24 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
 
 
 @router.get("/results")
-async def get_scan_results(request: Request) -> dict:
-    """Return cached scan results formatted for table rendering."""
+async def get_scan_results(
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1, le=50_000),
+) -> dict:
+    """Return cached scan results formatted for table rendering.
+
+    Supports pagination via ``offset`` / ``limit`` so the frontend never has
+    to serialise tens of thousands of rows at once. When ``limit`` is omitted
+    the full list is returned (backwards compatible).
+    """
     state: ServerState = request.app.state.server_state
+    cached = state.cached_results
+    total = len(cached)
+    page = cached if limit is None else cached[offset : offset + limit]
+
     items = []
-    for r in state.cached_results:
+    for r in page:
         file_path = getattr(r, "path", None)
         path_obj = Path(file_path) if file_path is not None else None
         fname = path_obj.name if path_obj else str(r)
@@ -74,11 +87,16 @@ async def get_scan_results(request: Request) -> dict:
                 "rel_path": getattr(r, "rel_path", ""),
             }
         )
-    return {
-        "count": len(items),
+    response: dict = {
+        "count": total,
         "in_progress": state.scan_in_progress,
         "items": items,
     }
+    if limit is not None:
+        response["offset"] = offset
+        response["limit"] = limit
+        response["has_more"] = offset + len(items) < total
+    return response
 
 
 @router.get("/events")

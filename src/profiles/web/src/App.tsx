@@ -19,7 +19,7 @@ import { ActionBar } from "./components/ActionBar";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { ControlsBar } from "./components/ControlsBar";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
-import { FileListTable } from "./components/FileListTable";
+import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { StatusBar } from "./components/StatusBar";
@@ -44,6 +44,8 @@ export default function App() {
   const [closeOnLaunch, setCloseOnLaunch] = useState<boolean>(false);
 
   const [files, setFiles] = useState<ScannedFileItem[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [scanning, setScanning] = useState<boolean>(false);
 
@@ -57,6 +59,34 @@ export default function App() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3500);
+  };
+
+  /**
+   * Fetch the first page of scan results and replace the list.
+   * Paging keeps the JSON payload small (500 rows instead of 25k+).
+   */
+  const loadScanResults = async () => {
+    const res = await fetchScanResults({ offset: 0, limit: SCAN_PAGE_SIZE });
+    setFiles(res.items);
+    setTotalCount(res.count);
+    return res;
+  };
+
+  /** Fetch the next page and append it to the list. */
+  const handleLoadMore = async () => {
+    if (loadingMore || files.length >= totalCount) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetchScanResults({ offset: files.length, limit: SCAN_PAGE_SIZE });
+      // Guard against duplicated rows if the cache changed mid-request.
+      const existing = new Set(files.map((f) => f.path || f.filename));
+      setFiles((prev) => [...prev, ...res.items.filter((f) => !existing.has(f.path || f.filename))]);
+      setTotalCount(res.count);
+    } catch {
+      /* paging failure is non-fatal; user can keep scrolling to retry */
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const loadConfig = async () => {
@@ -114,8 +144,14 @@ export default function App() {
         filter_text: filterText,
         recursive,
       });
-      const res = await fetchScanResults();
-      setFiles(res.items);
+      const scanRes = await executeScan({
+        directory,
+        extension: activeExtension,
+        filter_text: filterText,
+        recursive,
+      });
+      if (typeof scanRes?.count === "number") setTotalCount(scanRes.count);
+      await loadScanResults();
       setSelectedIndex(0);
     } catch (err: any) {
       showToast(`Scan failed: ${err.message}`);
@@ -145,8 +181,7 @@ export default function App() {
               filter_text: "",
               recursive: true,
             });
-            const scanRes = await fetchScanResults();
-            setFiles(scanRes.items);
+            await loadScanResults();
           } catch (scanErr) {
             console.error("Initial scan error:", scanErr);
           }
@@ -170,8 +205,7 @@ export default function App() {
         filter_text: filterText,
         recursive,
       });
-      const res = await fetchScanResults();
-      setFiles(res.items);
+      await loadScanResults();
       setSelectedIndex(0);
     } catch (err) {
       console.error("Directory change error:", err);
@@ -191,8 +225,7 @@ export default function App() {
         filter_text: filterText,
         recursive,
       });
-      const res = await fetchScanResults();
-      setFiles(res.items);
+      await loadScanResults();
       setSelectedIndex(0);
     } catch (err) {
       console.error("Scan error:", err);
@@ -267,7 +300,7 @@ export default function App() {
       extension: activeExtension,
       filter_text: folder,
       recursive,
-    }).then(() => fetchScanResults().then((res) => { setFiles(res.items); setSelectedIndex(0); }));
+    }).then(() => loadScanResults().then(() => setSelectedIndex(0)));
   };
 
   const handleFilterExtension = (ext: string) => {
@@ -277,7 +310,7 @@ export default function App() {
       extension: ext,
       filter_text: filterText,
       recursive,
-    }).then(() => fetchScanResults().then((res) => { setFiles(res.items); setSelectedIndex(0); }));
+    }).then(() => loadScanResults().then(() => setSelectedIndex(0)));
   };
 
   const handleCopyPath = (file: ScannedFileItem, forwardSlash?: boolean) => {
@@ -443,6 +476,9 @@ export default function App() {
 
       <FileListTable
         files={files}
+        totalCount={totalCount}
+        onLoadMore={handleLoadMore}
+        loadingMore={loadingMore}
         columnHeaders={config?.column_headers || []}
         columnNames={config?.column_names || []}
         selectedIndex={selectedIndex}
@@ -467,7 +503,7 @@ export default function App() {
       <StatusBar
         systemInfo={systemInfo}
         activeDirectory={activeDirectory}
-        fileCount={files.length}
+        fileCount={totalCount}
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
         onOpenLog={async () => {
