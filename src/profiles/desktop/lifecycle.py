@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import socket
 import threading
+import time
 from pathlib import Path
 
 import uvicorn
@@ -12,20 +13,36 @@ from profiles.core.config.models import AppConfig
 from profiles.server.app import create_app
 from profiles.server.state import ServerState
 
+_STARTUP_TIMEOUT_S = 10.0
+
+
+class ServerStartError(RuntimeError):
+    """Raised when the background uvicorn server fails to start.
+
+    Callers must not open a window against a dead server; the error message
+    names the host and port so the collision can be diagnosed.
+    """
+
 
 def find_available_port(start_port: int = 8088, max_attempts: int = 50) -> int:
-    """Find an available TCP port starting from start_port."""
+    """Find an available TCP port starting from start_port.
+
+    A port counts as free only when it can be bound *and* listened on, so a
+    port held by another process is skipped rather than reported available.
+    """
     for port in range(start_port, start_port + max_attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 sock.bind(("127.0.0.1", port))
+                sock.listen(1)
                 return port
             except OSError:
                 continue
     # Fallback to OS assigned ephemeral port
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
         return sock.getsockname()[1]
 
 
@@ -63,13 +80,25 @@ class BackgroundServer:
         self._app = create_app(self.state)
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
+        self._startup_error: BaseException | None = None
 
     @property
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self) -> None:
-        """Start the background server thread."""
+    def start(self, timeout: float = _STARTUP_TIMEOUT_S) -> None:
+        """Start the background server thread and wait until it is serving.
+
+        Args:
+            timeout: Seconds to wait for uvicorn to reach the serving state.
+
+        Raises:
+            ServerStartError: If the server fails to bind or start, so callers
+                never present a UI backed by a dead server.
+        """
+        if self.is_running:
+            return
+
         uv_config = uvicorn.Config(
             app=self._app,
             host=self.host,
@@ -78,13 +107,47 @@ class BackgroundServer:
             loop="asyncio",
         )
         self._server = uvicorn.Server(uv_config)
-        self._thread = threading.Thread(target=self._server.run, daemon=True)
+        self._thread = threading.Thread(target=self._run_server, daemon=True)
         self._thread.start()
 
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._startup_error is not None:
+                error = self._startup_error
+                self.stop()
+                msg = f"ProFiles server failed to start on {self.host}:{self.port}: {error}"
+                raise ServerStartError(msg)
+            if self.is_running and self._server is not None and self._server.started:
+                return
+            time.sleep(0.05)
+
+        self.stop()
+        msg = f"ProFiles server did not start within {timeout}s on {self.host}:{self.port}"
+        raise ServerStartError(msg)
+
+    def _run_server(self) -> None:
+        """Run uvicorn, recording startup failures for :meth:`start` to raise."""
+        assert self._server is not None
+        try:
+            self._server.run()
+        except SystemExit as exc:  # uvicorn calls sys.exit on bind failure
+            self._startup_error = exc
+        except OSError as exc:
+            self._startup_error = exc
+
+    def _reset(self) -> None:
+        """Clear thread/server references after a failed or completed run."""
+        self._server = None
+        self._thread = None
+        self._startup_error = None
+
     def stop(self) -> None:
-        """Signal the Uvicorn server to stop and join thread."""
-        if self._server:
+        """Signal the Uvicorn server to stop and join the thread.
+
+        Safe to call before :meth:`start` or more than once.
+        """
+        if self._server is not None:
             self._server.should_exit = True
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3.0)
-        self._thread = None
+        self._reset()

@@ -183,11 +183,16 @@ class ProFileApp:
         """Run only the FastAPI background server without opening PyWebView."""
         import time
 
-        from profiles.desktop.lifecycle import BackgroundServer
+        from profiles.desktop.lifecycle import BackgroundServer, ServerStartError
 
         assert self._config is not None
         server = BackgroundServer(config=self._config, host=host, port=port)
-        server.start()
+        try:
+            server.start()
+        except ServerStartError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
         print(f"ProFiles server running at http://{host}:{server.port} (press Ctrl+C to stop)")
         try:
             while server.is_running:

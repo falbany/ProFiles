@@ -14,14 +14,18 @@ def launch_desktop_window(
     host: str = "127.0.0.1",
     debug: bool = False,
 ) -> None:
-    """Start local server and open native PyWebView window."""
+    """Start local server and open native PyWebView window.
+
+    The background server is stopped whenever the window closes, including
+    when startup fails, so no orphaned process is left listening.
+    """
     server = BackgroundServer(config=config, host=host, port=port)
-    server.start()
 
     window_title = f"ProFiles - {config.title}" if config.title else "ProFiles"
     url = f"http://{host}:{server.port}"
 
     try:
+        server.start()
         webview.create_window(
             title=window_title,
             url=url,
