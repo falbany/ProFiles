@@ -5,6 +5,7 @@ Also tests profiles.__init__ package metadata and __main__ entry point.
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
@@ -316,7 +317,36 @@ class TestRun:
         assert excinfo.value.code == 1
         err = capsys.readouterr().err
         assert "failed to start on 127.0.0.1:8088" in err
+        # The fix must be copy-pasteable, not a vague "stop the other instance"
+        assert "kill $(lsof -ti:8088 -sTCP:LISTEN)" in err
         assert "another process is already using this port" in err.lower()
+
+
+class TestStopPortOwnerCommand:
+    """_stop_port_owner_command - the advice embedded in startup errors."""
+
+    def test_includes_port_and_a_kill_verb(self) -> None:
+        from profiles.app import _stop_port_owner_command
+
+        cmd = _stop_port_owner_command(8088)
+        assert "8088" in cmd
+        assert cmd.split()[0] in {"kill", "taskkill", "for"}
+
+    def test_filters_to_listeners_only(self) -> None:
+        """Client connections are not what blocks a bind - don't invite killing them."""
+        from profiles.app import _stop_port_owner_command
+
+        cmd = _stop_port_owner_command(8088)
+        if sys.platform != "win32":
+            assert "-sTCP:LISTEN" in cmd
+
+    def test_uses_windows_syntax_on_windows(self, mocker) -> None:  # type: ignore[no-untyped-def]
+        from profiles.app import _stop_port_owner_command
+
+        mocker.patch("profiles.app.sys.platform", "win32")
+        cmd = _stop_port_owner_command(8088)
+        assert "netstat" in cmd
+        assert "taskkill" in cmd
 
 
 # ── init_default_config ─────────────────────────────────────────────────────

@@ -20,6 +20,29 @@ from profiles.core.telemetry.diagnostics import configure_logger
 from profiles.gui.main_window import MainWindow
 from profiles.utils.network import get_hostname, get_username
 
+_DEFAULT_PORT = 8088
+
+
+def _stop_port_owner_command(port: int) -> str:
+    """Build the OS-appropriate command to free a busy local *port*.
+
+    Embedded in startup errors so the fix is copy-pasteable instead of
+    something the user has to go and look up.
+
+    Args:
+        port: TCP port number to release.
+
+    Returns:
+        A single-line shell command killing whatever listens on *port*.
+    """
+    if sys.platform == "win32":
+        return (
+            f'for /f "tokens=5" %a in '
+            f"('netstat -ano ^| findstr :{port} ^| findstr LISTENING') "
+            "do taskkill /PID %a /F"
+        )
+    return f"kill $(lsof -ti:{port} -sTCP:LISTEN)"
+
 
 class ProFileApp:
     """ProFiles application orchestrator.
@@ -179,7 +202,7 @@ class ProFileApp:
 
         return os.environ.get("PROFILES_GUI_BACKEND", "web").lower()
 
-    def _run_server_only(self, port: int = 8088, host: str = "127.0.0.1") -> None:
+    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "127.0.0.1") -> None:
         """Run only the FastAPI background server without opening PyWebView."""
         import time
 
@@ -202,7 +225,7 @@ class ProFileApp:
         finally:
             server.stop()
 
-    def _run_web_gui(self, port: int = 8088, host: str = "127.0.0.1") -> None:
+    def _run_web_gui(self, port: int = _DEFAULT_PORT, host: str = "127.0.0.1") -> None:
         """Launch web backend via PyWebView desktop shell."""
         from profiles.desktop.launcher import launch_desktop_window
         from profiles.desktop.lifecycle import ServerStartError
@@ -213,9 +236,8 @@ class ProFileApp:
         except ServerStartError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             print(
-                "Another process is already using this port. Stop the other "
-                "ProFiles instance (or run 'profiles --server-only' elsewhere) "
-                "and try again.",
+                "Another process is already using this port. Stop it with:\n"
+                f"    {_stop_port_owner_command(port)}",
                 file=sys.stderr,
             )
             raise SystemExit(1) from exc
