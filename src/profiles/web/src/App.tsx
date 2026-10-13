@@ -18,13 +18,22 @@ import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
 import { ActionBar } from "./components/ActionBar";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { ControlsBar } from "./components/ControlsBar";
+import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { FileListTable } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { StatusBar } from "./components/StatusBar";
 
 export default function App() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try {
+      const saved = localStorage.getItem("profiles-theme");
+      if (saved === "light" || saved === "dark") return saved;
+    } catch {
+      /* storage may be unavailable */
+    }
+    return "dark";
+  });
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [config, setConfig] = useState<AppConfigData | null>(null);
 
@@ -41,10 +50,78 @@ export default function App() {
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>("");
+  const [reloading, setReloading] = useState<boolean>(false);
+  const [language, setLanguage] = useState<"en" | "fr">("en");
+  const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3500);
+  };
+
+  const loadConfig = async () => {
+    try {
+      const cfg = await fetchConfig();
+      setConfig(cfg);
+      if (!activeDirectory && cfg.active_directory) {
+        setActiveDirectory(cfg.active_directory);
+      }
+      if (!activeExtension && cfg.extensions.length > 0) {
+        setActiveExtension(cfg.extensions[0]);
+      }
+      return cfg;
+    } catch (err: any) {
+      showToast(`Failed to load configuration: ${err.message}`);
+      return null;
+    }
+  };
+
+  const handleReloadConfig = async () => {
+    if (reloading) return;
+    setReloading(true);
+    showToast("Reloading configuration...");
+    try {
+      const cfg = await loadConfig();
+      if (cfg) {
+        showToast("Configuration reloaded.");
+        await handleScan();
+      }
+    } finally {
+      setReloading(false);
+    }
+  };
+
+  const handleBrowseDirectory = () => {
+    setShowDirPicker(true);
+  };
+
+  const handleDirectoryPicked = async (directory: string) => {
+    setShowDirPicker(false);
+    setActiveDirectory(directory);
+    showToast(`Directory selected: ${directory}`);
+    try {
+      await selectDirectory(directory);
+    } catch (err: any) {
+      // Non-fatal: directory is already applied in the UI
+      console.error("select-directory failed:", err);
+    }
+    // Scan with the freshly picked directory
+    setScanning(true);
+    try {
+      await executeScan({
+        directory,
+        extension: activeExtension,
+        filter_text: filterText,
+        recursive,
+      });
+      const res = await fetchScanResults();
+      setFiles(res.items);
+      setSelectedIndex(0);
+    } catch (err: any) {
+      showToast(`Scan failed: ${err.message}`);
+    } finally {
+      setScanning(false);
+    }
   };
 
   // Initial load
@@ -258,16 +335,15 @@ export default function App() {
       // Ctrl + R: Reload config & scan
       if (e.ctrlKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
-        fetchConfig().then(setConfig);
-        handleScan();
+        handleReloadConfig();
         return;
       }
 
       // Ctrl + D: Focus directory
       if (e.ctrlKey && e.key.toLowerCase() === "d") {
         e.preventDefault();
-        const dirSelect = document.querySelector("select") as HTMLSelectElement | null;
-        dirSelect?.focus();
+        const dirInput = document.querySelector("input[list='directories-list']") as HTMLInputElement | null;
+        dirInput?.focus();
         return;
       }
 
@@ -331,10 +407,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [files, selectedIndex, activeDirectory, activeExtension, filterText, recursive]);
 
-  const themeClasses = theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900";
+  // Apply theme attribute + persist preference
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("profiles-theme", theme);
+    } catch {
+      /* storage may be unavailable */
+    }
+  }, [theme]);
 
   return (
-    <div className={`flex h-screen flex-col font-sans ${themeClasses}`}>
+    <div className="flex h-screen flex-col bg-app font-sans text-ink transition-colors">
       <HeaderBar
         title={config?.title || ""}
         release={config?.release || ""}
@@ -354,6 +438,7 @@ export default function App() {
         onRecursiveChange={setRecursive}
         onScan={handleScan}
         scanning={scanning}
+        onBrowseDirectory={handleBrowseDirectory}
       />
 
       <FileListTable
@@ -402,6 +487,17 @@ export default function App() {
           }
         }}
         onShowShortcuts={() => setShowShortcuts(true)}
+        onReloadConfig={handleReloadConfig}
+        language={language}
+        onLanguageChange={setLanguage}
+      />
+
+      {/* Directory Picker Modal */}
+      <DirectoryPickerModal
+        isOpen={showDirPicker}
+        initialPath={activeDirectory}
+        onClose={() => setShowDirPicker(false)}
+        onSelect={handleDirectoryPicked}
       />
 
       {/* Context Menu */}
@@ -425,7 +521,7 @@ export default function App() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-12 right-6 z-50 rounded-lg border border-slate-700 bg-slate-900/95 px-4 py-2 text-xs font-medium text-slate-200 shadow-xl backdrop-blur-md">
+        <div className="fixed bottom-12 right-6 z-50 rounded-lg border border-line bg-surface-glass px-4 py-2 text-xs font-medium text-ink shadow-xl backdrop-blur-md">
           {toastMessage}
         </div>
       )}

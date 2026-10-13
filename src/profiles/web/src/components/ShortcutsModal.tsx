@@ -26,15 +26,15 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-[450px] max-w-full rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2 font-semibold text-slate-100">
+      <div className="w-[450px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2 font-semibold text-ink">
             <Keyboard className="h-5 w-5 text-indigo-400" />
             <span>Keyboard Shortcuts</span>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -44,10 +44,10 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
           {shortcuts.map(({ key, desc }) => (
             <div
               key={key}
-              className="flex items-center justify-between rounded-lg bg-slate-800/50 px-3 py-2"
+              className="flex items-center justify-between rounded-lg bg-elevated/50 px-3 py-2"
             >
-              <span className="text-slate-300">{desc}</span>
-              <kbd className="rounded bg-slate-950 px-2 py-0.5 font-mono text-[11px] font-semibold text-indigo-300 border border-slate-700">
+              <span className="text-ink-secondary">{desc}</span>
+              <kbd className="rounded bg-app px-2 py-0.5 font-mono text-[11px] font-semibold text-indigo-300 border border-line">
                 {key}
               </kbd>
             </div>

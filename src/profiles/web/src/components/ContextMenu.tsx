@@ -70,13 +70,13 @@ export function ContextMenu({
 
       {/* Menu popup */}
       <div
-        className="fixed z-50 w-56 rounded-lg border border-slate-700 bg-slate-900/95 py-1 text-xs text-slate-200 shadow-2xl backdrop-blur-md"
+        className="fixed z-50 w-56 rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
         style={{
           top: Math.min(y, window.innerHeight - 380),
           left: Math.min(x, window.innerWidth - 240),
         }}
       >
-        <div className="border-b border-slate-800 px-3 py-1.5 font-medium text-slate-400 truncate">
+        <div className="border-b border-line px-3 py-1.5 font-medium text-ink-muted truncate">
           {file.filename}
         </div>
 
@@ -96,7 +96,7 @@ export function ContextMenu({
           <span>Launch with arguments...</span>
         </button>
 
-        <div className="my-1 border-t border-slate-800" />
+        <div className="my-1 border-t border-line" />
 
         {/* Folder actions */}
         <button
@@ -121,7 +121,7 @@ export function ContextMenu({
           <span>Open Terminal in Directory</span>
         </button>
 
-        <div className="my-1 border-t border-slate-800" />
+        <div className="my-1 border-t border-line" />
 
         {/* Filter actions */}
         <button
@@ -148,32 +148,32 @@ export function ContextMenu({
           <span>Filter by Extension</span>
         </button>
 
-        <div className="my-1 border-t border-slate-800" />
+        <div className="my-1 border-t border-line" />
 
         {/* Copy actions */}
         <button
           onClick={() => { onCopyPath(file, false); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
-          <Copy className="h-3.5 w-3.5 text-slate-400" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted" />
           <span>Copy Full Path</span>
         </button>
         <button
           onClick={() => { onCopyPath(file, true); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
-          <Copy className="h-3.5 w-3.5 text-slate-400" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted" />
           <span>Copy Path (Forward Slashes)</span>
         </button>
         <button
           onClick={() => { onCopyFilename(file, false); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
-          <Copy className="h-3.5 w-3.5 text-slate-400" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted" />
           <span>Copy Filename</span>
         </button>
 
-        <div className="my-1 border-t border-slate-800" />
+        <div className="my-1 border-t border-line" />
 
         {/* Hashes */}
         <button
@@ -195,9 +195,9 @@ export function ContextMenu({
       {/* Launch with Args Modal */}
       {showArgsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-96 rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
-            <h3 className="mb-2 text-sm font-semibold text-slate-100">Launch with Arguments</h3>
-            <p className="mb-3 text-xs text-slate-400 truncate">{file.filename}</p>
+          <div className="w-96 rounded-xl border border-line bg-surface p-4 shadow-2xl">
+            <h3 className="mb-2 text-sm font-semibold text-ink">Launch with Arguments</h3>
+            <p className="mb-3 text-xs text-ink-muted truncate">{file.filename}</p>
             <input
               type="text"
               autoFocus
@@ -208,12 +208,12 @@ export function ContextMenu({
                 if (e.key === "Enter") handleArgsSubmit();
                 if (e.key === "Escape") setShowArgsModal(false);
               }}
-              className="mb-4 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
+              className="mb-4 w-full rounded-md border border-line bg-elevated px-3 py-2 text-xs text-ink outline-none focus:border-indigo-500"
             />
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowArgsModal(false)}
-                className="rounded-md px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                className="rounded-md px-3 py-1.5 text-xs text-ink-muted hover:bg-elevated hover:text-ink"
               >
                 Cancel
               </button>
