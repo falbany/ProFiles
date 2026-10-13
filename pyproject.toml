@@ -84,6 +84,18 @@ icon = "img/profiles"
 sources = ["src/profiles"]
 requires = []
 
+# Declared so that a Briefcase build registers ``*.profiles`` (e.g.
+# ``my.profiles``) as a ProFiles document on every platform: Info.plist
+# document types on macOS, the registry on Windows, .desktop MIME on Linux.
+# This is inert until a Briefcase build runs; the literal dotfile ``.profiles``
+# is not claimable (no filename extension for the OS to match).
+# See docs/superpowers/specs/2026-10-13-launch-and-config-handoff-design.md
+document_types = ["profiles"]
+
+[tool.briefcase.app.profiles.macOS]
+CFBundleTypeRole = "Editor"
+LSHandlerRank = "Owner"
+
 [tool.pylint.MASTER]
 init-import = "yes"
 max-line-length = 100
