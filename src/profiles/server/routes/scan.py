@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from profiles.core.config import service as config_service
 from profiles.core.processing import scanner
 from profiles.server.state import ServerState
 
@@ -42,6 +43,10 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
 
     state.scan_in_progress = True
     try:
+        active = config_service.find_active_config(state.config, str(state.active_directory))
+        exclude_files = (
+            active.search_exclude_files if active is not None else state.config.search_exclude_files
+        )
         results = await asyncio.to_thread(
             scanner.scan_and_process_dynamic,
             directories=str(state.active_directory),
@@ -49,6 +54,10 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
             extension=payload.extension,
             filter_text=payload.filter_text,
             recursive=payload.recursive,
+            exclude_dirs=state.config.search_exclude_dirs,
+            exclude_files=exclude_files,
+            column_names=state.config.column_names,
+            columns=state.config.columns,
         )
         state.cached_results = results
         return {"count": len(results), "directory": str(state.active_directory)}

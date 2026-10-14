@@ -22,6 +22,7 @@ import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { ShortcutsModal } from "./components/ShortcutsModal";
+import { LoadConfigModal } from "./components/LoadConfigModal";
 import { StatusBar } from "./components/StatusBar";
 
 export default function App() {
@@ -55,6 +56,7 @@ export default function App() {
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
+  const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -99,6 +101,12 @@ export default function App() {
       if (!activeExtension && cfg.extensions.length > 0) {
         setActiveExtension(cfg.extensions[0]);
       }
+      if (cfg.recursive_search !== undefined) {
+        setRecursive(cfg.recursive_search);
+      }
+      if (!filterText && cfg.filters.length > 0) {
+        setFilterText(cfg.filters[0]);
+      }
       return cfg;
     } catch (err: any) {
       showToast(`Failed to load configuration: ${err.message}`);
@@ -121,6 +129,40 @@ export default function App() {
     }
   };
 
+  const handleConfigLoaded = async (cfg: AppConfigData) => {
+    setConfig(cfg);
+    const targetDirectory = cfg.active_directory || activeDirectory || (cfg.directories[0] ?? "");
+    const nextExtension = cfg.extensions.includes(activeExtension)
+      ? activeExtension
+      : (cfg.extensions[0] ?? "");
+    const nextFilter = cfg.filters.includes(filterText) ? filterText : (cfg.filters[0] ?? "");
+    if (targetDirectory) {
+      setActiveDirectory(targetDirectory);
+    }
+    setActiveExtension(nextExtension);
+    setFilterText(nextFilter);
+    setRecursive(cfg.recursive_search);
+
+    showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
+    if (targetDirectory) {
+      setScanning(true);
+      try {
+        await executeScan({
+          directory: targetDirectory,
+          extension: nextExtension,
+          filter_text: nextFilter,
+          recursive: cfg.recursive_search,
+        });
+        await loadScanResults();
+        setSelectedIndex(0);
+      } catch (err: any) {
+        showToast(`Scan failed after config load: ${err.message}`);
+      } finally {
+        setScanning(false);
+      }
+    }
+  };
+
   const handleBrowseDirectory = () => {
     setShowDirPicker(true);
   };
@@ -129,25 +171,35 @@ export default function App() {
     setShowDirPicker(false);
     setActiveDirectory(directory);
     showToast(`Directory selected: ${directory}`);
+    let directoryConfig: AppConfigData | undefined;
     try {
-      await selectDirectory(directory);
+      directoryConfig = await selectDirectory(directory);
+      setConfig(directoryConfig);
     } catch (err: any) {
       // Non-fatal: directory is already applied in the UI
       console.error("select-directory failed:", err);
     }
+    const nextExtension = directoryConfig?.extensions.includes(activeExtension)
+      ? activeExtension
+      : (directoryConfig?.extensions[0] ?? activeExtension);
+    const nextFilter = directoryConfig?.filters.includes(filterText)
+      ? filterText
+      : (directoryConfig?.filters[0] ?? filterText);
+    setActiveExtension(nextExtension);
+    setFilterText(nextFilter);
     // Scan with the freshly picked directory
     setScanning(true);
     try {
       await executeScan({
         directory,
-        extension: activeExtension,
-        filter_text: filterText,
+        extension: nextExtension,
+        filter_text: nextFilter,
         recursive,
       });
       const scanRes = await executeScan({
         directory,
-        extension: activeExtension,
-        filter_text: filterText,
+        extension: nextExtension,
+        filter_text: nextFilter,
         recursive,
       });
       if (typeof scanRes?.count === "number") setTotalCount(scanRes.count);
@@ -170,16 +222,22 @@ export default function App() {
         setConfig(cfg);
         const initialDir = cfg.active_directory || (cfg.directories.length > 0 ? cfg.directories[0] : "");
         const initialExt = cfg.extensions.length > 0 ? cfg.extensions[0] : "";
+        const initialFilter = cfg.filters.length > 0 ? cfg.filters[0] : "";
         if (initialDir) setActiveDirectory(initialDir);
         if (initialExt) setActiveExtension(initialExt);
+        if (cfg.recursive_search !== undefined) setRecursive(cfg.recursive_search);
+        if (initialFilter) setFilterText(initialFilter);
+        if (!cfg.config_exists) {
+          setShowConfigPicker(true);
+        }
 
         if (initialDir) {
           try {
             await executeScan({
               directory: initialDir,
               extension: initialExt,
-              filter_text: "",
-              recursive: true,
+              filter_text: initialFilter,
+              recursive: cfg.recursive_search,
             });
             await loadScanResults();
           } catch (scanErr) {
@@ -197,12 +255,21 @@ export default function App() {
   const handleDirectoryChange = async (newDir: string) => {
     setActiveDirectory(newDir);
     try {
-      await selectDirectory(newDir);
+      const directoryConfig = await selectDirectory(newDir);
+      setConfig(directoryConfig);
+      const nextExtension = directoryConfig.extensions.includes(activeExtension)
+        ? activeExtension
+        : (directoryConfig.extensions[0] ?? "");
+      const nextFilter = directoryConfig.filters.includes(filterText)
+        ? filterText
+        : (directoryConfig.filters[0] ?? "");
+      setActiveExtension(nextExtension);
+      setFilterText(nextFilter);
       setScanning(true);
       await executeScan({
         directory: newDir,
-        extension: activeExtension,
-        filter_text: filterText,
+        extension: nextExtension,
+        filter_text: nextFilter,
         recursive,
       });
       await loadScanResults();
@@ -465,6 +532,7 @@ export default function App() {
         extensions={config?.extensions || []}
         activeExtension={activeExtension}
         onExtensionChange={setActiveExtension}
+        filterOptions={config?.filters || []}
         filterText={filterText}
         onFilterTextChange={setFilterText}
         recursive={recursive}
@@ -522,10 +590,21 @@ export default function App() {
             showToast(`Failed to open config: ${err.message}`);
           }
         }}
+        onLoadConfig={() => setShowConfigPicker(true)}
         onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
         language={language}
         onLanguageChange={setLanguage}
+        activeConfigName={config?.config_path ? config.config_path.split(/[\\/]/).pop() || config.config_path : undefined}
+      />
+
+      {/* Config Picker Modal */}
+      <LoadConfigModal
+        isOpen={showConfigPicker}
+        activeConfigPath={config?.config_path}
+        configExists={config?.config_exists}
+        onClose={() => setShowConfigPicker(false)}
+        onLoaded={handleConfigLoaded}
       />
 
       {/* Directory Picker Modal */}

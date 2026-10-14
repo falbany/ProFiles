@@ -155,7 +155,7 @@ line-ending = "auto"
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 addopts = [
     "--cov=src/profiles",
     "--cov-report=term-missing",

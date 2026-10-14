@@ -83,8 +83,13 @@ export function FileListTable({
   onContextMenu,
   rowColors,
 }: FileListTableProps) {
-  const headers = columnHeaders.length > 0 ? columnHeaders : ["File"];
-  const keys = columnNames.length > 0 ? columnNames : ["File"];
+  const fallbackKeys = ["File"];
+  const resolvedKeys = columnNames.length > 0 ? columnNames : fallbackKeys;
+  const resolvedHeaders = columnHeaders.length > 0 ? columnHeaders : resolvedKeys;
+  const columnSlots = Array.from({ length: Math.max(resolvedKeys.length, resolvedHeaders.length) }, (_, i) => ({
+    key: resolvedKeys[i] ?? fallbackKeys[0],
+    header: resolvedHeaders[i] ?? resolvedKeys[i] ?? fallbackKeys[0],
+  }));
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -167,16 +172,27 @@ export function FileListTable({
   const endIndex = Math.min(loadedCount, startIndex + visibleCount);
   const offsetY = startIndex * ROW_HEIGHT;
 
-  const getRowStyle = (filename: string, isSelected: boolean) => {
+  const getRowStyle = (filename: string, isSelected: boolean): { className: string; style: React.CSSProperties } => {
     if (isSelected) {
-      return "bg-indigo-600/25 border-l-2 border-indigo-500 text-ink";
+      return {
+        className: "bg-indigo-600/25 border-l-2 border-indigo-500 text-ink",
+        style: {},
+      };
     }
+
     for (const [pattern, color] of rowColors) {
       if (filename.toLowerCase().includes(pattern.toLowerCase())) {
-        return `hover:bg-elevated border-l-2 border-[${color}] text-ink`;
+        return {
+          className: "hover:bg-elevated border-l-2 text-ink",
+          style: { borderLeftColor: color },
+        };
       }
     }
-    return "border-l-2 border-transparent text-ink-secondary hover:bg-elevated/60";
+
+    return {
+      className: "border-l-2 border-transparent text-ink-secondary hover:bg-elevated/60",
+      style: { borderLeftColor: "transparent" },
+    };
   };
 
   // While paging, reserve room past the loaded rows so the user can keep
@@ -195,7 +211,10 @@ export function FileListTable({
         items={
           [
             { label: "#", icon: <FileCode className="h-3.5 w-3.5" /> },
-            ...headers.map((h, i) => ({ label: h, weight: COLUMN_WEIGHTS[keys[i]] })),
+            ...columnSlots.map(({ key, header }) => ({
+              label: header,
+              weight: COLUMN_WEIGHTS[key] ?? 1,
+            })),
           ] satisfies ScrollableStickyHeaderItem[]
         }
       />
@@ -217,22 +236,20 @@ export function FileListTable({
             {files.slice(startIndex, endIndex).map((file, i) => {
               const idx = startIndex + i;
               const isSelected = idx === selectedIndex;
+              const rowStyle = getRowStyle(file.filename, isSelected);
               return (
                 <div
                   key={file.path || idx}
                   onClick={() => onSelectIndex(idx)}
                   onDoubleClick={() => onLaunch(file)}
                   onContextMenu={(e) => onContextMenu(e, file, idx)}
-                  className={`flex cursor-pointer items-center transition-colors ${getRowStyle(
-                    file.filename,
-                    isSelected,
-                  )}`}
-                  style={{ height: ROW_HEIGHT }}
+                  className={`flex cursor-pointer items-center transition-colors ${rowStyle.className}`}
+                  style={{ ...rowStyle.style, height: ROW_HEIGHT }}
                 >
                   <div className="shrink-0 px-3 text-right font-mono text-ink-faint">
                     <span className="hidden sm:inline">{idx + 1}</span>
                   </div>
-                  {keys.map((key, kIdx) => (
+                  {resolvedKeys.map((key, kIdx) => (
                     <div
                       key={kIdx}
                       className="truncate px-3 font-mono"

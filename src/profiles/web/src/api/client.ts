@@ -1,4 +1,4 @@
-import type { AppConfigData, ScanResultsResponse, SystemInfo } from "./types";
+import type { AppConfigData, BrowseResult, ScanResultsResponse, SystemInfo } from "./types";
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   const res = await fetch("/api/system");
@@ -12,13 +12,40 @@ export async function fetchConfig(): Promise<AppConfigData> {
   return res.json();
 }
 
-export async function selectDirectory(directory: string): Promise<{ active_directory: string }> {
+export async function selectDirectory(directory: string): Promise<AppConfigData> {
   const res = await fetch("/api/config/select-directory", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ directory }),
   });
   if (!res.ok) throw new Error("Failed to select directory");
+  return res.json();
+}
+
+export async function loadConfigFile(configPath: string): Promise<AppConfigData> {
+  const res = await fetch("/api/config/load", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config_path: configPath }),
+  });
+  if (!res.ok) throw new Error("Failed to load config file");
+  return res.json();
+}
+
+export async function createConfigFile(directory: string): Promise<AppConfigData> {
+  const res = await fetch("/api/config/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ directory }),
+  });
+  if (!res.ok) throw new Error("Failed to create config file");
+  return res.json();
+}
+
+export async function browseForConfigFiles(path: string): Promise<BrowseResult> {
+  const url = `/api/fs/browse?path=${encodeURIComponent(path)}&include_hidden=true`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to browse config files");
   return res.json();
 }
 

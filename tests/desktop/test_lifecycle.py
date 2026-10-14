@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import socket
 import time
+from pathlib import Path
 
 import httpx
 import pytest
 
-from profiles.core.config.models import AppConfig
+from profiles.core.config.models import AppConfig, MachineConfiguration
 from profiles.desktop.lifecycle import (
     BackgroundServer,
     ServerStartError,
@@ -55,6 +56,36 @@ def test_stop_is_safe_before_start() -> None:
     server = BackgroundServer(config=AppConfig(title="never started"), port=0)
     server.stop()  # must not raise
     assert not server.is_running
+
+
+def test_background_server_does_not_use_cwd_when_configured_scan_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    scan_dir = tmp_path / "unmounted"
+    config = AppConfig(
+        configurations=[
+            MachineConfiguration(
+                name="network",
+                scan=(str(scan_dir),),
+                extensions=("exe",),
+                filters=("installer",),
+            )
+        ]
+    )
+
+    server = BackgroundServer(config=config, port=0)
+
+    assert server.state.active_directory is None
+    try:
+        server.start()
+        response = httpx.get(f"http://127.0.0.1:{server.port}/api/config", timeout=2.0)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["active_directory"] == str(scan_dir)
+        assert data["extensions"][0] == "exe"
+        assert data["filters"][0] == "installer"
+    finally:
+        server.stop()
 
 
 def test_background_server_lifecycle() -> None:

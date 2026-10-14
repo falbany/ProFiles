@@ -75,7 +75,7 @@ class BackgroundServer:
 
         self.state = ServerState(
             config=config,
-            active_directory=active_dir or Path.cwd(),
+            active_directory=active_dir,
         )
         self._app = create_app(self.state)
         self._server: uvicorn.Server | None = None

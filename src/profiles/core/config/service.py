@@ -60,6 +60,13 @@ def find_active_config(
     selected_dir_normalized = str(Path(directory).resolve())
 
     for cfg in config.configurations:
+        if any(
+            str(Path(scan_dir).resolve()).casefold() == selected_dir_normalized.casefold()
+            for scan_dir in cfg.scan
+        ):
+            return cfg
+
+    for cfg in config.configurations:
         if matches_machine_config(cfg, "", "", selected_dir_normalized):
             return cfg
     return None

@@ -1,5 +1,6 @@
 import { Folder, FolderOpen, Play, RefreshCw, Search } from "lucide-react";
 import Tooltip from "./Tooltip";
+import { EditableCombobox } from "./EditableCombobox";
 
 const OPERATOR_HELP = (
   <span className="flex flex-col gap-1 whitespace-nowrap text-left">
@@ -29,6 +30,7 @@ interface ControlsBarProps {
   extensions: string[];
   activeExtension: string;
   onExtensionChange: (ext: string) => void;
+  filterOptions?: string[];
   filterText: string;
   onFilterTextChange: (text: string) => void;
   recursive: boolean;
@@ -45,6 +47,7 @@ export function ControlsBar({
   extensions,
   activeExtension,
   onExtensionChange,
+  filterOptions = [],
   filterText,
   onFilterTextChange,
   recursive,
@@ -62,20 +65,17 @@ export function ControlsBar({
           <span>Directory:</span>
         </label>
         <Tooltip text="Select or type a directory path to scan files from.">
-          <input
-            type="text"
-            list="directories-list"
+          <EditableCombobox
+            id="directory-combobox"
+            ariaLabel="Directory"
             value={activeDirectory}
+            options={directories}
+            onChange={onDirectoryChange}
             placeholder="/path/to/directory"
-            onChange={(e) => onDirectoryChange(e.target.value)}
-            className="w-full min-w-0 rounded-md border border-line bg-elevated px-3 py-1.5 font-mono text-ink outline-none focus:border-indigo-500"
+            className="w-full"
+            inputClassName="font-mono"
           />
         </Tooltip>
-        <datalist id="directories-list">
-          {directories.map((dir) => (
-            <option key={dir} value={dir} />
-          ))}
-        </datalist>
         {onBrowseDirectory && (
           <Tooltip text="Browse for a folder on this system" block={false}>
             <button
@@ -95,12 +95,16 @@ export function ControlsBar({
         <Tooltip text={OPERATOR_HELP}>
           <div className="relative min-w-0 flex-1 basis-64">
             <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ink-muted" />
-            <input
-              type="text"
-              placeholder="Filter files: keyword, a OR b, -tag, exact phrase..."
+            <EditableCombobox
+              id="filter-combobox"
+              ariaLabel="File filter"
               value={filterText}
-              onChange={(e) => onFilterTextChange(e.target.value)}
-              className="w-full min-w-0 rounded-md border border-line bg-elevated py-1.5 pl-8 pr-3 text-ink outline-none focus:border-indigo-500"
+              options={filterOptions}
+              onChange={onFilterTextChange}
+              placeholder="Filter files: keyword, a OR b, -tag, exact phrase..."
+              className="w-full"
+              inputClassName="rounded-l-md py-1.5 pl-8 pr-3"
+              optionLabel={(filter) => filter || "(No filter)"}
             />
           </div>
         </Tooltip>
@@ -108,20 +112,16 @@ export function ControlsBar({
         <Tooltip text={OPERATOR_HELP} block={false}>
           <div className="flex shrink-0 items-center gap-1.5">
             <span className="text-ink-muted">Ext:</span>
-            <input
-              type="text"
-              list="extensions-list"
+            <EditableCombobox
+              id="extension-combobox"
+              ariaLabel="Extension filter"
               value={activeExtension}
-              onChange={(e) => onExtensionChange(e.target.value)}
+              options={extensions}
+              onChange={onExtensionChange}
               placeholder=".py OR .toml"
-              aria-label="Extension filter"
-              className="w-44 min-w-0 rounded-md border border-line bg-elevated px-2.5 py-1.5 font-mono text-ink outline-none focus:border-indigo-500"
+              className="w-44"
+              inputClassName="font-mono px-2.5"
             />
-            <datalist id="extensions-list">
-              {extensions.map((ext) => (
-                <option key={ext} value={ext} />
-              ))}
-            </datalist>
           </div>
         </Tooltip>
 
