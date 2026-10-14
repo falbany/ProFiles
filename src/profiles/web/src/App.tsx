@@ -306,7 +306,7 @@ export default function App() {
     try {
       await launchFile({
         directory: activeDirectory,
-        filename: file.filename,
+        filename: file.rel_path,
         release: config?.release,
       });
       if (closeOnLaunch) {
