@@ -140,6 +140,88 @@ async def test_scan_uses_config_exclusions_and_columns(test_state: ServerState) 
 
 
 @pytest.mark.anyio
+async def test_results_sorted_naturally_by_column(test_state: ServerState, tmp_path: Path) -> None:
+    """Sorting reorders the whole result set, with digits compared numerically."""
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.cached_results = [
+        ScannedFileDynamic(
+            path=tmp_path / f"item_{n}_prod.mttl", column_values={"Type": "prod"}, rel_path=""
+        )
+        for n in (10, 2, 1)
+    ]
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ascending = await client.get("/api/scan/results", params={"sort_by": "Type"})
+        # "prod" is identical on every row, so the tie-break falls back to the
+        # file name and 1 < 2 < 10 (natural, not lexicographic).
+        assert [r["filename"] for r in ascending.json()["items"]] == [
+            "item_1_prod.mttl",
+            "item_2_prod.mttl",
+            "item_10_prod.mttl",
+        ]
+        assert ascending.json()["sort_by"] == "Type"
+        assert ascending.json()["sort_dir"] == "asc"
+
+        descending = await client.get(
+            "/api/scan/results", params={"sort_by": "Type", "sort_dir": "desc"}
+        )
+        assert [r["filename"] for r in descending.json()["items"]] == [
+            "item_10_prod.mttl",
+            "item_2_prod.mttl",
+            "item_1_prod.mttl",
+        ]
+        assert descending.json()["sort_dir"] == "desc"
+
+
+@pytest.mark.anyio
+async def test_results_sort_applies_before_paging(test_state: ServerState, tmp_path: Path) -> None:
+    """A page taken from a sorted list keeps the same order as the full list."""
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.cached_results = [
+        ScannedFileDynamic(
+            path=tmp_path / f"file_{i}.mttl", column_values={"Type": f"t{i}"}, rel_path=""
+        )
+        for i in range(5)
+    ]
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        full = await client.get("/api/scan/results", params={"sort_by": "Type", "sort_dir": "desc"})
+        page = await client.get(
+            "/api/scan/results",
+            params={"sort_by": "Type", "sort_dir": "desc", "offset": 1, "limit": 2},
+        )
+
+    full_names = [r["filename"] for r in full.json()["items"]]
+    assert full_names == ["file_4.mttl", "file_3.mttl", "file_2.mttl", "file_1.mttl", "file_0.mttl"]
+    assert [r["filename"] for r in page.json()["items"]] == full_names[1:3]
+    assert page.json()["has_more"] is True
+
+
+@pytest.mark.anyio
+async def test_results_unknown_sort_column_keeps_scan_order(test_state: ServerState) -> None:
+    """An unknown column is ignored rather than emptying or reordering the list."""
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.cached_results = [
+        ScannedFileDynamic(
+            path=test_state.active_directory / "b.mttl", column_values={}, rel_path=""
+        ),
+        ScannedFileDynamic(
+            path=test_state.active_directory / "a.mttl", column_values={}, rel_path=""
+        ),
+    ]
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/scan/results", params={"sort_by": "Nope"})
+
+    filenames = [r["filename"] for r in response.json()["items"]]
+    assert filenames == ["b.mttl", "a.mttl"]
+    assert "sort_by" not in response.json()
+
+
+@pytest.mark.anyio
 async def test_scan_applies_exclusions_from_config_matching_scan_path(
     test_state: ServerState,
 ) -> None:

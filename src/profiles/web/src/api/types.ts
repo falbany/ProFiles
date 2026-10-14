@@ -51,4 +51,14 @@ export interface ScanResultsResponse {
   offset?: number;
   limit?: number;
   has_more?: boolean;
+  /** Column name the result set was sorted by, when a sort is active. */
+  sort_by?: string;
+  /** Direction the result set was sorted in, when a sort is active. */
+  sort_dir?: "asc" | "desc";
+}
+
+/** Which column the list is sorted by, and in which direction. */
+export interface ScanSort {
+  column: string;
+  direction: "asc" | "desc";
 }

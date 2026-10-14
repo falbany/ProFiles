@@ -14,7 +14,7 @@ import {
   revealFile,
   selectDirectory,
 } from "./api/client";
-import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
+import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import { ActionBar } from "./components/ActionBar";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { ControlsBar } from "./components/ControlsBar";
@@ -47,6 +47,8 @@ export default function App() {
   const [files, setFiles] = useState<ScannedFileItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  /** Column the list is ordered by, or `null` for scan order. */
+  const [sort, setSort] = useState<ScanSort | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [scanning, setScanning] = useState<boolean>(false);
   const scanGenerationRef = useRef(0);
@@ -80,9 +82,18 @@ export default function App() {
   /**
    * Fetch the first page of scan results and replace the list.
    * Paging keeps the JSON payload small (500 rows instead of 25k+).
+   *
+   * @param sortOrder Sort to request; defaults to the current component state.
+   *   Callers that just changed the sort must pass the new value, because the
+   *   state update will not have been applied yet.
    */
-  const loadScanResults = async (generation: number) => {
-    const res = await fetchScanResults({ offset: 0, limit: SCAN_PAGE_SIZE });
+  const loadScanResults = async (generation: number, sortOrder: ScanSort | null = sort) => {
+    const res = await fetchScanResults({
+      offset: 0,
+      limit: SCAN_PAGE_SIZE,
+      sort_by: sortOrder?.column,
+      sort_dir: sortOrder?.direction,
+    });
     if (!isCurrentScan(generation)) return false;
     setFiles(res.items);
     setTotalCount(res.count);
@@ -106,7 +117,12 @@ export default function App() {
     const generation = scanGenerationRef.current;
     setLoadingMore(true);
     try {
-      const res = await fetchScanResults({ offset: files.length, limit: SCAN_PAGE_SIZE });
+      const res = await fetchScanResults({
+        offset: files.length,
+        limit: SCAN_PAGE_SIZE,
+        sort_by: sort?.column,
+        sort_dir: sort?.direction,
+      });
       if (!isCurrentScan(generation)) return;
       // Guard against duplicated rows if the cache changed mid-request.
       const existing = new Set(files.map((f) => f.path || f.filename));
@@ -586,6 +602,14 @@ export default function App() {
           setContextMenuPos({ x: e.clientX, y: e.clientY, file });
         }}
         rowColors={config?.row_colors || []}
+        sort={sort}
+        onSortChange={(next) => {
+          setSort(next);
+          setSelectedIndex(0);
+          const generation = scanGenerationRef.current;
+          setLoadingMore(false);
+          void loadScanResults(generation, next);
+        }}
       />
 
       <ActionBar

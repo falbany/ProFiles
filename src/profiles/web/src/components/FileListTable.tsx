@@ -1,28 +1,64 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpDown, FileCode, Loader2 } from "lucide-react";
-import type { ScannedFileItem } from "../api/types";
+import { ArrowDown, ArrowUp, ArrowUpDown, FileCode, Loader2 } from "lucide-react";
+import type { ScanSort, ScannedFileItem } from "../api/types";
 
 interface ScrollableStickyHeaderItem {
   label: string;
   icon?: React.ReactNode;
   /** flex-grow weight; `1` by default so columns share the width evenly. */
   weight?: number;
+  /** Column name to sort by; omitted for the inert `#` index column. */
+  sortKey?: string;
+  /** Whether this column currently drives the list order. */
+  active?: boolean;
+  direction?: ScanSort["direction"];
+  onSort?: () => void;
 }
 
 function ScrollableStickyHeader({ items }: { items: ScrollableStickyHeaderItem[] }) {
   return (
     <div className="sticky top-0 z-10 flex select-none items-center border-b border-line bg-surface font-medium text-ink-muted">
-      {items.map((item, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-1.5 truncate px-3 py-2"
-          style={{ flex: item.weight ?? 1, minWidth: 0 }}
-        >
-          {item.icon}
-          <span className="truncate">{item.label}</span>
-          {i > 0 && <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 opacity-40" />}
-        </div>
-      ))}
+      {items.map((item, i) => {
+        const sortable = Boolean(item.onSort && item.sortKey);
+        const ariaSort = item.active ? (item.direction === "asc" ? "ascending" : "descending") : "none";
+        return (
+          <div
+            key={i}
+            className={`flex items-center gap-1.5 truncate px-3 py-2 ${sortable ? "cursor-pointer hover:text-ink transition-colors" : ""} ${item.active ? "text-ink" : ""}`}
+            style={{ flex: item.weight ?? 1, minWidth: 0 }}
+            {...(sortable
+              ? {
+                  role: "columnheader",
+                  "aria-sort": ariaSort,
+                  tabIndex: 0,
+                  onClick: item.onSort,
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      item.onSort?.();
+                    }
+                  },
+                }
+              : {})}
+          >
+            {item.icon}
+            <span className="truncate">{item.label}</span>
+            {sortable ? (
+              item.active ? (
+                item.direction === "asc" ? (
+                  <ArrowUp className="ml-auto h-3 w-3 shrink-0 text-indigo-400" />
+                ) : (
+                  <ArrowDown className="ml-auto h-3 w-3 shrink-0 text-indigo-400" />
+                )
+              ) : (
+                <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-40 hover:opacity-40" />
+              )
+            ) : (
+              i > 0 && <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 opacity-40" />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -41,6 +77,10 @@ interface FileListTableProps {
   onLaunch: (file: ScannedFileItem) => void;
   onContextMenu: (e: React.MouseEvent, file: ScannedFileItem, index: number) => void;
   rowColors: [string, string][];
+  /** Column the list is currently sorted by, or `null` in scan order. */
+  sort: ScanSort | null;
+  /** Advance the sort state for a column: `asc → desc → none`. */
+  onSortChange: (sort: ScanSort | null) => void;
 }
 
 /** Fixed row height (px) — `text-xs` + `py-2` lands on 28px. */
@@ -82,6 +122,8 @@ export function FileListTable({
   onLaunch,
   onContextMenu,
   rowColors,
+  sort,
+  onSortChange,
 }: FileListTableProps) {
   const fallbackKeys = ["File"];
   const resolvedKeys = columnNames.length > 0 ? columnNames : fallbackKeys;
@@ -214,6 +256,18 @@ export function FileListTable({
             ...columnSlots.map(({ key, header }) => ({
               label: header,
               weight: COLUMN_WEIGHTS[key] ?? 1,
+              sortKey: key,
+              active: sort?.column === key,
+              direction: sort?.direction,
+              onSort: () => {
+                if (sort?.column !== key) {
+                  onSortChange({ column: key, direction: "asc" });
+                } else if (sort.direction === "asc") {
+                  onSortChange({ column: key, direction: "desc" });
+                } else {
+                  onSortChange(null);
+                }
+              },
             })),
           ] satisfies ScrollableStickyHeaderItem[]
         }

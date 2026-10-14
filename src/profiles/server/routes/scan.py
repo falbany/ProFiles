@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -72,21 +75,68 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
             state.scan_in_progress = False
 
 
+def _sort_key(column: str) -> Callable[[Any], Any]:
+    """Build a case-insensitive natural sort key for a scan result column.
+
+    Values are text extracted from the file name or the extracted columns, so
+    digit runs compare numerically: ``item2`` sorts before ``item10``. Rows
+    whose column value is missing or identical fall back to the file name,
+    which keeps large scans usefully ordered instead of leaving ties in
+    arbitrary scan order.
+    """
+
+    def natural(text: str) -> list[int | str]:
+        return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", text)]
+
+    def key(row: Any) -> tuple[list[int | str], list[int | str]]:
+        return (natural(_column_value(row, column)), natural(_row_filename(row)))
+
+    return key
+
+
+def _row_filename(row: Any) -> str:
+    """Return the file name of a scan result row as a string."""
+    path = getattr(row, "path", None)
+    return Path(path).name if path is not None else str(row)
+
+
+def _column_value(row: Any, column: str) -> str:
+    """Return the display value of *row* for *column* as a string."""
+    values = getattr(row, "column_values", None) or {}
+    value = values.get(column)
+    if value is None or value == "":
+        value = _row_filename(row)
+    return str(value)
+
+
 @router.get("/results")
 async def get_scan_results(
     request: Request,
     offset: int = Query(default=0, ge=0),
     limit: int | None = Query(default=None, ge=1, le=50_000),
+    sort_by: str | None = Query(default=None),
+    sort_dir: Literal["asc", "desc"] | None = Query(default=None),
 ) -> dict:
     """Return cached scan results formatted for table rendering.
 
     Supports pagination via ``offset`` / ``limit`` so the frontend never has
     to serialise tens of thousands of rows at once. When ``limit`` is omitted
     the full list is returned (backwards compatible).
+
+    Sorting is applied to the *whole* cached result set before paging, so
+    pages fetched later keep the requested order. When ``sort_by`` names a
+    column that does not exist, the list is left in scan order.
     """
     state: ServerState = request.app.state.server_state
     cached = state.cached_results
     total = len(cached)
+
+    sort_applied = False
+    descending = sort_dir == "desc"
+    if sort_by and any(sort_by in (getattr(r, "column_values", None) or {}) for r in cached):
+        cached = sorted(cached, key=_sort_key(sort_by), reverse=descending)
+        sort_applied = True
+
     page = cached if limit is None else cached[offset : offset + limit]
 
     items = []
@@ -112,6 +162,9 @@ async def get_scan_results(
         response["offset"] = offset
         response["limit"] = limit
         response["has_more"] = offset + len(items) < total
+    if sort_applied:
+        response["sort_by"] = sort_by
+        response["sort_dir"] = sort_dir or "asc"
     return response
 
 

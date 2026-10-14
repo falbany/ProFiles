@@ -64,13 +64,21 @@ export async function executeScan(params: {
   return res.json();
 }
 
+export type SortDirection = "asc" | "desc";
+
 export async function fetchScanResults(params?: {
   offset?: number;
   limit?: number;
+  /** Column name to sort the full result set by (e.g. `"Path"`). */
+  sort_by?: string;
+  /** Sort direction; alternating clicks flip between `"asc"` and `"desc"`. */
+  sort_dir?: SortDirection;
 }): Promise<ScanResultsResponse> {
   const search = new URLSearchParams();
   if (params?.offset != null) search.set("offset", String(params.offset));
   if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.sort_by) search.set("sort_by", params.sort_by);
+  if (params?.sort_dir) search.set("sort_dir", params.sort_dir);
   const qs = search.toString();
   const url = `/api/scan/results${qs ? `?${qs}` : ""}`;
   const res = await fetch(url);
