@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   computeHash,
   executeScan,
@@ -49,6 +49,7 @@ export default function App() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [scanning, setScanning] = useState<boolean>(false);
+  const scanGenerationRef = useRef(0);
 
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
@@ -63,23 +64,50 @@ export default function App() {
     setTimeout(() => setToastMessage(""), 3500);
   };
 
+  const beginScan = () => {
+    const generation = ++scanGenerationRef.current;
+    setScanning(true);
+    setLoadingMore(false);
+    return generation;
+  };
+
+  const isCurrentScan = (generation: number) => generation === scanGenerationRef.current;
+
+  const finishScan = (generation: number) => {
+    if (isCurrentScan(generation)) setScanning(false);
+  };
+
   /**
    * Fetch the first page of scan results and replace the list.
    * Paging keeps the JSON payload small (500 rows instead of 25k+).
    */
-  const loadScanResults = async () => {
+  const loadScanResults = async (generation: number) => {
     const res = await fetchScanResults({ offset: 0, limit: SCAN_PAGE_SIZE });
+    if (!isCurrentScan(generation)) return false;
     setFiles(res.items);
     setTotalCount(res.count);
-    return res;
+    return true;
+  };
+
+  const runScan = async (
+    generation: number,
+    params: Parameters<typeof executeScan>[0],
+  ) => {
+    if (!isCurrentScan(generation)) return false;
+    await executeScan(params);
+    if (!isCurrentScan(generation) || !(await loadScanResults(generation))) return false;
+    setSelectedIndex(0);
+    return true;
   };
 
   /** Fetch the next page and append it to the list. */
   const handleLoadMore = async () => {
     if (loadingMore || files.length >= totalCount) return;
+    const generation = scanGenerationRef.current;
     setLoadingMore(true);
     try {
       const res = await fetchScanResults({ offset: files.length, limit: SCAN_PAGE_SIZE });
+      if (!isCurrentScan(generation)) return;
       // Guard against duplicated rows if the cache changed mid-request.
       const existing = new Set(files.map((f) => f.path || f.filename));
       setFiles((prev) => [...prev, ...res.items.filter((f) => !existing.has(f.path || f.filename))]);
@@ -87,7 +115,7 @@ export default function App() {
     } catch {
       /* paging failure is non-fatal; user can keep scrolling to retry */
     } finally {
-      setLoadingMore(false);
+      if (isCurrentScan(generation)) setLoadingMore(false);
     }
   };
 
@@ -130,6 +158,7 @@ export default function App() {
   };
 
   const handleConfigLoaded = async (cfg: AppConfigData) => {
+    const scanGeneration = beginScan();
     setConfig(cfg);
     const targetDirectory = cfg.active_directory || activeDirectory || (cfg.directories[0] ?? "");
     const nextExtension = cfg.extensions.includes(activeExtension)
@@ -145,21 +174,20 @@ export default function App() {
 
     showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
     if (targetDirectory) {
-      setScanning(true);
       try {
-        await executeScan({
+        await runScan(scanGeneration, {
           directory: targetDirectory,
           extension: nextExtension,
           filter_text: nextFilter,
           recursive: cfg.recursive_search,
         });
-        await loadScanResults();
-        setSelectedIndex(0);
       } catch (err: any) {
         showToast(`Scan failed after config load: ${err.message}`);
       } finally {
-        setScanning(false);
+        finishScan(scanGeneration);
       }
+    } else {
+      finishScan(scanGeneration);
     }
   };
 
@@ -168,6 +196,7 @@ export default function App() {
   };
 
   const handleDirectoryPicked = async (directory: string) => {
+    const scanGeneration = beginScan();
     setShowDirPicker(false);
     setActiveDirectory(directory);
     showToast(`Directory selected: ${directory}`);
@@ -179,6 +208,7 @@ export default function App() {
       // Non-fatal: directory is already applied in the UI
       console.error("select-directory failed:", err);
     }
+    if (!isCurrentScan(scanGeneration)) return;
     const nextExtension = directoryConfig?.extensions.includes(activeExtension)
       ? activeExtension
       : (directoryConfig?.extensions[0] ?? activeExtension);
@@ -188,62 +218,57 @@ export default function App() {
     setActiveExtension(nextExtension);
     setFilterText(nextFilter);
     // Scan with the freshly picked directory
-    setScanning(true);
     try {
-      await executeScan({
+      await runScan(scanGeneration, {
         directory,
         extension: nextExtension,
         filter_text: nextFilter,
         recursive,
       });
-      const scanRes = await executeScan({
-        directory,
-        extension: nextExtension,
-        filter_text: nextFilter,
-        recursive,
-      });
-      if (typeof scanRes?.count === "number") setTotalCount(scanRes.count);
-      await loadScanResults();
-      setSelectedIndex(0);
     } catch (err: any) {
-      showToast(`Scan failed: ${err.message}`);
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err.message}`);
     } finally {
-      setScanning(false);
+      finishScan(scanGeneration);
+    }
+  };
+
+  const initializeFromConfig = async (cfg: AppConfigData, scanGeneration: number) => {
+    if (!isCurrentScan(scanGeneration)) return;
+    setConfig(cfg);
+    const initialDir = cfg.active_directory || (cfg.directories.length > 0 ? cfg.directories[0] : "");
+    const initialExt = cfg.extensions.length > 0 ? cfg.extensions[0] : "";
+    const initialFilter = cfg.filters.length > 0 ? cfg.filters[0] : "";
+    if (initialDir) setActiveDirectory(initialDir);
+    if (initialExt) setActiveExtension(initialExt);
+    if (cfg.recursive_search !== undefined) setRecursive(cfg.recursive_search);
+    if (initialFilter) setFilterText(initialFilter);
+    if (!cfg.config_exists) {
+      setShowConfigPicker(true);
+    }
+
+    if (initialDir) {
+      try {
+        await runScan(scanGeneration, {
+          directory: initialDir,
+          extension: initialExt,
+          filter_text: initialFilter,
+          recursive: cfg.recursive_search,
+        });
+      } catch (scanErr) {
+        if (isCurrentScan(scanGeneration)) console.error("Initial scan error:", scanErr);
+      }
     }
   };
 
   // Initial load
   useEffect(() => {
     async function init() {
+      const scanGeneration = ++scanGenerationRef.current;
       try {
         const sys = await fetchSystemInfo();
         setSystemInfo(sys);
         const cfg = await fetchConfig();
-        setConfig(cfg);
-        const initialDir = cfg.active_directory || (cfg.directories.length > 0 ? cfg.directories[0] : "");
-        const initialExt = cfg.extensions.length > 0 ? cfg.extensions[0] : "";
-        const initialFilter = cfg.filters.length > 0 ? cfg.filters[0] : "";
-        if (initialDir) setActiveDirectory(initialDir);
-        if (initialExt) setActiveExtension(initialExt);
-        if (cfg.recursive_search !== undefined) setRecursive(cfg.recursive_search);
-        if (initialFilter) setFilterText(initialFilter);
-        if (!cfg.config_exists) {
-          setShowConfigPicker(true);
-        }
-
-        if (initialDir) {
-          try {
-            await executeScan({
-              directory: initialDir,
-              extension: initialExt,
-              filter_text: initialFilter,
-              recursive: cfg.recursive_search,
-            });
-            await loadScanResults();
-          } catch (scanErr) {
-            console.error("Initial scan error:", scanErr);
-          }
-        }
+        await initializeFromConfig(cfg, scanGeneration);
       } catch (err) {
         console.error("Initialization error:", err);
       }
@@ -253,9 +278,11 @@ export default function App() {
 
   // Directory change handler
   const handleDirectoryChange = async (newDir: string) => {
+    const scanGeneration = beginScan();
     setActiveDirectory(newDir);
     try {
       const directoryConfig = await selectDirectory(newDir);
+      if (!isCurrentScan(scanGeneration)) return;
       setConfig(directoryConfig);
       const nextExtension = directoryConfig.extensions.includes(activeExtension)
         ? activeExtension
@@ -265,39 +292,34 @@ export default function App() {
         : (directoryConfig.filters[0] ?? "");
       setActiveExtension(nextExtension);
       setFilterText(nextFilter);
-      setScanning(true);
-      await executeScan({
+      await runScan(scanGeneration, {
         directory: newDir,
         extension: nextExtension,
         filter_text: nextFilter,
         recursive,
       });
-      await loadScanResults();
-      setSelectedIndex(0);
     } catch (err) {
-      console.error("Directory change error:", err);
+      if (isCurrentScan(scanGeneration)) console.error("Directory change error:", err);
     } finally {
-      setScanning(false);
+      finishScan(scanGeneration);
     }
   };
 
   // Run scan
   const handleScan = async () => {
     if (!activeDirectory) return;
-    setScanning(true);
+    const scanGeneration = beginScan();
     try {
-      await executeScan({
+      await runScan(scanGeneration, {
         directory: activeDirectory,
         extension: activeExtension,
         filter_text: filterText,
         recursive,
       });
-      await loadScanResults();
-      setSelectedIndex(0);
     } catch (err) {
-      console.error("Scan error:", err);
+      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
     } finally {
-      setScanning(false);
+      finishScan(scanGeneration);
     }
   };
 
@@ -362,22 +384,28 @@ export default function App() {
 
   const handleFilterFolder = (folder: string) => {
     setFilterText(folder);
-    executeScan({
+    const scanGeneration = beginScan();
+    void runScan(scanGeneration, {
       directory: activeDirectory,
       extension: activeExtension,
       filter_text: folder,
       recursive,
-    }).then(() => loadScanResults().then(() => setSelectedIndex(0)));
+    }).catch((err) => {
+      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    }).finally(() => finishScan(scanGeneration));
   };
 
   const handleFilterExtension = (ext: string) => {
     setActiveExtension(ext);
-    executeScan({
+    const scanGeneration = beginScan();
+    void runScan(scanGeneration, {
       directory: activeDirectory,
       extension: ext,
       filter_text: filterText,
       recursive,
-    }).then(() => loadScanResults().then(() => setSelectedIndex(0)));
+    }).catch((err) => {
+      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    }).finally(() => finishScan(scanGeneration));
   };
 
   const handleCopyPath = (file: ScannedFileItem, forwardSlash?: boolean) => {

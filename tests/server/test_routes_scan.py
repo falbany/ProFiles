@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,6 +11,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from profiles.core.config.models import AppConfig, MachineConfiguration
+from profiles.core.processing.scanner import ScannedFileDynamic
 from profiles.server.app import create_app
 from profiles.server.state import ServerState
 
@@ -45,6 +48,64 @@ async def test_scan_and_get_results(test_state: ServerState) -> None:
         results = get_resp.json()
         assert len(results["items"]) >= 1
         assert results["items"][0]["filename"] == "app_1.0_PROD.mttl"
+
+
+@pytest.mark.anyio
+async def test_late_scan_does_not_replace_newer_scan_results(
+    test_state: ServerState,
+    tmp_path: Path,
+) -> None:
+    first_directory = test_state.active_directory
+    assert first_directory is not None
+    second_directory = tmp_path / "other-programs"
+    second_directory.mkdir()
+    first_started = threading.Event()
+    release_first = threading.Event()
+
+    def delayed_scan(*, directories: str, **_: object) -> list[ScannedFileDynamic]:
+        directory = Path(directories)
+        if directory == first_directory:
+            first_started.set()
+            if not release_first.wait(timeout=5):
+                raise TimeoutError("First scan was not released")
+            filename = "first.mttl"
+        else:
+            filename = "second.mttl"
+        return [
+            ScannedFileDynamic(
+                path=directory / filename,
+                column_values={},
+                rel_path=filename,
+            )
+        ]
+
+    app = create_app(test_state)
+    with patch(
+        "profiles.server.routes.scan.scanner.scan_and_process_dynamic",
+        side_effect=delayed_scan,
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            first_task = asyncio.create_task(
+                client.post(
+                    "/api/scan",
+                    json={"directory": str(first_directory), "recursive": True},
+                )
+            )
+            try:
+                assert await asyncio.to_thread(first_started.wait, timeout=5)
+                second_response = await client.post(
+                    "/api/scan",
+                    json={"directory": str(second_directory), "recursive": True},
+                )
+                assert second_response.status_code == 200
+            finally:
+                release_first.set()
+
+            first_response = await first_task
+            results_response = await client.get("/api/scan/results")
+
+    assert first_response.status_code == 200
+    assert results_response.json()["items"][0]["filename"] == "second.mttl"
 
 
 @pytest.mark.anyio

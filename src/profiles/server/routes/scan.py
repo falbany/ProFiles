@@ -27,29 +27,34 @@ class ScanRequest(BaseModel):
 async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     """Execute dynamic scan on the active directory and cache results."""
     state: ServerState = request.app.state.server_state
+    state.scan_generation += 1
+    scan_generation = state.scan_generation
     if payload.directory:
         state.active_directory = Path(payload.directory).expanduser().resolve()
 
-    if not state.active_directory:
+    scan_directory = state.active_directory
+    if not scan_directory:
         raise HTTPException(status_code=400, detail="Active directory is not set")
 
-    if not state.active_directory.exists():
-        state.cached_results = []
+    if not scan_directory.exists():
+        if scan_generation == state.scan_generation:
+            state.cached_results = []
+            state.scan_in_progress = False
         return {
             "count": 0,
-            "directory": str(state.active_directory),
+            "directory": str(scan_directory),
             "warning": "Directory does not exist",
         }
 
     state.scan_in_progress = True
     try:
-        active = config_service.find_active_config(state.config, str(state.active_directory))
+        active = config_service.find_active_config(state.config, str(scan_directory))
         exclude_files = (
             active.search_exclude_files if active is not None else state.config.search_exclude_files
         )
         results = await asyncio.to_thread(
             scanner.scan_and_process_dynamic,
-            directories=str(state.active_directory),
+            directories=str(scan_directory),
             config=state.config,
             extension=payload.extension,
             filter_text=payload.filter_text,
@@ -59,10 +64,12 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
             column_names=state.config.column_names,
             columns=state.config.columns,
         )
-        state.cached_results = results
-        return {"count": len(results), "directory": str(state.active_directory)}
+        if scan_generation == state.scan_generation:
+            state.cached_results = results
+        return {"count": len(results), "directory": str(scan_directory)}
     finally:
-        state.scan_in_progress = False
+        if scan_generation == state.scan_generation:
+            state.scan_in_progress = False
 
 
 @router.get("/results")
