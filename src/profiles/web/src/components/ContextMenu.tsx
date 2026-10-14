@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Copy,
   Eye,
@@ -7,6 +7,8 @@ import {
   Hash,
   Play,
   Terminal,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import type { ScannedFileItem } from "../api/types";
 
@@ -28,7 +30,12 @@ interface ContextMenuProps {
   onFilterExtension: (ext: string) => void;
   onCopyPath: (file: ScannedFileItem, forwardSlash?: boolean) => void;
   onCopyFilename: (file: ScannedFileItem, withoutExt?: boolean) => void;
+  onCopyUri: (file: ScannedFileItem) => void;
   onComputeHash: (file: ScannedFileItem, algorithm: "md5" | "sha256") => void;
+  onVerifyHash: (file: ScannedFileItem, algorithm: "md5" | "sha256") => void;
+  onProperties: (file: ScannedFileItem) => void;
+  onClearFile: (file: ScannedFileItem) => void;
+  onRefreshList: () => void;
 }
 
 export function ContextMenu({
@@ -43,12 +50,40 @@ export function ContextMenu({
   onFilterExtension,
   onCopyPath,
   onCopyFilename,
+  onCopyUri,
   onComputeHash,
+  onVerifyHash,
+  onProperties,
+  onClearFile,
+  onRefreshList,
 }: ContextMenuProps) {
   const [showArgsModal, setShowArgsModal] = useState(false);
   const [argsValue, setArgsValue] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [menuCoordinates, setMenuCoordinates] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!position) {
+      setMenuCoordinates(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const menu = menuRef.current;
+      if (!menu) return;
+      const bounds = menu.getBoundingClientRect();
+      const margin = 8;
+      setMenuCoordinates({
+        left: Math.max(margin, Math.min(position.x, window.innerWidth - bounds.width - margin)),
+        top: Math.max(margin, Math.min(position.y, window.innerHeight - bounds.height - margin)),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [position]);
 
   useEffect(() => {
     if (!position) return;
@@ -108,11 +143,8 @@ export function ContextMenu({
             items.at(-1)?.focus();
           }
         }}
-        className="fixed z-50 w-56 rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
-        style={{
-          top: Math.min(y, window.innerHeight - 380),
-          left: Math.min(x, window.innerWidth - 240),
-        }}
+        className="fixed z-50 max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
+        style={menuCoordinates ?? { left: x, top: y, visibility: "hidden" }}
       >
         <div className="border-b border-line px-3 py-1.5 font-medium text-ink-muted truncate">
           {file.filename}
@@ -220,6 +252,30 @@ export function ContextMenu({
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
           <span>Copy Filename</span>
         </button>
+        <button
+          role="menuitem"
+          onClick={() => { onCopyFilename(file, true); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <span>Copy Filename (without extension)</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onCopyPath(file, false); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <span>Copy Directory</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onCopyUri(file); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <span>Copy URI</span>
+        </button>
 
         <div className="my-1 border-t border-line" />
 
@@ -239,6 +295,50 @@ export function ContextMenu({
         >
           <Hash className="h-3.5 w-3.5 text-purple-400" />
           <span>Compute SHA256 Hash</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onVerifyHash(file, "md5"); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <span>Verify MD5 Hash</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onVerifyHash(file, "sha256"); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <span>Verify SHA256 Hash</span>
+        </button>
+
+        <div className="my-1 border-t border-line" />
+
+        {/* Info + utility */}
+        <button
+          role="menuitem"
+          onClick={() => { onProperties(file); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Eye className="h-3.5 w-3.5 text-sky-400" />
+          <span>Properties</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onClearFile(file); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <Trash2 className="h-3.5 w-3.5 text-red-400" />
+          <span>Delete</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onRefreshList(); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+          <span>Refresh List</span>
         </button>
       </div>
 

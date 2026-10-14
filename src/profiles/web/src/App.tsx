@@ -467,6 +467,78 @@ export default function App() {
     }
   };
 
+  const handleCopyUri = async (file: ScannedFileItem) => {
+    try {
+      const uri = new URL("file:///").href + file.path.replace(/\\/g, "/");
+      navigator.clipboard.writeText(uri);
+      showToast("File URI copied to clipboard.");
+    } catch (err: any) {
+      showToast(`URI copy failed: ${err.message}`);
+    }
+  };
+
+  const handleVerifyHash = async (file: ScannedFileItem, algorithm: "md5" | "sha256") => {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      if (!clipboardText.trim()) {
+        showToast("Clipboard is empty — copy a hash first, then try again.");
+        return;
+      }
+      showToast(`Computing ${algorithm.toUpperCase()}...`);
+      const res = await computeHash(file.path, algorithm);
+      const match = res.hash.toLowerCase() === clipboardText.trim().toLowerCase();
+      if (match) {
+        showToast(`✅  ${algorithm.toUpperCase()} matches!`);
+      } else {
+        showToast(`❌  ${algorithm.toUpperCase()} mismatch`);
+      }
+    } catch (err: any) {
+      showToast(`Verification failed: ${err.message}`);
+    }
+  };
+
+  const handleProperties = async (file: ScannedFileItem) => {
+    try {
+      showToast("Fetching properties...");
+      const res = await fetch(`/api/actions/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_path: file.path }),
+      });
+      if (!res.ok) throw new Error("Failed to fetch metadata");
+      const meta = await res.json();
+      const sizeKb = meta.size_bytes / 1024;
+      const info = `File: ${meta.name}\nPath: ${meta.path}\n\nSize: ${meta.size_bytes.toLocaleString()} bytes (${sizeKb.toFixed(1)} KB)\nModified: ${meta.modified}\nCreated: ${meta.created}`;
+      alert(info);
+    } catch (err: any) {
+      showToast(`Properties failed: ${err.message}`);
+    }
+  };
+
+  const handleClearFile = async (file: ScannedFileItem) => {
+    if (!confirm(`Are you sure you want to delete this file?\n\n${file.path}\n\nThis action cannot be undone.`)) {
+      return;
+    }
+    try {
+      showToast("Deleting file...");
+      const res = await fetch(`/api/actions/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_path: file.path }),
+      });
+      if (!res.ok) throw new Error("Failed to delete file");
+      showToast("File deleted successfully.");
+      // Refresh the file list
+      handleScan();
+    } catch (err: any) {
+      showToast(`Delete failed: ${err.message}`);
+    }
+  };
+
+  const handleRefreshList = () => {
+    handleScan();
+  };
+
   // Keyboard navigation & global shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -718,7 +790,12 @@ export default function App() {
         onFilterExtension={handleFilterExtension}
         onCopyPath={handleCopyPath}
         onCopyFilename={handleCopyFilename}
+        onCopyUri={handleCopyUri}
         onComputeHash={handleComputeHash}
+        onVerifyHash={handleVerifyHash}
+        onProperties={handleProperties}
+        onClearFile={handleClearFile}
+        onRefreshList={handleRefreshList}
       />
 
       {/* Shortcuts Modal */}

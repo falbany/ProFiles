@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from profiles.core import actions
+from profiles.core.processing.file_metadata import get_file_metadata
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
 
@@ -121,10 +122,42 @@ async def launch_file(payload: LaunchRequest) -> dict:
 async def reveal_file(payload: PathRequest) -> dict:
     """Reveal file in host file explorer."""
     path = Path(payload.file_path).expanduser().resolve()
+    result = actions.reveal_in_file_manager(path)
+    if result.status != actions.ActionStatus.SUCCESS:
+        status_code = 404 if result.status == actions.ActionStatus.NOT_FOUND else 500
+        raise HTTPException(status_code=status_code, detail=result.message)
+    return {
+        "status": str(result.status.value),
+        "message": result.message,
+        "path": str(result.path) if result.path else None,
+    }
+
+
+@router.post("/metadata")
+async def file_metadata(payload: PathRequest) -> dict:
+    """Return basic metadata for a file."""
+    path = Path(payload.file_path).expanduser().resolve()
     if not path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
-    success = open_file_explorer(str(path))
-    return {"success": success}
+    try:
+        return get_file_metadata(path)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read file metadata: {exc}") from exc
+
+
+@router.post("/delete")
+async def delete_file(payload: PathRequest) -> dict:
+    """Delete a file after the client has obtained user confirmation."""
+    path = Path(payload.file_path).expanduser().resolve()
+    result = actions.clear_file(path)
+    if result.status != actions.ActionStatus.SUCCESS:
+        status_code = 404 if result.status == actions.ActionStatus.NOT_FOUND else 400
+        raise HTTPException(status_code=status_code, detail=result.message)
+    return {
+        "status": str(result.status.value),
+        "message": result.message,
+        "path": str(result.path) if result.path else None,
+    }
 
 
 @router.post("/hash")
