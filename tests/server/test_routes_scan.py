@@ -129,3 +129,28 @@ async def test_actions_hash(test_state: ServerState, tmp_path: Path) -> None:
         data = resp.json()
         assert "hash" in data
         assert len(data["hash"]) == 32  # MD5 hex length
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(("launch_result", "expected_status"), [(True, 200), (False, 400)])
+async def test_launch_with_args_handles_boolean_result(
+    test_state: ServerState,
+    tmp_path: Path,
+    launch_result: bool,
+    expected_status: int,
+) -> None:
+    target_file = tmp_path / "programs" / "app_1.0_PROD.mttl"
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.launch_file_with_args",
+        return_value=launch_result,
+    ) as launch_mock:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/actions/launch-with-args",
+                json={"file_path": str(target_file), "args": "--preview"},
+            )
+
+    assert response.status_code == expected_status
+    launch_mock.assert_called_once_with(target_file.resolve(), "--preview")

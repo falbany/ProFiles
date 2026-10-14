@@ -62,12 +62,12 @@ async def launch_with_args(payload: LaunchWithArgsRequest) -> dict:
     path = Path(payload.file_path).expanduser().resolve()
     if not path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
-    res = actions.launch_file_with_args(path, payload.args)
-    if res.status != actions.ActionStatus.SUCCESS:
-        raise HTTPException(status_code=400, detail=res.message)
+    launched = actions.launch_file_with_args(path, payload.args)
+    if not launched:
+        raise HTTPException(status_code=400, detail=f"Failed to launch file: {path}")
     return {
-        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
-        "message": res.message,
+        "status": "success",
+        "message": f"Launched {path}",
     }
 
 
