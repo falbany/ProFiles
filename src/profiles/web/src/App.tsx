@@ -42,10 +42,10 @@ export default function App() {
   const [activeExtension, setActiveExtension] = useState<string>("");
   const [filterText, setFilterText] = useState<string>("");
   const [recursive, setRecursive] = useState<boolean>(true);
-  const [closeOnLaunch, setCloseOnLaunch] = useState<boolean>(false);
 
   const [files, setFiles] = useState<ScannedFileItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [hasScanned, setHasScanned] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   /** Column the list is ordered by, or `null` for scan order. */
   const [sort, setSort] = useState<ScanSort | null>(null);
@@ -97,6 +97,7 @@ export default function App() {
     if (!isCurrentScan(generation)) return false;
     setFiles(res.items);
     setTotalCount(res.count);
+    setHasScanned(true);
     return true;
   };
 
@@ -339,6 +340,24 @@ export default function App() {
     }
   };
 
+  const handleClearFilter = async () => {
+    setFilterText("");
+    if (!activeDirectory) return;
+    const scanGeneration = beginScan();
+    try {
+      await runScan(scanGeneration, {
+        directory: activeDirectory,
+        extension: activeExtension,
+        filter_text: "",
+        recursive,
+      });
+    } catch (err) {
+      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    } finally {
+      finishScan(scanGeneration);
+    }
+  };
+
   // Launch file
   const handleLaunch = async (file: ScannedFileItem) => {
     try {
@@ -347,9 +366,6 @@ export default function App() {
         filename: file.rel_path,
         release: config?.release,
       });
-      if (closeOnLaunch) {
-        window.close();
-      }
     } catch (err) {
       console.error("Launch error:", err);
     }
@@ -461,11 +477,31 @@ export default function App() {
         return;
       }
 
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        document.querySelector<HTMLElement>("[data-testid='file-list']")?.focus();
+        return;
+      }
+
       // If typing in input / select, handle Enter for scan
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) {
         if (e.key === "Enter") {
           handleScan();
         }
+        return;
+      }
+
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+        const file = files[selectedIndex];
+        if (!file) return;
+        e.preventDefault();
+        const row = document.querySelector<HTMLElement>(`[data-row-index="${selectedIndex}"]`);
+        const rect = row?.getBoundingClientRect();
+        setContextMenuPos({
+          x: rect ? rect.left + 24 : 24,
+          y: rect ? rect.top + rect.height / 2 : 24,
+          file,
+        });
         return;
       }
 
@@ -591,6 +627,10 @@ export default function App() {
         totalCount={totalCount}
         onLoadMore={handleLoadMore}
         loadingMore={loadingMore}
+        scanning={scanning}
+        hasScanned={hasScanned}
+        filterText={filterText}
+        onClearFilter={handleClearFilter}
         columnHeaders={config?.column_headers || []}
         columnNames={config?.column_names || []}
         selectedIndex={selectedIndex}
@@ -614,8 +654,6 @@ export default function App() {
 
       <ActionBar
         onExecute={handleExecute}
-        closeOnLaunch={closeOnLaunch}
-        onCloseOnLaunchChange={setCloseOnLaunch}
         scanning={scanning}
         hasSelection={files.length > 0}
       />
@@ -687,11 +725,16 @@ export default function App() {
       <ShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
 
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-12 right-6 z-50 rounded-lg border border-line bg-surface-glass px-4 py-2 text-xs font-medium text-ink shadow-xl backdrop-blur-md">
-          {toastMessage}
-        </div>
-      )}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={toastMessage
+          ? "fixed bottom-12 right-6 z-50 rounded-lg border border-line bg-surface-glass px-4 py-2 text-xs font-medium text-ink shadow-xl backdrop-blur-md"
+          : "sr-only"}
+      >
+        {toastMessage}
+      </div>
     </div>
   );
 }

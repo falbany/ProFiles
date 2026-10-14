@@ -82,7 +82,7 @@ export function ControlsBar({
               type="button"
               onClick={onBrowseDirectory}
               aria-label="Browse directory"
-              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
@@ -131,7 +131,7 @@ export function ControlsBar({
               type="checkbox"
               checked={recursive}
               onChange={(e) => onRecursiveChange(e.target.checked)}
-              className="rounded border-line text-indigo-600 focus:ring-0"
+              className="rounded border-line text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-app"
             />
             <span>Recursive</span>
           </label>
@@ -141,10 +141,10 @@ export function ControlsBar({
           <button
             onClick={onScan}
             disabled={scanning}
-            className="flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             {scanning ? (
-              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
             ) : (
               <Play className="h-3.5 w-3.5 fill-current" />
             )}

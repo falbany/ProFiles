@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Copy,
   Eye,
@@ -47,6 +47,20 @@ export function ContextMenu({
 }: ContextMenuProps) {
   const [showArgsModal, setShowArgsModal] = useState(false);
   const [argsValue, setArgsValue] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!position) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      previousFocusRef.current?.focus();
+    };
+  }, [position]);
 
   if (!position) return null;
 
@@ -70,6 +84,30 @@ export function ContextMenu({
 
       {/* Menu popup */}
       <div
+        ref={menuRef}
+        role="menu"
+        aria-label={`Actions for ${file.filename}`}
+        onKeyDown={(event) => {
+          if (["Escape", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            event.stopPropagation();
+          }
+          const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
+          const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+          } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            items[(currentIndex + delta + items.length) % items.length]?.focus();
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            items[0]?.focus();
+          } else if (event.key === "End") {
+            event.preventDefault();
+            items.at(-1)?.focus();
+          }
+        }}
         className="fixed z-50 w-56 rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
         style={{
           top: Math.min(y, window.innerHeight - 380),
@@ -82,6 +120,7 @@ export function ContextMenu({
 
         {/* Launch actions */}
         <button
+          role="menuitem"
           onClick={() => { onLaunch(file); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -89,6 +128,7 @@ export function ContextMenu({
           <span>Launch</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => { setShowArgsModal(true); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -100,6 +140,7 @@ export function ContextMenu({
 
         {/* Folder actions */}
         <button
+          role="menuitem"
           onClick={() => { onReveal(file); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -107,6 +148,7 @@ export function ContextMenu({
           <span>Reveal in File Manager</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => { onOpenFolder(file); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -114,6 +156,7 @@ export function ContextMenu({
           <span>Open Folder</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => { onOpenTerminal(file); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -125,6 +168,7 @@ export function ContextMenu({
 
         {/* Filter actions */}
         <button
+          role="menuitem"
           onClick={() => {
             const parts = file.path.split(/[/\\]/);
             const parent = parts.length > 1 ? parts[parts.length - 2] : "";
@@ -137,6 +181,7 @@ export function ContextMenu({
           <span>Filter to Folder</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => {
             const ext = getExt(file.filename);
             if (ext) onFilterExtension(ext);
@@ -152,6 +197,7 @@ export function ContextMenu({
 
         {/* Copy actions */}
         <button
+          role="menuitem"
           onClick={() => { onCopyPath(file, false); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -159,6 +205,7 @@ export function ContextMenu({
           <span>Copy Full Path</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => { onCopyPath(file, true); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -166,6 +213,7 @@ export function ContextMenu({
           <span>Copy Path (Forward Slashes)</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => { onCopyFilename(file, false); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -177,6 +225,7 @@ export function ContextMenu({
 
         {/* Hashes */}
         <button
+          role="menuitem"
           onClick={() => { onComputeHash(file, "md5"); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >
@@ -184,6 +233,7 @@ export function ContextMenu({
           <span>Compute MD5 Hash</span>
         </button>
         <button
+          role="menuitem"
           onClick={() => { onComputeHash(file, "sha256"); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
         >

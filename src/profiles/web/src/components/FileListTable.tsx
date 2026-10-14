@@ -13,22 +13,47 @@ interface ScrollableStickyHeaderItem {
   active?: boolean;
   direction?: ScanSort["direction"];
   onSort?: () => void;
+  width?: number;
+  canResize?: boolean;
+  onResizeBy?: (delta: number) => void;
+  onResizeTo?: (width: number) => void;
+  defaultWidth?: number;
 }
 
-function ScrollableStickyHeader({ items }: { items: ScrollableStickyHeaderItem[] }) {
+interface ResizePointerState {
+  pointerId: number;
+  startX: number;
+  startWidth: number;
+  resizeTo: (width: number) => void;
+}
+
+interface ScrollableStickyHeaderProps {
+  items: ScrollableStickyHeaderItem[];
+  columnTemplate: string;
+  resizePointerRef: React.MutableRefObject<ResizePointerState | null>;
+  resizeMovedRef: React.MutableRefObject<boolean>;
+}
+
+function ScrollableStickyHeader({ items, columnTemplate, resizePointerRef, resizeMovedRef }: ScrollableStickyHeaderProps) {
   return (
-    <div className="sticky top-0 z-10 flex select-none items-center border-b border-line bg-surface font-medium text-ink-muted">
+    <div
+      className="sticky top-0 z-10 grid select-none items-center border-b border-l-2 border-l-transparent border-line bg-surface font-medium text-ink-muted"
+      role="row"
+      aria-rowindex={1}
+      data-file-list-header
+      style={{ gridTemplateColumns: columnTemplate }}
+    >
       {items.map((item, i) => {
         const sortable = Boolean(item.onSort && item.sortKey);
         const ariaSort = item.active ? (item.direction === "asc" ? "ascending" : "descending") : "none";
         return (
           <div
             key={i}
-            className={`flex items-center gap-1.5 truncate px-3 py-2 ${sortable ? "cursor-pointer hover:text-ink transition-colors" : ""} ${item.active ? "text-ink" : ""}`}
-            style={{ flex: item.weight ?? 1, minWidth: 0 }}
+            role="columnheader"
+            data-column-key={item.sortKey}
+            className={`group relative flex items-center gap-1.5 truncate px-3 py-2 ${sortable ? "cursor-pointer hover:text-ink transition-colors" : ""} ${item.active ? "text-ink" : ""}`}
             {...(sortable
               ? {
-                  role: "columnheader",
                   "aria-sort": ariaSort,
                   tabIndex: 0,
                   onClick: item.onSort,
@@ -56,6 +81,72 @@ function ScrollableStickyHeader({ items }: { items: ScrollableStickyHeaderItem[]
             ) : (
               i > 0 && <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 opacity-40" />
             )}
+            {item.canResize && item.onResizeBy && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`Resize ${item.label} column`}
+                aria-valuemin={MIN_COLUMN_WIDTH}
+                aria-valuemax={MAX_COLUMN_WIDTH}
+                aria-valuenow={item.width ?? item.defaultWidth ?? DEFAULT_COLUMN_WIDTH}
+                aria-valuetext={`${item.width ?? item.defaultWidth ?? DEFAULT_COLUMN_WIDTH} pixels wide`}
+                title="Drag to resize; use arrow keys or click either side to adjust"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const wasDragged = resizeMovedRef.current;
+                  resizeMovedRef.current = false;
+                  if (wasDragged) return;
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  item.onResizeBy?.(event.clientX < rect.left + rect.width / 2 ? -RESIZE_STEP : RESIZE_STEP);
+                }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const header = event.currentTarget.parentElement;
+                  resizeMovedRef.current = false;
+                  resizePointerRef.current = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startWidth: item.width ?? header?.getBoundingClientRect().width ?? item.defaultWidth ?? DEFAULT_COLUMN_WIDTH,
+                    resizeTo: item.onResizeTo!,
+                  };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={(event) => {
+                  const resize = resizePointerRef.current;
+                  if (!resize || resize.pointerId !== event.pointerId) return;
+                  const delta = event.clientX - resize.startX;
+                  if (Math.abs(delta) > 2) resizeMovedRef.current = true;
+                  resize.resizeTo(resize.startWidth + delta);
+                }}
+                onPointerUp={(event) => {
+                  if (resizePointerRef.current?.pointerId === event.pointerId) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                    resizePointerRef.current = null;
+                    window.setTimeout(() => {
+                      resizeMovedRef.current = false;
+                    }, 0);
+                  }
+                }}
+                onPointerCancel={() => {
+                  resizePointerRef.current = null;
+                  resizeMovedRef.current = false;
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                    event.preventDefault();
+                    item.onResizeBy?.(event.key === "ArrowLeft" ? -RESIZE_STEP : RESIZE_STEP);
+                  } else if (event.key === "Home" || event.key === "End") {
+                    event.preventDefault();
+                    item.onResizeTo?.(event.key === "Home" ? MIN_COLUMN_WIDTH : MAX_COLUMN_WIDTH);
+                  }
+                }}
+                className="absolute inset-y-0 right-0 z-10 w-3 cursor-col-resize touch-none border-r border-transparent transition-colors hover:border-indigo-400 focus-visible:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              />
+            )}
           </div>
         );
       })}
@@ -70,6 +161,12 @@ interface FileListTableProps {
   onLoadMore?: () => void;
   /** Whether a page request is currently in flight. */
   loadingMore?: boolean;
+  /** Whether a scan is actively running. */
+  scanning?: boolean;
+  /** Whether at least one scan has completed. */
+  hasScanned?: boolean;
+  filterText: string;
+  onClearFilter: () => void;
   columnHeaders: string[];
   columnNames: string[];
   selectedIndex: number;
@@ -89,6 +186,11 @@ const ROW_HEIGHT = 28;
 const OVERSCAN = 12;
 /** Page size requested from the backend when paging is enabled. */
 const PAGE_SIZE = 500;
+const MIN_COLUMN_WIDTH = 80;
+const MAX_COLUMN_WIDTH = 960;
+const DEFAULT_COLUMN_WIDTH = 160;
+const RESIZE_STEP = 24;
+const INDEX_COLUMN_WIDTH = 44;
 
 /** Column weights so Path gets more room than Type/Version. */
 const COLUMN_WEIGHTS: Record<string, number> = { File: 2, Path: 3, FileName: 1, Type: 1, Version: 1 };
@@ -115,6 +217,10 @@ export function FileListTable({
   totalCount,
   onLoadMore,
   loadingMore = false,
+  scanning = false,
+  hasScanned = false,
+  filterText,
+  onClearFilter,
   columnHeaders,
   columnNames,
   selectedIndex,
@@ -136,6 +242,30 @@ export function FileListTable({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const resizePointerRef = useRef<ResizePointerState | null>(null);
+  const resizeMovedRef = useRef(false);
+
+  const totalColumnWeight = resolvedKeys.reduce((sum, key) => sum + (COLUMN_WEIGHTS[key] ?? 1), 1);
+  const resizeColumnTo = (key: string, width: number) => {
+    const boundedWidth = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Math.round(width)));
+    setColumnWidths((current) => ({ ...current, [key]: boundedWidth }));
+  };
+  const resizeColumnBy = (key: string, delta: number) => {
+    const header = Array.from(scrollRef.current?.querySelectorAll<HTMLElement>("[data-column-key]") ?? [])
+      .find((element) => element.dataset.columnKey === key);
+    const currentWidth = columnWidths[key] ?? header?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH;
+    resizeColumnTo(key, currentWidth + delta);
+  };
+  const columnTemplate = [
+    `${INDEX_COLUMN_WIDTH}px`,
+    ...resolvedKeys.map((key) =>
+      columnWidths[key]
+        ? `${columnWidths[key]}px`
+        : `minmax(${MIN_COLUMN_WIDTH}px, ${COLUMN_WEIGHTS[key] ?? 1}fr)`,
+    ),
+  ].join(" ");
 
   /** Guards against firing multiple concurrent page requests. */
   const loadingRef = useRef(false);
@@ -151,13 +281,33 @@ export function FileListTable({
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setViewportHeight(entry.contentRect.height);
+        setViewportWidth(entry.contentRect.width);
       }
     });
     observer.observe(el);
     // Seed the initial height synchronously to avoid a first-paint flash.
     setViewportHeight(el.clientHeight || 600);
+    setViewportWidth(el.clientWidth || 0);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || selectedIndex < 0 || selectedIndex >= loadedCount) return;
+    const headerHeight = el.querySelector<HTMLElement>("[data-file-list-header]")?.offsetHeight ?? 0;
+    const rowTop = headerHeight + selectedIndex * ROW_HEIGHT;
+    const rowBottom = rowTop + ROW_HEIGHT;
+    let nextScrollTop = el.scrollTop;
+    if (rowTop < el.scrollTop + headerHeight) {
+      nextScrollTop = rowTop - headerHeight;
+    } else if (rowBottom > el.scrollTop + el.clientHeight) {
+      nextScrollTop = rowBottom - el.clientHeight;
+    }
+    if (nextScrollTop !== el.scrollTop) {
+      el.scrollTop = nextScrollTop;
+      setScrollTop(nextScrollTop);
+    }
+  }, [selectedIndex, loadedCount]);
 
   /**
    * Fetch the next page when the user approaches the end of the loaded rows.
@@ -245,17 +395,40 @@ export function FileListTable({
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-auto bg-app text-xs"
+      className="flex-1 overflow-auto bg-app text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-[-2px]"
       data-testid="file-list"
       data-loaded-count={loadedCount}
+      aria-busy={scanning}
+      role="grid"
+      aria-label="Discovered files"
+      aria-rowcount={Math.max(grandTotal, loadedCount === 0 ? 1 : 0) + 1}
+      aria-colcount={resolvedKeys.length + 1}
+      aria-activedescendant={loadedCount > 0 ? `file-row-${selectedIndex}` : undefined}
+      tabIndex={0}
     >
       <ScrollableStickyHeader
+        columnTemplate={columnTemplate}
+        resizePointerRef={resizePointerRef}
+        resizeMovedRef={resizeMovedRef}
         items={
           [
             { label: "#", icon: <FileCode className="h-3.5 w-3.5" /> },
             ...columnSlots.map(({ key, header }) => ({
               label: header,
               weight: COLUMN_WEIGHTS[key] ?? 1,
+              width: columnWidths[key],
+              defaultWidth: Math.min(
+                MAX_COLUMN_WIDTH,
+                Math.max(
+                  MIN_COLUMN_WIDTH,
+                  Math.round(
+                    ((viewportWidth - INDEX_COLUMN_WIDTH) * (COLUMN_WEIGHTS[key] ?? 1)) / totalColumnWeight,
+                  ),
+                ),
+              ),
+              canResize: true,
+              onResizeBy: (delta: number) => resizeColumnBy(key, delta),
+              onResizeTo: (width: number) => resizeColumnTo(key, width),
               sortKey: key,
               active: sort?.column === key,
               direction: sort?.direction,
@@ -274,19 +447,44 @@ export function FileListTable({
       />
 
       {loadedCount === 0 ? (
-        <div className="p-8 text-center text-ink-faint" data-testid="file-list-empty">
-          No matching files found. Click "Scan" to refresh.
+        <div role="row" aria-rowindex={2} data-testid="file-list-empty">
+          <div role="gridcell" aria-colspan={resolvedKeys.length + 1} className="p-8 text-center text-ink-faint">
+            {scanning ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-indigo-400 motion-reduce:animate-none" />
+                <span>Scanning files...</span>
+              </div>
+            ) : !hasScanned ? (
+              <span>Select a directory and scan to find files.</span>
+            ) : filterText.trim() ? (
+              <div className="flex flex-col items-center gap-2">
+                <span>No files match “{filterText}”.</span>
+                <button
+                  type="button"
+                  onClick={onClearFilter}
+                  className="rounded-md px-3 py-1.5 text-ink-secondary underline underline-offset-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  Clear filter and scan again
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <span>No files found for the current directory and extension.</span>
+                <span className="text-ink-muted">Try another directory or extension.</span>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         /* Spacer reserves the full scroll height. */
-        <div className="relative" style={{ height: spacerHeight }}>
+        <div className="relative" style={{ height: spacerHeight }} role="rowgroup">
           {loadingMore && (
-            <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2">
+            <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2" aria-hidden="true">
               <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
             </div>
           )}
           {/* The virtualized window, shifted into position by the transform. */}
-          <div style={{ transform: `translateY(${offsetY}px)` }} data-testid="file-list-window">
+          <div style={{ transform: `translateY(${offsetY}px)` }} data-testid="file-list-window" role="presentation">
             {files.slice(startIndex, endIndex).map((file, i) => {
               const idx = startIndex + i;
               const isSelected = idx === selectedIndex;
@@ -294,22 +492,31 @@ export function FileListTable({
               return (
                 <div
                   key={file.path || idx}
-                  onClick={() => onSelectIndex(idx)}
+                  id={`file-row-${idx}`}
+                  data-row-index={idx}
+                  role="row"
+                  aria-rowindex={idx + 2}
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onSelectIndex(idx);
+                    scrollRef.current?.focus();
+                  }}
                   onDoubleClick={() => onLaunch(file)}
                   onContextMenu={(e) => onContextMenu(e, file, idx)}
-                  className={`flex cursor-pointer items-center transition-colors ${rowStyle.className}`}
-                  style={{ ...rowStyle.style, height: ROW_HEIGHT }}
+                  className={`grid cursor-pointer items-center transition-colors ${rowStyle.className}`}
+                  style={{ ...rowStyle.style, height: ROW_HEIGHT, gridTemplateColumns: columnTemplate }}
                 >
-                  <div className="shrink-0 px-3 text-right font-mono text-ink-faint">
+                  <div className="px-3 text-right font-mono text-ink-faint">
                     <span className="hidden sm:inline">{idx + 1}</span>
                   </div>
                   {resolvedKeys.map((key, kIdx) => (
                     <div
                       key={kIdx}
+                      role="gridcell"
+                      data-column-key={key}
                       className="truncate px-3 font-mono"
                       style={{
-                        flex: COLUMN_WEIGHTS[key] ?? 1,
-                        minWidth: 0,
+                        minWidth: MIN_COLUMN_WIDTH,
                       }}
                       title={key === "Path" ? file.path : undefined}
                     >
