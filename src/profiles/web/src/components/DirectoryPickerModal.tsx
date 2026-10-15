@@ -120,13 +120,13 @@ export function DirectoryPickerModal({
         className="flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
               <FolderOpen className="h-5 w-5 text-indigo-400" />
             </span>
             <div className="min-w-0">
-              <h2 id="directory-picker-title" className="text-base font-semibold text-ink">
+              <h2 id="directory-picker-title" className="text-sm font-semibold text-ink">
                 Select a directory
               </h2>
               <p className="truncate font-mono text-xs text-ink-muted">
@@ -139,20 +139,20 @@ export function DirectoryPickerModal({
             onClick={onClose}
             aria-label="Close directory picker"
             title="Close"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="border-b border-line px-5 py-4 sm:px-6">
+        <div className="border-b border-line px-4 py-3 sm:px-5">
           <label
             htmlFor="directory-picker-path"
-            className="mb-2 block text-xs font-medium text-ink-secondary"
+            className="mb-1.5 block text-xs font-medium text-ink-secondary"
           >
             Location
           </label>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
           <input
             ref={pathInputRef}
             id="directory-picker-path"
@@ -163,12 +163,12 @@ export function DirectoryPickerModal({
               if (e.key === "Enter") browse(pathInput.trim());
             }}
             placeholder="/path/to/directory"
-            className="h-11 min-w-0 flex-1 rounded-lg border border-line bg-elevated px-3 font-mono text-sm text-ink outline-none placeholder:text-ink-faint focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/30"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-elevated px-2.5 font-mono text-sm text-ink outline-none placeholder:text-ink-faint transition-colors hover:bg-surface-strong focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/30"
           />
           <button
             type="button"
             onClick={() => browse(pathInput.trim())}
-            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-line bg-elevated px-4 text-sm font-medium text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-elevated px-3.5 text-sm font-medium text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             Go
           </button>
@@ -177,7 +177,7 @@ export function DirectoryPickerModal({
             onClick={() => browse("")}
             aria-label="Home directory"
             title="Home directory"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Home className="h-4 w-4" />
           </button>
@@ -187,7 +187,7 @@ export function DirectoryPickerModal({
               onClick={() => browse(browseData.parent_path!)}
               aria-label="Parent directory"
               title="Parent directory"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <ChevronRight className="h-4 w-4 rotate-180" />
             </button>
@@ -195,25 +195,25 @@ export function DirectoryPickerModal({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4" aria-busy={loading}>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 sm:px-3 sm:py-3" aria-busy={loading}>
           {loading ? (
-            <div className="flex h-full items-center justify-center gap-3 text-sm text-ink-muted">
+            <div className="flex h-full items-center justify-center gap-2.5 text-sm text-ink-muted">
               <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
               <span role="status">Loading directories…</span>
             </div>
           ) : error ? (
-            <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <div role="alert" className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
               <p className="text-sm text-rose-400">{error}</p>
               <button
                 type="button"
                 onClick={() => browse(pathInput || browseData?.current_path || "")}
-                className="min-h-10 rounded-lg border border-line bg-elevated px-4 text-sm text-ink-secondary hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="min-h-10 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 Retry
               </button>
             </div>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-0.5">
               {browseData?.items
                 .filter((item) => item.is_dir)
                 .map((item) => (
@@ -226,13 +226,13 @@ export function DirectoryPickerModal({
                         onSelect(item.path);
                         onClose();
                       }}
-                      className={`flex min-h-12 w-full items-center justify-between rounded-lg px-4 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                      className={`flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
                         selectedDir === item.path
                           ? "bg-indigo-600/20 text-indigo-200"
                           : "text-ink-secondary hover:bg-elevated hover:text-ink"
                       }`}
                     >
-                      <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex min-w-0 items-center gap-2.5">
                         <Folder className="h-5 w-5 shrink-0 text-indigo-400" />
                         <span className="truncate">{item.name}</span>
                       </span>
@@ -241,8 +241,8 @@ export function DirectoryPickerModal({
                   </li>
                 ))}
               {browseData?.items.filter((item) => item.is_dir).length === 0 && (
-                <li className="flex h-full min-h-48 flex-col items-center justify-center gap-3 text-center text-sm text-ink-muted">
-                  <FolderOpen className="h-8 w-8 text-ink-faint" />
+                <li className="flex h-full min-h-36 flex-col items-center justify-center gap-2.5 text-center text-sm text-ink-muted">
+                  <FolderOpen className="h-7 w-7 text-ink-faint" />
                   No subdirectories found
                 </li>
               )}
@@ -250,9 +250,9 @@ export function DirectoryPickerModal({
           )}
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-2 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0 flex-1">
-            <p className="mb-1 text-xs font-medium text-ink-muted">Selected folder</p>
+            <p className="mb-0.5 text-xs font-medium text-ink-muted">Selected folder</p>
             <p
               className="truncate font-mono text-sm text-ink"
               title={selectedDir || pathInput}
@@ -260,19 +260,18 @@ export function DirectoryPickerModal({
               {selectedDir || pathInput || "—"}
             </p>
           </div>
-          <div className="flex shrink-0 justify-end gap-2">
+          <div className="flex shrink-0 justify-end gap-1.5">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-11 rounded-lg px-4 text-sm text-ink-muted transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            >
+              className="min-h-10 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
               Cancel
             </button>
             <button
               type="button"
               onClick={handleConfirm}
               disabled={!pathInput.trim()}
-              className="flex min-h-11 items-center gap-2 rounded-lg bg-indigo-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FolderOpen className="h-4 w-4" />
               Select folder

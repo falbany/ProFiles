@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, FileCode, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, FileCode, Loader2 } from "lucide-react";
 import type { ScanSort, ScannedFileItem } from "../api/types";
 
 interface ScrollableStickyHeaderItem {
@@ -336,8 +336,12 @@ export function FileListTable({
     };
 
     el.addEventListener("scroll", maybeLoadMore, { passive: true });
+    // Global event: also listen on window so load-more triggers even when
+    // scrolling is delegated to a parent container (not the element itself).
+    window.addEventListener("scroll", maybeLoadMore, { passive: true });
     return () => {
       el.removeEventListener("scroll", maybeLoadMore);
+      window.removeEventListener("scroll", maybeLoadMore);
     };
   }, [files, hasMore, onLoadMore, loadedCount]);
 
@@ -533,7 +537,9 @@ export function FileListTable({
               className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-line bg-surface-strong px-3 py-1 text-[11px] text-ink-muted shadow"
               data-testid="file-list-paging"
             >
-              {loadingMore ? "Loading more… " : ""}
+              {loadingMore ? (
+                <ArrowLeftRight className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none text-ink-muted" />
+              ) : null}
               ({loadedCount} of {grandTotal} loaded)
             </div>
           )}

@@ -568,6 +568,16 @@ export default function App() {
     }
   };
 
+  const handleGoToHomeDirectory = async () => {
+    try {
+      // "~" resolves to the OS home directory on the backend via expanduser()
+      await handleDirectoryChange("~");
+      showToast("Directory set to home folder.");
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
   const handleExport = () => {
     if (files.length === 0) {
       showToast("No files to export.");
@@ -818,6 +828,13 @@ export default function App() {
         return;
       }
 
+      // Ctrl + H: Go to home directory
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        void handleGoToHomeDirectory();
+        return;
+      }
+
       // ? or Ctrl + /: Show shortcuts
       if (e.key === "?" || (e.ctrlKey && e.key === "/")) {
         e.preventDefault();
@@ -874,6 +891,7 @@ export default function App() {
         onScan={handleScan}
         scanning={scanning}
         onBrowseDirectory={handleBrowseDirectory}
+        onGoToHomeDirectory={handleGoToHomeDirectory}
         onOpenActiveDirectory={handleOpenActiveDirectory}
         barcodeMode={barcodeMode}
         onBarcodeToggle={handleBarcodeToggle}

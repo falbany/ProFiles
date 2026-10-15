@@ -1,4 +1,4 @@
-import { ArrowRight, Folder, FolderOpen, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
+import { ArrowRight, Folder, FolderOpen, Home, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 
@@ -38,6 +38,7 @@ interface ControlsBarProps {
   onScan: () => void;
   scanning: boolean;
   onBrowseDirectory?: () => void;
+  onGoToHomeDirectory?: () => void;
   onOpenActiveDirectory?: () => void;
   barcodeMode: boolean;
   onBarcodeToggle: () => void;
@@ -60,6 +61,7 @@ export function ControlsBar({
   onScan,
   scanning,
   onBrowseDirectory,
+  onGoToHomeDirectory,
   onOpenActiveDirectory,
   barcodeMode,
   onBarcodeToggle,
@@ -94,7 +96,7 @@ export function ControlsBar({
               type="button"
               onClick={onOpenActiveDirectory}
               aria-label="Open active directory"
-              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
             >
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
@@ -108,20 +110,34 @@ export function ControlsBar({
               type="button"
               onClick={onBrowseDirectory}
               aria-label="Browse directory"
-              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
           </Tooltip>
         )}
 
-        {/* Barcode scanner mode toggle (right of Browse) */}
+        {/* Go to user home directory (right of Browse) */}
+        {onGoToHomeDirectory && (
+          <Tooltip text="Set directory to your home folder" block={false}>
+            <button
+              type="button"
+              onClick={onGoToHomeDirectory}
+              aria-label="Go to home directory"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+            >
+              <Home className="h-3.5 w-3.5" />
+            </button>
+          </Tooltip>
+        )}
+
+        {/* Barcode scanner mode toggle (right of Home) */}
         <Tooltip text="Toggle barcode scanner mode (USB HID). When active, scan a barcode to auto-fill controls and trigger a scan." block={false}>
           <button
             type="button"
             onClick={onBarcodeToggle}
             aria-label={barcodeMode ? "Disable barcode mode" : "Enable barcode mode"}
-            className={`rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+          className={`rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors ${
               barcodeMode ? "border-indigo-500 bg-indigo-600/20 text-indigo-400" : "border-line bg-elevated"
             }}`}
           >
@@ -181,7 +197,7 @@ export function ControlsBar({
           <button
             onClick={onScan}
             disabled={scanning}
-            className="flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
           >
             {scanning ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
@@ -198,7 +214,7 @@ export function ControlsBar({
             type="button"
             onClick={onTimerClick}
             aria-label="Configure timer / auto-rescan"
-            className={`flex shrink-0 items-center justify-center rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`flex shrink-0 items-center justify-center rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors ${
               autoRescanActive ? "border-indigo-500 bg-indigo-600/20 text-indigo-400" : "border-line bg-elevated"
             }}
           `}
