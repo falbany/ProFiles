@@ -258,11 +258,12 @@ class ProFileApp:
 
         return os.environ.get("PROFILES_GUI_BACKEND", "web").lower()
 
-    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "127.0.0.1") -> None:
+    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "0.0.0.0") -> None:
         """Run only the FastAPI background server without opening PyWebView."""
         import time
 
         from profiles.desktop.lifecycle import BackgroundServer, ServerStartError
+        from profiles.utils.network import get_local_ip
 
         assert self._config is not None
         server = BackgroundServer(config=self._config, host=host, port=port)
@@ -272,7 +273,12 @@ class ProFileApp:
             print(f"ERROR: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
 
-        print(f"ProFiles server running at http://{host}:{server.port} (press Ctrl+C to stop)")
+        # Display both local and network URLs
+        local_ip = get_local_ip()
+        print("ProFiles server running at:")
+        print(f"  Local:  http://127.0.0.1:{server.port}")
+        print(f"  Network: http://{local_ip}:{server.port}")
+        print("  Access from other PCs on your network (press Ctrl+C to stop)")
         try:
             while server.is_running:
                 time.sleep(0.5)

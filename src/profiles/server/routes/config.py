@@ -65,6 +65,10 @@ def _config_response(state: ServerState) -> dict:
 
     extensions, filters = config_service.merge_config_overrides(cfg, str(state.active_directory))
 
+    # Find the active config matching the selected directory to get its row_colors
+    active_config = config_service.find_active_config(cfg, str(state.active_directory))
+    row_colors_to_return = active_config.row_colors if active_config is not None else cfg.row_colors
+
     return {
         "title": cfg.title,
         "release": cfg.release,
@@ -81,7 +85,7 @@ def _config_response(state: ServerState) -> dict:
         "config_exists": config_path.exists(),
         "column_headers": list(cfg.column_headers or cfg.column_names),
         "column_names": list(cfg.column_names),
-        "row_colors": [[rule[0], rule[1]] for rule in cfg.row_colors],
+        "row_colors": [[rule[0], rule[1]] for rule in row_colors_to_return],
     }
 
 

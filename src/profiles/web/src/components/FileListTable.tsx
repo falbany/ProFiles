@@ -367,23 +367,24 @@ export function FileListTable({
   const getRowStyle = (filename: string, isSelected: boolean): { className: string; style: React.CSSProperties } => {
     if (isSelected) {
       return {
-        className: "bg-indigo-600/25 border-l-2 border-indigo-500 text-ink",
+        className: "bg-indigo-600/25 border-l-4 border-indigo-500 text-ink",
         style: {},
       };
     }
 
     for (const [pattern, color] of rowColors) {
-      if (filename.toLowerCase().includes(pattern.toLowerCase())) {
+      const matches = filename.toLowerCase().includes(pattern.toLowerCase());
+      if (matches) {
         return {
-          className: "hover:bg-elevated border-l-2 text-ink",
-          style: { borderLeftColor: color },
+          className: "hover:bg-elevated border-l-4 text-ink",
+          style: { borderLeftColor: color, borderLeftWidth: '4px' as const },
         };
       }
     }
 
     return {
-      className: "border-l-2 border-transparent text-ink-secondary hover:bg-elevated/60",
-      style: { borderLeftColor: "transparent" },
+      className: "border-l-4 border-transparent text-ink-secondary hover:bg-elevated/60",
+      style: { borderLeftColor: 'transparent', borderLeftWidth: '4px' as const },
     };
   };
 
