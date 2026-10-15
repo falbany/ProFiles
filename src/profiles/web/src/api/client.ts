@@ -188,3 +188,14 @@ export async function openConfigFile(): Promise<{ status: string; message: strin
   if (!res.ok) throw new Error("Failed to open config file");
   return res.json();
 }
+
+/** Generate a QR-code PNG encoding the file location as a ProFiles barcode payload. */
+export async function generateBarcode(filePath: string): Promise<{ image: string; content: string }> {
+  const res = await fetch("/api/actions/barcode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error("Failed to generate barcode");
+  return res.json();
+}

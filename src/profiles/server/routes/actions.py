@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 from pathlib import Path
 
@@ -183,3 +184,64 @@ async def compute_hash(payload: HashRequest) -> dict:
         raise HTTPException(status_code=500, detail="Error reading file") from exc
 
     return {"algorithm": algo, "hash": hasher.hexdigest()}
+
+
+class BarcodeRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/barcode")
+async def generate_barcode(payload: BarcodeRequest):
+    """Generate a QR code image encoding the file location as a ProFiles barcode payload.
+
+    The QR content uses the structured ``key=value`` format that the ProFiles
+    barcode scanner understands so the recipient can scan it directly into
+    their instance.
+
+    **Payload format:** ``dir=<parent>;filter=<filename>;scan=1``
+    """
+    from io import BytesIO
+
+    import qrcode
+
+    path = Path(payload.file_path).expanduser().resolve()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+
+    # Build the barcode payload that the scanner can parse back
+    if path.is_dir():
+        dir_str = str(path)
+        filename = ""
+        ext = ""
+    else:
+        dir_str = str(path.parent)
+        filename = path.name
+        ext = path.suffix
+
+    parts = [f"dir={dir_str}"]
+    if filename:
+        parts.append(f"filter={filename}")
+    if ext:
+        parts.append(f"ext={ext}")
+    parts.append("scan=1")
+
+    qr_content = ";".join(parts)
+
+    qr = qrcode.QRCode(
+        version=2,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    return {
+        "image": f"data:image/png;base64,{png_b64}",
+        "content": qr_content,
+    }

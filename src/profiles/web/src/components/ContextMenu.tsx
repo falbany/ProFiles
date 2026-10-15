@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Hash,
   Play,
+  QrCode,
   Terminal,
   Trash2,
   RotateCcw,
@@ -36,6 +37,7 @@ interface ContextMenuProps {
   onProperties: (file: ScannedFileItem) => void;
   onClearFile: (file: ScannedFileItem) => void;
   onRefreshList: () => void;
+  onGenerateBarcode: (file: ScannedFileItem) => void;
 }
 
 export function ContextMenu({
@@ -56,6 +58,7 @@ export function ContextMenu({
   onProperties,
   onClearFile,
   onRefreshList,
+  onGenerateBarcode,
 }: ContextMenuProps) {
   const [showArgsModal, setShowArgsModal] = useState(false);
   const [argsValue, setArgsValue] = useState("");
@@ -339,6 +342,14 @@ export function ContextMenu({
         >
           <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
           <span>Refresh List</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => { onGenerateBarcode(file); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white"
+        >
+          <QrCode className="h-3.5 w-3.5 text-fuchsia-400" />
+          <span>Generate QR Code</span>
         </button>
       </div>
 
