@@ -70,6 +70,7 @@ def _config_response(state: ServerState) -> dict:
         "release": cfg.release,
         "search_dir": cfg.search_dir,
         "recursive_search": bool(cfg.recursive_search),
+        "theme": cfg.theme,
         "directories": available_dirs,
         "extensions": extensions,
         "filters": filters,

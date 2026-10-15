@@ -26,18 +26,9 @@ import { LoadConfigModal } from "./components/LoadConfigModal";
 import { StatusBar } from "./components/StatusBar";
 
 export default function App() {
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    try {
-      const saved = localStorage.getItem("profiles-theme");
-      if (saved === "light" || saved === "dark") return saved;
-    } catch {
-      /* storage may be unavailable */
-    }
-    return "dark";
-  });
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [config, setConfig] = useState<AppConfigData | null>(null);
-
   const [activeDirectory, setActiveDirectory] = useState<string>("");
   const [activeExtension, setActiveExtension] = useState<string>("");
   const [filterText, setFilterText] = useState<string>("");
@@ -251,6 +242,19 @@ export default function App() {
 
   const initializeFromConfig = async (cfg: AppConfigData, scanGeneration: number) => {
     if (!isCurrentScan(scanGeneration)) return;
+    
+    // Apply theme from .profiles configuration with highest priority
+    // This overrides any localStorage value to ensure config file is the source of truth
+    const configTheme = cfg.theme === "auto" ? "dark" : (cfg.theme === "light" ? "light" : "dark");
+    setTheme(configTheme);
+    
+    // Persist the config theme to localStorage for future sessions
+    try {
+      localStorage.setItem("profiles-theme", configTheme);
+    } catch {
+      /* storage may be unavailable */
+    }
+    
     setConfig(cfg);
     const initialDir = cfg.active_directory || (cfg.directories.length > 0 ? cfg.directories[0] : "");
     const initialExt = cfg.extensions.length > 0 ? cfg.extensions[0] : "";

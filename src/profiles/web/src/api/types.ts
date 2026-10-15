@@ -10,6 +10,7 @@ export interface AppConfigData {
   release: string;
   search_dir: string;
   recursive_search: boolean;
+  theme: "light" | "dark" | "auto";
   directories: string[];
   extensions: string[];
   filters: string[];
