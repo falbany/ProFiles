@@ -1,0 +1,405 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  Bug,
+  Copy,
+  ExternalLink,
+  FileText,
+  Info,
+  Loader2,
+  RefreshCw,
+  Search,
+  X,
+  XCircle,
+} from "lucide-react";
+
+import { fetchLogEntries } from "../api/client";
+import type { LogEntry, LogLevel } from "../api/types";
+
+/** Poll cadence for the live tail, in milliseconds. */
+const POLL_INTERVAL_MS = 2000;
+/** Entries requested per poll — the newest window of the log tail. */
+const PAGE_LIMIT = 500;
+
+const LEVEL_FILTERS: Array<{ value: LogLevel | null; label: string }> = [
+  { value: null, label: "ALL" },
+  { value: "DEBUG", label: "DEBUG" },
+  { value: "INFO", label: "INFO" },
+  { value: "WARNING", label: "WARNING" },
+  { value: "ERROR", label: "ERROR" },
+  { value: "CRITICAL", label: "CRITICAL" },
+];
+
+/** Level → icon + text colour. Accessible pairs on the dark surface. */
+const LEVEL_STYLE: Record<LogEntry["level"], { icon: typeof Info; className: string }> = {
+  DEBUG: { icon: Bug, className: "text-sky-400" },
+  INFO: { icon: Info, className: "text-emerald-400" },
+  WARNING: { icon: AlertTriangle, className: "text-amber-400" },
+  ERROR: { icon: XCircle, className: "text-rose-400" },
+  CRITICAL: { icon: XCircle, className: "text-rose-300" },
+  UNKNOWN: { icon: FileText, className: "text-ink-faint" },
+};
+
+export interface LogViewerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpenExternally?: () => void;
+}
+
+export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerModalProps) {
+  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [logPath, setLogPath] = useState<string>("profiles.log");
+  const [sizeBytes, setSizeBytes] = useState<number>(0);
+  const [level, setLevel] = useState<LogLevel | null>(null);
+  const [search, setSearch] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [live, setLive] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  /** When true, the newest entry stays pinned to the bottom on refresh. */
+  const [followTail, setFollowTail] = useState<boolean>(true);
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  /** Kept in a ref so the poll effect can re-read it without re-subscribing. */
+  const liveRef = useRef(live);
+  const filterRef = useRef<{ level: LogLevel | null; search: string }>({ level, search });
+
+  liveRef.current = live;
+  filterRef.current = { level, search };
+
+  const load = useCallback(async () => {
+    const { level: activeLevel, search: activeSearch } = filterRef.current;
+    setLoading(true);
+    try {
+      const data = await fetchLogEntries({
+        limit: PAGE_LIMIT,
+        level: activeLevel,
+        search: activeSearch,
+      });
+      setEntries(data.entries);
+      setLogPath(data.path);
+      setSizeBytes(data.size_bytes);
+      setError(null);
+    } catch (err) {
+      setError((err as Error)?.message || "Failed to read the log file");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial fetch whenever the dialog opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    void load();
+  }, [isOpen, load]);
+
+  // Live tail — refetch on an interval while enabled.
+  useEffect(() => {
+    if (!isOpen || !live) return;
+    const timer = window.setInterval(() => {
+      void load();
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isOpen, live, load]);
+
+  // Debounce text filter input instead of firing a request per keystroke.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = window.setTimeout(() => void load(), 250);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, level, search, load]);
+
+  // Keep the newest entry in view while following the tail.
+  useEffect(() => {
+    if (!followTail) return;
+    const scroller = scrollRef.current;
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  }, [entries, followTail]);
+
+  // Restrict focus to the dialog and return it to the opener on close.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => {
+      cancelAnimationFrame(frame);
+      previous?.focus();
+    };
+  }, [isOpen]);
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusable?.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  /** Tracks manual scrolling so we stop following once the user scrolls up. */
+  const handleScroll = () => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
+    setFollowTail(atBottom);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(entries.map((entry) => entry.raw).join("\n"));
+    } catch {
+      /* clipboard unavailable — the external-open fallback still applies */
+    }
+  };
+
+  const levelCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of entries) {
+      counts.set(entry.level, (counts.get(entry.level) ?? 0) + 1);
+    }
+    return counts;
+  }, [entries]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="log-viewer-title"
+        onKeyDown={handleDialogKeyDown}
+        className="flex h-[min(84dvh,760px)] w-[min(94vw,900px)] min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl sm:rounded-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
+              <FileText className="h-5 w-5 text-indigo-400" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="log-viewer-title" className="text-base font-semibold text-ink">
+                Application logs
+              </h2>
+              <p className="truncate font-mono text-xs text-ink-muted">
+                {logPath}
+                <span className="text-ink-faint"> · {formatSize(sizeBytes)}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLive((value) => !value)}
+              aria-pressed={live}
+              title={live ? "Pause live tail" : "Resume live tail"}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                live
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-line bg-elevated text-ink-muted hover:text-ink"
+              }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${live ? "bg-emerald-400" : "bg-ink-faint"}`}
+                aria-hidden="true"
+              />
+              {live ? "Live" : "Paused"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              title="Refresh now"
+              className="rounded-lg border border-line bg-elevated p-2 text-ink-muted hover:text-ink disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleCopy()}
+              disabled={entries.length === 0}
+              title="Copy visible lines"
+              className="rounded-lg border border-line bg-elevated p-2 text-ink-muted hover:text-ink disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Copy className="h-4 w-4" aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onOpenExternally?.();
+                onClose();
+              }}
+              title="Open log file in the default application"
+              className="rounded-lg border border-line bg-elevated p-2 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            </button>
+
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              title="Close"
+              className="rounded-lg p-2 text-ink-muted hover:bg-hover-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-app/40 px-5 py-3 sm:px-6">
+          <div
+            className="flex overflow-hidden rounded-lg border border-line text-[11px]"
+            role="group"
+            aria-label="Filter by log level"
+          >
+            {LEVEL_FILTERS.map((option) => {
+              const active = level === option.value;
+              const count = option.value ? (levelCounts.get(option.value) ?? 0) : entries.length;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => setLevel(option.value)}
+                  aria-pressed={active}
+                  title={option.value ? `Show ${option.value} and above` : "Show all levels"}
+                  className={`flex items-center gap-1 px-2.5 py-1 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                    active ? "bg-indigo-600 text-white" : "text-ink-muted hover:bg-elevated hover:text-ink"
+                  }`}
+                >
+                  {option.label}
+                  <span className={active ? "text-indigo-200" : "text-ink-faint"}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative min-w-[200px] flex-1">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint"
+              aria-hidden="true"
+            />
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Filter log lines…"
+              aria-label="Filter log lines"
+              className="w-full rounded-lg border border-line bg-elevated py-1.5 pl-8 pr-2.5 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setFollowTail(true)}
+            aria-pressed={followTail}
+            title="Scroll to the newest entry"
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              followTail
+                ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
+                : "border-line bg-elevated text-ink-muted hover:text-ink"
+            }`}
+          >
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+            Follow tail
+          </button>
+        </div>
+
+        {/* Log body */}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-app px-2 py-2 font-mono text-xs leading-relaxed sm:px-3"
+        >
+          {error && (
+            <p role="alert" className="px-3 py-6 text-center text-xs text-rose-400">
+              {error}
+            </p>
+          )}
+
+          {!error && entries.length === 0 && !loading && (
+            <p className="px-3 py-6 text-center text-xs text-ink-faint">
+              No log entries match the current filters.
+            </p>
+          )}
+
+          <ul className="space-y-0.5">
+            {entries.map((entry, index) => {
+              const style = LEVEL_STYLE[entry.level] ?? LEVEL_STYLE.UNKNOWN;
+              const Icon = style.icon;
+              const isError = entry.level === "ERROR" || entry.level === "CRITICAL";
+              return (
+                <li
+                  key={`${index}-${entry.raw}`}
+                  className={`group flex items-start gap-2 rounded px-2 py-1 ${
+                    isError ? "bg-rose-500/5" : "hover:bg-elevated/50"
+                  }`}
+                >
+                  <span className={style.className}>
+                    <Icon className="mt-0.5 h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  <span className="w-[138px] shrink-0 text-ink-faint">{entry.timestamp}</span>
+                  <span className={`w-[52px] shrink-0 text-[10px] font-semibold ${style.className}`}>
+                    {entry.level}
+                  </span>
+                  <span className="min-w-0 flex-1 break-words text-ink-secondary">{entry.message}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-line px-5 py-3 text-[11px] text-ink-faint sm:px-6">
+          {/* Single atomic status message instead of competing live regions. */}
+          <span role="status" aria-atomic="true">
+            {loading && entries.length === 0
+              ? "Loading log entries…"
+              : `${entries.length} of ${formatSize(sizeBytes)} shown`}
+          </span>
+          <span className="flex items-center gap-1.5">
+            {loading && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+            <span className="hidden sm:inline">Ctrl + Shift + L</span>
+            <span>opens externally</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Human-readable byte count, matching the viewer's compact footer style. */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

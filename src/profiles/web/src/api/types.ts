@@ -63,3 +63,29 @@ export interface ScanSort {
   column: string;
   direction: "asc" | "desc";
 }
+
+/** Severity levels accepted by the log viewer, most verbose first. */
+export type LogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+
+/** A single parsed `profiles.log` line. */
+export interface LogEntry {
+  /** `YYYY-MM-DD HH:MM:SS`; empty for unparsed lines. */
+  timestamp: string;
+  /** One of the `LogLevel` values, or `"UNKNOWN"` for unparsed lines. */
+  level: LogLevel | "UNKNOWN";
+  /** Machine/source identifier emitted by the logger. */
+  source: string;
+  /** Event name plus any structured `key=value` payload. */
+  message: string;
+  /** Leading UPPER_SNAKE_CASE event name, empty when absent. */
+  event: string;
+  /** The original, untouched line. */
+  raw: string;
+}
+
+export interface LogResponse {
+  path: string;
+  size_bytes: number;
+  total_returned: number;
+  entries: LogEntry[];
+}

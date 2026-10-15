@@ -5,6 +5,7 @@
 - :class:`LoggerFactory` — factory for rotating-file loggers
 - :class:`SourceFilter` — filter that injects a ``source`` field on records
 - :mod:`events` — structured event helpers
+- :mod:`log_viewer` — parse ``profiles.log`` into structured entries
 """
 
 from __future__ import annotations
@@ -55,14 +56,24 @@ from profiles.core.telemetry.events import (
     workflow_step,
     workflow_step_failed,
 )
+from profiles.core.telemetry.log_viewer import (
+    LOG_LEVELS,
+    LogEntry,
+    parse_log_line,
+    read_log_entries,
+)
 from profiles.core.telemetry.metrics import ScanMetrics, ScanTimer
 
 __all__ = [
     "LOG_FORMAT",
+    "LOG_LEVELS",
+    "LogEntry",
     "LoggerFactory",
     "SourceFilter",
     "configure_logger",
     "get_logger",
+    "parse_log_line",
+    "read_log_entries",
     "ScanMetrics",
     "ScanTimer",
     "app_closed",

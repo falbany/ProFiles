@@ -21,6 +21,7 @@ import { ControlsBar } from "./components/ControlsBar";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
+import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
 import { StatusBar } from "./components/StatusBar";
@@ -51,6 +52,7 @@ export default function App() {
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
   const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
+  const [showLogViewer, setShowLogViewer] = useState<boolean>(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -550,6 +552,7 @@ export default function App() {
       if (e.key === "Escape") {
         setContextMenuPos(null);
         setShowShortcuts(false);
+        setShowLogViewer(false);
         return;
       }
 
@@ -619,10 +622,10 @@ export default function App() {
         return;
       }
 
-      // Ctrl + Shift + L: Open log
+      // Ctrl + Shift + L: Open the log viewer
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
         e.preventDefault();
-        openLogFile().then((r) => showToast(r.message));
+        setShowLogViewer((prev) => !prev);
         return;
       }
 
@@ -740,14 +743,7 @@ export default function App() {
         fileCount={totalCount}
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
-        onOpenLog={async () => {
-          try {
-            const res = await openLogFile();
-            showToast(res.message);
-          } catch (err: any) {
-            showToast(`Failed to open log: ${err.message}`);
-          }
-        }}
+        onOpenLog={() => setShowLogViewer(true)}
         onOpenConfig={async () => {
           try {
             const res = await openConfigFile();
@@ -804,6 +800,15 @@ export default function App() {
 
       {/* Shortcuts Modal */}
       <ShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+
+      {/* Log Viewer Modal */}
+      <LogViewerModal
+        isOpen={showLogViewer}
+        onClose={() => setShowLogViewer(false)}
+        onOpenExternally={() => {
+          openLogFile().then((r) => showToast(r.message));
+        }}
+      />
 
       {/* Toast Notification */}
       <div
