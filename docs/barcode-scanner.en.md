@@ -167,6 +167,30 @@ The button uses consistent app styling:
 
 ---
 
+## QR Code Generation
+
+### Sharing File Locations
+
+ProFiles can **generate QR codes** encoding a file's location as a barcode payload, so recipients can scan it directly into their own ProFiles instance:
+
+1. Right-click any file in the results list.
+2. Select **Generate QR Code** from the context menu.
+3. A modal appears showing the QR code image and the encoded payload (e.g. `dir=/path/to/dir;filter=filename.ext;ext=.ext;scan=1`).
+4. Print or share the QR code — the recipient enables barcode mode (`Ctrl+B`) and scans the QR. ProFiles auto-fills the directory, filter, and extension, then triggers a scan.
+
+### How It Works
+
+| Component | Description |
+|-----------|-------------|
+| `POST /api/actions/barcode` | Backend endpoint that builds the payload and generates a QR PNG |
+| `generateBarcode()` | Frontend client function that fetches the QR image + payload |
+| `ContextMenu.tsx` | Adds the "Generate QR Code" item (with `QrCode` icon) |
+| `App.tsx` | Renders the QR modal and manages open/close state |
+
+The payload format is identical to what the barcode scanner consumes, ensuring full round-trip compatibility.
+
+---
+
 ## Accessibility
 
 - The barcode button has an `aria-label` that updates with the toggle state.

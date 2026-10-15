@@ -167,6 +167,30 @@ Le bouton utilise le style cohérent de l'application :
 
 ---
 
+## Génération de Code QR
+
+### Partage de l'emplacement de fichiers
+
+ProFiles peut **générer des codes QR** encodant l'emplacement d'un fichier sous forme de payload de code-barres, afin que les destinataires puissent le scanner directement dans leur propre instance ProFiles :
+
+1. Cliquez avec le bouton droit sur n'importe quel fichier dans la liste des résultats.
+2. Sélectionnez **Générer un code QR** dans le menu contextuel.
+3. Une fenêtre modale s'affiche montrant le code QR et le payload encodé (par ex. `dir=/chemin/vers/le/dossier;filter=nom_fichier.ext;ext=.ext;scan=1`).
+4. Imprimez ou partagez le code QR — le destinataire active le mode code-barres (`Ctrl+B`) et scanne le QR. ProFiles remplit automatiquement le répertoire, le filtre et l'extension, puis déclenche un scan.
+
+### Fonctionnement technique
+
+| Composant | Description |
+|-----------|-------------|
+| `POST /api/actions/barcode` | Point de terminaison backend qui construit le payload et génère un QR en PNG |
+| `generateBarcode()` | Fonction client frontend qui récupère l'image QR + le payload |
+| `ContextMenu.tsx` | Ajoute l'élément de menu "Générer un code QR" (icône `QrCode`) |
+| `App.tsx` | Affiche la modale QR et gère l'ouverture/fermeture |
+
+Le format du payload est identique à celui consommé par le lecteur de codes-barres, garantissant une compatibilité aller-retour complète.
+
+---
+
 ## Accessibilité
 
 - Le bouton code-barres possède une `aria-label` qui se met à jour selon l'état du bouton.
