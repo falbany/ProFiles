@@ -1,4 +1,4 @@
-import { Activity, Terminal } from "lucide-react";
+import { Activity, Link2, Terminal } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 interface HeaderBarProps {
@@ -26,9 +26,27 @@ export function HeaderBar({ title, release, systemInfo }: HeaderBarProps) {
         {systemInfo && (
           <div className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-ink-secondary">
             <Activity className="h-3 w-3 text-emerald-400" />
-            <span>{systemInfo.hostname}</span>
+            <a
+              href={`http://${systemInfo.hostname}:8088`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ProFiles on ${systemInfo.hostname}:8088`}
+              className="font-mono hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 py-0.5"
+            >
+              {systemInfo.hostname}
+              <Link2 className="ml-1 h-3 w-3 text-ink-muted inline-block" />
+            </a>
             <span className="text-ink-faint">|</span>
-            <span className="font-mono text-ink-muted">{systemInfo.ip}</span>
+            <a
+              href={`http://${systemInfo.ip}:8088`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ProFiles on ${systemInfo.ip}:8088`}
+              className="font-mono hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 py-0.5"
+            >
+              <Link2 className="mr-1 h-3 w-3 text-ink-muted inline-block" />
+              {systemInfo.ip}
+            </a>
           </div>
         )}
       </div>

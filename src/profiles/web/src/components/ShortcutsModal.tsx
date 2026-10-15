@@ -20,6 +20,8 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "Ctrl + Shift + L", desc: "Open the log viewer" },
     { key: "Ctrl + ,", desc: "Open config file" },
     { key: "Ctrl + Shift + T", desc: "Toggle theme (Dark / Light)" },
+    { key: "Ctrl + B", desc: "Toggle barcode scanner mode" },
+    { key: "Ctrl + T", desc: "Open auto-rescan timer modal" },
     { key: "? or Ctrl + /", desc: "Show keyboard shortcuts" },
     { key: "Escape", desc: "Close dialogs / context menu" },
   ];
