@@ -76,6 +76,15 @@ Covers headless automation, programmatic API usage, custom front-ends (CLI/Web),
   - Optimize scan configuration
   - Benchmark and troubleshoot performance
 
+### Barcode Scanner
+
+- **English**: [Barcode Scanner Mode](./barcode-scanner.en.md)
+  - Enable/disable barcode mode (UI button or `Ctrl+B`)
+  - Barcode payload format (`key=value;key=value` pairs)
+  - Auto-apply values and trigger scan
+  - UI indicators and toast notifications
+  - Technical architecture and troubleshooting
+
 ---
 ## 🚀 Quick Start
 
