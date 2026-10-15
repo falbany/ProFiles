@@ -12,6 +12,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "F5", desc: "Refresh / re-scan file list" },
     { key: "Ctrl + R", desc: "Reload configuration & scan" },
     { key: "Enter", desc: "Execute / launch selected file" },
+    { key: "P", desc: "Open properties for selected file" },
     { key: "↑ / ↓", desc: "Navigate file list" },
     { key: "Ctrl + D", desc: "Focus Directory field" },
     { key: "Ctrl + E", desc: "Focus Extension field" },

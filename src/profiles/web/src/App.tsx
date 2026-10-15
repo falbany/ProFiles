@@ -23,6 +23,7 @@ import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
+import { FilePropertiesModal } from "./components/FilePropertiesModal";
 import { StatusBar } from "./components/StatusBar";
 
 export default function App() {
@@ -51,6 +52,8 @@ export default function App() {
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
   const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
+  const [showPropertiesModal, setShowPropertiesModal] = useState<boolean>(false);
+  const [propertiesFile, setPropertiesFile] = useState<ScannedFileItem | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -127,21 +130,23 @@ export default function App() {
     }
   };
 
-  const loadConfig = async () => {
+  const loadConfig = async (forceUpdate: boolean = false) => {
     try {
       const cfg = await fetchConfig();
       setConfig(cfg);
-      if (!activeDirectory && cfg.active_directory) {
-        setActiveDirectory(cfg.active_directory);
+      
+      // Force update all config values, or only set if empty
+      if (forceUpdate || !activeDirectory) {
+        setActiveDirectory(cfg.active_directory || "");
       }
-      if (!activeExtension && cfg.extensions.length > 0) {
-        setActiveExtension(cfg.extensions[0]);
+      if (forceUpdate || !activeExtension) {
+        setActiveExtension(cfg.extensions.length > 0 ? cfg.extensions[0] : "");
       }
       if (cfg.recursive_search !== undefined) {
         setRecursive(cfg.recursive_search);
       }
-      if (!filterText && cfg.filters.length > 0) {
-        setFilterText(cfg.filters[0]);
+      if (forceUpdate || !filterText) {
+        setFilterText(cfg.filters.length > 0 ? cfg.filters[0] : "");
       }
       return cfg;
     } catch (err: any) {
@@ -154,14 +159,33 @@ export default function App() {
     if (reloading) return;
     setReloading(true);
     showToast("Reloading configuration...");
+    
+    const scanGeneration = beginScan();
+    
     try {
-      const cfg = await loadConfig();
+      // 1. Fetch fresh system info (in case hostname/IP changed)
+      const sys = await fetchSystemInfo();
+      setSystemInfo(sys);
+      
+      // 2. Fetch and force-update configuration
+      const cfg = await loadConfig(true); // forceUpdate = true
+      
       if (cfg) {
         showToast("Configuration reloaded.");
-        await handleScan();
+        // 3. Run fresh scan with new generation ID
+        await runScan(scanGeneration, {
+          directory: activeDirectory,
+          extension: activeExtension,
+          filter_text: filterText,
+          recursive,
+        });
       }
+    } catch (err: any) {
+      showToast(`Failed to reload configuration: ${err.message}`);
     } finally {
       setReloading(false);
+      // 4. Finish scan if it's still the current generation
+      finishScan(scanGeneration);
     }
   };
 
@@ -501,22 +525,9 @@ export default function App() {
     }
   };
 
-  const handleProperties = async (file: ScannedFileItem) => {
-    try {
-      showToast("Fetching properties...");
-      const res = await fetch(`/api/actions/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file_path: file.path }),
-      });
-      if (!res.ok) throw new Error("Failed to fetch metadata");
-      const meta = await res.json();
-      const sizeKb = meta.size_bytes / 1024;
-      const info = `File: ${meta.name}\nPath: ${meta.path}\n\nSize: ${meta.size_bytes.toLocaleString()} bytes (${sizeKb.toFixed(1)} KB)\nModified: ${meta.modified}\nCreated: ${meta.created}`;
-      alert(info);
-    } catch (err: any) {
-      showToast(`Properties failed: ${err.message}`);
-    }
+  const handleProperties = (file: ScannedFileItem) => {
+    setPropertiesFile(file);
+    setShowPropertiesModal(true);
   };
 
   const handleClearFile = async (file: ScannedFileItem) => {
@@ -644,6 +655,16 @@ export default function App() {
       if (e.key === "?" || (e.ctrlKey && e.key === "/")) {
         e.preventDefault();
         setShowShortcuts((prev) => !prev);
+        return;
+      }
+
+      // P: Open file properties (when a file is selected)
+      if (e.key.toLowerCase() === "p" && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        const file = files[selectedIndex];
+        if (file) {
+          e.preventDefault();
+          handleProperties(file);
+        }
         return;
       }
 
@@ -804,6 +825,16 @@ export default function App() {
 
       {/* Shortcuts Modal */}
       <ShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+
+      {/* File Properties Modal */}
+      <FilePropertiesModal
+        isOpen={showPropertiesModal}
+        file={propertiesFile}
+        onClose={() => {
+          setShowPropertiesModal(false);
+          setPropertiesFile(null);
+        }}
+      />
 
       {/* Toast Notification */}
       <div
