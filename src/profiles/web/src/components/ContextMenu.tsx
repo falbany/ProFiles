@@ -9,7 +9,6 @@ import {
   QrCode,
   Terminal,
   Trash2,
-  RotateCcw,
 } from "lucide-react";
 import type { ScannedFileItem } from "../api/types";
 
@@ -27,6 +26,7 @@ interface ContextMenuProps {
   onReveal: (file: ScannedFileItem) => void;
   onOpenFolder: (file: ScannedFileItem) => void;
   onOpenTerminal: (file: ScannedFileItem) => void;
+  onScanDirectory: (directory: string) => void;
   onFilterFolder: (folder: string) => void;
   onFilterExtension: (ext: string) => void;
   onCopyPath: (file: ScannedFileItem, forwardSlash?: boolean) => void;
@@ -36,8 +36,8 @@ interface ContextMenuProps {
   onVerifyHash: (file: ScannedFileItem, algorithm: "md5" | "sha256") => void;
   onProperties: (file: ScannedFileItem) => void;
   onClearFile: (file: ScannedFileItem) => void;
-  onRefreshList: () => void;
   onGenerateBarcode: (file: ScannedFileItem) => void;
+  showToast?: (message: string) => void;
 }
 
 export function ContextMenu({
@@ -48,6 +48,7 @@ export function ContextMenu({
   onReveal,
   onOpenFolder,
   onOpenTerminal,
+  onScanDirectory,
   onFilterFolder,
   onFilterExtension,
   onCopyPath,
@@ -57,8 +58,8 @@ export function ContextMenu({
   onVerifyHash,
   onProperties,
   onClearFile,
-  onRefreshList,
   onGenerateBarcode,
+  showToast,
 }: Readonly<ContextMenuProps>) {
   const [showArgsModal, setShowArgsModal] = useState(false);
   const [argsValue, setArgsValue] = useState("");
@@ -115,12 +116,22 @@ export function ContextMenu({
     return idx !== -1 ? filename.slice(idx) : "";
   };
 
+  const getDirectoryPath = (fullPath: string) => {
+    const lastSep = Math.max(fullPath.lastIndexOf("/"), fullPath.lastIndexOf("\\"));
+    return lastSep !== -1 ? fullPath.slice(0, lastSep) : fullPath;
+  };
+
+  const getRelativeFolderPath = (relPath: string) => {
+    const lastSep = Math.max(relPath.lastIndexOf("/"), relPath.lastIndexOf("\\"));
+    return lastSep !== -1 ? relPath.slice(0, lastSep) : "";
+  };
+
   return (
     <>
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 z-40" 
-        onClick={onClose} 
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
         onContextMenu={(e) => { e.preventDefault(); onClose(); }}
         aria-hidden="true"
       />
@@ -209,16 +220,39 @@ export function ContextMenu({
           <Terminal className="h-3.5 w-3.5 text-emerald-400" />
           <span>Open Terminal in Directory</span>
         </button>
+        <button
+          role="menuitem"
+          onClick={() => { onGenerateBarcode(file); onClose(); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          aria-label={'Generate QR Code'}
+        >
+          <QrCode className="h-3.5 w-3.5 text-fuchsia-400" />
+          <span>Generate QR Code</span>
+        </button>
 
         <div className="my-1 border-t border-line" />
 
-        {/* Filter actions */}
+        {/* Directory & Filter actions */}
         <button
           role="menuitem"
           onClick={() => {
-            const parts = file.path.split(/[/\\]/);
-            const parent = parts.length > 1 ? parts.at(-2) ?? "" : "";
-            if (parent) onFilterFolder(parent);
+            const dir = getDirectoryPath(file.path);
+            onScanDirectory(dir);
+            onClose();
+          }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          aria-label={'Scan to Directory'}
+        >
+          <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
+          <span>Scan to Directory</span>
+        </button>
+        <button
+          role="menuitem"
+          onClick={() => {
+            const relFolder = getRelativeFolderPath(file.rel_path);
+            if (relFolder) {
+              onFilterFolder(relFolder);
+            }
             onClose();
           }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
@@ -251,7 +285,7 @@ export function ContextMenu({
           aria-label={`Copy full path of ${file.filename}`}
         >
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
-          <span>Copy Full Path</span>
+          <span className="truncate">Copy Full Path</span>
         </button>
         <button
           role="menuitem"
@@ -260,7 +294,7 @@ export function ContextMenu({
           aria-label={`Copy path of ${file.filename} with forward slashes`}
         >
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
-          <span>Copy Path (Forward Slashes)</span>
+          <span className="truncate">Copy Path (Forward Slashes)</span>
         </button>
         <button
           role="menuitem"
@@ -269,7 +303,7 @@ export function ContextMenu({
           aria-label={`Copy filename of ${file.filename}`}
         >
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
-          <span>Copy Filename</span>
+          <span className="truncate">Copy Filename</span>
         </button>
         <button
           role="menuitem"
@@ -278,16 +312,21 @@ export function ContextMenu({
           aria-label={`Copy filename of ${file.filename} without extension`}
         >
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
-          <span>Copy Filename (without extension)</span>
+          <span className="truncate">Copy Filename (no ext)</span>
         </button>
         <button
           role="menuitem"
-          onClick={() => { onCopyPath(file, false); onClose(); }}
+          onClick={() => {
+            const dirPath = getDirectoryPath(file.path);
+            navigator.clipboard.writeText(dirPath);
+            onClose();
+            showToast?.('Copy Directory');
+          }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
-          aria-label={`Copy directory path of ${file.filename}`}
+          aria-label={'Copy Directory'}
         >
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
-          <span>Copy Directory</span>
+          <span className="truncate">Copy Directory</span>
         </button>
         <button
           role="menuitem"
@@ -296,7 +335,7 @@ export function ContextMenu({
           aria-label={`Copy URI of ${file.filename}`}
         >
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
-          <span>Copy URI</span>
+          <span className="truncate">Copy URI</span>
         </button>
 
         <div className="my-1 border-t border-line" />
@@ -360,31 +399,13 @@ export function ContextMenu({
           <Trash2 className="h-3.5 w-3.5 text-red-400" />
           <span>Delete</span>
         </button>
-        <button
-          role="menuitem"
-          onClick={() => { onRefreshList(); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
-          aria-label="Refresh file list"
-        >
-          <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
-          <span>Refresh List</span>
-        </button>
-        <button
-          role="menuitem"
-          onClick={() => { onGenerateBarcode(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
-          aria-label={`Generate QR code for ${file.filename}`}
-        >
-          <QrCode className="h-3.5 w-3.5 text-fuchsia-400" />
-          <span>Generate QR Code</span>
-        </button>
       </div>
 
       {/* Launch with Args Modal */}
       {showArgsModal && (
-        <dialog 
+        <dialog
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 rounded-xl"
-          aria-modal="true" 
+          aria-modal="true"
           aria-labelledby="args-modal-title"
         >
           <div className="w-96 rounded-xl border border-line bg-surface p-4 shadow-2xl">

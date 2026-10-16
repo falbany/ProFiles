@@ -462,6 +462,15 @@ export default function App() {
     }
   };
 
+  const handleScanDirectory = async (directory: string) => {
+    try {
+      await handleDirectoryChange(directory);
+      showToast(`Scanned directory: ${directory}`);
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
   const handleFilterFolder = (folder: string) => {
     setFilterText(folder);
     const scanGeneration = beginScan();
@@ -570,9 +579,6 @@ export default function App() {
     }
   };
 
-  const handleRefreshList = () => {
-    handleScan();
-  };
 
   const handleGenerateBarcode = async (file: ScannedFileItem) => {
     try {
@@ -1034,6 +1040,7 @@ export default function App() {
         onReveal={handleReveal}
         onOpenFolder={handleOpenFolder}
         onOpenTerminal={handleOpenTerminal}
+        onScanDirectory={handleScanDirectory}
         onFilterFolder={handleFilterFolder}
         onFilterExtension={handleFilterExtension}
         onCopyPath={handleCopyPath}
@@ -1043,8 +1050,8 @@ export default function App() {
         onVerifyHash={handleVerifyHash}
         onProperties={handleProperties}
         onClearFile={handleClearFile}
-        onRefreshList={handleRefreshList}
         onGenerateBarcode={handleGenerateBarcode}
+        showToast={showToast}
       />
 
       {/* Shortcuts Modal */}
