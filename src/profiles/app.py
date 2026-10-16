@@ -75,6 +75,7 @@ class ProFileApp:
         headless: bool = False,
         server_only: bool = False,
         no_config_propose: bool = False,
+        gui_backend: str = "web",
     ) -> None:
         """Initialize the application.
 
@@ -85,12 +86,14 @@ class ProFileApp:
             headless: Run without GUI (CLI mode).
             server_only: Run only the web server without opening desktop window.
             no_config_propose: Do not offer to create a .profiles at startup.
+            gui_backend: GUI backend to use ('tk' or 'web'). Defaults to 'web'.
         """
         self._config_path = Path(config_path) if config_path is not None else None
         self._log_path = Path(log_path)
         self._headless = headless
         self._server_only = server_only
         self._no_config_propose = no_config_propose
+        self._gui_backend = gui_backend.lower()
         self._config: AppConfig | None = None
         self._window: MainWindow | None = None
         self._logger: logging.Logger | None = None
@@ -245,19 +248,11 @@ class ProFileApp:
                     self._logger.info(result.message)
 
         # Step 5: Create and run the GUI
-        backend = self.resolve_gui_backend()
-        self._logger.info(f"Selected GUI backend: {backend}")
-        if backend == "web":
+        self._logger.info(f"Selected GUI backend: {self._gui_backend}")
+        if self._gui_backend == "web":
             self._run_web_gui()
         else:
             self._run_gui()
-
-    @staticmethod
-    def resolve_gui_backend() -> str:
-        """Resolve active GUI backend ('tk' or 'web'). Defaults to 'web'."""
-        import os
-
-        return os.environ.get("PROFILES_GUI_BACKEND", "web").lower()
 
     def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "0.0.0.0") -> None:
         """Run only the FastAPI background server without opening PyWebView."""
@@ -462,7 +457,9 @@ def main() -> None:
     in pyproject.toml.
 
     Usage:
-        profiles                          Launch GUI
+        profiles                          Launch GUI with web backend (default)
+        profiles --web                    Launch GUI with web backend
+        profiles --tkinter                Launch GUI with Tkinter backend
         profiles --config path/.profiles  Launch with explicit config
         profiles --headless               Headless: scan & launch all
         profiles --headless file.mttl     Launch specific file
@@ -473,7 +470,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  profiles                                  Launch GUI (auto-search config)
+  profiles                                  Launch GUI with web backend (default)
+  profiles --web                            Launch GUI with web backend
+  profiles --tkinter                        Launch GUI with Tkinter backend
   profiles --config /path/to/.profiles      Use explicit config file
   profiles --headless                       Headless: scan & launch all
   profiles --headless file.mttl             Headless: launch specific file
@@ -507,6 +506,16 @@ Examples:
         help="Do not offer to create a .profiles file at startup",
     )
     parser.add_argument(
+        "--tkinter",
+        action="store_true",
+        help="Use Tkinter GUI backend (default is web)",
+    )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Use web GUI backend (default)",
+    )
+    parser.add_argument(
         "file",
         nargs="?",
         default=None,
@@ -519,11 +528,20 @@ Examples:
         init_default_config()
         return
 
+    # Determine GUI backend from arguments
+    if args.tkinter:
+        gui_backend = "tk"
+    elif args.web:
+        gui_backend = "web"
+    else:
+        gui_backend = "web"  # Default to web
+
     app = ProFileApp(
         config_path=args.config,
         headless=args.headless,
         server_only=args.server_only,
         no_config_propose=args.no_config_propose,
+        gui_backend=gui_backend,
     )
     app.run(file=args.file)
 

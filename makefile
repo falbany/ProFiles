@@ -14,7 +14,7 @@ BRIEFCASE := $(UV) run briefcase
 # ============================================
 # Installation
 # ============================================
-.PHONY: install install-system install-system-dev install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-clean
+.PHONY: install install-system install-system-dev uninstall install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-clean
 
 install: ## Install with uv (recommended)
 	@echo "📦 Installing ProFiles with uv..."
@@ -30,6 +30,11 @@ install-system-dev: ## Install system-wide (development mode)
 	@echo "📦 Installing ProFiles system-wide (development mode)..."
 	pip install -e ".[dev]"
 	@echo "✅ Development installation complete!"
+
+uninstall: ## Uninstall ProFiles from system-wide installation
+	@echo "🗑️  Uninstalling ProFiles..."
+	pip uninstall -y profiles
+	@echo "✅ Uninstallation complete!"
 
 install-uv: ## Install uv package manager
 	@echo "🔧 Installing uv package manager..."
