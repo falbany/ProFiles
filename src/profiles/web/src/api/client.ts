@@ -1,4 +1,34 @@
-import type { AppConfigData, ScanResultsResponse, SystemInfo } from "./types";
+import type {
+  AppConfigData,
+  BrowseResult,
+  LogLevel,
+  LogResponse,
+  ScanResultsResponse,
+  SystemInfo,
+} from "./types";
+
+export async function openLogFile(): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/actions/open-log", {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to open log file");
+  return res.json();
+}
+
+/** Fetch the tail of `profiles.log` as structured entries (oldest first). */
+export async function fetchLogEntries(params?: {
+  limit?: number;
+  level?: LogLevel | null;
+  search?: string;
+}): Promise<LogResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.level) search.set("level", params.level);
+  if (params?.search) search.set("search", params.search);
+  const res = await fetch(`/api/logs?${search.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch log entries");
+  return res.json();
+}
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   const res = await fetch("/api/system");
@@ -12,13 +42,40 @@ export async function fetchConfig(): Promise<AppConfigData> {
   return res.json();
 }
 
-export async function selectDirectory(directory: string): Promise<{ active_directory: string }> {
+export async function selectDirectory(directory: string): Promise<AppConfigData> {
   const res = await fetch("/api/config/select-directory", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ directory }),
   });
   if (!res.ok) throw new Error("Failed to select directory");
+  return res.json();
+}
+
+export async function loadConfigFile(configPath: string): Promise<AppConfigData> {
+  const res = await fetch("/api/config/load", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config_path: configPath }),
+  });
+  if (!res.ok) throw new Error("Failed to load config file");
+  return res.json();
+}
+
+export async function createConfigFile(directory: string): Promise<AppConfigData> {
+  const res = await fetch("/api/config/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ directory }),
+  });
+  if (!res.ok) throw new Error("Failed to create config file");
+  return res.json();
+}
+
+export async function browseForConfigFiles(path: string): Promise<BrowseResult> {
+  const url = `/api/fs/browse?path=${encodeURIComponent(path)}&include_hidden=true`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to browse config files");
   return res.json();
 }
 
@@ -37,13 +94,21 @@ export async function executeScan(params: {
   return res.json();
 }
 
+export type SortDirection = "asc" | "desc";
+
 export async function fetchScanResults(params?: {
   offset?: number;
   limit?: number;
+  /** Column name to sort the full result set by (e.g. `"Path"`). */
+  sort_by?: string;
+  /** Sort direction; alternating clicks flip between `"asc"` and `"desc"`. */
+  sort_dir?: SortDirection;
 }): Promise<ScanResultsResponse> {
   const search = new URLSearchParams();
   if (params?.offset != null) search.set("offset", String(params.offset));
   if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.sort_by) search.set("sort_by", params.sort_by);
+  if (params?.sort_dir) search.set("sort_dir", params.sort_dir);
   const qs = search.toString();
   const url = `/api/scan/results${qs ? `?${qs}` : ""}`;
   const res = await fetch(url);
@@ -116,18 +181,21 @@ export async function computeHash(filePath: string, algorithm: "md5" | "sha256")
   return res.json();
 }
 
-export async function openLogFile(): Promise<{ status: string; message: string }> {
-  const res = await fetch("/api/actions/open-log", {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to open log file");
-  return res.json();
-}
-
 export async function openConfigFile(): Promise<{ status: string; message: string }> {
   const res = await fetch("/api/actions/open-config", {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to open config file");
+  return res.json();
+}
+
+/** Generate a QR-code PNG encoding the file location as a ProFiles barcode payload. */
+export async function generateBarcode(filePath: string): Promise<{ image: string; content: string }> {
+  const res = await fetch("/api/actions/barcode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error("Failed to generate barcode");
   return res.json();
 }

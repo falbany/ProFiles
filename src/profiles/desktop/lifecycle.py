@@ -49,7 +49,7 @@ def find_available_port(start_port: int = 8088, max_attempts: int = 50) -> int:
 class BackgroundServer:
     """Spawns and manages a local Uvicorn instance in a background thread."""
 
-    def __init__(self, config: AppConfig, host: str = "127.0.0.1", port: int = 8088) -> None:
+    def __init__(self, config: AppConfig, host: str = "0.0.0.0", port: int = 8088) -> None:
         self.config = config
         self.host = host
         self.port = port if port != 0 else find_available_port(8088)
@@ -75,7 +75,7 @@ class BackgroundServer:
 
         self.state = ServerState(
             config=config,
-            active_directory=active_dir or Path.cwd(),
+            active_directory=active_dir,
         )
         self._app = create_app(self.state)
         self._server: uvicorn.Server | None = None

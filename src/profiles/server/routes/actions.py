@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from profiles.core import actions
+from profiles.core.processing.file_metadata import get_file_metadata
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
 
@@ -62,12 +64,12 @@ async def launch_with_args(payload: LaunchWithArgsRequest) -> dict:
     path = Path(payload.file_path).expanduser().resolve()
     if not path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
-    res = actions.launch_file_with_args(path, payload.args)
-    if res.status != actions.ActionStatus.SUCCESS:
-        raise HTTPException(status_code=400, detail=res.message)
+    launched = actions.launch_file_with_args(path, payload.args)
+    if not launched:
+        raise HTTPException(status_code=400, detail=f"Failed to launch file: {path}")
     return {
-        "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
-        "message": res.message,
+        "status": "success",
+        "message": f"Launched {path}",
     }
 
 
@@ -121,10 +123,42 @@ async def launch_file(payload: LaunchRequest) -> dict:
 async def reveal_file(payload: PathRequest) -> dict:
     """Reveal file in host file explorer."""
     path = Path(payload.file_path).expanduser().resolve()
+    result = actions.reveal_in_file_manager(path)
+    if result.status != actions.ActionStatus.SUCCESS:
+        status_code = 404 if result.status == actions.ActionStatus.NOT_FOUND else 500
+        raise HTTPException(status_code=status_code, detail=result.message)
+    return {
+        "status": str(result.status.value),
+        "message": result.message,
+        "path": str(result.path) if result.path else None,
+    }
+
+
+@router.post("/metadata")
+async def file_metadata(payload: PathRequest) -> dict:
+    """Return basic metadata for a file."""
+    path = Path(payload.file_path).expanduser().resolve()
     if not path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
-    success = open_file_explorer(str(path))
-    return {"success": success}
+    try:
+        return get_file_metadata(path)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read file metadata: {exc}") from exc
+
+
+@router.post("/delete")
+async def delete_file(payload: PathRequest) -> dict:
+    """Delete a file after the client has obtained user confirmation."""
+    path = Path(payload.file_path).expanduser().resolve()
+    result = actions.clear_file(path)
+    if result.status != actions.ActionStatus.SUCCESS:
+        status_code = 404 if result.status == actions.ActionStatus.NOT_FOUND else 400
+        raise HTTPException(status_code=status_code, detail=result.message)
+    return {
+        "status": str(result.status.value),
+        "message": result.message,
+        "path": str(result.path) if result.path else None,
+    }
 
 
 @router.post("/hash")
@@ -150,3 +184,64 @@ async def compute_hash(payload: HashRequest) -> dict:
         raise HTTPException(status_code=500, detail="Error reading file") from exc
 
     return {"algorithm": algo, "hash": hasher.hexdigest()}
+
+
+class BarcodeRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/barcode")
+async def generate_barcode(payload: BarcodeRequest):
+    """Generate a QR code image encoding the file location as a ProFiles barcode payload.
+
+    The QR content uses the structured ``key=value`` format that the ProFiles
+    barcode scanner understands so the recipient can scan it directly into
+    their instance.
+
+    **Payload format:** ``dir=<parent>;filter=<filename>;scan=1``
+    """
+    from io import BytesIO
+
+    import qrcode
+
+    path = Path(payload.file_path).expanduser().resolve()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+
+    # Build the barcode payload that the scanner can parse back
+    if path.is_dir():
+        dir_str = str(path)
+        filename = ""
+        ext = ""
+    else:
+        dir_str = str(path.parent)
+        filename = path.name
+        ext = path.suffix
+
+    parts = [f"dir={dir_str}"]
+    if filename:
+        parts.append(f"filter={filename}")
+    if ext:
+        parts.append(f"ext={ext}")
+    parts.append("scan=1")
+
+    qr_content = ";".join(parts)
+
+    qr = qrcode.QRCode(
+        version=2,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    return {
+        "image": f"data:image/png;base64,{png_b64}",
+        "content": qr_content,
+    }

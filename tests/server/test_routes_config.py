@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from profiles.core.config.models import AppConfig
+from profiles.core.config.models import AppConfig, MachineConfiguration
 from profiles.server.app import create_app
 from profiles.server.state import ServerState
 
@@ -38,6 +38,27 @@ async def test_get_config(test_state: ServerState) -> None:
 
 
 @pytest.mark.anyio
+async def test_get_config_uses_presets_for_selected_scan_directory(test_state: ServerState) -> None:
+    test_state.config.configurations = [
+        MachineConfiguration(
+            name="production",
+            scan=(str(test_state.active_directory),),
+            extensions=("mttl OR mttx", "mttl"),
+            filters=("", "tmp", "prod"),
+        )
+    ]
+    app = create_app(test_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/config")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["extensions"] == ["mttl OR mttx", "mttl", ".mttl"]
+    assert data["filters"] == ["", "tmp", "prod", "ST_PRO", "ST_ENG"]
+
+
+@pytest.mark.anyio
 async def test_select_directory(test_state: ServerState, tmp_path: Path) -> None:
     new_dir = tmp_path / "new_programs"
     new_dir.mkdir()
@@ -51,6 +72,34 @@ async def test_select_directory(test_state: ServerState, tmp_path: Path) -> None
         data = response.json()
         assert data["active_directory"] == str(new_dir)
         assert test_state.active_directory == new_dir
+
+
+@pytest.mark.anyio
+async def test_select_directory_returns_its_configuration_presets(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    new_dir = tmp_path / "new_programs"
+    new_dir.mkdir()
+    test_state.config.configurations = [
+        MachineConfiguration(
+            name="new-programs",
+            scan=(str(new_dir),),
+            extensions=("exe",),
+            filters=("installer",),
+        )
+    ]
+    app = create_app(test_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/select-directory",
+            json={"directory": str(new_dir)},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["extensions"][0] == "exe"
+    assert data["filters"][0] == "installer"
 
 
 @pytest.mark.anyio

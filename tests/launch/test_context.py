@@ -25,11 +25,12 @@ from profiles.launch.context import (
 class TestDocumentsFromArgv:
     def test_parses_profiles_documents(self) -> None:
         paths = _documents_from_argv(["prog", "/a/my.profiles", "/b/proj.profiles"])
-        assert paths == (Path("/a/my.profiles"), Path("/b/proj.profiles"))
+        # Use resolve() so Windows paths include drive letter
+        assert paths == (Path("/a/my.profiles").resolve(), Path("/b/proj.profiles").resolve())
 
     def test_accepts_legacy_yaml_suffix(self) -> None:
         paths = _documents_from_argv(["prog", "/a/config.profiles.yaml"])
-        assert paths == (Path("/a/config.profiles.yaml"),)
+        assert paths == (Path("/a/config.profiles.yaml").resolve(),)
 
     def test_ignores_non_config_argv(self) -> None:
         assert _documents_from_argv(["prog", "file.mttl", "other.txt"]) == ()

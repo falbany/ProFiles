@@ -15,5 +15,7 @@ class ServerState:
 
     config: AppConfig
     active_directory: Path | None = None
+    config_path: Path | None = None
     cached_results: list[Any] = field(default_factory=list)
     scan_in_progress: bool = False
+    scan_generation: int = 0

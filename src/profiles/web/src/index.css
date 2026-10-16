@@ -18,7 +18,7 @@
   --app-text-primary: #f8fafc;
   --app-text-secondary: #cbd5e1; /* slate-300 */
   --app-text-muted: #94a3b8; /* slate-400 */
-  --app-text-faint: #64748b; /* slate-500 */
+  --app-text-faint: #94a3b8; /* slate-400 (was slate-500 #64748b, bumped for >= 4.5:1 contrast) */
   --app-glass: rgb(15 23 42 / 0.6);
   --app-glass-strong: rgb(2 6 23 / 0.9);
   color-scheme: dark;
@@ -33,7 +33,7 @@
   --app-text-primary: #0f172a; /* slate-900 */
   --app-text-secondary: #334155; /* slate-700 */
   --app-text-muted: #475569; /* slate-600 */
-  --app-text-faint: #64748b; /* slate-500 */
+  --app-text-faint: #475569; /* slate-600 (was slate-500 #64748b, bumped for >= 4.5:1 contrast) */
   --app-glass: rgb(255 255 255 / 0.7);
   --app-glass-strong: rgb(248 250 252 / 0.95);
   color-scheme: light;
@@ -60,6 +60,18 @@ body {
   background-color: var(--app-bg);
   color: var(--app-text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Reduce motion for users who prefer minimal animation */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Themed scrollbars */

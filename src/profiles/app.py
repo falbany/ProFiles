@@ -18,6 +18,13 @@ from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry import events
 from profiles.core.telemetry.diagnostics import configure_logger
 from profiles.gui.main_window import MainWindow
+from profiles.launch import (
+    CreationResult,
+    detect_launch_context,
+    propose_creation,
+    resolve_config_path,
+    with_explicit_config,
+)
 from profiles.utils.network import get_hostname, get_username
 
 _DEFAULT_PORT = 8088
@@ -67,6 +74,8 @@ class ProFileApp:
         log_path: str | Path = "profiles.log",
         headless: bool = False,
         server_only: bool = False,
+        no_config_propose: bool = False,
+        gui_backend: str = "web",
     ) -> None:
         """Initialize the application.
 
@@ -76,11 +85,15 @@ class ProFileApp:
             log_path: Path to the log file.
             headless: Run without GUI (CLI mode).
             server_only: Run only the web server without opening desktop window.
+            no_config_propose: Do not offer to create a .profiles at startup.
+            gui_backend: GUI backend to use ('tk' or 'web'). Defaults to 'web'.
         """
         self._config_path = Path(config_path) if config_path is not None else None
         self._log_path = Path(log_path)
         self._headless = headless
         self._server_only = server_only
+        self._no_config_propose = no_config_propose
+        self._gui_backend = gui_backend.lower()
         self._config: AppConfig | None = None
         self._window: MainWindow | None = None
         self._logger: logging.Logger | None = None
@@ -118,11 +131,33 @@ class ProFileApp:
             level=level,
         )
 
+    def _resolve_startup_config(
+        self,
+        explicit: Path | None,
+    ) -> tuple[Path | None, bool]:
+        """Return (config_path, config_is_missing).
+
+        Uses the launch resolution logic to determine which config file
+        should be used for this launch.
+
+        Args:
+            explicit: Value of --config flag, if any.
+
+        Returns:
+            Tuple of (resolved config path or None, whether it's missing).
+        """
+        ctx = detect_launch_context()
+        ctx = with_explicit_config(ctx, explicit)
+        resolved = resolve_config_path(ctx)
+        is_missing = resolved is not None and not resolved.exists()
+        return resolved, is_missing
+
     def _load_configuration(self, logger: logging.Logger) -> AppConfig:
         """Load the application configuration.
 
-        Searches the folder tree for a .profiles file. If none is found,
-        returns an AppConfig with default values.
+        Uses launch-time resolution to determine which config file to use.
+        If no config is found and not in server-only mode, offers to create
+        a starter configuration.
 
         Args:
             logger: Logger instance to use for logging.
@@ -133,14 +168,23 @@ class ProFileApp:
         Exits:
             SystemExit(1) if configuration is invalid.
         """
+        # Use launch resolution instead of bare self._config_path
+        resolved, is_missing = self._resolve_startup_config(self._config_path)
+
+        if is_missing:
+            events.config_invalid(logger, error=f"Config file not found: {resolved}")
+            print(f"ERROR: Configuration file not found: {resolved}", file=sys.stderr)
+            sys.exit(1)
+
         try:
-            config = load_config(self._config_path)
+            config = load_config(resolved)
             events.config_loaded(
                 logger,
-                path=str(self._config_path) if self._config_path else "auto",
-                mode="folder tree search" if not self._config_path else "explicit",
+                path=str(resolved) if resolved else "auto",
+                mode="launch resolution" if resolved else "auto",
                 release=config.release,
             )
+            self._config_path = resolved  # Update for later use
             return config
         except (OSError, ValueError) as exc:
             events.config_invalid(logger, error=str(exc))
@@ -188,25 +232,34 @@ class ProFileApp:
             self._run_server_only()
             return
 
+        # Step 4b: Offer to create config if none found (not in server mode)
+        if self._config is None and not self._no_config_propose:
+            resolved, _ = self._resolve_startup_config(self._config_path)
+            if resolved is None:
+                # No config found anywhere - offer to create one
+                search_dir = Path.cwd()
+                result = propose_creation(search_dir)
+                if isinstance(result, CreationResult) and result.status == "CREATED":
+                    self._logger.info(result.message)
+                    # Reload with the newly created config
+                    self._config_path = result.path
+                    self._config = self._load_configuration(self._logger)
+                elif isinstance(result, CreationResult) and result.status == "SKIPPED":
+                    self._logger.info(result.message)
+
         # Step 5: Create and run the GUI
-        backend = self.resolve_gui_backend()
-        if backend == "web":
+        self._logger.info(f"Selected GUI backend: {self._gui_backend}")
+        if self._gui_backend == "web":
             self._run_web_gui()
         else:
             self._run_gui()
 
-    @staticmethod
-    def resolve_gui_backend() -> str:
-        """Resolve active GUI backend ('tk' or 'web'). Defaults to 'web'."""
-        import os
-
-        return os.environ.get("PROFILES_GUI_BACKEND", "web").lower()
-
-    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "127.0.0.1") -> None:
+    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "0.0.0.0") -> None:
         """Run only the FastAPI background server without opening PyWebView."""
         import time
 
         from profiles.desktop.lifecycle import BackgroundServer, ServerStartError
+        from profiles.utils.network import get_local_ip
 
         assert self._config is not None
         server = BackgroundServer(config=self._config, host=host, port=port)
@@ -216,7 +269,12 @@ class ProFileApp:
             print(f"ERROR: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
 
-        print(f"ProFiles server running at http://{host}:{server.port} (press Ctrl+C to stop)")
+        # Display both local and network URLs
+        local_ip = get_local_ip()
+        print("ProFiles server running at:")
+        print(f"  Local:  http://127.0.0.1:{server.port}")
+        print(f"  Network: http://{local_ip}:{server.port}")
+        print("  Access from other PCs on your network (press Ctrl+C to stop)")
         try:
             while server.is_running:
                 time.sleep(0.5)
@@ -399,7 +457,9 @@ def main() -> None:
     in pyproject.toml.
 
     Usage:
-        profiles                          Launch GUI
+        profiles                          Launch GUI with web backend (default)
+        profiles --web                    Launch GUI with web backend
+        profiles --tkinter                Launch GUI with Tkinter backend
         profiles --config path/.profiles  Launch with explicit config
         profiles --headless               Headless: scan & launch all
         profiles --headless file.mttl     Launch specific file
@@ -410,7 +470,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  profiles                                  Launch GUI (auto-search config)
+  profiles                                  Launch GUI with web backend (default)
+  profiles --web                            Launch GUI with web backend
+  profiles --tkinter                        Launch GUI with Tkinter backend
   profiles --config /path/to/.profiles      Use explicit config file
   profiles --headless                       Headless: scan & launch all
   profiles --headless file.mttl             Headless: launch specific file
@@ -439,6 +501,21 @@ Examples:
         help="Run local FastAPI server only (no desktop window, for browser/PWA use)",
     )
     parser.add_argument(
+        "--no-config-propose",
+        action="store_true",
+        help="Do not offer to create a .profiles file at startup",
+    )
+    parser.add_argument(
+        "--tkinter",
+        action="store_true",
+        help="Use Tkinter GUI backend (default is web)",
+    )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Use web GUI backend (default)",
+    )
+    parser.add_argument(
         "file",
         nargs="?",
         default=None,
@@ -451,10 +528,20 @@ Examples:
         init_default_config()
         return
 
+    # Determine GUI backend from arguments
+    if args.tkinter:
+        gui_backend = "tk"
+    elif args.web:
+        gui_backend = "web"
+    else:
+        gui_backend = "web"  # Default to web
+
     app = ProFileApp(
         config_path=args.config,
         headless=args.headless,
         server_only=args.server_only,
+        no_config_propose=args.no_config_propose,
+        gui_backend=gui_backend,
     )
     app.run(file=args.file)
 

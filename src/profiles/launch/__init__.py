@@ -19,13 +19,16 @@ from profiles.launch.context import (
     detect_launch_context,
     with_explicit_config,
 )
+from profiles.launch.creation import CreationResult, propose_creation
 from profiles.launch.resolution import resolve_config_path
 
 __all__ = [
     "CONFIG_SUFFIX",
     "FALLBACK_CONFIG_SUFFIX",
+    "CreationResult",
     "LaunchContext",
     "detect_launch_context",
+    "propose_creation",
     "resolve_config_path",
     "with_explicit_config",
 ]

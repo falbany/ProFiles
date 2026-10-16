@@ -1,4 +1,4 @@
-import { FileText, Globe, HardDrive, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { FileCog, FileText, Globe, HardDrive, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
@@ -11,10 +11,12 @@ interface StatusBarProps {
   onToggleTheme: () => void;
   onOpenLog: () => void;
   onOpenConfig: () => void;
+  onLoadConfig?: () => void;
   onShowShortcuts: () => void;
   onReloadConfig?: () => void;
   language?: Language;
   onLanguageChange?: (lang: Language) => void;
+  activeConfigName?: string;
 }
 
 export function StatusBar({
@@ -25,10 +27,12 @@ export function StatusBar({
   onToggleTheme,
   onOpenLog,
   onOpenConfig,
+  onLoadConfig,
   onShowShortcuts,
   onReloadConfig,
   language = "en",
   onLanguageChange,
+  activeConfigName,
 }: StatusBarProps) {
   return (
     <footer className="flex items-center justify-between border-t border-line bg-app px-4 py-2 text-[11px] text-ink-muted">
@@ -60,14 +64,14 @@ export function StatusBar({
           <span>Shortcuts</span>
         </button>
 
-        {/* Log Button */}
+        {/* Log Viewer Button */}
         <button
           onClick={onOpenLog}
-          title="Open log file"
-          className="flex items-center gap-1 text-ink-muted hover:text-ink"
+          title="Open the application log viewer"
+          className="flex items-center gap-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
           <FileText className="h-3 w-3" />
-          <span>Log</span>
+          <span>Logs</span>
         </button>
 
         <span className="text-ink-faint">|</span>
@@ -107,6 +111,18 @@ export function StatusBar({
               <span>FR</span>
             </button>
           </div>
+        )}
+
+        {/* Load Config Button */}
+        {onLoadConfig && (
+          <button
+            onClick={onLoadConfig}
+            title={activeConfigName ? `Load a different .profiles file (active: ${activeConfigName})` : "Load a .profiles file"}
+            className="flex items-center gap-1 text-ink-muted hover:text-ink"
+          >
+            <FileCog className="h-3 w-3" />
+            <span>Load config…</span>
+          </button>
         )}
 
         {/* Config Button */}

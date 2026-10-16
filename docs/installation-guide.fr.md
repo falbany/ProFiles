@@ -120,6 +120,41 @@ python -m profiles --help
 
 ---
 
+## Build du Frontend Web
+
+ProFiles inclut un frontend web React qui est automatiquement buildé lors de l'installation.
+
+### Avec npm installé
+
+Si Node.js et npm sont installés sur votre système, le frontend web sera build automatiquement :
+
+```bash
+pip install .
+# Building web frontend...
+# SUCCESS: Web build successful.
+```
+
+### Sans npm
+
+Si npm n'est pas installé, ProFiles utilisera une version pré-buildée du frontend :
+
+```bash
+pip install .
+# WARNING: npm not found. Using pre-built web assets.
+```
+
+Pour avoir la dernière version du frontend, installez Node.js depuis https://nodejs.org.
+
+### Rebuild Manuel
+
+Pour rebuild le frontend après des modifications :
+
+```bash
+python -m profiles.web.build --force
+```
+
+---
+
 ## Dépendances
 
 ### Dépendances principales

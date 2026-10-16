@@ -98,6 +98,34 @@ git clone https://github.com/falbany/ProFiles.git
 cd ProFiles
 poetry install   # creates .venv and installs dependencies
 poetry run ProFiles  # run the app
+```
+
+### Web Frontend Build
+
+ProFiles includes a React web frontend that is automatically built during installation:
+
+**With npm installed:**
+If Node.js and npm are installed, the web frontend will be built automatically:
+```bash
+pip install .
+# Building web frontend...
+# SUCCESS: Web build successful.
+```
+
+**Without npm:**
+If npm is not installed, ProFiles will use pre-built web assets:
+```bash
+pip install .
+# WARNING: npm not found. Using pre-built web assets.
+```
+
+**Manual rebuild:**
+To rebuild the web frontend after modifications:
+```bash
+python -m profiles.web.build --force
+```
+
+Download Node.js from https://nodejs.org
 poetry run pytest --cov  # run tests
 ```
 

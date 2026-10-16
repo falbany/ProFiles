@@ -59,15 +59,20 @@ def _system_python() -> str:
             if path:
                 # Verify it's Python 3.11+ (required for StrEnum)
                 import subprocess
+
                 result = subprocess.run(
-                    [path, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                    [
+                        path,
+                        "-c",
+                        "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
+                    ],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
                 )
                 if result.returncode == 0:
                     version = result.stdout.strip()
-                    major, minor = map(int, version.split('.'))
+                    major, minor = map(int, version.split("."))
                     if major > 3 or (major == 3 and minor >= 11):
                         return path
         except Exception:
@@ -95,13 +100,33 @@ def _add_src_to_path(root: Path) -> None:
             del sys.modules[name]
 
 
+def _choose_working_dir(root: Path) -> Path:
+    """Choose the working directory for this launch.
+
+    Priority:
+        1. The folder the shortcut was double-clicked from (via launch context)
+        2. The shortcut's own directory (fallback)
+
+    Returns:
+        The directory to chdir into before launching the app.
+    """
+    from profiles.launch import detect_launch_context
+
+    ctx = detect_launch_context()
+    target = ctx.working_directory or root
+    return target if target.is_dir() else root
+
+
 def _run() -> None:
     root = _project_root()
 
-    # When invoked as ``python3 ProFiles.pyw`` (already inside the right env),
-    # we run the GUI in-process — no extra subprocess, faster double-click.
+    # Add src/ to path first (needed for imports regardless of CWD)
     _add_src_to_path(root)
-    os.chdir(root)
+
+    # Choose working directory based on launch context
+    # This makes the shortcut use the invoking folder, not its own
+    target_dir = _choose_working_dir(root)
+    os.chdir(target_dir)
 
     try:
         from profiles.app import ProFileApp  # noqa: E402
@@ -116,6 +141,7 @@ def _run() -> None:
     except Exception as e:
         print(f"ERROR: Failed to import profiles: {e}")
         import traceback
+
         traceback.print_exc()
         print("\nPress Enter to exit...")
         input()
@@ -127,6 +153,7 @@ def _run() -> None:
     except Exception as e:
         print(f"ERROR: Application failed to start: {e}")
         import traceback
+
         traceback.print_exc()
         print("\nPress Enter to exit...")
         input()
@@ -155,6 +182,7 @@ if __name__ == "__main__":
         # This prevents the terminal from closing immediately on double-click
         print(f"ERROR: ProFiles failed to start: {e}")
         import traceback
+
         traceback.print_exc()
         print("\nPress Enter to exit...")
         input()  # Wait for user to press Enter
