@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Create Web Build Integration Plan",
+			"type": "shell",
+			"command": "echo \"Starting plan creation...\""
+		}
+	]
+}

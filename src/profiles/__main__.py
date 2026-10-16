@@ -11,22 +11,19 @@ package's source directory first, then reimports.
 
 from __future__ import annotations
 
-import importlib
 import sys
 from pathlib import Path
 
-from profiles.app import main
+# Force the correct profiles package to be loaded first
+here = str(Path(__file__).resolve().parent.parent)
+sys.path[:] = [here] + [p for p in sys.path if p != here]
 
-_loaded = importlib.import_module("profiles")
-if not hasattr(_loaded, "__path__"):
-    here = str(Path(__file__).resolve().parent.parent)
-    sys.path[:] = [here] + [p for p in sys.path if p != here]
-    for name in list(sys.modules):
-        if name == "profiles" or name.startswith("profiles."):
-            del sys.modules[name]
-    # Reimport after path fix
-    from profiles.app import main as _main
+# Clear any previously loaded profiles modules
+for name in list(sys.modules):
+    if name == "profiles" or name.startswith("profiles."):
+        del sys.modules[name]
 
-    main = _main
+# Now import from the correct location
+from profiles.app import main  # noqa: E402
 
 main()

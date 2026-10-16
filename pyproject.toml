@@ -3,7 +3,7 @@ requires = ["hatchling", "nodeenv>=1.8.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "profiles"
+name = "profiles-app"
 version = "2026.8.0"
 description = "ProFiles - A modern GUI launcher for production test programs"
 readme = "README.md"
@@ -45,6 +45,7 @@ Repository = "https://github.com/falbany/profiles.git"
 
 [project.scripts]
 ProFiles = "profiles.app:main"
+profiles = "profiles.app:main"
 
 [project.optional-dependencies]
 dev = [
@@ -63,8 +64,11 @@ dev = [
 path = "src/profiles/web/build_hook.py"
 
 [tool.hatch.build.targets.wheel]
-include = ["src/profiles"]
+packages = ["src/profiles"]
 artifacts = ["src/profiles/web/dist"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/profiles" = "profiles_app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

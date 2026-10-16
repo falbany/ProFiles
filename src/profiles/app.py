@@ -246,6 +246,7 @@ class ProFileApp:
 
         # Step 5: Create and run the GUI
         backend = self.resolve_gui_backend()
+        self._logger.info(f"Selected GUI backend: {backend}")
         if backend == "web":
             self._run_web_gui()
         else:
