@@ -1,4 +1,4 @@
-import { ArrowRight, Folder, FolderOpen, Home, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
+import { ArrowRight, Folder, FolderOpen, Home, Play, QrCode, RefreshCw, Search, Terminal, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 
@@ -40,6 +40,7 @@ interface ControlsBarProps {
   onBrowseDirectory?: () => void;
   onGoToHomeDirectory?: () => void;
   onOpenActiveDirectory?: () => void;
+  onOpenTerminal?: (directory: string) => void;
   barcodeMode: boolean;
   onBarcodeToggle: () => void;
   autoRescanActive: boolean;
@@ -53,7 +54,7 @@ export function ControlsBar({
   extensions,
   activeExtension,
   onExtensionChange,
-  filterOptions = [],
+  filterOptions,
   filterText,
   onFilterTextChange,
   recursive,
@@ -63,6 +64,7 @@ export function ControlsBar({
   onBrowseDirectory,
   onGoToHomeDirectory,
   onOpenActiveDirectory,
+  onOpenTerminal,
   barcodeMode,
   onBarcodeToggle,
   autoRescanActive,
@@ -117,7 +119,21 @@ export function ControlsBar({
           </Tooltip>
         )}
 
-        {/* Go to user home directory (right of Browse) */}
+        {/* Open active directory in terminal (right of Browse) */}
+        {onOpenTerminal && (
+          <Tooltip text="Open the active directory in a terminal" block={false}>
+            <button
+              type="button"
+              onClick={() => onOpenTerminal(activeDirectory)}
+              aria-label="Open directory in terminal"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+            </button>
+          </Tooltip>
+        )}
+
+        {/* Go to user home directory (right of Terminal) */}
         {onGoToHomeDirectory && (
           <Tooltip text="Set directory to your home folder" block={false}>
             <button
@@ -155,7 +171,7 @@ export function ControlsBar({
               id="filter-combobox"
               ariaLabel="File filter"
               value={filterText}
-              options={filterOptions}
+              options={filterOptions || []}
               onChange={onFilterTextChange}
               placeholder="Filter files: keyword, a OR b, -tag, exact phrase..."
               className="w-full"

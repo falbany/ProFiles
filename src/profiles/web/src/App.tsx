@@ -595,6 +595,16 @@ export default function App() {
     }
   };
 
+  const handleOpenDirectoryInTerminal = async (directory: string) => {
+    if (!directory) return;
+    try {
+      await openTerminal(directory);
+      showToast("Terminal opened in directory.");
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
   const handleGoToHomeDirectory = async () => {
     try {
       // "~" resolves to the OS home directory on the backend via expanduser()
@@ -930,6 +940,7 @@ export default function App() {
         onBrowseDirectory={handleBrowseDirectory}
         onGoToHomeDirectory={handleGoToHomeDirectory}
         onOpenActiveDirectory={handleOpenActiveDirectory}
+        onOpenTerminal={handleOpenDirectoryInTerminal}
         barcodeMode={barcodeMode}
         onBarcodeToggle={handleBarcodeToggle}
         autoRescanActive={autoRescanInterval > 0}

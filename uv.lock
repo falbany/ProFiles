@@ -718,7 +718,7 @@ wheels = [
 ]
 
 [[package]]
-name = "profiles"
+name = "profiles-app"
 version = "2026.8.0"
 source = { editable = "." }
 dependencies = [

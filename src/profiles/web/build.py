@@ -13,12 +13,45 @@ WEB_ROOT = Path(__file__).resolve().parent
 
 
 def _needs_rebuild(marker_file: Path) -> bool:
-    """Check if rebuild is needed."""
+    """Check if rebuild is needed by scanning all source files.
+
+    Checks:
+    - package.json (dependency changes)
+    - All TypeScript/React source files (.tsx, .ts)
+    - Stylesheet files (.css, .scss, .sass)
+    - HTML template files (.html)
+
+    Returns:
+        True if any source file is newer than the marker file
+    """
     if not marker_file.exists():
         return True
 
+    marker_mtime = marker_file.stat().st_mtime
+
+    # Check package.json for dependency changes
     package_json = WEB_ROOT / "package.json"
-    return package_json.stat().st_mtime > marker_file.stat().st_mtime
+    if package_json.exists() and package_json.stat().st_mtime > marker_mtime:
+        return True
+
+    # Check all source files for modifications
+    source_patterns = [
+        "**/*.tsx",  # React/TypeScript JSX
+        "**/*.ts",  # TypeScript
+        "**/*.css",  # Stylesheets
+        "**/*.scss",  # Sass styles
+        "**/*.html",  # HTML templates
+    ]
+
+    for pattern in source_patterns:
+        for source_file in WEB_ROOT.glob(pattern):
+            # Skip node_modules and dist directories
+            if "node_modules" in str(source_file) or "dist" in str(source_file):
+                continue
+            if source_file.stat().st_mtime > marker_mtime:
+                return True
+
+    return False
 
 
 def main() -> int:
