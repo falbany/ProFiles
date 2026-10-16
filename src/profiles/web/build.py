@@ -36,17 +36,17 @@ def main() -> int:
 
     # Check npm availability
     if shutil.which("npm") is None:
-        print("❌ ERROR: npm not found.", file=sys.stderr)
+        print("ERROR: npm not found.", file=sys.stderr)
         print("   Please install Node.js: https://nodejs.org", file=sys.stderr)
         return 1
 
     # Skip if not forced and no rebuild needed
     if not args.force and not _needs_rebuild(marker_file):
-        print("ℹ️  Web assets are up to date. Use --force to rebuild.")
+        print("INFO: Web assets are up to date. Use --force to rebuild.")
         return 0
 
     # Run build
-    print("🌐 Building web frontend...")
+    print("Building web frontend...")
     try:
         # Install dependencies
         if not (WEB_ROOT / "node_modules").is_dir():
@@ -60,10 +60,10 @@ def main() -> int:
         subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True)
 
         marker_file.touch()
-        print("✅ Build successful.")
+        print("SUCCESS: Build successful.")
         return 0
     except subprocess.CalledProcessError as error:
-        print(f"❌ Build failed: {error}", file=sys.stderr)
+        print(f"ERROR: Build failed: {error}", file=sys.stderr)
         return error.returncode
 
 

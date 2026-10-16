@@ -130,8 +130,8 @@ Si Node.js et npm sont installés sur votre système, le frontend web sera build
 
 ```bash
 pip install .
-# 🌐 Building web frontend...
-# ✅ Web build successful.
+# Building web frontend...
+# SUCCESS: Web build successful.
 ```
 
 ### Sans npm
@@ -140,7 +140,7 @@ Si npm n'est pas installé, ProFiles utilisera une version pré-buildée du fron
 
 ```bash
 pip install .
-# ⚠️ WARNING: npm not found. Using pre-built web assets.
+# WARNING: npm not found. Using pre-built web assets.
 ```
 
 Pour avoir la dernière version du frontend, installez Node.js depuis https://nodejs.org.

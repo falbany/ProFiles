@@ -108,15 +108,15 @@ ProFiles includes a React web frontend that is automatically built during instal
 If Node.js and npm are installed, the web frontend will be built automatically:
 ```bash
 pip install .
-# 🌐 Building web frontend...
-# ✅ Web build successful.
+# Building web frontend...
+# SUCCESS: Web build successful.
 ```
 
 **Without npm:**
 If npm is not installed, ProFiles will use pre-built web assets:
 ```bash
 pip install .
-# ⚠️ WARNING: npm not found. Using pre-built web assets.
+# WARNING: npm not found. Using pre-built web assets.
 ```
 
 **Manual rebuild:**
