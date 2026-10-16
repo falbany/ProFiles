@@ -5,6 +5,7 @@ import {
   fetchConfig,
   fetchScanResults,
   fetchSystemInfo,
+  generateBarcode,
   launchFile,
   launchWithArgs,
   openConfigFile,
@@ -21,10 +22,14 @@ import { ControlsBar } from "./components/ControlsBar";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
+import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
 import { StatusBar } from "./components/StatusBar";
+import { TimerModal } from "./components/TimerModal";
+import { parseBarcodeInput } from "./utils/barcodeScanner";
+import { exportToCsv } from "./utils/exportCsv";
 
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -54,6 +59,21 @@ export default function App() {
   const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
   const [showPropertiesModal, setShowPropertiesModal] = useState<boolean>(false);
   const [propertiesFile, setPropertiesFile] = useState<ScannedFileItem | null>(null);
+  const [showLogViewer, setShowLogViewer] = useState<boolean>(false);
+  const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
+
+  // Barcode scanner mode — when active, the next Enter-terminated
+  // keypress sequence is captured as barcode input.
+  const [barcodeMode, setBarcodeMode] = useState<boolean>(false);
+  const barcodeBufferRef = useRef<string>("");
+
+  // QR code modal — shows a generated QR for sharing a file location.
+  const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
+  const [barcodeImage, setBarcodeImage] = useState<{ image: string; content: string } | null>(null);
+
+  // Timer — periodic rescan interval in seconds (0 = disabled).
+  const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -554,6 +574,174 @@ export default function App() {
     handleScan();
   };
 
+  const handleGenerateBarcode = async (file: ScannedFileItem) => {
+    try {
+      const result = await generateBarcode(file.path);
+      setBarcodeImage({ image: result.image, content: result.content });
+      setShowBarcodeModal(true);
+      showToast("QR code generated.");
+    } catch (err: any) {
+      showToast(`Failed to generate QR: ${err.message}`);
+    }
+  };
+
+  const handleOpenActiveDirectory = async () => {
+    if (!activeDirectory) return;
+    try {
+      await openFolder(activeDirectory);
+      showToast("Directory opened in file manager.");
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
+  const handleGoToHomeDirectory = async () => {
+    try {
+      // "~" resolves to the OS home directory on the backend via expanduser()
+      await handleDirectoryChange("~");
+      showToast("Directory set to home folder.");
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
+  const handleExport = () => {
+    if (files.length === 0) {
+      showToast("No files to export.");
+      return;
+    }
+    try {
+      const csvContent = exportToCsv(files, config?.column_names || [], config ?? undefined, filterText);
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `profiles-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-")}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Exported ${files.length} files to CSV.`);
+    } catch (err: any) {
+      showToast(`Export failed: ${err.message}`);
+    }
+  };
+
+  const handleBarcodeToggle = () => {
+    setBarcodeMode((prev) => {
+      const next = !prev;
+      if (next) {
+        barcodeBufferRef.current = "";
+        showToast("Barcode mode ON — scan a barcode now.");
+      } else {
+        barcodeBufferRef.current = "";
+        showToast("Barcode mode OFF.");
+      }
+      return next;
+    });
+  };
+
+  const applyBarcodeValues = (values: Partial<{
+    filter: string;
+    ext: string;
+    recursive: boolean;
+    dir: string;
+    scan: boolean;
+  }>) => {
+    if (values.filter !== undefined) setFilterText(values.filter);
+    if (values.ext !== undefined) setActiveExtension(values.ext);
+    if (values.recursive !== undefined) setRecursive(values.recursive);
+    if (values.dir !== undefined) setActiveDirectory(values.dir);
+
+    // If scan=1 or any value was applied, trigger a rescan
+    const shouldScan = values.scan === true ||
+      values.filter !== undefined ||
+      values.ext !== undefined ||
+      values.recursive !== undefined ||
+      values.dir !== undefined;
+
+    if (shouldScan) {
+      // Disable barcode mode after applying
+      setBarcodeMode(false);
+      barcodeBufferRef.current = "";
+      // Use a short timeout to let state propagate before scanning
+      setTimeout(() => {
+        void handleScan();
+      }, 50);
+    }
+  };
+
+  // Barcode scanner input — global keypress listener when barcodeMode is active.
+  // USB/wedge scanners emit keystrokes + Enter; we accumulate until Enter.
+  useEffect(() => {
+    if (!barcodeMode) return;
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        const raw = barcodeBufferRef.current;
+        if (!raw) {
+          barcodeBufferRef.current = "";
+          return;
+        }
+
+        e.preventDefault();
+        barcodeBufferRef.current = "";
+
+        const result = parseBarcodeInput(raw);
+
+        if (result.isPlainFilter) {
+          showToast(`Barcode filter: ${result.values.filter}`);
+          setFilterText(result.values.filter || "");
+          setBarcodeMode(false);
+          setTimeout(() => void handleScan(), 50);
+        } else {
+          // Parsed key=value pairs — apply all and auto-scan
+          const vals = result.values;
+          const summary = Object.entries(vals)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(", ");
+          showToast(`Barcode applied: ${summary}`);
+          applyBarcodeValues(vals);
+        }
+      } else if (e.key === "Escape") {
+        // Allow user to cancel barcode mode
+        setBarcodeMode(false);
+        barcodeBufferRef.current = "";
+        showToast("Barcode mode cancelled.");
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Accumulate printable characters
+        barcodeBufferRef.current += e.key;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeydown, true);
+    return () => document.removeEventListener("keydown", handleKeydown, true);
+  }, [barcodeMode]);
+
+  // Timer — periodic rescan effect.
+  useEffect(() => {
+    if (autoRescanInterval > 0) {
+      timerRef.current = setInterval(() => {
+        void handleScan();
+      }, autoRescanInterval * 1000);
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [autoRescanInterval]);
+
+  const handleTimerSet = (intervalSeconds: number) => {
+    setAutoRescanInterval(intervalSeconds);
+    if (intervalSeconds > 0) {
+      showToast(`Auto-rescan every ${intervalSeconds}s.`);
+    } else {
+      showToast("Auto-rescan disabled.");
+    }
+  };
+
   // Keyboard navigation & global shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -561,6 +749,8 @@ export default function App() {
       if (e.key === "Escape") {
         setContextMenuPos(null);
         setShowShortcuts(false);
+        setShowLogViewer(false);
+        setShowTimerModal(false);
         return;
       }
 
@@ -630,10 +820,10 @@ export default function App() {
         return;
       }
 
-      // Ctrl + Shift + L: Open log
+      // Ctrl + Shift + L: Open the log viewer
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
         e.preventDefault();
-        openLogFile().then((r) => showToast(r.message));
+        setShowLogViewer((prev) => !prev);
         return;
       }
 
@@ -648,6 +838,27 @@ export default function App() {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
         e.preventDefault();
         setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+        return;
+      }
+
+      // Ctrl + B: Toggle barcode scanner mode
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setBarcodeMode((prev) => !prev);
+        return;
+      }
+
+      // Ctrl + T: Open timer modal
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        setShowTimerModal(true);
+        return;
+      }
+
+      // Ctrl + H: Go to home directory
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        void handleGoToHomeDirectory();
         return;
       }
 
@@ -682,7 +893,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [files, selectedIndex, activeDirectory, activeExtension, filterText, recursive]);
+  }, [files, selectedIndex, activeDirectory, activeExtension, filterText, recursive, barcodeMode]);
 
   // Apply theme attribute + persist preference
   useEffect(() => {
@@ -717,6 +928,12 @@ export default function App() {
         onScan={handleScan}
         scanning={scanning}
         onBrowseDirectory={handleBrowseDirectory}
+        onGoToHomeDirectory={handleGoToHomeDirectory}
+        onOpenActiveDirectory={handleOpenActiveDirectory}
+        barcodeMode={barcodeMode}
+        onBarcodeToggle={handleBarcodeToggle}
+        autoRescanActive={autoRescanInterval > 0}
+        onTimerClick={() => setShowTimerModal(true)}
       />
 
       <FileListTable
@@ -753,6 +970,8 @@ export default function App() {
         onExecute={handleExecute}
         scanning={scanning}
         hasSelection={files.length > 0}
+        fileCount={totalCount}
+        onExport={handleExport}
       />
 
       <StatusBar
@@ -761,14 +980,7 @@ export default function App() {
         fileCount={totalCount}
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
-        onOpenLog={async () => {
-          try {
-            const res = await openLogFile();
-            showToast(res.message);
-          } catch (err: any) {
-            showToast(`Failed to open log: ${err.message}`);
-          }
-        }}
+        onOpenLog={() => setShowLogViewer(true)}
         onOpenConfig={async () => {
           try {
             const res = await openConfigFile();
@@ -821,6 +1033,7 @@ export default function App() {
         onProperties={handleProperties}
         onClearFile={handleClearFile}
         onRefreshList={handleRefreshList}
+        onGenerateBarcode={handleGenerateBarcode}
       />
 
       {/* Shortcuts Modal */}
@@ -835,6 +1048,62 @@ export default function App() {
           setPropertiesFile(null);
         }}
       />
+
+      {/* Timer Modal */}
+      <TimerModal
+        isOpen={showTimerModal}
+        currentInterval={autoRescanInterval}
+        onClose={() => setShowTimerModal(false)}
+        onSetInterval={handleTimerSet}
+      />
+
+      {/* Log Viewer Modal */}
+      <LogViewerModal
+        isOpen={showLogViewer}
+        onClose={() => setShowLogViewer(false)}
+        onOpenExternally={() => {
+          openLogFile().then((r) => showToast(r.message));
+        }}
+      />
+
+      {/* QR Code Modal */}
+      {showBarcodeModal && barcodeImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => {
+            setShowBarcodeModal(false);
+            setBarcodeImage(null);
+          }}
+        >
+          <div
+            className="w-96 max-w-[90vw] rounded-xl border border-line bg-surface p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-4 text-center text-sm font-semibold text-ink">
+              Scan to open in ProFiles
+            </h3>
+            <div className="flex justify-center">
+              <img
+                src={barcodeImage.image}
+                alt="QR code encoding file location"
+                className="h-48 w-48 border border-line bg-white p-2"
+              />
+            </div>
+            <p className="mb-4 break-all text-center text-xs text-ink-muted">
+              {barcodeImage.content}
+            </p>
+            <button
+              onClick={() => {
+                setShowBarcodeModal(false);
+                setBarcodeImage(null);
+              }}
+              className="w-full rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       <div

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from profiles.server.routes.actions import router as actions_router
 from profiles.server.routes.config import router as config_router
 from profiles.server.routes.fs import router as fs_router
+from profiles.server.routes.logs import router as logs_router
 from profiles.server.routes.scan import router as scan_router
 from profiles.server.routes.system import router as system_router
 from profiles.server.state import ServerState
@@ -41,6 +42,7 @@ def create_app(state: ServerState, static_dir: Path | None = None) -> FastAPI:
     app.include_router(fs_router)
     app.include_router(scan_router)
     app.include_router(actions_router)
+    app.include_router(logs_router)
 
     # Mount compiled web frontend
     from profiles.server.static import mount_static_app

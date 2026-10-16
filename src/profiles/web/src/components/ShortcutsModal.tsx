@@ -18,9 +18,12 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "Ctrl + E", desc: "Focus Extension field" },
     { key: "Ctrl + F", desc: "Focus Filter / Search field" },
     { key: "Ctrl + L", desc: "Focus File List" },
-    { key: "Ctrl + Shift + L", desc: "Open log file" },
+    { key: "Ctrl + Shift + L", desc: "Open the log viewer" },
     { key: "Ctrl + ,", desc: "Open config file" },
     { key: "Ctrl + Shift + T", desc: "Toggle theme (Dark / Light)" },
+    { key: "Ctrl + B", desc: "Toggle barcode scanner mode" },
+    { key: "Ctrl + T", desc: "Open auto-rescan timer modal" },
+    { key: "Ctrl + H", desc: "Set directory to home folder" },
     { key: "? or Ctrl + /", desc: "Show keyboard shortcuts" },
     { key: "Escape", desc: "Close dialogs / context menu" },
   ];

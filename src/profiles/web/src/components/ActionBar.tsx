@@ -1,15 +1,19 @@
-import { Play, Sparkles } from "lucide-react";
+import { Download, Play, Sparkles } from "lucide-react";
 
 interface ActionBarProps {
   onExecute: () => void;
   scanning: boolean;
   hasSelection: boolean;
+  fileCount: number;
+  onExport?: () => void;
 }
 
 export function ActionBar({
   onExecute,
   scanning,
   hasSelection,
+  fileCount,
+  onExport,
 }: ActionBarProps) {
   return (
     <div className="flex items-center justify-between border-t border-line bg-surface-glass px-4 py-2.5 text-xs">
@@ -19,6 +23,16 @@ export function ActionBar({
             <Sparkles className="h-3.5 w-3.5 animate-pulse motion-reduce:animate-none" />
             <span>Scanning directory...</span>
           </div>
+        )}
+        {onExport && (
+          <button
+            onClick={onExport}
+            disabled={fileCount === 0 || scanning}
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-elevated px-3 py-1.5 text-xs font-medium text-ink-secondary hover:border-indigo-500 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export CSV</span>
+          </button>
         )}
       </div>
 

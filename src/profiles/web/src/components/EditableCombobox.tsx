@@ -116,7 +116,7 @@ export function EditableCombobox({
           setIsOpen(true);
         }}
         onKeyDown={handleKeyDown}
-        className={`min-w-0 flex-1 rounded-l-md border border-line bg-elevated px-3 py-1.5 text-ink outline-none focus:border-indigo-500 ${inputClassName}`}
+        className={`min-w-0 flex-1 rounded-l-md border border-line bg-elevated px-3 py-1.5 text-ink outline-none transition-colors hover:bg-surface-strong focus:border-indigo-500 ${inputClassName}`}
       />
       <button
         type="button"
@@ -125,7 +125,7 @@ export function EditableCombobox({
         title={`Show ${ariaLabel.toLowerCase()} options`}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => (isOpen ? setIsOpen(false) : openList())}
-        className="shrink-0 rounded-r-md border border-l-0 border-line bg-elevated px-2 text-ink-muted hover:bg-surface-strong hover:text-ink focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+        className="shrink-0 rounded-r-md border border-l-0 border-line bg-elevated px-2 text-ink-muted hover:bg-surface-strong hover:text-ink focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 transition-colors"
       >
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>

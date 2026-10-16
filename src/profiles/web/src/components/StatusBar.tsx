@@ -64,14 +64,14 @@ export function StatusBar({
           <span>Shortcuts</span>
         </button>
 
-        {/* Log Button */}
+        {/* Log Viewer Button */}
         <button
           onClick={onOpenLog}
-          title="Open log file"
-          className="flex items-center gap-1 text-ink-muted hover:text-ink"
+          title="Open the application log viewer"
+          className="flex items-center gap-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
           <FileText className="h-3 w-3" />
-          <span>Log</span>
+          <span>Logs</span>
         </button>
 
         <span className="text-ink-faint">|</span>

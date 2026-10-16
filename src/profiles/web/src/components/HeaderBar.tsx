@@ -26,9 +26,25 @@ export function HeaderBar({ title, release, systemInfo }: HeaderBarProps) {
         {systemInfo && (
           <div className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-ink-secondary">
             <Activity className="h-3 w-3 text-emerald-400" />
-            <span>{systemInfo.hostname}</span>
+            <a
+              href={`http://${systemInfo.hostname}:${window.location.port}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ProFiles on ${systemInfo.hostname}`}
+              className="font-mono hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 py-0.5"
+            >
+              {systemInfo.hostname}
+            </a>
             <span className="text-ink-faint">|</span>
-            <span className="font-mono text-ink-muted">{systemInfo.ip}</span>
+            <a
+              href={`http://${systemInfo.ip}:${window.location.port}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ProFiles on ${systemInfo.ip}`}
+              className="font-mono hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 py-0.5"
+            >
+              {systemInfo.ip}
+            </a>
           </div>
         )}
       </div>

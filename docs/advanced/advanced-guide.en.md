@@ -5,6 +5,7 @@
 > ⚙️ **[Configuration](../configuration-profile.en.md)** |
 > 🔧 **[Hooks](../hooks-guide.en.md)** |
 > 📊 **[Dynamic Columns](../columns-guide.en.md)** |
+> � **[Barcode Scanner](../barcode-scanner.en.md)** |
 > 🚀 **Advanced Guide** |
 > 🇫🇷 **[Version Française](./guide-avance.fr.md)**
 
@@ -15,6 +16,7 @@ This guide covers advanced usage patterns, automation, and custom front-end deve
 ## Table of Contents
 
 - [Headless Mode for Automation](#headless-mode-for-automation)
+- [Barcode Scanner Mode](#barcode-scanner-mode)
 - [Custom Front-Ends](#custom-front-ends)
 - [Programmatic API Usage](#programmatic-api-usage)
 - [Performance Tuning](#performance-tuning)
@@ -42,6 +44,28 @@ python -m profiles --headless --config /path/to/.profiles
 - **Scheduled tasks**: Run periodic scans or launches
 - **Batch processing**: Process multiple files programmatically
 - **Remote execution**: Run on servers without display capabilities
+
+---
+
+## Barcode Scanner Mode
+
+> 📖 **Full documentation**: [Barcode Scanner Mode](../barcode-scanner.en.md)
+
+ProFiles supports USB HID barcode scanner input as a keyboard wedge device. When enabled (via the `QrCode` button in the ControlsBar or `Ctrl+B`), barcode scans are parsed into `key=value` pairs and auto-applied to the scan controls, optionally triggering an immediate scan.
+
+**Quick reference — payload format:**
+
+```
+filter=.py;ext=toml;recursive=0;dir=/path/to/scannedir;scan=1
+```
+
+| Key | Aliases | Description |
+|-----|---------|-------------|
+| `filter` | `query`, `search` | Text filter for the file list |
+| `ext` | `extension`, `filetype` | File extension filter |
+| `recursive` | `recurse` | `1` for recursive, `0` for non-recursive |
+| `dir` | `directory`, `path` | Directory path (`~` expands to home) |
+| `scan` | — | `1` to auto-trigger scan, `0` to apply only |
 
 ---
 

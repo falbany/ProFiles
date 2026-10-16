@@ -1,4 +1,34 @@
-import type { AppConfigData, BrowseResult, ScanResultsResponse, SystemInfo } from "./types";
+import type {
+  AppConfigData,
+  BrowseResult,
+  LogLevel,
+  LogResponse,
+  ScanResultsResponse,
+  SystemInfo,
+} from "./types";
+
+export async function openLogFile(): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/actions/open-log", {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to open log file");
+  return res.json();
+}
+
+/** Fetch the tail of `profiles.log` as structured entries (oldest first). */
+export async function fetchLogEntries(params?: {
+  limit?: number;
+  level?: LogLevel | null;
+  search?: string;
+}): Promise<LogResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.level) search.set("level", params.level);
+  if (params?.search) search.set("search", params.search);
+  const res = await fetch(`/api/logs?${search.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch log entries");
+  return res.json();
+}
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   const res = await fetch("/api/system");
@@ -151,18 +181,21 @@ export async function computeHash(filePath: string, algorithm: "md5" | "sha256")
   return res.json();
 }
 
-export async function openLogFile(): Promise<{ status: string; message: string }> {
-  const res = await fetch("/api/actions/open-log", {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to open log file");
-  return res.json();
-}
-
 export async function openConfigFile(): Promise<{ status: string; message: string }> {
   const res = await fetch("/api/actions/open-config", {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to open config file");
+  return res.json();
+}
+
+/** Generate a QR-code PNG encoding the file location as a ProFiles barcode payload. */
+export async function generateBarcode(filePath: string): Promise<{ image: string; content: string }> {
+  const res = await fetch("/api/actions/barcode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error("Failed to generate barcode");
   return res.json();
 }

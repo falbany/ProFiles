@@ -17,6 +17,7 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pywebview>=5.1.0",
     "sse-starlette>=2.1.0",
+    "qrcode[pil]>=7.5.0",
 ]
 license = "MIT"
 authors = [

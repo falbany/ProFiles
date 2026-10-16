@@ -5,6 +5,7 @@
 > ⚙️ **[Configuration](../configuration-profile.fr.md)** |
 > 🔧 **[Hooks](../hooks-guide.en.md)** |
 > 📊 **[Colonnes Dynamiques](../columns-guide.fr.md)** |
+> � **[Lecteur de Codes-barres](../barcode-scanner.fr.md)** |
 > 🚀 **Guide Avancé** |
 > 🇬🇧 **[English Version](./advanced-guide.en.md)**
 
@@ -15,6 +16,7 @@ Ce guide couvre les modèles d'utilisation avancés, l'automatisation et le dév
 ## Table des Matières
 
 - [Mode Headless pour l'Automatisation](#mode-headless-pour-lautomatisation)
+- [Mode Lecteur de Codes-barres](#mode-lecteur-de-codes-barres)
 - [Interfaces Personnalisées](#interfaces-personnalisées)
 - [Utilisation de l'API Programmatique](#utilisation-de-lapi-programmatique)
 - [Optimisation des Performances](#optimisation-des-performances)
@@ -42,6 +44,28 @@ python -m profiles --headless --config /chemin/vers/.profiles
 - **Tâches planifiées** : Exécuter des scans ou lancements périodiques
 - **Traitement par lots** : Traiter plusieurs fichiers programmatiquement
 - **Exécution distante** : Exécuter sur des serveurs sans capacités d'affichage
+
+---
+
+## Mode Lecteur de Codes-barres
+
+> 📖 **Documentation complète** : [Mode Lecteur de Codes-barres](../barcode-scanner.fr.md)
+
+ProFiles prend en charge la saisie par code-barres USB HID en tant que périphérique clavier *wedge*. Lorsqu'il est activé (via le bouton `QrCode` dans la Barre de Contrôle ou `Ctrl+B`), les codes-barres sont analysés en paires `key=value` et appliqués automatiquement aux contrôles de scan, déclenchant éventuellement un scan immédiat.
+
+**Référence rapide — format de la donnée :**
+
+```
+filter=.py;ext=toml;recursive=0;dir=/path/to/scannedir;scan=1
+```
+
+| Clé | Alias(es) | Description |
+|-----|-----------|-------------|
+| `filter` | `query`, `search` | Filtre texte pour la liste des fichiers |
+| `ext` | `extension`, `filetype` | Filtre d'extension de fichier |
+| `recursive` | `recurse` | `1` pour récursif, `0` pour non-récursif |
+| `dir` | `directory`, `path` | Chemin du répertoire (`~` se développe en répertoire personnel) |
+| `scan` | — | `1` pour déclencher automatiquement le scan, `0` pour appliquer uniquement |
 
 ---
 
