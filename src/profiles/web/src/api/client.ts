@@ -5,6 +5,7 @@ import type {
   LogResponse,
   ScanResultsResponse,
   SystemInfo,
+  WorkflowSessionState,
 } from "./types";
 
 export async function openLogFile(): Promise<{ status: string; message: string }> {
@@ -197,5 +198,42 @@ export async function generateBarcode(filePath: string): Promise<{ image: string
     body: JSON.stringify({ file_path: filePath }),
   });
   if (!res.ok) throw new Error("Failed to generate barcode");
+  return res.json();
+}
+
+export async function startWorkflowSession(params: {
+  directory: string;
+  filename: string;
+  release?: string;
+  args?: string;
+}): Promise<WorkflowSessionState> {
+  const res = await fetch("/api/workflow/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to start workflow session" }));
+    throw new Error(errorData.detail || "Failed to start workflow session");
+  }
+  return res.json();
+}
+
+export async function fetchWorkflowSession(sessionId: string): Promise<WorkflowSessionState> {
+  const res = await fetch(`/api/workflow/${sessionId}`);
+  if (!res.ok) throw new Error("Failed to fetch workflow session");
+  return res.json();
+}
+
+export async function respondWorkflowSession(
+  sessionId: string,
+  action: "yes" | "skip" | "no" | "ack",
+): Promise<WorkflowSessionState> {
+  const res = await fetch(`/api/workflow/${sessionId}/respond`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  if (!res.ok) throw new Error("Failed to respond to workflow prompt");
   return res.json();
 }

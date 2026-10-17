@@ -47,6 +47,28 @@ export interface ScannedFileItem {
   hook_pattern?: string | null;
 }
 
+export interface WorkflowStepRecord {
+  index: number;
+  action: "run" | "run_after" | "replace" | "notify" | "check" | string;
+  content: string;
+  ask?: string | null;
+  wait?: boolean;
+  status: "pending" | "running" | "completed" | "skipped" | "failed";
+  message?: string;
+}
+
+export interface WorkflowSessionState {
+  session_id: string;
+  filename: string;
+  pattern: string;
+  status: "idle" | "running" | "waiting_ask" | "waiting_notify" | "completed" | "aborted" | "failed";
+  current_index: number;
+  ask_prompt?: string | null;
+  notify_message?: string | null;
+  final_message?: string | null;
+  steps: WorkflowStepRecord[];
+}
+
 export interface ScanResultsResponse {
   count: number;
   in_progress: boolean;
