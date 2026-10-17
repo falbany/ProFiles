@@ -11,7 +11,7 @@ import {
   respondWorkflowSession,
   startWorkflowSession,
 } from "../api/client";
-import type { WorkflowSessionState } from "../api/types";
+import type { WorkflowSessionState, WorkflowStepRecord } from "../api/types";
 
 interface WorkflowRunnerModalProps {
   isOpen: boolean;
@@ -108,17 +108,20 @@ export function WorkflowRunnerModal({
   const [session, setSession] = useState<WorkflowSessionState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isOpen || !directory || !filename) {
       setSession(null);
       setError(null);
+      setSelectedStepIndex(null);
       return;
     }
 
     let active = true;
     setLoading(true);
     setError(null);
+    setSelectedStepIndex(null);
 
     startWorkflowSession({
       directory,
@@ -143,7 +146,7 @@ export function WorkflowRunnerModal({
     return () => {
       active = false;
     };
-  }, [isOpen, directory, filename, release, args, onFinished]);
+  }, [isOpen, directory, filename, release, args]);
 
   const handleRespond = async (action: "yes" | "skip" | "no" | "ack") => {
     if (!session) return;
@@ -163,8 +166,13 @@ export function WorkflowRunnerModal({
 
   if (!isOpen) return null;
 
-  const currentStep = session?.steps[session.current_index];
-  const isFinished = session?.status === "completed" || session?.status === "aborted" || session?.status === "failed";
+  const activeStep: WorkflowStepRecord | undefined =
+    selectedStepIndex !== null
+      ? session?.steps[selectedStepIndex]
+      : session?.steps[session.current_index];
+
+  const isFinished =
+    session?.status === "completed" || session?.status === "aborted" || session?.status === "failed";
 
   return (
     <div
@@ -203,18 +211,21 @@ export function WorkflowRunnerModal({
           {/* Left Sidebar: Steps */}
           <div className="w-80 border-r border-line bg-surface-strong/20 p-4 overflow-y-auto flex flex-col gap-2 shrink-0">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted px-1 mb-1">
-              Workflow Steps
+              Workflow Steps (Click to inspect)
             </h3>
             {session && session.steps.length > 0 ? (
-              session.steps.map((st) => {
-                const isCurrent = session.current_index === st.index - 1 && !isFinished;
+              session.steps.map((st, idx) => {
+                const isCurrentExecuting = session.current_index === idx && !isFinished;
+                const isInspected = selectedStepIndex === idx || (selectedStepIndex === null && isCurrentExecuting);
                 return (
-                  <div
+                  <button
                     key={st.index}
-                    className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${
-                      isCurrent
-                        ? "border-indigo-500/60 bg-indigo-500/10 shadow-xs"
-                        : "border-line/60 bg-surface/60"
+                    type="button"
+                    onClick={() => setSelectedStepIndex(idx)}
+                    className={`flex items-start text-left gap-2.5 rounded-lg border px-3 py-2.5 transition-colors cursor-pointer w-full ${
+                      isInspected
+                        ? "border-indigo-500/60 bg-indigo-500/15 shadow-xs ring-1 ring-indigo-500/30"
+                        : "border-line/60 bg-surface/60 hover:bg-elevated/80"
                     }`}
                   >
                     <div className="mt-0.5 shrink-0">
@@ -250,7 +261,7 @@ export function WorkflowRunnerModal({
                         <p className="mt-1 text-[10px] text-ink-faint italic">{st.message}</p>
                       )}
                     </div>
-                  </div>
+                  </button>
                 );
               })
             ) : (
@@ -268,67 +279,106 @@ export function WorkflowRunnerModal({
                 </div>
               )}
 
-              {/* Active Step Details / Markdown Preview */}
+              {/* Active / Inspected Step Details */}
               <div className="rounded-xl border border-line bg-surface p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-line pb-3">
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-indigo-500/10 px-2 py-0.5 font-mono text-xs font-semibold uppercase text-indigo-300">
-                      {currentStep?.action || session?.status}
+                      {activeStep?.action || session?.status}
                     </span>
                     <span className="text-xs text-ink-muted">
-                      {currentStep ? `Step ${currentStep.index} of ${session?.steps.length}` : "Status"}
+                      {activeStep ? `Step ${activeStep.index} of ${session?.steps.length}` : "Status"}
                     </span>
+                    {(selectedStepIndex !== null && selectedStepIndex !== session?.current_index) && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStepIndex(null)}
+                        className="text-[11px] text-indigo-400 hover:underline ml-2"
+                      >
+                        (Return to active step)
+                      </button>
+                    )}
                   </div>
                   {loading && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
                 </div>
 
                 {/* Content Body / Rendered Markdown */}
                 <div className="space-y-3 text-xs text-ink font-sans leading-relaxed">
-                  {session?.status === "waiting_notify" && session.notify_message ? (
+                  {/* Priority 1: Interactive Prompts (only if on CURRENT executing step) */}
+                  {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notify" && session.notify_message && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notification Message:</p>
                       <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
                         {renderMarkdown(session.notify_message)}
                       </div>
                     </div>
-                  ) : session?.status === "waiting_ask" && session.ask_prompt ? (
+                  )}
+
+                  {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_ask" && session.ask_prompt && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-wider text-amber-400">Confirmation Prompt:</p>
                       <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-medium text-ink">
                         {session.ask_prompt}
                       </div>
                     </div>
-                  ) : session?.status === "completed" ? (
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 mx-auto">
-                        <CheckCircle2 className="h-6 w-6" />
+                  )}
+
+                  {/* Priority 2: Full-screen completion banner (only if NO step is specifically being inspected) */}
+                  {isFinished && selectedStepIndex === null && (
+                    <div className={`rounded-xl border p-8 text-center space-y-4 ${
+                      session?.status === "completed"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                        : "border-red-500/30 bg-red-500/10 text-red-300"
+                    }`}>
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface/50 mx-auto">
+                        {session?.status === "completed" ? (
+                          <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                        ) : (
+                          <AlertCircle className="h-6 w-6 text-red-400" />
+                        )}
                       </div>
-                      <h3 className="text-sm font-bold text-emerald-300">Workflow Completed Successfully</h3>
-                      <p className="text-xs text-ink-secondary">{session.final_message || "All steps executed successfully. File launched."}</p>
+                      <div className="space-y-1">
+                        <h3 className="text-base font-bold">
+                          {session?.status === "completed" ? "Workflow Finished" : "Workflow Terminated"}
+                        </h3>
+                        <p className="text-xs text-ink-secondary max-w-md mx-auto">
+                          {session?.final_message || "The launch sequence has ended."}
+                        </p>
+                      </div>
                       <div className="pt-2">
                         <button
                           type="button"
                           onClick={onClose}
-                          className="rounded-lg bg-emerald-600 px-6 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-surface transition-all"
+                          className="rounded-lg bg-indigo-600 px-8 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-all scale-105 active:scale-95"
                         >
-                          Close Workflow
+                          Close Engine Runner
                         </button>
                       </div>
                     </div>
-                  ) : session?.status === "aborted" || session?.status === "failed" ? (
-                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center space-y-3">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20 text-red-400 mx-auto">
-                        <AlertCircle className="h-6 w-6" />
+                  )}
+
+                  {/* Priority 3: General content display for inspected or non-prompting current step */}
+                  {!(isFinished && selectedStepIndex === null) && 
+                   !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask")) && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Step Content:</p>
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+                          {activeStep?.content ? renderMarkdown(activeStep.content) : "Waiting..."}
+                        </div>
                       </div>
-                      <h3 className="text-sm font-bold text-red-300">Workflow Terminated</h3>
-                      <p className="text-xs text-ink-secondary">{session.final_message || "Workflow stopped due to user abort or error."}</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Current Command / Content:</p>
-                      <div className="rounded-lg border border-line bg-surface-strong p-3 font-mono text-xs text-ink">
-                        {currentStep?.content ? renderMarkdown(currentStep.content) : "Executing steps..."}
-                      </div>
+                      
+                      {activeStep?.ask && (
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+                          <span className="font-semibold">Workflow Guard:</span> {activeStep.ask}
+                        </div>
+                      )}
+                      
+                      {activeStep?.message && (
+                        <div className="rounded-lg border border-line bg-surface-strong p-3 text-xs text-ink-muted italic">
+                          <span className="font-semibold text-ink-secondary not-italic uppercase text-[10px]">Log:</span> {activeStep.message}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -338,42 +388,42 @@ export function WorkflowRunnerModal({
             {/* Bottom Action Area (Ask Callbacks / Dismiss) */}
             <div className="pt-4 border-t border-line flex items-center justify-between mt-6">
               <div className="text-xs text-ink-muted">
-                {session?.status === "waiting_ask"
-                  ? "Choose an option below to proceed:"
-                  : session?.status === "waiting_notify"
-                  ? "Click Continue to acknowledge notification:"
+                {session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
+                  ? "Action required to proceed:"
+                  : session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
+                  ? "Acknowledge message to proceed:"
                   : isFinished
-                  ? "Workflow session finished."
-                  : "Executing workflow steps..."}
+                  ? "Session terminated."
+                  : "Step in progress..."}
               </div>
 
               <div className="flex items-center gap-2">
-                {session?.status === "waiting_notify" && (
+                {session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <button
                     type="button"
                     disabled={loading}
                     onClick={() => handleRespond("ack")}
-                    className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none"
                   >
-                    Continue
+                    Continue Workflow
                   </button>
                 )}
 
-                {session?.status === "waiting_ask" && (
+                {session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <>
                     <button
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("no")}
-                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10"
                     >
-                      No (Abort)
+                      Abort Launch
                     </button>
                     <button
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("skip")}
-                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/10"
                     >
                       Skip Step
                     </button>
@@ -383,7 +433,7 @@ export function WorkflowRunnerModal({
                       onClick={() => handleRespond("yes")}
                       className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
                     >
-                      Yes (Execute)
+                      Execute Step
                     </button>
                   </>
                 )}
@@ -394,7 +444,7 @@ export function WorkflowRunnerModal({
                     onClick={onClose}
                     className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
                   >
-                    Close Window
+                    Close Runner
                   </button>
                 )}
               </div>
