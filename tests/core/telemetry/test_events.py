@@ -4,6 +4,7 @@ import logging
 import re
 
 import pytest
+
 from profiles.core.telemetry.events import (
     _bool,
     _quote,

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from profiles.core import actions
 from profiles.core.processing.file_metadata import get_file_metadata
@@ -195,7 +195,8 @@ async def compute_hash(payload: HashRequest) -> dict:
 
 
 class BarcodeRequest(BaseModel):
-    file_path: str
+    file_path: str | None = Field(default=None, alias="filePath")
+    content: str | None = None
 
 
 @router.post("/barcode")
@@ -206,34 +207,39 @@ async def generate_barcode(payload: BarcodeRequest):
     barcode scanner understands so the recipient can scan it directly into
     their instance.
 
-    **Payload format:** ``dir=<parent>;filter=<filename>;scan=1``
+    **Payload format (default):** ``dir=<parent>;filter=<filename>;scan=1``
     """
     from io import BytesIO
 
     import qrcode
 
-    path = Path(payload.file_path).expanduser().resolve()
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="File does not exist")
+    if payload.content:
+        qr_content = payload.content
+    elif payload.file_path:
+        path = Path(payload.file_path).expanduser().resolve()
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="File does not exist")
 
-    # Build the barcode payload that the scanner can parse back
-    if path.is_dir():
-        dir_str = str(path)
-        filename = ""
-        ext = ""
+        # Build the barcode payload that the scanner can parse back
+        if path.is_dir():
+            dir_str = str(path)
+            filename = ""
+            ext = ""
+        else:
+            dir_str = str(path.parent)
+            filename = path.name
+            ext = path.suffix
+
+        parts = [f"dir={dir_str}"]
+        if filename:
+            parts.append(f"filter={filename}")
+        if ext:
+            parts.append(f"ext={ext}")
+        parts.append("scan=1")
+
+        qr_content = ";".join(parts)
     else:
-        dir_str = str(path.parent)
-        filename = path.name
-        ext = path.suffix
-
-    parts = [f"dir={dir_str}"]
-    if filename:
-        parts.append(f"filter={filename}")
-    if ext:
-        parts.append(f"ext={ext}")
-    parts.append("scan=1")
-
-    qr_content = ";".join(parts)
+        raise HTTPException(status_code=400, detail="Missing file_path or content")
 
     qr = qrcode.QRCode(
         version=2,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { X, File, Folder, Calendar, Hash, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
+import { X, File, Folder, Calendar, Hash, ChevronDown, ChevronRight, Copy, Check, QrCode } from "lucide-react";
 import type { ScannedFileItem } from "../api/types";
+import { BarcodeModal } from "./BarcodeModal";
 
 export interface FilePropertiesModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["basic", "hashes", "timestamps", "system"]));
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -41,6 +43,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       previousFocusRef.current?.focus();
       // Reset expanded sections when closing
       setExpandedSections(new Set(["basic", "hashes", "timestamps", "system"]));
+      setShowQrModal(false);
       return;
     }
 
@@ -202,6 +205,13 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                   {file.filename}
                 </p>
               </div>
+              <button
+                onClick={() => setShowQrModal(true)}
+                className="ml-2 rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30"
+                title="Generate Barcode/QR Code"
+              >
+                <QrCode className="h-4 w-4" />
+              </button>
             </div>
             <button
               onClick={onClose}
@@ -353,6 +363,13 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           </div>
         </div>
       </div>
+
+      <BarcodeModal
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+        initialFilePath={file.path}
+        md5={metadata?.md5}
+      />
     </div>
   );
 }

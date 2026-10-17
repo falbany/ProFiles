@@ -151,6 +151,7 @@ vice-versa. Only `gui/__init__.py` bridges them.
 
 ```python
 """GUI entry point. Selects active backend based on PROFILES_GUI_BACKEND."""
+
 from __future__ import annotations
 
 import os
@@ -161,13 +162,17 @@ if _BACKEND == "qt":
     from profiles.gui.qt import main_window, search_bar, status_bar
     from profiles.gui.qt import context_menu, styles, ui
     from profiles.gui.qt.controllers import (
-        directory_manager, scan_controller, window_actions,
+        directory_manager,
+        scan_controller,
+        window_actions,
     )
 else:
     from profiles.gui.tk import main_window, search_bar, status_bar
     from profiles.gui.tk import context_menu, styles, ui
     from profiles.gui.tk.controllers import (
-        directory_manager, scan_controller, window_actions,
+        directory_manager,
+        scan_controller,
+        window_actions,
     )
 
 # Shared, always imported from the canonical location.
@@ -248,12 +253,23 @@ signals that `MainWindow` connects.
 ```python
 class ScanWorker(QObject):
     """Runs a scan off the GUI thread; emits results via Qt signals."""
-    finished = Signal(int, list)        # (scan_id, results)
-    failed = Signal(int, str)           # (scan_id, error_msg)
-    progress = Signal(int, int)         # (scan_id, current_count)
 
-    def __init__(self, *, config, directory_label, scan_paths,
-                 extension, filter_text, recursive, scan_id, logger):
+    finished = Signal(int, list)  # (scan_id, results)
+    failed = Signal(int, str)  # (scan_id, error_msg)
+    progress = Signal(int, int)  # (scan_id, current_count)
+
+    def __init__(
+        self,
+        *,
+        config,
+        directory_label,
+        scan_paths,
+        extension,
+        filter_text,
+        recursive,
+        scan_id,
+        logger,
+    ):
         super().__init__()
         # ... mirror of run_scan() args, no queue
 
@@ -288,11 +304,13 @@ stays unchanged. The Qt version is a thin `QObject` wrapper.
 ```python
 class DirectoryView(Protocol):
     """Same shape as the Tk version, but Qt types."""
+
     @property
     def dir_combo(self) -> QComboBox: ...
     @property
     def dir_text(self) -> str: ...
     def set_dir_text(self, value: str) -> None: ...
+
     # ... ext_combo, filter_combo
 ```
 

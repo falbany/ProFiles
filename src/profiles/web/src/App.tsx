@@ -5,7 +5,6 @@ import {
   fetchConfig,
   fetchScanResults,
   fetchSystemInfo,
-  generateBarcode,
   launchFile,
   openConfigFile,
   openFolder,
@@ -25,6 +24,7 @@ import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
+import { BarcodeModal } from "./components/BarcodeModal";
 import { StatusBar } from "./components/StatusBar";
 import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
@@ -75,7 +75,7 @@ export default function App() {
 
   // QR code modal — shows a generated QR for sharing a file location.
   const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
-  const [barcodeImage, setBarcodeImage] = useState<{ image: string; content: string } | null>(null);
+  const [barcodeFilePath, setBarcodeFilePath] = useState<string | undefined>(undefined);
 
   // Timer — periodic rescan interval in seconds (0 = disabled).
   const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
@@ -587,15 +587,9 @@ export default function App() {
   };
 
 
-  const handleGenerateBarcode = async (file: ScannedFileItem) => {
-    try {
-      const result = await generateBarcode(file.path);
-      setBarcodeImage({ image: result.image, content: result.content });
-      setShowBarcodeModal(true);
-      showToast("QR code generated.");
-    } catch (err: any) {
-      showToast(`Failed to generate QR: ${err.message}`);
-    }
+  const handleGenerateBarcode = (file: ScannedFileItem) => {
+    setBarcodeFilePath(file.path);
+    setShowBarcodeModal(true);
   };
 
   const handleOpenActiveDirectory = async () => {
@@ -1109,43 +1103,14 @@ export default function App() {
       />
 
       {/* QR Code Modal */}
-      {showBarcodeModal && barcodeImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => {
-            setShowBarcodeModal(false);
-            setBarcodeImage(null);
-          }}
-        >
-          <div
-            className="w-96 max-w-[90vw] rounded-xl border border-line bg-surface p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="mb-4 text-center text-sm font-semibold text-ink">
-              Scan to open in ProFiles
-            </h3>
-            <div className="flex justify-center">
-              <img
-                src={barcodeImage.image}
-                alt="QR code encoding file location"
-                className="h-48 w-48 border border-line bg-white p-2"
-              />
-            </div>
-            <p className="mb-4 break-all text-center text-xs text-ink-muted">
-              {barcodeImage.content}
-            </p>
-            <button
-              onClick={() => {
-                setShowBarcodeModal(false);
-                setBarcodeImage(null);
-              }}
-              className="w-full rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      <BarcodeModal
+        isOpen={showBarcodeModal}
+        onClose={() => {
+          setShowBarcodeModal(false);
+          setBarcodeFilePath(undefined);
+        }}
+        initialFilePath={barcodeFilePath}
+      />
 
       {/* Toast Notification */}
       <div

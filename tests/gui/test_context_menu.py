@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from profiles.core.actions import ActionResult, ActionStatus
 from profiles.gui.context_menu import FileContextMenu
 
