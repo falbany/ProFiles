@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, FileCode, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, FileCode, Loader2, Webhook } from "lucide-react";
 import type { ScanSort, ScannedFileItem } from "../api/types";
 
 interface ScrollableStickyHeaderItem {
@@ -511,7 +511,16 @@ export function FileListTable({
                   className={`grid cursor-pointer items-center transition-colors ${rowStyle.className}`}
                   style={{ ...rowStyle.style, height: ROW_HEIGHT, gridTemplateColumns: columnTemplate }}
                 >
-                  <div className="px-3 text-right font-mono text-ink-faint">
+                  <div className="flex items-center justify-end gap-1 px-3 font-mono text-ink-faint">
+                    {file.has_hook && (
+                      <span
+                        title={file.hook_pattern ? `Launch workflow: ${file.hook_pattern}` : "Launch workflow configured"}
+                        aria-label="Workflow hook attached"
+                        className="inline-flex items-center text-amber-500/80 hover:text-amber-400"
+                      >
+                        <Webhook className="h-3 w-3 shrink-0" />
+                      </span>
+                    )}
                     <span className="hidden sm:inline">{idx + 1}</span>
                   </div>
                   {resolvedKeys.map((key, kIdx) => (
