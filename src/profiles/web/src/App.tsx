@@ -7,7 +7,6 @@ import {
   fetchSystemInfo,
   generateBarcode,
   launchFile,
-  launchWithArgs,
   openConfigFile,
   openFolder,
   openLogFile,
@@ -28,6 +27,7 @@ import { LoadConfigModal } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
 import { StatusBar } from "./components/StatusBar";
 import { TimerModal } from "./components/TimerModal";
+import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
 import { parseBarcodeInput } from "./utils/barcodeScanner";
 import { exportToCsv } from "./utils/exportCsv";
 
@@ -61,6 +61,12 @@ export default function App() {
   const [propertiesFile, setPropertiesFile] = useState<ScannedFileItem | null>(null);
   const [showLogViewer, setShowLogViewer] = useState<boolean>(false);
   const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
+
+  // Workflow Modal state
+  const [workflowLaunchParams, setWorkflowLaunchParams] = useState<{
+    file: ScannedFileItem;
+    args?: string;
+  } | null>(null);
 
   // Barcode scanner mode — when active, the next Enter-terminated
   // keypress sequence is captured as barcode input.
@@ -407,15 +413,21 @@ export default function App() {
   };
 
   // Launch file
-  const handleLaunch = async (file: ScannedFileItem) => {
+  const handleLaunch = async (file: ScannedFileItem, extraArgs?: string) => {
+    if (file.has_hook) {
+      setWorkflowLaunchParams({ file, args: extraArgs });
+      return;
+    }
     try {
       await launchFile({
         directory: activeDirectory,
         filename: file.rel_path,
         release: config?.release,
+        args: extraArgs,
       });
-    } catch (err) {
-      console.error("Launch error:", err);
+      showToast(`Launched ${file.filename}`);
+    } catch (err: any) {
+      showToast(`Launch error: ${err.message}`);
     }
   };
 
@@ -427,12 +439,7 @@ export default function App() {
 
   // Context menu actions
   const handleLaunchWithArgs = async (file: ScannedFileItem, args: string) => {
-    try {
-      const res = await launchWithArgs(file.path, args);
-      showToast(res.message || "File launched with arguments.");
-    } catch (err: any) {
-      showToast(`Error: ${err.message}`);
-    }
+    handleLaunch(file, args);
   };
 
   const handleReveal = async (file: ScannedFileItem) => {
@@ -1081,6 +1088,23 @@ export default function App() {
         onClose={() => setShowLogViewer(false)}
         onOpenExternally={() => {
           openLogFile().then((r) => showToast(r.message));
+        }}
+      />
+
+      {/* Workflow Runner Modal */}
+      <WorkflowRunnerModal
+        isOpen={Boolean(workflowLaunchParams)}
+        onClose={() => setWorkflowLaunchParams(null)}
+        directory={activeDirectory}
+        filename={workflowLaunchParams?.file.rel_path || ""}
+        release={config?.release}
+        args={workflowLaunchParams?.args}
+        onFinished={(status, msg) => {
+          if (status === "completed") {
+            showToast(msg || "Workflow launched successfully.");
+          } else if (status === "aborted" || status === "failed") {
+            showToast(`Workflow stopped: ${msg}`);
+          }
         }}
       />
 
