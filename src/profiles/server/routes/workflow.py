@@ -210,12 +210,27 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
         raise HTTPException(status_code=400, detail="No matching workflow found for file")
 
     steps = list(config.launch_hooks[matched_pattern])
+    username = get_username()
+    hostname = get_hostname()
     step_records = [
         StepRecord(
             index=idx + 1,
             action=s.action,
-            content=s.content,
-            ask=s.ask,
+            content=_substitute_variables(
+                s.content,
+                target_file,
+                username=username,
+                hostname=hostname,
+            ),
+            ask=_substitute_variables(
+                s.ask,
+                target_file,
+                action_content=s.content,
+                username=username,
+                hostname=hostname,
+            )
+            if s.ask
+            else None,
             wait=s.wait,
         )
         for idx, s in enumerate(steps)
