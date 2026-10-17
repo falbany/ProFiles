@@ -40,10 +40,10 @@ Les workflows utilisent une structure YAML par étapes. Chaque entrée dans `hoo
 
 ```yaml
 hooks:
-  failmode: warn           # Mode d'échec global : "warn" | "abort" | "skip"
-  timeout: 30              # Timeout par défaut en secondes pour les étapes bloquantes
+  failmode: warn # Mode d'échec global : "warn" | "abort" | "skip"
+  timeout: 30 # Timeout par défaut en secondes pour les étapes bloquantes
   entries:
-    "*.mttl":              # Motif glob (tous les fichiers .mttl)
+    "*.mttl": # Motif glob (tous les fichiers .mttl)
       - action: notify
         content: "# Lancement de {{filename}}\\nPréparation de l'environnement..."
       - action: run
@@ -56,8 +56,8 @@ hooks:
         ask: "Utiliser le lanceur spécial ?"
         wait: true
         on_failure: warn
-    
-    "special.mttl":        # Motif plus spécifique (fichier exact)
+
+    "special.mttl": # Motif plus spécifique (fichier exact)
       - action: notify
         content: "**Traitement spécial** pour ce fichier."
       - action: run_after
@@ -75,6 +75,7 @@ hooks:
 | `filename.ext` | Correspondance exacte        | `manual.pdf`, `readme.txt` |
 
 **Règle de priorité** : Lorsqu'un fichier correspond à plusieurs motifs, le moteur sélectionne le **plus spécifique** :
+
 1. Correspondance exacte (`manual.pdf`) > `?` > `*` > `.ext`
 2. Les motifs plus spécifiques **écrasent** les motifs génériques
 
@@ -91,10 +92,11 @@ Affiche un message à l'utilisateur avec support partiel du Markdown.
 ```yaml
 - action: notify
   content: "# Titre\\n**Message important**\\n*Note: Ceci est une italique*"
-  wait: true  # Bloque jusqu'à ce que l'utilisateur ferme le dialogue
+  wait: true # Bloque jusqu'à ce que l'utilisateur ferme le dialogue
 ```
 
 **Comportement** :
+
 - **GUI mode** : Affiche une fenêtre Tkinter avec texte formaté
 - **Headless mode** : Imprime le message formaté sur la sortie standard
 - **Toujours réussi** : Ne peut pas échouer, donc `on_failure` est ignoré
@@ -107,13 +109,14 @@ Exécute une commande shell et attend la fin de l'exécution.
 ```yaml
 - action: run
   content: "prepare_env.exe --file {{path}} --verbose"
-  wait: true           # Attend la fin (défaut)
-  on_failure: stop     # stop | warn | continue
-  timeout: 15          # Optionnel : surcharge du timeout global (secondes)
-  if: "env:DEBUG"      # Optionnel : n'exécute que si DEBUG est défini
+  wait: true # Attend la fin (défaut)
+  on_failure: stop # stop | warn | continue
+  timeout: 15 # Optionnel : surcharge du timeout global (secondes)
+  if: "env:DEBUG" # Optionnel : n'exécute que si DEBUG est défini
 ```
 
 **Comportement** :
+
 - **Bloquant** : Le workflow attend la fin de la commande
 - **Capture la sortie** : stdout/stderr capturés (non affichés par défaut)
 - **Code de retour** : 0 = succès, non-0 = échec
@@ -126,10 +129,11 @@ Lance une commande en arrière-plan et continue immédiatement.
 ```yaml
 - action: run_after
   content: "logger.exe --opened {{filename}} --async"
-  wait: false  # Toujours false pour run_after
+  wait: false # Toujours false pour run_after
 ```
 
 **Comportement** :
+
 - **Non-bloquant** : Le workflow continue immédiatement
 - **Processus détaché** : Le processus enfant est indépendant
 - **Toujours réussi** : Ne peut pas échouer (échecs silencieux)
@@ -147,6 +151,7 @@ Exécute une commande **à la place** du lancement OS par défaut.
 ```
 
 **Comportement** :
+
 - **Remplace le lancement OS** : La commande est exécutée INSTEAD de l'association OS
 - **Workflow terminé** : Après `replace`, le workflow se termine (pas de lancement OS)
 - **Blocage** : Attend la fin de la commande (si `wait: true`)
@@ -164,6 +169,7 @@ Exécute une commande et vérifie son code de retour.
 ```
 
 **Comportement** :
+
 - **Bloquant** : Attend la fin de la commande
 - **Vérification explicite** : Utilisé pour valider des préconditions
 - **Gestion d'échec** : Respecte `on_failure`
@@ -192,6 +198,7 @@ Chaque étape peut être protégée par une invite de confirmation **Oui/Passer/
 ### Comportement sur Dernier Étape
 
 Si l'utilisateur choisit **Passer** sur le **dernier** étape :
+
 - Le workflow se termine
 - Le lancement OS est **sauté** (SKIP_LAUNCH)
 
@@ -202,21 +209,22 @@ entries:
   "*.mttl":
     - action: run
       content: "prepare.exe {{path}}"
-      ask: "Préparer le fichier ?"  # Oui/Passer/Non
-      
+      ask: "Préparer le fichier ?" # Oui/Passer/Non
+
     - action: notify
       content: "Environnement préparé."
-      
+
     - action: run
       content: "validate.exe {{path}}"
-      ask: "Valider avant lancement ?"  # Oui/Passer/Non
-      
+      ask: "Valider avant lancement ?" # Oui/Passer/Non
+
     - action: replace
       content: "special_launcher.exe {{path}}"
-      ask: "Utiliser lanceur spécial ?"  # Oui/Passer/Non
+      ask: "Utiliser lanceur spécial ?" # Oui/Passer/Non
 ```
 
 **Scénarios** :
+
 - **Oui → Oui → Oui** : Tous les étapes exécutés, lanceur spécial utilisé
 - **Oui → Passer → Oui** : Étape 2 sautée, lanceur spécial utilisé
 - **Passer** (premier) : Étape 1 sautée, continue aux étapes suivants
@@ -249,10 +257,10 @@ entries:
   "*.pdf":
     - action: notify
       content: "# Ouverture de {{filename}}\\nChemin : {{path}}"
-      
+
     - action: run
       content: "tracker.exe --log {{filename}} --dir {{dir}}"
-      
+
     - action: run_after
       content: "backup.exe {{path}} --timestamp {{date}}"
 ```
@@ -292,15 +300,16 @@ L'action `notify` supporte un **sous-ensemble de Markdown** pour une communicati
 - action: notify
   content: |
     # Lancement de {{filename}}
-    
+
     **Statut** : Préparation de l'environnement...
-    
+
     *Note* : Cette opération peut prendre quelques secondes.
-    
+
     Commande : `prepare_env.exe --file {{path}}`
 ```
 
 **Rendu GUI** :
+
 - Titre en grand et gras
 - Texte en gras pour "Important"
 - Texte en italique pour les notes
@@ -308,6 +317,7 @@ L'action `notify` supporte un **sous-ensemble de Markdown** pour une communicati
 - Mise en page aérée
 
 **Rendu Headless** :
+
 - Texte plat avec escape sequences
 - Markdown stripé (voir `render_text()` dans `src/profiles/core/environment/render.py`)
 
@@ -319,8 +329,8 @@ L'action `notify` supporte un **sous-ensemble de Markdown** pour une communicati
 
 ```yaml
 hooks:
-  failmode: warn    # Comportement par défaut pour les échecs
-  timeout: 30       # Timeout en secondes pour les étapes bloquantes
+  failmode: warn # Comportement par défaut pour les échecs
+  timeout: 30 # Timeout en secondes pour les étapes bloquantes
 ```
 
 ### Modes d'Échec (`failmode`)
@@ -338,10 +348,11 @@ Chaque étape peut surcharger le `failmode` global :
 ```yaml
 - action: run
   content: "critical_setup.exe {{path}}"
-  on_failure: abort  # Surcharge le failmode global
+  on_failure: abort # Surcharge le failmode global
 ```
 
 **Valeurs possibles** :
+
 - `stop` : Arrête le workflow (équivalent à `abort`)
 - `warn` : Avertit mais continue (équivalent à `warn`)
 - `continue` : Supprime l'erreur et continue (similaire à `warn` mais sans avertissement)
@@ -358,8 +369,8 @@ Un timeout compte comme un **échec** (code de retour non-0) :
 
 ```yaml
 hooks:
-  timeout: 10  # Timeout court
-  
+  timeout: 10 # Timeout court
+
 entries:
   "*.mttl":
     - action: run
@@ -377,7 +388,7 @@ Défini dans `hooks.timeout` (défaut : 30 secondes).
 
 ```yaml
 hooks:
-  timeout: 60  # 60 secondes pour tous les étapes bloquants
+  timeout: 60 # 60 secondes pour tous les étapes bloquants
 ```
 
 ### Timeout par Étape (override)
@@ -386,13 +397,13 @@ Chaque étape peut surcharger le timeout global avec son propre champ `timeout` 
 
 ```yaml
 hooks:
-  timeout: 30  # Timeout global par défaut
+  timeout: 30 # Timeout global par défaut
 
 entries:
   "*.mttl":
     - action: run
       content: "quick_check.exe {{path}}"
-      timeout: 5    # Surcharge — 5 secondes pour cette étape seulement
+      timeout: 5 # Surcharge — 5 secondes pour cette étape seulement
     - action: run
       content: "slow_build.exe {{path}}"
       # Utilise le timeout global de 30s
@@ -406,6 +417,7 @@ Un timeout entraîne un résultat d'échec (code de retour non-0) et déclenche 
 ### Commandes Asynchrones (`run_after`)
 
 Les étapes `run_after` **ne sont pas sujettes au timeout** :
+
 - Elles sont lancées en arrière-plan
 - Le workflow continue immédiatement
 - Les échecs de spawn sont silencieux
@@ -425,16 +437,16 @@ entries:
   "*.mttl":
     - action: run
       content: "deploy.exe --production {{path}}"
-      if: "env:DEPLOY_ENV"      # S'exécute seulement si DEPLOY_ENV est défini
+      if: "env:DEPLOY_ENV" # S'exécute seulement si DEPLOY_ENV est défini
     - action: run
       content: "staging_deploy.exe {{path}}"
-      if: "env:DEPLOY_ENV=prod"  # S'exécute seulement si DEPLOY_ENV = "prod"
+      if: "env:DEPLOY_ENV=prod" # S'exécute seulement si DEPLOY_ENV = "prod"
 ```
 
-| Syntaxe            | Comportement                                  |
-| ------------------ | --------------------------------------------- |
-| `env:VAR_NAME`     | L'étape s'exécute si `VAR_NAME` est **défini** (n'importe quelle valeur) |
-| `env:VAR=value`    | L'étape s'exécute si `VAR_NAME` **vaut** `value`  |
+| Syntaxe         | Comportement                                                             |
+| --------------- | ------------------------------------------------------------------------ |
+| `env:VAR_NAME`  | L'étape s'exécute si `VAR_NAME` est **défini** (n'importe quelle valeur) |
+| `env:VAR=value` | L'étape s'exécute si `VAR_NAME` **vaut** `value`                         |
 
 Si la condition **n'est pas remplie**, l'étape est silencieusement ignorée — le workflow continue à l'étape suivante.
 
@@ -454,20 +466,21 @@ Le moteur utilise un **algorithme de scoring** pour déterminer le motif le plus
 ```yaml
 hooks:
   entries:
-    "*.mttl":           # Score bas — tous les .mttl
+    "*.mttl": # Score bas — tous les .mttl
       - action: notify
         content: "Traitement générique .mttl"
-    
-    "special.mttl":     # Score élevé — fichier exact
+
+    "special.mttl": # Score élevé — fichier exact
       - action: notify
         content: "Traitement SPECIAL pour special.mttl"
-    
-    "test?.mttl":       # Score moyen — test1.mttl, test2.mttl
+
+    "test?.mttl": # Score moyen — test1.mttl, test2.mttl
       - action: notify
         content: "Traitement pour test?.mttl"
 ```
 
 **Résultats** :
+
 - `special.mttl` → Utilise le motif `special.mttl` (exact)
 - `test1.mttl` → Utilise le motif `test?.mttl` (`?` > `*`)
 - `other.mttl` → Utilise le motif `*.mttl` (générique)
@@ -490,18 +503,18 @@ hooks:
     "*.mttl":
       - action: notify
         content: "# Lancement de {{filename}}\\nPréparation de l'environnement..."
-      
+
       - action: run
         content: "prepare_env.exe --file {{path}} --verbose"
         ask: "Exécuter la préparation ?"
         wait: true
         on_failure: stop
-      
+
       - action: run
         content: "validate_env.exe --check {{dir}}"
         wait: true
         on_failure: warn
-      
+
       - action: notify
         content: "**Environnement prêt**\\nLancement en cours..."
 ```
@@ -517,13 +530,13 @@ hooks:
       - action: notify
         content: "# Exécution d'un exécutable\\n**Attention** : Vérifiez l'origine du fichier."
         wait: true
-      
+
       - action: run
         content: "antivirus.exe --scan {{path}}"
         ask: "Scanner avec antivirus ?"
         wait: true
         on_failure: warn
-      
+
       - action: replace
         content: "sandbox_launcher.exe {{path}}"
         ask: "Exécuter en sandbox ?"
@@ -542,7 +555,7 @@ hooks:
       - action: run_after
         content: "audit_logger.exe --opened {{filename}} --user {{username}} --time {{date}}"
         wait: false
-      
+
       - action: run_after
         content: "backup.exe {{path}} --destination \\\\server\\backup"
         wait: false
@@ -561,16 +574,16 @@ hooks:
         ask: "Vérifier les dépendances ?"
         wait: true
         on_failure: abort
-      
+
       - action: notify
         content: "**Dépendances vérifiées**\\nContinuer le lancement ?"
-      
+
       - action: run
         content: "prepare_data.exe {{path}}"
         ask: "Préparer les données ?"
         wait: true
         on_failure: warn
-      
+
       - action: run
         content: "special_tool.exe {{path}} --mode=advanced"
         ask: "Exécuter : {{content}}"
@@ -679,6 +692,7 @@ outcome = run_workflow(
 **Cause** : Spécificité du motif ou incohérence de correspondance.
 
 **Solutions** :
+
 1. Vérifier que le motif correspond au fichier (ex: `.mttl` vs `*.mttl`)
 2. Utiliser un motif plus spécifique (ex: `special.mttl` au lieu de `*.mttl`)
 3. Vérifier l'extension du fichier (case-sensitive ?)
@@ -690,6 +704,7 @@ outcome = run_workflow(
 **Cause** : Orthographe incorrecte des jetons.
 
 **Solutions** :
+
 1. Vérifier la syntaxe : `{{path}}`, `{{filename}}`, `{{dir}}`, `{{ext}}`, `{{stem}}`
 2. S'assurer d'utiliser **deux accolades** de chaque côté
 3. Vérifier que le fichier existe (les jetons nécessitent un `file_path` valide)
@@ -699,10 +714,12 @@ outcome = run_workflow(
 **Cause** : Mode headless ou Tkinter manquant.
 
 **Comportement attendu** :
+
 - En mode headless : Le message est imprimé sur la sortie standard
 - Si Tkinter manquant : Fallback automatique vers headless
 
 **Solutions** :
+
 1. Vérifier que Tkinter est installé (`python -m tkinter`)
 2. En mode headless, vérifier la console pour les messages
 
@@ -711,6 +728,7 @@ outcome = run_workflow(
 **Cause** : Commandes trop lentes pour le timeout configuré.
 
 **Solutions** :
+
 1. Augmenter `hooks.timeout` dans `.profiles`
 2. Définir un `timeout` par étape pour surcharger la valeur globale pour les commandes lentes
 3. Utiliser `action: run_after` pour les commandes longues en arrière-plan
@@ -721,6 +739,7 @@ outcome = run_workflow(
 **Cause** : Vérification de variable d'environnement non remplie.
 
 **Solutions** :
+
 1. Vérifier que la variable est définie dans l'environnement avant le lancement
 2. Utiliser `env:VAR` pour les vérifications d'existence ou `env:VAR=value` pour l'égalité
 3. Se rappeler : les étapes ignorées sont **silencieuses** — aucun avertissement n'est journalisé
@@ -730,6 +749,7 @@ outcome = run_workflow(
 **Cause** : `failmode` ou `on_failure` mal configuré.
 
 **Solutions** :
+
 1. Vérifier `failmode: abort` pour un comportement strict
 2. Ajouter `on_failure: stop` aux étapes critiques
 3. Utiliser `action: check` pour les validations explicites

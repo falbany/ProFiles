@@ -96,3 +96,31 @@ async def test_workflow_advances_through_prompts(workflow_state: ServerState) ->
             assert resp_step.status_code == 200
             final_data = resp_step.json()
             assert final_data["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_workflow_run_after_is_non_blocking(workflow_state: ServerState) -> None:
+    # Update state with a run_after step
+    workflow_state.config.launch_hooks = {
+        "*.mttl": (
+            WorkflowStep(action="run_after", content="echo async"),
+            WorkflowStep(action="notify", content="After async notice"),
+        )
+    }
+    app = create_app(workflow_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Start: should execute run_after immediately and stop at notify
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(workflow_state.active_directory), "filename": "tool.mttl"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # Session should be waiting_notify, not idle or pending
+        assert data["status"] == "waiting_notify"
+        # First step (run_after) should be completed
+        assert data["steps"][0]["action"] == "run_after"
+        assert data["steps"][0]["status"] == "completed"
+        # Second step (notify) should be running (current focus)
+        assert data["steps"][1]["status"] == "running"

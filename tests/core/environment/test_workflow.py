@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
 
@@ -125,6 +126,25 @@ def test_date_token_substitution():
 
     expected = dt.date.today().isoformat()
     assert f"echo {expected}" in captured[0]
+
+
+def test_double_brace_token_substitution():
+    """Double-brace tokens {{filename}}, {{path}}, etc. are substituted correctly."""
+    from pathlib import Path
+
+    from profiles.core.environment.workflow import _substitute_variables
+
+    file_path = Path("/tmp/test_dir/example.pdf")
+    res = _substitute_variables(
+        "File: {{filename}}, path: {{path}}, dir: {{dir}}, stem: {{stem}}, ext: {{ext}}, user: {{username}}, host: {{hostname}}",
+        file_path,
+        username="alice",
+        hostname="macbook",
+    )
+    assert (
+        res
+        == "File: example.pdf, path: /tmp/test_dir/example.pdf, dir: /tmp/test_dir, stem: example, ext: .pdf, user: alice, host: macbook"
+    )
 
 
 def test_username_in_ask_guard():

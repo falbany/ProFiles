@@ -156,19 +156,26 @@ def _advance_session(session: WorkflowSession) -> None:
         )
 
         if step.action == "replace":
-            rec.status = "completed" if ret == 0 else "failed"
+            # replace returns WorkflowOutcome.SKIP_LAUNCH (not int), or None
+            rec.status = "completed"
             session.status = "completed"
             session.final_message = f"Launched replacement: {step.content}"
             return
 
-        if ret != 0:
+        if step.action == "run_after":
+            # run_after runs asynchronously in background and must not block
+            rec.status = "completed"
+            session.current_index += 1
+            continue
+
+        if ret is not None and ret != 0:
             rec.status = "failed"
             on_fail = step.on_failure or "warn"
             if on_fail in ("stop", "abort"):
                 session.status = "failed"
-                session.final_message = f"Step {i + 1} failed with code {ret}"
+                session.final_message = f"Step {i + 1} failed"
                 return
-            rec.message = f"Warning: command returned code {ret}"
+            rec.message = "Warning: step returned error outcome"
         else:
             rec.status = "completed"
 

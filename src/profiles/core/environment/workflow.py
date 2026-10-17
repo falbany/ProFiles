@@ -290,25 +290,25 @@ def _substitute_variables(
     username: str | None = None,
     hostname: str | None = None,
 ) -> str:
-    """Substitute variables in step content string."""
+    """Substitute variables in step content string (supporting both {{token}} and {token})."""
     res = template
-    if action_content is not None:
-        res = res.replace("{content}", action_content)
+    tokens = {
+        "content": action_content,
+        "username": username,
+        "hostname": hostname,
+        "date": datetime.date.today().isoformat(),
+        "path": str(file_path) if file_path else None,
+        "filename": file_path.name if file_path else None,
+        "dir": str(file_path.parent) if file_path else None,
+        "stem": file_path.stem if file_path else None,
+        "ext": file_path.suffix if file_path else None,
+    }
 
-    if username is not None:
-        res = res.replace("{username}", username)
-    if hostname is not None:
-        res = res.replace("{hostname}", hostname)
-    res = res.replace("{date}", datetime.date.today().isoformat())
+    for key, val in tokens.items():
+        if val is not None:
+            res = res.replace("{{" + key + "}}", val)
+            res = res.replace("{" + key + "}", val)
 
-    if not file_path:
-        return res
-
-    res = res.replace("{path}", str(file_path))
-    res = res.replace("{filename}", file_path.name)
-    res = res.replace("{dir}", str(file_path.parent))
-    res = res.replace("{stem}", file_path.stem)
-    res = res.replace("{ext}", file_path.suffix)
     return res
 
 
