@@ -12,6 +12,7 @@ import {
   openTerminal,
   revealFile,
   selectDirectory,
+  browseDirectory,
 } from "./api/client";
 import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import { ActionBar } from "./components/ActionBar";
@@ -622,6 +623,21 @@ export default function App() {
     }
   };
 
+  const handleGoToParentDirectory = async () => {
+    if (!activeDirectory) return;
+    try {
+      const result = await browseDirectory(activeDirectory);
+      if (result.parent_path) {
+        await handleDirectoryChange(result.parent_path);
+        showToast("Moved to parent directory.");
+      } else {
+        showToast("Already at root directory.");
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
   const handleExport = () => {
     if (files.length === 0) {
       showToast("No files to export.");
@@ -945,6 +961,7 @@ export default function App() {
         onScan={handleScan}
         scanning={scanning}
         onBrowseDirectory={handleBrowseDirectory}
+        onGoToParentDirectory={handleGoToParentDirectory}
         onGoToHomeDirectory={handleGoToHomeDirectory}
         onOpenActiveDirectory={handleOpenActiveDirectory}
         onOpenTerminal={handleOpenDirectoryInTerminal}

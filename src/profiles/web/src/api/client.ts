@@ -80,6 +80,13 @@ export async function browseForConfigFiles(path: string): Promise<BrowseResult> 
   return res.json();
 }
 
+export async function browseDirectory(path: string): Promise<BrowseResult> {
+  const url = `/api/fs/browse?path=${encodeURIComponent(path)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to browse directory");
+  return res.json();
+}
+
 export async function executeScan(params: {
   directory?: string;
   extension: string;

@@ -38,6 +38,7 @@ interface ControlsBarProps {
   onScan: () => void;
   scanning: boolean;
   onBrowseDirectory?: () => void;
+  onGoToParentDirectory?: () => void;
   onGoToHomeDirectory?: () => void;
   onOpenActiveDirectory?: () => void;
   onOpenTerminal?: (directory: string) => void;
@@ -62,6 +63,7 @@ export function ControlsBar({
   onScan,
   scanning,
   onBrowseDirectory,
+  onGoToParentDirectory,
   onGoToHomeDirectory,
   onOpenActiveDirectory,
   onOpenTerminal,
@@ -101,6 +103,20 @@ export function ControlsBar({
               className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
             >
               <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </Tooltip>
+        )}
+
+        {/* Go to parent directory (left of Browse) */}
+        {onGoToParentDirectory && (
+          <Tooltip text="Go to parent directory" block={false}>
+            <button
+              type="button"
+              onClick={onGoToParentDirectory}
+              aria-label="Go to parent directory"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+            >
+              <span className="font-mono text-sm leading-none font-bold">&lt;</span>
             </button>
           </Tooltip>
         )}
