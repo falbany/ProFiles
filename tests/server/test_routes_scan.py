@@ -51,6 +51,25 @@ async def test_scan_and_get_results(test_state: ServerState) -> None:
 
 
 @pytest.mark.anyio
+async def test_scan_results_contain_hook_metadata(test_state: ServerState) -> None:
+    from profiles.core.config.models import WorkflowStep
+
+    test_state.config.launch_hooks = {"*.mttl": (WorkflowStep(action="run", content="echo hook"),)}
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post(
+            "/api/scan",
+            json={"extension": ".mttl", "filter_text": "", "recursive": True},
+        )
+        get_resp = await client.get("/api/scan/results")
+        assert get_resp.status_code == 200
+        items = get_resp.json()["items"]
+        assert len(items) >= 1
+        assert items[0]["has_hook"] is True
+        assert items[0]["hook_pattern"] == "*.mttl"
+
+
+@pytest.mark.anyio
 async def test_late_scan_does_not_replace_newer_scan_results(
     test_state: ServerState,
     tmp_path: Path,

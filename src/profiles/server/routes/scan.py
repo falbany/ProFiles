@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from profiles.core.config import service as config_service
+from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.processing import scanner
 from profiles.server.state import ServerState
 
@@ -139,18 +140,23 @@ async def get_scan_results(
 
     page = cached if limit is None else cached[offset : offset + limit]
 
+    hook_patterns = list(state.config.launch_hooks.keys()) if state.config.launch_hooks else []
+
     items = []
     for r in page:
         file_path = getattr(r, "path", None)
         path_obj = Path(file_path) if file_path is not None else None
         fname = path_obj.name if path_obj else str(r)
         col_vals = getattr(r, "column_values", {})
+        matched_hook = select_most_specific_pattern(hook_patterns, fname) if hook_patterns else None
         items.append(
             {
                 "filename": fname,
                 "path": str(path_obj) if path_obj else "",
                 "column_values": col_vals,
                 "rel_path": getattr(r, "rel_path", ""),
+                "has_hook": bool(matched_hook),
+                "hook_pattern": matched_hook,
             }
         )
     response: dict = {
