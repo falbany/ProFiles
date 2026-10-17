@@ -79,6 +79,31 @@ async def test_file_metadata_endpoint_returns_properties(
 
 
 @pytest.mark.anyio
+async def test_launch_forwards_config_and_logger(test_state: ServerState, tmp_path: Path) -> None:
+    target = tmp_path / "app.mttl"
+    target.write_text("dummy")
+    test_state.config.search_dir = str(tmp_path)
+    expected = ActionResult(status=ActionStatus.SUCCESS, message="Launched", path=target)
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.launch_selected_file", return_value=expected
+    ) as launch_mock:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/actions/launch",
+                json={"directory": str(tmp_path), "filename": "app.mttl", "release": "1.0"},
+            )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "message": "Launched", "path": str(target)}
+    launch_mock.assert_called_once()
+    kwargs = launch_mock.call_args.kwargs
+    assert kwargs.get("config") is test_state.config
+    assert "logger" in kwargs
+
+
+@pytest.mark.anyio
 async def test_delete_endpoint_removes_file(test_state: ServerState, tmp_path: Path) -> None:
     target = tmp_path / "sample.txt"
     target.write_text("sample")

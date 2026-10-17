@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from profiles.core import actions
 from profiles.core.processing.file_metadata import get_file_metadata
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
+
+logger = logging.getLogger("profiles.server.actions")
 
 router = APIRouter(prefix="/api/actions", tags=["actions"])
 
@@ -101,14 +104,19 @@ class HashRequest(BaseModel):
 
 
 @router.post("/launch")
-async def launch_file(payload: LaunchRequest) -> dict:
+async def launch_file(payload: LaunchRequest, request: Request) -> dict:
     """Launch selected program via OS association and workflow actions."""
+    state = getattr(request.app.state, "server_state", None)
+    config = getattr(state, "config", None) if state else None
+    logger = getattr(state, "logger", None) if state else None
     res = actions.launch_selected_file(
         directory=payload.directory,
         filename=payload.filename,
         release=payload.release,
         username=get_username(),
         args=payload.args,
+        config=config,
+        logger=logger,
     )
     if res.status != actions.ActionStatus.SUCCESS:
         raise HTTPException(status_code=400, detail=res.message)
