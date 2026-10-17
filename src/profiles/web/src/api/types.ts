@@ -43,6 +43,8 @@ export interface ScannedFileItem {
   path: string;
   column_values: Record<string, string>;
   rel_path: string;
+  has_hook?: boolean;
+  hook_pattern?: string | null;
 }
 
 export interface ScanResultsResponse {
