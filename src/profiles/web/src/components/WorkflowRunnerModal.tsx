@@ -305,6 +305,15 @@ export function WorkflowRunnerModal({
                       </div>
                       <h3 className="text-sm font-bold text-emerald-300">Workflow Completed Successfully</h3>
                       <p className="text-xs text-ink-secondary">{session.final_message || "All steps executed successfully. File launched."}</p>
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className="rounded-lg bg-emerald-600 px-6 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-surface transition-all"
+                        >
+                          Close Workflow
+                        </button>
+                      </div>
                     </div>
                   ) : session?.status === "aborted" || session?.status === "failed" ? (
                     <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center space-y-3">
