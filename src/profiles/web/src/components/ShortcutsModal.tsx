@@ -22,6 +22,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "Ctrl + ,", desc: "Open config file" },
     { key: "Ctrl + Shift + T", desc: "Toggle theme (Dark / Light)" },
     { key: "Ctrl + B", desc: "Toggle barcode scanner mode" },
+    { key: "Ctrl + Shift + B", desc: "Open webcam / camera barcode scanner" },
     { key: "Ctrl + T", desc: "Open auto-rescan timer modal" },
     { key: "Ctrl + H", desc: "Set directory to home folder" },
     { key: "? or Ctrl + /", desc: "Show keyboard shortcuts" },

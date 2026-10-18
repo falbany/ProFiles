@@ -26,6 +26,8 @@ import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
 import { BarcodeModal } from "./components/BarcodeModal";
+import { CameraBarcodeModal } from "./components/CameraBarcodeModal";
+import { SingleMatchPromptModal } from "./components/SingleMatchPromptModal";
 import { StatusBar } from "./components/StatusBar";
 import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
@@ -77,6 +79,10 @@ export default function App() {
   // QR code modal — shows a generated QR for sharing a file location.
   const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
   const [barcodeFilePath, setBarcodeFilePath] = useState<string | undefined>(undefined);
+
+  // Camera Barcode Scanner & Single match prompt state
+  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
+  const [singleMatchFile, setSingleMatchFile] = useState<ScannedFileItem | null>(null);
 
   // Timer — periodic rescan interval in seconds (0 = disabled).
   const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
@@ -660,6 +666,58 @@ export default function App() {
     }
   };
 
+  const handleCameraDetected = async (rawCode: string) => {
+    setShowCameraScanner(false);
+    showToast("Barcode detected!");
+
+    const result = parseBarcodeInput(rawCode);
+    const vals = result.values;
+
+    const nextDir = vals.dir !== undefined ? vals.dir : activeDirectory;
+    const nextExt = vals.ext !== undefined ? vals.ext : activeExtension;
+    const nextFilter = vals.filter !== undefined ? vals.filter : filterText;
+    const nextRecursive = vals.recursive !== undefined ? vals.recursive : recursive;
+
+    if (vals.dir !== undefined) setActiveDirectory(vals.dir);
+    if (vals.ext !== undefined) setActiveExtension(vals.ext);
+    if (vals.filter !== undefined) setFilterText(vals.filter);
+    if (vals.recursive !== undefined) setRecursive(vals.recursive);
+
+    if (nextDir) {
+      const scanGeneration = beginScan();
+      try {
+        await executeScan({
+          directory: nextDir,
+          extension: nextExt,
+          filter_text: nextFilter,
+          recursive: nextRecursive,
+        });
+
+        const res = await fetchScanResults({
+          offset: 0,
+          limit: SCAN_PAGE_SIZE,
+          sort_by: sort?.column,
+          sort_dir: sort?.direction,
+        });
+
+        if (!isCurrentScan(scanGeneration)) return;
+
+        setFiles(res.items);
+        setTotalCount(res.count);
+        setHasScanned(true);
+        setSelectedIndex(0);
+
+        if (res.count === 1 && res.items.length === 1) {
+          setSingleMatchFile(res.items[0]);
+        }
+      } catch (err: any) {
+        showToast(`Scan error: ${err.message}`);
+      } finally {
+        finishScan(scanGeneration);
+      }
+    }
+  };
+
   const handleBarcodeToggle = () => {
     setBarcodeMode((prev) => {
       const next = !prev;
@@ -881,6 +939,13 @@ export default function App() {
         return;
       }
 
+      // Ctrl + Shift + B: Open camera barcode scanner
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setShowCameraScanner((prev) => !prev);
+        return;
+      }
+
       // Ctrl + T: Open timer modal
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "t") {
         e.preventDefault();
@@ -967,6 +1032,7 @@ export default function App() {
         onOpenTerminal={handleOpenDirectoryInTerminal}
         barcodeMode={barcodeMode}
         onBarcodeToggle={handleBarcodeToggle}
+        onCameraBarcodeClick={() => setShowCameraScanner(true)}
         autoRescanActive={autoRescanInterval > 0}
         onTimerClick={() => setShowTimerModal(true)}
       />
@@ -1127,6 +1193,27 @@ export default function App() {
           setBarcodeFilePath(undefined);
         }}
         initialFilePath={barcodeFilePath}
+      />
+
+      {/* Camera Barcode Scanner Modal */}
+      <CameraBarcodeModal
+        isOpen={showCameraScanner}
+        onClose={() => setShowCameraScanner(false)}
+        onDetected={handleCameraDetected}
+      />
+
+      {/* Single Match Launch Confirmation */}
+      <SingleMatchPromptModal
+        isOpen={Boolean(singleMatchFile)}
+        file={singleMatchFile}
+        onConfirm={() => {
+          if (singleMatchFile) {
+            const f = singleMatchFile;
+            setSingleMatchFile(null);
+            handleLaunch(f);
+          }
+        }}
+        onDismiss={() => setSingleMatchFile(null)}
       />
 
       {/* Toast Notification */}

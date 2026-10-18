@@ -1,4 +1,4 @@
-import { ArrowRight, Folder, FolderOpen, Home, Play, QrCode, RefreshCw, Search, Terminal, Timer } from "lucide-react";
+import { ArrowRight, Camera, Folder, FolderOpen, Home, Play, QrCode, RefreshCw, Search, Terminal, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 
@@ -44,6 +44,7 @@ interface ControlsBarProps {
   onOpenTerminal?: (directory: string) => void;
   barcodeMode: boolean;
   onBarcodeToggle: () => void;
+  onCameraBarcodeClick?: () => void;
   autoRescanActive: boolean;
   onTimerClick: () => void;
 }
@@ -69,6 +70,7 @@ export function ControlsBar({
   onOpenTerminal,
   barcodeMode,
   onBarcodeToggle,
+  onCameraBarcodeClick,
   autoRescanActive,
   onTimerClick,
 }: ControlsBarProps) {
@@ -176,6 +178,20 @@ export function ControlsBar({
             <QrCode className={`h-3.5 w-3.5 ${barcodeMode ? "animate-pulse" : ""}`} />
           </button>
         </Tooltip>
+
+        {/* Camera barcode scanner */}
+        {onCameraBarcodeClick && (
+          <Tooltip text="Scan barcode or QR code using webcam / camera (Ctrl + Shift + B)" block={false}>
+            <button
+              type="button"
+              onClick={onCameraBarcodeClick}
+              aria-label="Scan barcode with camera"
+              className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </button>
+          </Tooltip>
+        )}
       </div>
 
       {/* Row 2: Search filters and Actions */}
