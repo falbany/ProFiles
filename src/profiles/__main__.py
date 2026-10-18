@@ -19,7 +19,7 @@ here = str(Path(__file__).resolve().parent.parent)
 sys.path[:] = [here] + [p for p in sys.path if p != here]
 
 # Clear any previously loaded profiles modules
-for name in sys.modules:
+for name in list(sys.modules):
     if name == "profiles" or name.startswith("profiles."):
         del sys.modules[name]
 

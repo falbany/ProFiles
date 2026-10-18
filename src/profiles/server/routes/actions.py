@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from profiles.core import actions
 from profiles.core.processing.file_metadata import get_file_metadata
@@ -195,6 +195,8 @@ async def compute_hash(payload: HashRequest) -> dict:
 
 
 class BarcodeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     file_path: str | None = Field(default=None, alias="filePath")
     content: str | None = None
 
