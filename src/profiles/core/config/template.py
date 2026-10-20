@@ -77,6 +77,7 @@ version: 1
 #                       recursive scan.
 # search_exclude_files: filename glob patterns (case-insensitive) for files to skip
 #                       during scanning. Per-config entries are APPENDED.
+# max_search_depth:     int, default 10 — maximum depth for recursive directory scanning.
 # verbose:              logging verbosity — "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL".
 # scan_metrics:         bool, default false — log performance metrics after each scan.
 # ============================================================================
@@ -88,6 +89,7 @@ defaults:
   language: en            # "en" or "fr"
   search_dir: '{cwd}'
   recursive_search: false
+  max_search_depth: 10
   extensions: [All, .lnk]
   filters: ["", ST_PRO, ST_ENG]
   row_colors:
@@ -234,6 +236,9 @@ hooks:
 #   row_colors    per-config row-coloring rules (APPENDED to defaults,
 #                 checked first)
 #   search_exclude_files  per-config file excludes (APPENDED to defaults)
+#   search_exclude_dirs   per-config directory excludes override
+#   max_search_depth      per-config max search depth override
+#   recursive_search      per-config recursive search override
 #
 # match field (OR logic — any match in any field selects this config):
 #   hostname      glob/regex patterns for the machine's hostname

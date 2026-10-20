@@ -85,20 +85,13 @@ class TestRunScan:
         assert sid == 8
         assert got is None
 
-    def test_uses_active_config_excludes_when_available(self) -> None:
+    def test_passes_config_to_scanner(self) -> None:
         cfg = _config()
-        active = MagicMock(search_exclude_files=("active",))
         q: queue.Queue[ScanResult] = queue.Queue()
-        with (
-            patch(
-                "profiles.gui.controllers.scan_controller.scanner.scan_and_process_dynamic",
-                return_value=[],
-            ) as scan_mock,
-            patch(
-                "profiles.gui.controllers.scan_controller.config_service.find_active_config",
-                return_value=active,
-            ),
-        ):
+        with patch(
+            "profiles.gui.controllers.scan_controller.scanner.scan_and_process_dynamic",
+            return_value=[],
+        ) as scan_mock:
             run_scan(
                 config=cfg,
                 directory_label="d",
@@ -112,36 +105,7 @@ class TestRunScan:
             )
 
         kwargs = scan_mock.call_args.kwargs
-        assert kwargs["exclude_files"] == ("active",)
-
-    def test_falls_back_to_base_excludes_when_no_active(self) -> None:
-        cfg = _config()
-        cfg.search_exclude_files = ("base",)
-        q: queue.Queue[ScanResult] = queue.Queue()
-        with (
-            patch(
-                "profiles.gui.controllers.scan_controller.scanner.scan_and_process_dynamic",
-                return_value=[],
-            ) as scan_mock,
-            patch(
-                "profiles.gui.controllers.scan_controller.config_service.find_active_config",
-                return_value=None,
-            ),
-        ):
-            run_scan(
-                config=cfg,
-                directory_label="d",
-                scan_paths=["/tmp"],
-                extension=".txt",
-                filter_text="",
-                recursive=True,
-                queue_=q,
-                scan_id=10,
-                logger=_logger(),
-            )
-
-        kwargs = scan_mock.call_args.kwargs
-        assert kwargs["exclude_files"] == ("base",)
+        assert kwargs["config"] == cfg
 
 
 class TestScanQueue:

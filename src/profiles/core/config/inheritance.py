@@ -60,7 +60,7 @@ def _resolve_machine(
         local = getattr(cfg, field)
         inherited = getattr(base, field) if base is not None else None
         local_set = field in cfg.model_fields_set
-        if field in ("extensions", "filters", "search_exclude_files"):
+        if field in ("extensions", "filters", "search_exclude_files", "search_exclude_dirs"):
             if local is None or not local_set:
                 return list(inherited or [])
             return _merge_str(inherited or [], local)
@@ -82,6 +82,15 @@ def _resolve_machine(
         row_colors=_merge_row(defaults.row_colors, pick("row_colors")),
         search_exclude_files=tuple(
             _merge_str(defaults.search_exclude_files, pick("search_exclude_files"))
+        ),
+        max_search_depth=pick("max_search_depth")
+        if pick("max_search_depth") is not None
+        else defaults.max_search_depth,
+        recursive_search=pick("recursive_search")
+        if pick("recursive_search") is not None
+        else defaults.recursive_search,
+        search_exclude_dirs=tuple(
+            _merge_str(defaults.search_exclude_dirs, pick("search_exclude_dirs"))
         ),
     )
 

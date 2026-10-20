@@ -80,6 +80,8 @@ def _scan_subtree(
     ext_lower: str,
     exclude_dirs: tuple[str, ...] = (),
     exclude_files: tuple[str, ...] = (),
+    current_depth: int = 1,
+    max_depth: int = 10,
 ) -> list[Path]:
     """Worker: recursively scan a directory subtree for matching files.
 
@@ -96,10 +98,15 @@ def _scan_subtree(
             basenames to skip during recursive walk.
         exclude_files: Glob patterns (case-insensitive) for file
             basenames to skip during recursive walk.
+        current_depth: Internal recursion tracker (root files = depth 0).
+        max_depth: Maximum directory recursion depth.
 
     Returns:
         List of matching file paths in this subtree.
     """
+    if current_depth > max_depth:
+        return []
+
     files: list[Path] = []
     try:
         with os.scandir(root) as entries:
@@ -108,7 +115,14 @@ def _scan_subtree(
                     if entry.is_dir(follow_symlinks=False):
                         if not _is_excluded(entry.name, exclude_dirs):
                             files.extend(
-                                _scan_subtree(entry.path, ext_lower, exclude_dirs, exclude_files)
+                                _scan_subtree(
+                                    entry.path,
+                                    ext_lower,
+                                    exclude_dirs,
+                                    exclude_files,
+                                    current_depth + 1,
+                                    max_depth,
+                                )
                             )
                         continue
                     if (
@@ -130,6 +144,7 @@ def scan_directory(
     recursive: bool = False,
     exclude_dirs: tuple[str, ...] = (),
     exclude_files: tuple[str, ...] = (),
+    max_depth: int = 10,
 ) -> list[Path]:
     """Scan a directory for files matching the given extension.
 
@@ -147,11 +162,12 @@ def scan_directory(
         recursive: If True, scan subdirectories recursively.
         exclude_dirs: Glob patterns (case-insensitive) for directory
             basenames to skip during recursive walk. Supports ``*``,
-            ``?``, and ``[seq]`` wildcards (e.g. ``Debug*``,
+            ``?`` and ``[seq]`` wildcards (e.g. ``Debug*``,
             ``*tmp``, ``node_modules``).
         exclude_files: Glob patterns (case-insensitive) for file
             basenames to skip. Supports the same wildcards as
             *exclude_dirs* (e.g. ``*backup*``, ``*.tmp``, ``~$*``).
+        max_depth: Maximum recursion depth for recursive scan (default 10).
 
     Returns:
         Sorted list of matching file paths.
@@ -207,7 +223,9 @@ def scan_directory(
     collections = [root_files]
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
         futures = [
-            executor.submit(_scan_subtree, subdir, ext_lower, exclude_dirs, exclude_files)
+            executor.submit(
+                _scan_subtree, subdir, ext_lower, exclude_dirs, exclude_files, 1, max_depth
+            )
             for subdir in subdirs
         ]
         for future in concurrent.futures.as_completed(futures):

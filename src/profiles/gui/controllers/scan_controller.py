@@ -15,7 +15,6 @@ import logging
 import queue
 from typing import Any
 
-from profiles.core.config import service as config_service
 from profiles.core.config.models import AppConfig
 from profiles.core.processing import scanner
 from profiles.core.processing.scanner import ScannedFileDynamic
@@ -48,7 +47,7 @@ def run_scan(
     Args:
         config: The application configuration (read for exclude lists).
         directory_label: Captured at request time; used to pick the
-            active machine config (which contributes per-config excludes).
+            active machine config (which contributes per-config settings).
         scan_paths: Directories to scan (multiple supported).
         extension: Extension filter expression.
         filter_text: Keyword filter.
@@ -59,17 +58,11 @@ def run_scan(
         logger: Standard logger for diagnostics.
     """
     try:
-        active = config_service.find_active_config(config, directory_label)
-        exclude_files = (
-            active.search_exclude_files if active is not None else config.search_exclude_files
-        )
         items = scanner.scan_and_process_dynamic(
             scan_paths,
             extension=extension,
             filter_text=filter_text,
             recursive=recursive,
-            exclude_dirs=config.search_exclude_dirs,
-            exclude_files=exclude_files,
             column_names=config.column_names,
             columns=config.columns,
             config=config,

@@ -142,6 +142,9 @@ class MachineConfiguration:
             pattern is a case-insensitive substring of the filename.
         search_exclude_files: Per-config file exclusion patterns (case-insensitive
             glob/wildcard). Appended to ``defaults.search_exclude_files``.
+        max_search_depth: Maximum depth for recursive directory scanning.
+        recursive_search: Whether to scan subdirectories recursively.
+        search_exclude_dirs: Per-config directory exclusion patterns.
     """
 
     match: MatchCriteria = field(default_factory=MatchCriteria)
@@ -150,6 +153,9 @@ class MachineConfiguration:
     filters: tuple[str, ...] = ()
     row_colors: tuple[tuple[str, str], ...] = ()
     search_exclude_files: tuple[str, ...] = ()
+    max_search_depth: int | None = None
+    recursive_search: bool | None = None
+    search_exclude_dirs: tuple[str, ...] = ()
     name: str | None = None
 
     def __post_init__(self) -> None:
@@ -160,7 +166,14 @@ class MachineConfiguration:
                 ip=tuple(self.match.ip),
                 path=tuple(self.match.path),
             )
-        for field_name in ("scan", "extensions", "filters", "row_colors", "search_exclude_files"):
+        for field_name in (
+            "scan",
+            "extensions",
+            "filters",
+            "row_colors",
+            "search_exclude_files",
+            "search_exclude_dirs",
+        ):
             value = getattr(self, field_name)
             if isinstance(value, list):
                 setattr(self, field_name, tuple(value))
@@ -189,6 +202,7 @@ class AppConfig:
             to this list, with per-config rules taking priority.
         verbose: Logging verbosity level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
         scan_metrics: If True, log performance metrics after each scan operation.
+        max_search_depth: Global maximum depth for recursive search.
         configurations: List of MachineConfiguration entries.
         config_path: Path to the .profiles file.
         skip_config_prompt: If True, skip config file creation prompt (for testing).
@@ -219,6 +233,7 @@ class AppConfig:
     row_colors: tuple[tuple[str, str], ...] = ()
     verbose: str = "INFO"
     scan_metrics: bool = False
+    max_search_depth: int = 10
     configurations: list[MachineConfiguration] = field(default_factory=list)
     config_path: Path = field(default_factory=lambda: Path.cwd() / PRIMARY_CONFIG_NAME)
     skip_config_prompt: bool = False

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 import profiles.core.processing.scanner as scanner
-from profiles.core.config.models import AppConfig
+from profiles.core.config.models import AppConfig, MachineConfiguration
 from profiles.core.processing.scanner import (
     ScannedFile,
     ScannedFileDynamic,
@@ -580,6 +580,28 @@ class TestScanPipelineSharedOrchestration:
             (item.column_values["File"], item.column_values["Version"]) for item in dynamic
         }
         assert legacy_set == dynamic_set
+
+    def test_max_search_depth_and_machine_config_overrides(self, tmp_path: Path) -> None:
+        """Verify max_search_depth, recursive_search, and search_exclude_dirs override AppConfig."""
+        sub = tmp_path / "level1" / "level2" / "level3"
+        sub.mkdir(parents=True)
+        (sub / "deep.mttl").write_text("deep")
+
+        # Default max_search_depth is 10, but let's test depth 1
+        config = AppConfig(
+            max_search_depth=1,
+            configurations=[
+                MachineConfiguration(
+                    scan=(str(tmp_path),),
+                    max_search_depth=5,
+                    recursive_search=True,
+                )
+            ],
+        )
+
+        results = scan_and_process(str(tmp_path), extension=".mttl", recursive=True, config=config)
+        assert len(results) == 1
+        assert results[0].filename == "level1/level2/level3/deep.mttl"
 
     def test_dynamic_single_file_column_equivalent_to_legacy(self, tmp_path: Path) -> None:
         """The legacy GUI mode (column_names=("File",)) equals the dynamic path.

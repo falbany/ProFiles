@@ -110,6 +110,7 @@ class Defaults(BaseModel):
     search_exclude_files: list[str] = Field(default_factory=list)
     verbose: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     scan_metrics: bool = False
+    max_search_depth: int = Field(default=10, ge=0)
 
 
 class MatchCriteriaSchema(BaseModel):
@@ -145,6 +146,9 @@ class MachineConfig(BaseModel):
     filters: list[str] | None = None
     row_colors: list[RowColor] | None = None
     search_exclude_files: list[str] | None = None
+    max_search_depth: int | None = Field(default=None, ge=0)
+    recursive_search: bool | None = None
+    search_exclude_dirs: list[str] | None = None
 
     @field_validator("scan", mode="before")
     @classmethod

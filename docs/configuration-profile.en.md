@@ -71,6 +71,7 @@ This section defines default parameters applicable to all machines.
 | `row_colors`          | array of objects   | `[]`                 | Generic row-coloring rules applied to ALL configurations. Each object has `pattern` (string) and `color` (#RRGGBB)                                                |
 | `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Directory basenames (case-insensitive glob patterns) skipped during recursive scan. Supports `*`, `?`, `[seq]` wildcards (`*tmp`, `node_modules`, `Debug*`, etc.) |
 | `search_exclude_files` | array of strings | `[]`                 | File basenames (case-insensitive glob patterns) skipped during scan. Applies to recursive AND non-recursive scans. Same wildcard syntax as `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Per-config entries are APPENDED. |
+| `max_search_depth`    | integer            | `10`                 | Maximum recursion depth for directory scanning |
 | `verbose`             | enum               | `"INFO"`             | Logging verbosity: `"DEBUG"` | `"INFO"` | `"WARNING"` | `"ERROR"` | `"CRITICAL"`                                              |
 | `scan_metrics`        | bool               | `false`              | Log performance metrics after each scan                                                                                                                           |
 
@@ -138,6 +139,9 @@ Configurations can `extend` another configuration to inherit settings. Lists are
 | `filters`     | array of strings   | No       | Per-station Filter presets (overrides `defaults.filters`)        |
 | `row_colors`  | array of objects   | No       | Configuration-specific coloring rules. APPENDED to `defaults.row_colors` and checked first |
 | `search_exclude_files` | array of strings | No | Per-station file exclusion patterns. APPENDED to `defaults.search_exclude_files`. Same wildcard syntax. |
+| `search_exclude_dirs` | array of strings | No | Per-station directory exclusion patterns (overrides `defaults.search_exclude_dirs`). |
+| `max_search_depth`    | integer            | No       | Per-station maximum recursion depth override. |
+| `recursive_search`    | bool               | No       | Per-station recursive search state override. |
 
 ### `match` Field
 

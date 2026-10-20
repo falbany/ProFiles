@@ -140,6 +140,7 @@ class ConfigReader:
         config.row_colors = tuple((rc.pattern, rc.color) for rc in d.row_colors)
         config.verbose = d.verbose
         config.scan_metrics = d.scan_metrics
+        config.max_search_depth = d.max_search_depth
 
     def _apply_columns(self, config: AppConfig, schema: AppConfigYaml) -> None:
         """Populate *config* from ``schema.columns``."""
@@ -185,6 +186,9 @@ class ConfigReader:
                 filters=m.filters,
                 row_colors=tuple((rc.pattern, rc.color) for rc in m.row_colors),
                 search_exclude_files=m.search_exclude_files,
+                max_search_depth=m.max_search_depth,
+                recursive_search=m.recursive_search,
+                search_exclude_dirs=m.search_exclude_dirs,
             )
             for name, m in resolved.items()
         ]

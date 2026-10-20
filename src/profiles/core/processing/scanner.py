@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import NamedTuple, TypeVar
 
+from profiles.core.config import service as config_service
 from profiles.core.config.models import AppConfig
 from profiles.core.processing.column_extractor import ColumnExtractor
 from profiles.core.processing.file_classifier import (
@@ -99,6 +100,7 @@ def _scan_and_filter(
     recursive: bool = False,
     exclude_dirs: Sequence[str] | None = None,
     exclude_files: Sequence[str] | None = None,
+    config: AppConfig | None = None,
 ) -> Iterator[tuple[Path, str, str]]:
     """Shared scanning + filtering generator used by all ``scan_*`` functions.
 
@@ -112,6 +114,7 @@ def _scan_and_filter(
         recursive: Whether to descend into subdirectories.
         exclude_dirs: Directory names to skip during recursion.
         exclude_files: File name glob patterns to skip during scanning.
+        config: Optional AppConfig for overrides and excludes.
 
     Yields:
         Tuples of (absolute Path, display path str, full suffix str).
@@ -127,12 +130,37 @@ def _scan_and_filter(
             continue
         try:
             base_path = Path(directory)
+
+            # Resolve effective config settings (global vs per-host override)
+            active = None
+            if config:
+                active = config_service.find_active_config(config, directory)
+
+            effective_recursive = recursive
+            effective_depth = config.max_search_depth if config else 10
+            effective_exclude_dirs = tuple(exclude_dirs) if exclude_dirs else ()
+            effective_exclude_files = tuple(exclude_files) if exclude_files else ()
+
+            if active:
+                if active.recursive_search is not None:
+                    effective_recursive = active.recursive_search
+                if active.max_search_depth is not None:
+                    effective_depth = active.max_search_depth
+                if active.search_exclude_dirs:
+                    effective_exclude_dirs = active.search_exclude_dirs
+                if active.search_exclude_files:
+                    # Append per-config excludes to the global list passed in.
+                    effective_exclude_files = tuple(
+                        dict.fromkeys((*effective_exclude_files, *active.search_exclude_files))
+                    )
+
             files = scan_directory(
                 directory,
                 "",
-                recursive=recursive,
-                exclude_dirs=tuple(exclude_dirs) if exclude_dirs else (),
-                exclude_files=tuple(exclude_files) if exclude_files else (),
+                recursive=effective_recursive,
+                exclude_dirs=effective_exclude_dirs,
+                exclude_files=effective_exclude_files,
+                max_depth=effective_depth,
             )
             for file_path in files:
                 abs_path = str(file_path.resolve())
@@ -232,6 +260,7 @@ def _run_scan_pipeline(
     exclude_files: Sequence[str] | None,
     enable_metrics: bool,
     worker: Callable[[Path, str, str], T],
+    config: AppConfig | None = None,
 ) -> list[T]:
     """Shared scan → filter → process orchestration for all ``scan_*`` functions.
 
@@ -275,6 +304,7 @@ def _run_scan_pipeline(
                     recursive=recursive,
                     exclude_dirs=exclude_dirs,
                     exclude_files=exclude_files,
+                    config=config,
                 )
             )
 
@@ -396,6 +426,7 @@ def scan_and_process(
         exclude_files=exclude_files,
         enable_metrics=_metrics_enabled(log_metrics, config),
         worker=_process_file,
+        config=config,
     )
 
 
@@ -449,4 +480,5 @@ def scan_and_process_dynamic(
         exclude_files=exclude_files,
         enable_metrics=_metrics_enabled(log_metrics, config),
         worker=dynamic_worker,
+        config=config,
     )

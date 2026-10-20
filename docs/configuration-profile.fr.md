@@ -70,6 +70,7 @@ Cette section définit les paramètres par défaut applicables à toutes les mac
 | `row_colors`          | array of objects   | `[]`                 | Règles de coloration génériques appliquées à TOUS les configurations. Chaque objet a `pattern` (string) et `color` (#RRGGBB)        |
 | `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Noms de répertoires (motifs glob insensibles à la casse) ignorés lors du scan récursif. Prend en charge les jokers `*`, `?`, `[seq]` (`*tmp`, `node_modules`, `Debug*`, etc.) |
 | `search_exclude_files` | array of strings | `[]`                 | Noms de fichiers (motifs glob insensibles à la casse) ignorés lors du scan. S'applique aux scans récursifs ET non récursifs. Même syntaxe de jokers que `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Les motifs par configuration sont AJOUTÉS. |
+| `max_search_depth`    | integer            | `10`                 | Profondeur maximale de récursion pour le scan de répertoires |
 | `verbose`             | enum               | `"INFO"`             | Verbosité du logging : `"DEBUG"` | `"INFO"` | `"WARNING"` | `"ERROR"` | `"CRITICAL"` |
 | `scan_metrics`        | bool               | `false`              | Journaliser les métriques de performance après chaque scan                   |
 
@@ -137,6 +138,9 @@ Les configurations peuvent `extend` une autre configuration pour hériter des pa
 | `filters`     | array of strings   | Non         | Présélections Filter par station (remplace `defaults.filters`)         |
 | `row_colors`  | array of objects   | Non         | Règles de coloration spécifiques à la configuration. AJOUTÉES à `defaults.row_colors` et vérifiées en premier |
 | `search_exclude_files` | array of strings | Non | Motifs d'exclusion de fichiers par station. AJOUTÉS à `defaults.search_exclude_files`. Même syntaxe de jokers. |
+| `search_exclude_dirs` | array of strings | Non | Motifs d'exclusion de répertoires par station (remplace `defaults.search_exclude_dirs`). |
+| `max_search_depth`    | integer            | Non         | Profondeur maximale de récursion par station. |
+| `recursive_search`    | bool               | Non         | État du scan récursif par station. |
 
 ### Champ `match`
 
