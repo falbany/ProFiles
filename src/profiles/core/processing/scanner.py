@@ -92,6 +92,35 @@ def _passes_extension_filter(
     )
 
 
+def _resolve_scan_config(
+    directory: str,
+    recursive: bool,
+    exclude_dirs: Sequence[str] | None,
+    exclude_files: Sequence[str] | None,
+    config: AppConfig | None,
+) -> tuple[bool, int, tuple[str, ...], tuple[str, ...]]:
+    """Resolve effective search configuration for a directory."""
+    active = config_service.find_active_config(config, directory) if config else None
+    eff_recursive = (
+        active.recursive_search if (active and active.recursive_search is not None) else recursive
+    )
+    eff_depth = (
+        active.max_search_depth
+        if (active and active.max_search_depth is not None)
+        else (config.max_search_depth if config else 10)
+    )
+
+    eff_exclude_dirs = tuple(exclude_dirs) if exclude_dirs else ()
+    if active and active.search_exclude_dirs:
+        eff_exclude_dirs = active.search_exclude_dirs
+
+    eff_exclude_files = tuple(exclude_files) if exclude_files else ()
+    if active and active.search_exclude_files:
+        eff_exclude_files = tuple(dict.fromkeys((*eff_exclude_files, *active.search_exclude_files)))
+
+    return eff_recursive, eff_depth, eff_exclude_dirs, eff_exclude_files
+
+
 def _scan_and_filter(
     directories: Sequence[str] | str,
     *,
@@ -131,28 +160,12 @@ def _scan_and_filter(
         try:
             base_path = Path(directory)
 
-            # Resolve effective config settings (global vs per-host override)
-            active = None
-            if config:
-                active = config_service.find_active_config(config, directory)
-
-            effective_recursive = recursive
-            effective_depth = config.max_search_depth if config else 10
-            effective_exclude_dirs = tuple(exclude_dirs) if exclude_dirs else ()
-            effective_exclude_files = tuple(exclude_files) if exclude_files else ()
-
-            if active:
-                if active.recursive_search is not None:
-                    effective_recursive = active.recursive_search
-                if active.max_search_depth is not None:
-                    effective_depth = active.max_search_depth
-                if active.search_exclude_dirs:
-                    effective_exclude_dirs = active.search_exclude_dirs
-                if active.search_exclude_files:
-                    # Append per-config excludes to the global list passed in.
-                    effective_exclude_files = tuple(
-                        dict.fromkeys((*effective_exclude_files, *active.search_exclude_files))
-                    )
+            (
+                effective_recursive,
+                effective_depth,
+                effective_exclude_dirs,
+                effective_exclude_files,
+            ) = _resolve_scan_config(directory, recursive, exclude_dirs, exclude_files, config)
 
             files = scan_directory(
                 directory,
