@@ -243,8 +243,8 @@ row_colors = PATTERN1:#HEX1, PATTERN2:#HEX2, ...
 
 ### Priority Rules
 
-1. `[LAUNCHER]` rules are applied first (base)
-2. `[CONFIGURATION_N]` rules are **appended** after
+1. `defaults` rules are applied first (base)
+2. `configs` rules are **appended** after
 3. Per-config rules have priority (checked first)
 
 ### Example
@@ -465,8 +465,8 @@ configs:
 
 **Resolution order for file `PROD_test.lnk`:**
 
-1. Check `[CONFIGURATION_1]` rules first → `PROD:#0D47A1` (darker blue) ✅
-2. If no match, check `[LAUNCHER]` rules → `PROD:#1565C0` (standard blue)
+1. Check `configs` rules first → `PROD:#0D47A1` (darker blue) ✅
+2. If no match, check `defaults` rules → `PROD:#1565C0` (standard blue)
 3. Final: `SPECIFIC:#FF0000` (red) for files containing "SPECIFIC"
 
 ---
@@ -623,7 +623,7 @@ A: Delete `.profiles` or run `python -m profiles --init` to regenerate.
 ### Version 1.0 (Current)
 
 - Full YAML-format configuration support
-- Per-machine `[CONFIGURATION_N]` sections
+- Per-machine `configs` sections
 - Row coloring with pattern matching
 - Advanced search operators (-, +, OR, quotes)
 - CLI flags for explicit configuration

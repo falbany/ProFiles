@@ -130,18 +130,18 @@ class MatchCriteria:
 
 @dataclass
 class MachineConfiguration:
-    """A single ``[CONFIGURATION_N]`` section from ``.profiles``.
+    """A single machine configuration entry from ``configs`` in ``.profiles``.
 
     Attributes:
         match: Auto-selection criteria based on hostname, IP, or path existence.
         scan: Directories to scan for test programs.
-        extensions: Per-config extension overrides (empty = use ``[LAUNCHER]`` defaults).
-        filters: Per-config filter overrides (empty = use ``[LAUNCHER]`` defaults).
+        extensions: Per-config extension overrides (empty = use ``defaults``).
+        filters: Per-config filter overrides (empty = use ``defaults``).
         row_colors: Per-config row-coloring rules as ``(pattern, color)`` tuples.
             Empty = no row coloring. The GUI applies the first rule whose
             pattern is a case-insensitive substring of the filename.
         search_exclude_files: Per-config file exclusion patterns (case-insensitive
-            glob/wildcard). Appended to ``[LAUNCHER].search_exclude_files``.
+            glob/wildcard). Appended to ``defaults.search_exclude_files``.
     """
 
     match: MatchCriteria = field(default_factory=MatchCriteria)
@@ -183,9 +183,9 @@ class AppConfig:
         filters: Available keyword filter options.
         search_exclude_files: Filename glob patterns (case-insensitive)
             for files to skip during scanning. Per-config
-            ``[CONFIGURATION_N].search_exclude_files`` are APPENDED.
+            ``search_exclude_files`` are APPENDED.
         row_colors: Generic row-coloring rules as ``(pattern, color)`` tuples.
-            These serve as a base; ``[CONFIGURATION_N]``.row_colors are APPENDED
+            These serve as a base; per-config ``row_colors`` are APPENDED
             to this list, with per-config rules taking priority.
         verbose: Logging verbosity level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
         scan_metrics: If True, log performance metrics after each scan operation.

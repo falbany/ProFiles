@@ -1,6 +1,6 @@
 """Launch hooks engine — runs user-configured commands around file launches.
 
-Single Responsibility: orchestrate the ``[HOOKS]`` pipeline (parse → token
+Single Responsibility: orchestrate the ``hooks`` pipeline (parse → token
 substitute → run). No Tkinter / GUI imports. Pure stdlib. Called by the
 :mod:`profiles.core.actions` module and by any future front-end (CLI, TUI).
 
@@ -65,7 +65,7 @@ class HookOutcome(Enum):
 
 
 def parse_hook_entries(raw_value: str) -> tuple[HookSpec, ...]:
-    """Parse a raw ``[HOOKS]`` value into a tuple of :class:`HookSpec`.
+    """Parse a raw ``hooks`` value into a tuple of :class:`HookSpec`.
 
     Entries are comma-separated; commas inside double-quoted substrings are
     preserved. Each entry is ``[when]|template`` — a missing ``|`` defaults to
@@ -75,7 +75,7 @@ def parse_hook_entries(raw_value: str) -> tuple[HookSpec, ...]:
     thin static wrapper preserved for back-compat.
 
     Args:
-        raw_value: Raw option value from the ``[HOOKS]`` section.
+        raw_value: Raw option value from the ``hooks`` section.
 
     Returns:
         Tuple of parsed :class:`HookSpec` instances.

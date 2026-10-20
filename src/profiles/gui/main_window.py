@@ -394,7 +394,7 @@ class MainWindow:
         return self._dir_manager.find_active_config()
 
     def _apply_config_overrides(self) -> None:
-        """Merge per-config extensions/filters with the generic [LAUNCHER] defaults."""
+        """Merge per-config extensions/filters with the generic defaults."""
         self._dir_manager.apply_config_overrides()
 
     # ----------------------------------------------------------------
@@ -407,7 +407,7 @@ class MainWindow:
         Each ``(pattern, color)`` rule from the active MachineConfiguration
         becomes a unique treeview tag. Pattern matching is case-insensitive
         substring against each filename. If no configuration matches the
-        selected directory, fall back to [LAUNCHER].row_colors.
+        selected directory, fall back to default row_colors.
 
         Configured colours are used as-is on both light and dark themes;
         only colours whose WCAG contrast ratio against ``self._theme.surface``
@@ -423,7 +423,7 @@ class MainWindow:
 
         active = self._find_active_config()
 
-        # Use active config row_colors if found, otherwise fall back to [LAUNCHER] row_colors
+        # Use active config row_colors if found, otherwise fall back to default row_colors
         row_colors_to_use = active.row_colors if active is not None else self._config.row_colors
 
         for pattern, color in row_colors_to_use:

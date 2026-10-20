@@ -224,11 +224,11 @@ class TestConfigScanMetrics:
         assert config.scan_metrics is True
 
     def test_config_parsing_false(self, tmp_path: Path) -> None:
-        """Test ConfigReader parses 'False' as False."""
+        """Test ConfigReader parses 'false' as False."""
         from profiles.core.config.reader import ConfigReader
 
         profiles_file = tmp_path / ".profiles"
-        profiles_file.write_text("[LAUNCHER]\nscan_metrics = False\n")
+        profiles_file.write_text("defaults:\n  scan_metrics: false\n")
 
         reader = ConfigReader(profiles_file)
         config = reader.load()

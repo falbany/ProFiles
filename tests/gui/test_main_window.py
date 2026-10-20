@@ -75,7 +75,7 @@ def _make_config(
             ),
         ],
     )
-    # LAUNCHER-level row_colors: exercised when no active per-directory
+    # Defaults-level row_colors: exercised when no active per-directory
     # config matches the selected directory (the canonical docs setup).
     cfg.row_colors = row_colors
     return cfg
@@ -94,9 +94,9 @@ def window(tmp_path: Path) -> MainWindow:
 
 @pytest.fixture
 def row_color_window(tmp_path: Path) -> Callable[..., MainWindow]:
-    """Factory fixture for a MainWindow with LAUNCHER-level row_colors.
+    """Factory fixture for a MainWindow with global default row_colors.
 
-    ``row_colors`` are placed on ``AppConfig`` (the ``[LAUNCHER]`` base),
+    ``row_colors`` are placed on ``AppConfig`` (the ``defaults`` base),
     which ``_configure_row_colors`` uses whenever no per-directory
     ``MachineConfiguration`` matches the selected directory — the
     canonical documented setup.

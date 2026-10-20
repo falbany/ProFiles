@@ -111,7 +111,7 @@ def _merge_unique(
     active_items: Sequence[str],
     default_items: Sequence[str],
 ) -> list[str]:
-    """Merge *active_items* (per-config) with *default_items* ([LAUNCHER] defaults).
+    """Merge *active_items* (per-config) with *default_items* (global defaults).
 
     Per-config items come first, followed by default items that are not
     already present.  Uses ``dict.fromkeys`` for O(1) dedup while
@@ -126,7 +126,7 @@ def merge_config_overrides(
     config: AppConfig,
     directory: str,
 ) -> tuple[list[str], list[str]]:
-    """Merge per-config extensions/filters with the generic ``[LAUNCHER]`` defaults.
+    """Merge per-config extensions/filters with global defaults.
 
     Returns ``(merged_extensions, merged_filters)``.
     """

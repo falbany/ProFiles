@@ -4,7 +4,7 @@ This file provides context and instructions for AI agents working on the ProFile
 
 ## Project Overview
 
-ProFiles is a pure-stdlib Python application (no external dependencies beyond `pytest`). It uses Tkinter for GUI, `configparser` for INI file reading, and `os.startfile` / `open` / `xdg-open` for file launching on Windows / macOS / Linux respectively.
+ProFiles is a pure-stdlib Python application (no external dependencies beyond `pytest`). It uses Tkinter for GUI, YAML for configuration file reading, and `os.startfile` / `open` / `xdg-open` for file launching on Windows / macOS / Linux respectively.
 
 **Key technical constraints:**
 - **Python 3.11+** with `from __future__ import annotations`

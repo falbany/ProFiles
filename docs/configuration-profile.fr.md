@@ -242,8 +242,8 @@ row_colors = PATTERN1:#HEX1, PATTERN2:#HEX2, ...
 
 ### Règles de priorité
 
-1. Les règles `[LAUNCHER]` sont appliquées en premier (base)
-2. Les règles `[CONFIGURATION_N]` sont **ajoutées** après
+1. Les règles `defaults` sont appliquées en premier (base)
+2. Les règles `configs` sont **ajoutées** après
 3. Les règles par configuration ont la priorité (vérifiées en premier)
 
 ### Exemple
@@ -462,8 +462,8 @@ configs:
 ```
 
 **Ordre de résolution pour le fichier `PROD_test.lnk` :**
-1. Vérifier d'abord les règles `[CONFIGURATION_1]` → `PROD:#0D47A1` (bleu plus foncé) ✅
-2. Si aucune correspondance, vérifier les règles `[LAUNCHER]` → `PROD:#1565C0` (bleu standard)
+1. Vérifier d'abord les règles `configs` → `PROD:#0D47A1` (bleu plus foncé) ✅
+2. Si aucune correspondance, vérifier les règles `defaults` → `PROD:#1565C0` (bleu standard)
 3. Finalement : `SPECIFIC:#FF0000` (rouge) pour les fichiers contenant "SPECIFIC"
 
 ---
@@ -609,7 +609,7 @@ R : Supprimez `.profiles` ou exécutez `python -m profiles --init` pour régén�
 
 ### Version 1.0 (Actuelle)
 - Prise en charge complète de la configuration au format YAML
-- Sections `[CONFIGURATION_N]` par machine
+- Sections `configs` par machine
 - Coloration des lignes avec correspondance de motifs
 - Opérateurs de recherche avancés (-, +, OR, guillemets)
 - Flags CLI pour configuration explicite

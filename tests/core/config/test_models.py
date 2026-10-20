@@ -22,7 +22,7 @@ class TestAppConfig:
         assert config.close_after_execute is False
         assert config.search_dir == ""
         assert config.recursive_search is False
-        assert config.column_names == ()  # Empty by default, built from [COLUMN_*] sections
+        assert config.column_names == ()  # Empty by default, built from "columns" section
         assert config.column_widths == ()  # Empty by default
         assert config.extensions == ("All", ".lnk")
         assert config.filters == ("", "ST_PRO", "ST_ENG")

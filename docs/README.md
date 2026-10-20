@@ -20,12 +20,12 @@ Welcome to the ProFiles documentation. This documentation is available in **Engl
 - **Français**: [Configuration .profiles](./configuration-pylaunch.fr.md)
 
 Detailed reference for the `.profiles` configuration file (also applies to `.profile` legacy naming):
-- Global `[LAUNCHER]` settings
-- Per-machine `[CONFIGURATION_N]` sections
+- Global `defaults` settings
+- Per-machine `configs` sections
 - Search operators and syntax
 - Row coloring rules
 - CLI command lines
-- Launch hooks (`[HOOKS]` section)
+- Launch hooks (`hooks` section)
 
 > **Note**: The configuration file is named `.profiles`. Older documentation may reference `configuration-profile.*.md` files — these are superseded by `configuration-pylaunch.*.md` but the content is equivalent.
 

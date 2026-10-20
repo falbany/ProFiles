@@ -483,17 +483,17 @@ python -m profiles --config /full/path/to/.profiles
 - Network drive latency
 
 **Solution**:
-```ini
+```yaml
 # In .profiles file
-[LAUNCHER]
-# Exclude common large directories
-search_exclude_dirs = .git, node_modules, __pycache__, bin, obj, Debug, Release
+defaults:
+  # Exclude common large directories
+  search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj, Debug, Release]
 
-# Limit extensions
-extensions = .lnk, .pdf
+  # Limit extensions
+  extensions: [.lnk, .pdf]
 
-# Or disable recursive initially
-recursive_search = false
+  # Or disable recursive initially
+  recursive_search: false
 ```
 
 ---

@@ -22,19 +22,19 @@ ProFiles includes built-in performance monitoring for file scanning operations. 
 
 ### Via Configuration File
 
-Add the `scan_metrics` setting to your `[LAUNCHER]` section:
+Add the `scan_metrics` setting to your `defaults` section:
 
-```ini
-[LAUNCHER]
-scan_metrics = Vrai
-verbose = DEBUG
+```yaml
+defaults:
+  scan_metrics: true
+  verbose: DEBUG
 ```
 
 **Available values**:
-- `Vrai` (or `True`, `Yes`, `1`, `On`) - Enable metrics logging
-- `Faux` (or `False`, `No`, `0`, `Off`) - Disable metrics logging (default)
+- `true` (or `yes`, `1`, `on`) - Enable metrics logging
+- `false` (or `no`, `0`, `off`) - Disable metrics logging (default)
 
-> **Note**: Metrics are logged at **DEBUG** level. You must set `verbose = DEBUG` to see them.
+> **Note**: Metrics are logged at **DEBUG** level. You must set `verbose: DEBUG` to see them.
 
 ### Via Code (Programmatic API)
 
@@ -94,10 +94,10 @@ DEBUG Scan metrics: {'directory': '/path/to/scan',
 
 Track scan performance over time to establish baselines:
 
-```ini
-[LAUNCHER]
-scan_metrics = Vrai
-verbose = DEBUG
+```yaml
+defaults:
+  scan_metrics: true
+  verbose: DEBUG
 ```
 
 **Example log output**:
@@ -113,16 +113,16 @@ verbose = DEBUG
 
 Test different exclusion patterns to improve scan speed:
 
-```ini
+```yaml
 # Before optimization
-[LAUNCHER]
-search_exclude_dirs = .git
-scan_metrics = Vrai
+defaults:
+  search_exclude_dirs: [.git]
+  scan_metrics: true
 
 # After optimization - add more exclusions
-[LAUNCHER]
-search_exclude_dirs = .git, __pycache__, bin, obj, tmp, Debug
-scan_metrics = Vrai
+defaults:
+  search_exclude_dirs: [.git, __pycache__, bin, obj, tmp, Debug]
+  scan_metrics: true
 ```
 
 **Compare metrics**:
@@ -133,16 +133,16 @@ scan_metrics = Vrai
 
 Evaluate the performance impact of recursive scanning:
 
-```ini
+```yaml
 # Non-recursive scan
-[LAUNCHER]
-recursive_search = Faux
-scan_metrics = Vrai
+defaults:
+  recursive_search: false
+  scan_metrics: true
 
 # Recursive scan
-[LAUNCHER]
-recursive_search = Vrai
-scan_metrics = Vrai
+defaults:
+  recursive_search: true
+  scan_metrics: true
 ```
 
 ### 4. **Large Directory Monitoring**
@@ -165,17 +165,17 @@ DEBUG Scan metrics: {'directory': 'D:\\Production\\Tests',
 
 ### Metrics Not Appearing
 
-**Problem**: `scan_metrics = Vrai` but no metrics in logs.
+**Problem**: `scan_metrics: true` but no metrics in logs.
 
 **Solutions**:
-1. Verify `verbose = DEBUG` is set
+1. Verify `verbose: DEBUG` is set
 2. Check log file path and permissions
 3. Ensure you're scanning a directory (not an empty one)
 
-```ini
-[LAUNCHER]
-verbose = DEBUG
-scan_metrics = Vrai
+```yaml
+defaults:
+  verbose: DEBUG
+  scan_metrics: true
 ```
 
 ### Slow Scan Performance
@@ -189,17 +189,17 @@ scan_metrics = Vrai
 4. **Recursive scan** - Non-recursive is faster
 
 **Recommendations**:
-```ini
-[LAUNCHER]
-# Add aggressive exclusions
-search_exclude_dirs = .git, __pycache__, bin, obj, tmp, Debug, Release, .vs
-search_exclude_files = *backup*, *.tmp, ~$*, *.log
+```yaml
+defaults:
+  # Add aggressive exclusions
+  search_exclude_dirs: [.git, __pycache__, bin, obj, tmp, Debug, Release, .vs]
+  search_exclude_files: [*backup*, *.tmp, ~$*, *.log]
 
-# Use non-recursive if possible
-recursive_search = Faux
+  # Use non-recursive if possible
+  recursive_search: false
 
-# Enable metrics to verify improvement
-scan_metrics = Vrai
+  # Enable metrics to verify improvement
+  scan_metrics: true
 ```
 
 ### High Error Count

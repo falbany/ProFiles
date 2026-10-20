@@ -518,17 +518,17 @@ python -m profiles --config /chemin/complet/vers/.profiles
 - Latence du lecteur réseau
 
 **Solution** :
-```ini
+```yaml
 # Dans le fichier .profiles
-[LAUNCHER]
-# Exclure les répertoires courants volumineux
-search_exclude_dirs = .git, node_modules, __pycache__, bin, obj, Debug, Release
+defaults:
+  # Exclure les répertoires courants volumineux
+  search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj, Debug, Release]
 
-# Limiter les extensions
-extensions = .lnk, .pdf
+  # Limiter les extensions
+  extensions: [.lnk, .pdf]
 
-# Ou désactiver le récursif initialement
-recursive_search = Faux
+  # Ou désactiver le récursif initialement
+  recursive_search: false
 ```
 
 ---

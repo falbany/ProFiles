@@ -327,9 +327,9 @@ Pour les répertoires avec >10 000 fichiers :
    ```
 
 2. **Exclure les répertoires courants volumineux** :
-   ```ini
-   [LAUNCHER]
-   search_exclude_dirs = .git, node_modules, __pycache__, build, dist
+   ```yaml
+   defaults:
+     search_exclude_dirs: [.git, node_modules, __pycache__, build, dist]
    ```
 
 3. **Utiliser le mode non-récursif initialement** :
