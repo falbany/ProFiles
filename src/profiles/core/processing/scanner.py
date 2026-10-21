@@ -95,6 +95,20 @@ def _passes_extension_filter(
     )
 
 
+def _merge_unique(*seqs: Sequence[str] | None) -> tuple[str, ...]:
+    """Concatenate sequences, drop duplicates, keep first-seen order."""
+    seen: set[str] = set()
+    merged: list[str] = []
+    for seq in seqs:
+        if not seq:
+            continue
+        for pattern in seq:
+            if pattern not in seen:
+                seen.add(pattern)
+                merged.append(pattern)
+    return tuple(merged)
+
+
 def _resolve_scan_config(
     directory: str,
     recursive: bool,
@@ -113,13 +127,16 @@ def _resolve_scan_config(
         else (config.max_search_depth if config else 10)
     )
 
-    eff_exclude_dirs = tuple(exclude_dirs) if exclude_dirs else ()
-    if active and active.search_exclude_dirs:
-        eff_exclude_dirs = active.search_exclude_dirs
-
-    eff_exclude_files = tuple(exclude_files) if exclude_files else ()
-    if active and active.search_exclude_files:
-        eff_exclude_files = tuple(dict.fromkeys((*eff_exclude_files, *active.search_exclude_files)))
+    eff_exclude_dirs = _merge_unique(
+        config.search_exclude_dirs if config else None,
+        exclude_dirs,
+        active.search_exclude_dirs if active else None,
+    )
+    eff_exclude_files = _merge_unique(
+        config.search_exclude_files if config else None,
+        exclude_files,
+        active.search_exclude_files if active else None,
+    )
 
     return eff_recursive, eff_depth, eff_exclude_dirs, eff_exclude_files
 

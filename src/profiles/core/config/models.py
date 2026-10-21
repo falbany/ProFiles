@@ -144,7 +144,10 @@ class MachineConfiguration:
             glob/wildcard). Appended to ``defaults.search_exclude_files``.
         max_search_depth: Maximum depth for recursive directory scanning.
         recursive_search: Whether to scan subdirectories recursively.
-        search_exclude_dirs: Per-config directory exclusion patterns.
+        search_exclude_dirs: Per-config directory exclusion patterns
+            (case-insensitive glob/wildcard). Order-merged with the global
+            ``AppConfig.search_exclude_dirs`` (first-seen order, duplicates
+            removed).
     """
 
     match: MatchCriteria = field(default_factory=MatchCriteria)
@@ -197,6 +200,14 @@ class AppConfig:
         search_exclude_files: Filename glob patterns (case-insensitive)
             for files to skip during scanning. Per-config
             ``search_exclude_files`` are APPENDED.
+        search_exclude_dirs: Directory-name glob patterns (case-insensitive)
+            for directories to skip during scanning. Order-merges with the
+            global list: global → caller → per-config (first-seen order,
+            duplicates removed). Default excludes ``.git``; since the merge,
+            ``.git`` is now ALWAYS excluded in pipeline scans unless removed
+            from the global list.
+            ``search_exclude_dirs`` are APPENDED to the global list
+            (first-seen order, duplicates removed).
         row_colors: Generic row-coloring rules as ``(pattern, color)`` tuples.
             These serve as a base; per-config ``row_colors`` are APPENDED
             to this list, with per-config rules taking priority.
