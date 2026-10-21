@@ -63,7 +63,7 @@ def extract_version(filename: str, extension: str = "") -> str:
     return _strip_extension_from_version(version, extension)
 
 
-def _strip_extension_from_version(version: str, extension: str) -> str:
+def strip_extension_from_version(version: str, extension: str) -> str:
     """Strip the file extension suffix from a version string if present.
 
     Args:
@@ -77,6 +77,10 @@ def _strip_extension_from_version(version: str, extension: str) -> str:
     if ext_lower and version.lower().endswith(f".{ext_lower}"):
         return version[: -len(ext_lower) - 1]
     return version
+
+
+# Back-compat private alias (pre-Task 11 name).
+_strip_extension_from_version = strip_extension_from_version
 
 
 def get_file_info(file_path: str | Path, extension: str = "") -> tuple[str, str]:
@@ -94,7 +98,7 @@ def get_file_info(file_path: str | Path, extension: str = "") -> tuple[str, str]
     return filename, version
 
 
-def _build_column_extractor(
+def build_column_extractor(
     columns: object | None,
     column_names: tuple[str, ...],
 ) -> ColumnExtractor:
@@ -126,6 +130,10 @@ def _build_column_extractor(
             extractor.add_rule("Version", r"_V(.+)", group=1, priority=10)
 
     return extractor
+
+
+# Back-compat private alias (pre-Task 11 name).
+_build_column_extractor = build_column_extractor
 
 
 def _iter_columns(columns: object) -> list[tuple[str, object]]:

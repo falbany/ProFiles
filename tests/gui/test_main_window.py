@@ -779,8 +779,16 @@ class TestNoConfigFileMode:
         from profiles.gui.main_window import MainWindow
 
         test_items = [
-            ScannedFileDynamic(path=tmp_path / "test1.mttl", column_values={"File": "test1.mttl"}),
-            ScannedFileDynamic(path=tmp_path / "test2.mttl", column_values={"File": "test2.mttl"}),
+            ScannedFileDynamic(
+                path=tmp_path / "test1.mttl",
+                column_values={"File": "test1.mttl"},
+                rel_path="test1.mttl",
+            ),
+            ScannedFileDynamic(
+                path=tmp_path / "test2.mttl",
+                column_values={"File": "test2.mttl"},
+                rel_path="test2.mttl",
+            ),
         ]
 
         # Mock tree insert to capture calls

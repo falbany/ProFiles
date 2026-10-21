@@ -336,7 +336,9 @@ class TestScannedFileDynamic:
             "Version": "01",
             "Device": "ABC123",
         }
-        scanned = ScannedFileDynamic(path=Path("C:/path/to/test.mttl"), column_values=column_values)
+        scanned = ScannedFileDynamic(
+            path=Path("C:/path/to/test.mttl"), column_values=column_values, rel_path="test.mttl"
+        )
 
         assert scanned.path == Path("C:/path/to/test.mttl")
         assert scanned.column_values == column_values

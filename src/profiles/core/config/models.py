@@ -14,6 +14,7 @@ from typing import Literal
 from profiles import __version__ as _pkg_version
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.config.schema import MatchCriteriaSchema
+from profiles.utils.file_utils import DEFAULT_MAX_SEARCH_DEPTH
 
 
 @dataclass(frozen=True)
@@ -244,7 +245,7 @@ class AppConfig:
     row_colors: tuple[tuple[str, str], ...] = ()
     verbose: str = "INFO"
     scan_metrics: bool = False
-    max_search_depth: int = 10
+    max_search_depth: int = DEFAULT_MAX_SEARCH_DEPTH
     configurations: list[MachineConfiguration] = field(default_factory=list)
     config_path: Path = field(default_factory=lambda: Path.cwd() / PRIMARY_CONFIG_NAME)
     skip_config_prompt: bool = False
@@ -256,6 +257,7 @@ class AppConfig:
 __all__ = [
     "AppConfig",
     "ColumnConfiguration",
+    "DEFAULT_MAX_SEARCH_DEPTH",
     "HookSpec",
     "MachineConfiguration",
 ]

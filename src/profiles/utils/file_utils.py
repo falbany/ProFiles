@@ -19,6 +19,13 @@ from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 
+# Shared depth default for recursive scans (plan Task 11). This module is
+# a leaf of the package graph — profiles.core.config.models re-exports the
+# constant so it remains part of the config models' public surface.
+# (A utils -> core import was tried first and IS circular: core/__init__
+# eagerly imports scanner, which imports this module.)
+DEFAULT_MAX_SEARCH_DEPTH = 10
+
 # Cache sys.platform to avoid the attribute lookup on every call.
 _IS_WINDOWS = sys.platform.startswith("win") or os.name == "nt"
 _IS_MACOS = sys.platform == "darwin"
@@ -172,7 +179,7 @@ def _scan_subtree(
     exclude_dirs: tuple[str, ...] = (),
     exclude_files: tuple[str, ...] = (),
     current_depth: int = 1,
-    max_depth: int = 10,
+    max_depth: int = DEFAULT_MAX_SEARCH_DEPTH,
     on_skip: Callable[[str, str], None] | None = None,
     name_filter: Callable[[str], bool] | None = None,
 ) -> list[Path]:
@@ -243,7 +250,7 @@ def scan_directory(
     recursive: bool = False,
     exclude_dirs: tuple[str, ...] = (),
     exclude_files: tuple[str, ...] = (),
-    max_depth: int = 10,
+    max_depth: int = DEFAULT_MAX_SEARCH_DEPTH,
     on_skip: Callable[[str, str], None] | None = None,
     name_filter: Callable[[str], bool] | None = None,
 ) -> list[Path]:

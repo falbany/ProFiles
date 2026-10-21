@@ -24,7 +24,11 @@ from profiles.core.processing.file_classifier import (
 )
 from profiles.core.telemetry import events as _events
 from profiles.core.telemetry.metrics import ScanTimer
-from profiles.utils.file_utils import scan_directory, suffix_of_name
+from profiles.utils.file_utils import (
+    DEFAULT_MAX_SEARCH_DEPTH,  # noqa: F401  (re-export)
+    scan_directory,
+    suffix_of_name,
+)
 from profiles.utils.search_parser import match_filter, tokenize
 
 # Thread pool configuration for parallel file processing
@@ -39,11 +43,22 @@ T = TypeVar("T")
 
 
 class ScannedFile(NamedTuple):
-    """A processed and filtered file entry ready for display / launch."""
+    """A processed and filtered file entry ready for display / launch.
 
-    filename: str
+    Attributes:
+        rel_path: Path relative to the scanned directory (display path).
+        version: Extracted version string (may be empty).
+        path: Full filesystem path to the file.
+    """
+
+    rel_path: str
     version: str
     path: Path
+
+    @property
+    def filename(self) -> str:
+        """Read-only alias for :attr:`rel_path` (pre-rename name)."""
+        return self.rel_path
 
 
 class ScannedFileDynamic(NamedTuple):
@@ -57,7 +72,7 @@ class ScannedFileDynamic(NamedTuple):
 
     path: Path
     column_values: dict[str, str]
-    rel_path: str = ""
+    rel_path: str
 
 
 def is_simple_extension(ext: str) -> bool:
@@ -109,7 +124,7 @@ def _resolve_scan_config(
     eff_depth = (
         active.max_search_depth
         if (active and active.max_search_depth is not None)
-        else (config.max_search_depth if config else 10)
+        else (config.max_search_depth if config else DEFAULT_MAX_SEARCH_DEPTH)
     )
 
     eff_exclude_dirs = _merge_unique(
