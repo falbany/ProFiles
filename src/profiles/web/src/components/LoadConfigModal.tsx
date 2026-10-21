@@ -41,8 +41,10 @@ export function LoadConfigModal({
       ? document.activeElement
       : null;
     setError(null);
-    const initialPath = activeConfigPath ? activeConfigPath.split(/[\\/]/).slice(0, -1).join("\\") || activeConfigPath : "";
-    void browse(initialPath || "");
+    const configPath = activeConfigPath ?? "";
+    const lastSep = Math.max(configPath.lastIndexOf("/"), configPath.lastIndexOf("\\"));
+    const initialPath = lastSep > 0 ? configPath.slice(0, lastSep) : "";
+    void browse(initialPath);
     const focusFrame = requestAnimationFrame(() => pathInputRef.current?.focus());
 
     return () => {

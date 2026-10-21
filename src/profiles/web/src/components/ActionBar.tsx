@@ -6,6 +6,8 @@ interface ActionBarProps {
   hasSelection: boolean;
   fileCount: number;
   onExport?: () => void;
+  /** Transient status message; rendered centered above the bar while set. */
+  toastMessage?: string;
 }
 
 export function ActionBar({
@@ -14,9 +16,23 @@ export function ActionBar({
   hasSelection,
   fileCount,
   onExport,
+  toastMessage,
 }: ActionBarProps) {
   return (
-    <div className="flex items-center justify-between border-t border-line bg-surface-glass px-4 py-2.5 text-xs">
+    <div className="relative flex items-center justify-between border-t border-line bg-surface-glass px-4 py-2.5 text-xs">
+      {/* Toast — centered on the action bar both horizontally and
+          vertically; pointer-events pass through to the controls below. */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 z-50 max-w-[min(70vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-surface-strong px-4 py-2 text-center text-xs font-medium text-ink shadow-xl backdrop-blur-md"
+        >
+          {toastMessage}
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         {scanning && (
           <div className="flex items-center gap-2 text-indigo-400">

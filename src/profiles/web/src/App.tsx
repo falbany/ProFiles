@@ -88,9 +88,13 @@ export default function App() {
   const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const showToast = (msg: string) => {
+    if (!msg) return; // never blank an existing toast with an empty message
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(""), 3500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 3500);
   };
 
   const beginScan = () => {
@@ -1073,6 +1077,7 @@ export default function App() {
         hasSelection={files.length > 0}
         fileCount={totalCount}
         onExport={handleExport}
+        toastMessage={toastMessage}
       />
 
       <StatusBar
@@ -1216,17 +1221,6 @@ export default function App() {
         onDismiss={() => setSingleMatchFile(null)}
       />
 
-      {/* Toast Notification */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className={toastMessage
-          ? "fixed bottom-12 right-6 z-50 rounded-lg border border-line bg-surface-glass px-4 py-2 text-xs font-medium text-ink shadow-xl backdrop-blur-md"
-          : "sr-only"}
-      >
-        {toastMessage}
-      </div>
     </div>
   );
 }
