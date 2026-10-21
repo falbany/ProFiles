@@ -318,3 +318,29 @@ class TestMatchFilter:
 
     def test_trailing_space(self) -> None:
         assert match_filter("ST_PRO.mttl", "ST_PRO  ") is True
+
+
+# ── D3: empty and blank tokens are dropped (Task 1) ──────────────────────
+
+from profiles.core.processing.scanner import is_simple_extension  # noqa: E402
+
+
+class TestEmptyTokenDropping:
+    """D3: tokens that are empty or whitespace-only are dropped; quote-only
+    filters match everything instead of raising."""
+
+    @pytest.mark.parametrize("query", ['""', '"  "', "   "])
+    def test_empty_or_blank_tokens_are_dropped(self, query: str) -> None:
+        assert tokenize(query) == []
+
+    def test_empty_phrase_between_terms_is_dropped(self) -> None:
+        assert tokenize('a "" b') == ["a", "b"]
+
+    def test_empty_quoted_filter_matches_everything(self) -> None:
+        assert match_filter("anything.pdf", '""') is True
+
+    def test_empty_quoted_extension_is_simple(self) -> None:
+        assert is_simple_extension('""') is True
+
+    def test_unmatched_quote_is_literal_token(self) -> None:
+        assert tokenize('"foo bar') == ['"foo', "bar"]

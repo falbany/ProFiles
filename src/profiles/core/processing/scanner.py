@@ -71,6 +71,9 @@ def is_simple_extension(ext: str) -> bool:
     if not stripped or stripped.lower() == "all":
         return True
     tokens = tokenize(stripped)
+    if not tokens:
+        # Quote-only extension ("" / "   "): tokens were all empty → simple.
+        return True
     if len(tokens) != 1:
         return False
     token = tokens[0]

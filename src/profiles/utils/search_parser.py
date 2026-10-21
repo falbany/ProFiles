@@ -54,10 +54,18 @@ def tokenize(query: str) -> list[str]:
         query: The raw filter string entered by the user.
 
     Returns:
-        A list of token strings.
+        A list of token strings. Tokens that are empty or whitespace-only
+        (e.g. from empty quoted phrases) are dropped, so every element is
+        a non-empty, non-whitespace :class:`str`.
     """
-    # Match either a quoted string (capture inside quotes) or a non-whitespace token
-    return [m.group(1) or m.group(2) for m in re.finditer(r'"([^"]*)"|(\S+)', query)]
+    # Match either a quoted string (capture inside quotes) or a non-whitespace token.
+    # An empty grouped phrase (`""`, `"   "`) yields group(1) == "" → dropped.
+    tokens: list[str] = []
+    for m in re.finditer(r'"([^"]*)"|(\S+)', query):
+        token = m.group(1) if m.group(1) is not None else m.group(2)
+        if token and token.strip():
+            tokens.append(token)
+    return tokens
 
 
 def split_or_groups(tokens: Sequence[str]) -> list[list[str]]:
