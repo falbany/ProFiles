@@ -173,6 +173,9 @@ def _scan_and_filter(
 
     ext_stripped = extension.strip()
     seen_paths: set[str] = set()
+    # Deduplicate only when several roots could yield the same file
+    # (e.g. ``A`` and ``A/sub``); a single root cannot repeat itself.
+    dedupe = len(directory_list) > 1
 
     for directory in directory_list:
         if not directory:
@@ -199,18 +202,18 @@ def _scan_and_filter(
             for file_path in files:
                 full_suffix = "".join(file_path.suffixes)
 
-                try:
-                    abs_path = str(file_path.resolve())
-                except OSError as exc:
-                    _events.scan_skipped(logger, path=str(file_path), error=str(exc))
-                    continue
-
-                if abs_path in seen_paths:
-                    continue
-                seen_paths.add(abs_path)
-
                 if not _passes_extension_filter(full_suffix, extension, ext_stripped):
                     continue
+
+                if dedupe:
+                    try:
+                        abs_path = str(file_path.resolve())
+                    except OSError as exc:
+                        _events.scan_skipped(logger, path=str(file_path), error=str(exc))
+                        continue
+                    if abs_path in seen_paths:
+                        continue
+                    seen_paths.add(abs_path)
 
                 display_path = _compute_display_path(file_path, base_path)
 

@@ -47,6 +47,12 @@ class TestScanFailureScope:
     def test_resolve_error_skips_single_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
+        """Per-file resolve failure skips that file (DEBUG) — multi-root scan.
+
+        Path resolution only runs when dedupe is active (several roots);
+        a single-root scan can never duplicate a file, so it never
+        resolves (Task 6). Two identical roots keep dedupe on here.
+        """
         root = tmp_path / "scan"
         root.mkdir()
         (root / "good.pdf").write_text("x", encoding="utf-8")
@@ -63,7 +69,7 @@ class TestScanFailureScope:
         monkeypatch.setattr(Path, "resolve", flaky_resolve)
 
         with caplog.at_level(logging.DEBUG):
-            results = scan_and_process(str(root))
+            results = scan_and_process([str(root), str(root)])
 
         assert [r.filename for r in results] == ["good.pdf"]
         assert any("SCAN_SKIPPED" in rec.message for rec in caplog.records)
