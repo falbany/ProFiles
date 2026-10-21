@@ -41,18 +41,33 @@ def _full_suffix(file: Path | str) -> str:
     """
     if isinstance(file, Path):
         return "".join(file.suffixes)
-    name = os.path.basename(file)
-    dot_idx = name.find(".")
-    if dot_idx in (-1, 0):
+    return suffix_of_name(os.path.basename(str(file)))
+
+
+def suffix_of_name(name: str) -> str:
+    """Full compound extension of a *name* — the ``Path.suffixes`` rule.
+
+    Reproduces ``"".join(Path(name).suffixes)`` exactly (including the
+    empty result for trailing-dot and all-dot names, and the leading-dot
+    handling for dotfiles), without constructing a :class:`Path`.
+
+    Args:
+        name: The file name (may include no dots at all).
+
+    Returns:
+        The full compound extension (leading dots included), or ``""``.
+    """
+    if name.endswith("."):
         return ""
-    return name[dot_idx:]
+    stem = name.lstrip(".")
+    return "".join("." + part for part in stem.split(".")[1:])
 
 
 def _matches_extension(file: Path | str, ext_lower: str) -> bool:
     """Check if a file matches the given extension filter.
 
     Supports compound extensions (e.g. ``.my.pdf``) by comparing
-    against the full suffix via :func:`_full_suffix`.
+    against the full suffix via :func:`suffix_of_name`.
 
     Args:
         file: The file path or string filename to check.
@@ -62,7 +77,8 @@ def _matches_extension(file: Path | str, ext_lower: str) -> bool:
     Returns:
         True if the file matches the filter.
     """
-    return not ext_lower or ext_lower == "all" or _full_suffix(file).lower() == f".{ext_lower}"
+    name = file if isinstance(file, str) else os.path.basename(str(file))
+    return not ext_lower or ext_lower == "all" or suffix_of_name(name).lower() == f".{ext_lower}"
 
 
 def _is_excluded(name: str, patterns: tuple[str, ...]) -> bool:
@@ -99,6 +115,7 @@ def _scan_subtree(
     current_depth: int = 1,
     max_depth: int = 10,
     on_skip: Callable[[str, str], None] | None = None,
+    name_filter: Callable[[str], bool] | None = None,
 ) -> list[Path]:
     """Worker: recursively scan a directory subtree for matching files.
 
@@ -121,6 +138,9 @@ def _scan_subtree(
         max_depth: Maximum directory recursion depth.
         on_skip: Optional ``(path, error_text)`` callback invoked for
             every entry or directory that cannot be read.
+        name_filter: Optional predicate applied to each *matching* file
+            name (after the extension and exclude-files checks, before
+            the Path is built); returning ``False`` skips the file.
 
     Returns:
         List of matching file paths in this subtree.
@@ -144,6 +164,7 @@ def _scan_subtree(
                                     current_depth + 1,
                                     max_depth,
                                     on_skip,
+                                    name_filter,
                                 )
                             )
                         continue
@@ -152,6 +173,8 @@ def _scan_subtree(
                         and _matches_extension(entry.name, ext_lower)
                         and not _is_excluded(entry.name, exclude_files)
                     ):
+                        if name_filter is not None and not name_filter(entry.name):
+                            continue
                         files.append(Path(entry.path))
                 except OSError as exc:
                     _report_skip(on_skip, entry.path, exc)
@@ -168,6 +191,7 @@ def scan_directory(
     exclude_files: tuple[str, ...] = (),
     max_depth: int = 10,
     on_skip: Callable[[str, str], None] | None = None,
+    name_filter: Callable[[str], bool] | None = None,
 ) -> list[Path]:
     """Scan a directory for files matching the given extension.
 
@@ -200,6 +224,9 @@ def scan_directory(
         max_depth: Maximum recursion depth for recursive scan (default 10).
         on_skip: Optional ``(path, error_text)`` callback invoked for
             every entry or directory that cannot be read.
+        name_filter: Optional predicate applied to each *matching* file
+            name (after the extension and exclude-files checks, before
+            the Path is built); returning ``False`` skips the file.
 
     Returns:
         Sorted list of matching file paths.
@@ -222,6 +249,8 @@ def scan_directory(
                             and _matches_extension(entry.name, ext_lower)
                             and not _is_excluded(entry.name, exclude_files)
                         ):
+                            if name_filter is not None and not name_filter(entry.name):
+                                continue
                             files.append(Path(entry.path))
                     except OSError as exc:
                         _report_skip(on_skip, entry.path, exc)
@@ -245,6 +274,8 @@ def scan_directory(
                         and _matches_extension(entry.name, ext_lower)
                         and not _is_excluded(entry.name, exclude_files)
                     ):
+                        if name_filter is not None and not name_filter(entry.name):
+                            continue
                         root_files.append(Path(entry.path))
                 except OSError as exc:
                     _report_skip(on_skip, entry.path, exc)
@@ -256,7 +287,15 @@ def scan_directory(
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
         future_to_dir = {
             executor.submit(
-                _scan_subtree, subdir, ext_lower, exclude_dirs, exclude_files, 1, max_depth, on_skip
+                _scan_subtree,
+                subdir,
+                ext_lower,
+                exclude_dirs,
+                exclude_files,
+                1,
+                max_depth,
+                on_skip,
+                name_filter,
             ): subdir
             for subdir in subdirs
         }

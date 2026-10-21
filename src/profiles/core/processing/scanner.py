@@ -24,7 +24,7 @@ from profiles.core.processing.file_classifier import (
 )
 from profiles.core.telemetry import events as _events
 from profiles.core.telemetry.metrics import ScanTimer
-from profiles.utils.file_utils import scan_directory
+from profiles.utils.file_utils import scan_directory, suffix_of_name
 from profiles.utils.search_parser import match_filter, tokenize
 
 # Thread pool configuration for parallel file processing
@@ -78,21 +78,6 @@ def is_simple_extension(ext: str) -> bool:
         return False
     token = tokens[0]
     return not (token.startswith("-") or token.startswith("+"))
-
-
-def _passes_extension_filter(
-    full_suffix: str,
-    extension: str,
-    ext_stripped: str,
-) -> bool:
-    """Check whether *full_suffix* passes the extension filter.
-
-    Returns ``True`` when the file should be **kept** (i.e. the filter
-    does not reject it).  An empty / ``"All"`` extension always passes.
-    """
-    return not (
-        ext_stripped and ext_stripped.lower() != "all" and not match_filter(full_suffix, extension)
-    )
 
 
 def _merge_unique(*seqs: Sequence[str] | None) -> tuple[str, ...]:
@@ -177,6 +162,17 @@ def _scan_and_filter(
     # (e.g. ``A`` and ``A/sub``); a single root cannot repeat itself.
     dedupe = len(directory_list) > 1
 
+    # Push the extension filter into the scan: names that cannot pass
+    # the filter never become Path objects (Task 7). Substring (D1)
+    # matching on the file name's full compound suffix.
+    name_filter: Callable[[str], bool] | None = None
+    if ext_stripped and ext_stripped.lower() != "all":
+
+        def _extension_predicate(name: str) -> bool:
+            return match_filter(suffix_of_name(name), extension)
+
+        name_filter = _extension_predicate
+
     for directory in directory_list:
         if not directory:
             continue
@@ -198,12 +194,10 @@ def _scan_and_filter(
                 exclude_files=effective_exclude_files,
                 max_depth=effective_depth,
                 on_skip=lambda p, e: _events.scan_skipped(logger, path=p, error=e),
+                name_filter=name_filter,
             )
             for file_path in files:
                 full_suffix = "".join(file_path.suffixes)
-
-                if not _passes_extension_filter(full_suffix, extension, ext_stripped):
-                    continue
 
                 if dedupe:
                     try:
