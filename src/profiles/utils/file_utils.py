@@ -11,10 +11,12 @@ import concurrent.futures
 import fnmatch
 import hashlib
 import os
+import re
 import shlex
 import subprocess
 import sys
 from collections.abc import Callable
+from functools import lru_cache
 from pathlib import Path
 
 # Cache sys.platform to avoid the attribute lookup on every call.
@@ -81,6 +83,30 @@ def _matches_extension(file: Path | str, ext_lower: str) -> bool:
     return not ext_lower or ext_lower == "all" or suffix_of_name(name).lower() == f".{ext_lower}"
 
 
+def _match_nothing(_name: str) -> bool:
+    """Predicate for an empty pattern tuple: excludes nothing."""
+    return False
+
+
+@lru_cache(maxsize=64)
+def _compile_excludes(patterns: tuple[str, ...]) -> Callable[[str], bool]:
+    """Build a memoized ``name -> bool`` predicate for glob *patterns*.
+
+    One combined regex from every ``fnmatch.translate`` pattern,
+    both patterns and names lowercased (case-insensitive semantics as
+    in the previous per-pattern ``fnmatch.fnmatchcase`` loop).
+    """
+    if not patterns:
+        return _match_nothing
+    combined = "|".join(fnmatch.translate(p.lower()) for p in patterns)
+    regex = re.compile(combined)
+
+    def match(name: str) -> bool:
+        return regex.match(name.lower()) is not None
+
+    return match
+
+
 def _is_excluded(name: str, patterns: tuple[str, ...]) -> bool:
     """Return True if *name* matches any glob *pattern* (case-insensitive).
 
@@ -88,8 +114,7 @@ def _is_excluded(name: str, patterns: tuple[str, ...]) -> bool:
     :mod:`fnmatch`. An entry of bare ``"*"`` excludes every directory,
     which is rarely useful in practice but is allowed for completeness.
     """
-    name_lower = name.lower()
-    return any(fnmatch.fnmatchcase(name_lower, p.lower()) for p in patterns)
+    return _compile_excludes(patterns)(name)
 
 
 def _report_skip(
