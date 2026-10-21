@@ -355,12 +355,18 @@ def open_with_default_app(file_path: str | Path) -> bool:
 def launch_file_with_args(path: Path, args: str) -> bool:
     """Launch *path* with extra CLI *args* using the OS default association.
 
-    Args are split with ``shlex`` (POSIX rules); no shell metacharacter
-    injection.  Empty *args* returns ``False`` — the caller falls back
-    to :func:`launch_file`.
+    Args are split with ``shlex`` (POSIX rules; no shell is invoked on
+    POSIX — the command vector is passed directly to the OS).  Empty
+    *args* returns ``False`` — the caller falls back to
+    :func:`launch_file`.
 
-    Returns ``True`` only when the child process was successfully
-    spawned.  Exceptions are swallowed to match :func:`launch_file`.
+    Returns ``True`` once the launcher process was spawned; the child is
+    never waited on.  Exceptions are swallowed to match
+    :func:`launch_file`.
+
+    Windows caveat: the Windows branch still goes through ``cmd.exe``
+    (``cmd /c start``), so shell metacharacters are interpreted there;
+    ``os.startfile`` cannot take arguments.
     """
     try:
         tokens = shlex.split(args)
@@ -370,17 +376,13 @@ def launch_file_with_args(path: Path, args: str) -> bool:
         return False
 
     try:
-        if sys.platform == "win32":
-            with subprocess.Popen(  # noqa: S602,S607 - intentional shell invocation
-                ["cmd", "/c", "start", "", str(path), *tokens]
-            ):
-                pass
-        elif sys.platform == "darwin":
-            with subprocess.Popen(["open", str(path), *tokens]):  # noqa: S607
-                pass
+        if _IS_WINDOWS:
+            # Windows keeps ``cmd /c start``: os.startfile cannot take arguments.
+            subprocess.Popen(["cmd", "/c", "start", "", str(path), *tokens])
+        elif _IS_MACOS:
+            subprocess.Popen(["open", str(path), *tokens])
         else:
-            with subprocess.Popen(["xdg-open", str(path), *tokens]):  # noqa: S607
-                pass
+            subprocess.Popen(["xdg-open", str(path), *tokens])
         return True
     except (OSError, subprocess.SubprocessError):
         return False

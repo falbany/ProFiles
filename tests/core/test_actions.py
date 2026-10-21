@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import profiles.utils.file_utils as file_utils
 from profiles.config import AppConfig, MachineConfiguration
 from profiles.core import actions
 from profiles.core.actions import (
@@ -521,9 +522,8 @@ class TestLaunchSelectedWithArgs:
         f = tmp_path / "doc.pdf"
         f.write_text("x", encoding="utf-8")
         mock_popen = mocker.patch("profiles.utils.file_utils.subprocess.Popen")
-
-        # platform branch is selected at call time, not import time.
-        mocker.patch.object(sys, "platform", "linux")
+        mocker.patch.object(file_utils, "_IS_WINDOWS", False)
+        mocker.patch.object(file_utils, "_IS_MACOS", False)
         assert actions._launch_with_args(f, "--page 2") is True
 
         mock_popen.assert_called_once()
@@ -557,7 +557,7 @@ class TestLaunchSelectedWithArgs:
         f = tmp_path / "doc.pdf"
         f.write_text("x", encoding="utf-8")
         mock_popen = mocker.patch("profiles.utils.file_utils.subprocess.Popen")
-        mocker.patch.object(sys, "platform", "win32")
+        mocker.patch.object(file_utils, "_IS_WINDOWS", True)
 
         assert actions._launch_with_args(f, "/p 2") is True
 
