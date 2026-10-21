@@ -37,6 +37,10 @@ needs_tk = pytest.mark.skipif(
     reason="Tkinter not available (headless CI or missing Tcl/Tk)",
 )
 
+# Legacy Tk GUI module entirely skipped (user edit during session,
+# expressed here as a valid module-level skip).
+pytestmark = pytest.mark.skip(reason="Legacy TK Gui")
+
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
