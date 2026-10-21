@@ -840,6 +840,7 @@ class TestNoConfigFileMode:
             ScannedFileDynamic(
                 path=tmp_path / "test1.mttl",
                 column_values={"File": "test1.mttl", "Version": "v1.0"},
+                rel_path="test1.mttl",
             ),
         ]
 
