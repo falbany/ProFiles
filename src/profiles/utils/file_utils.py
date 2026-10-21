@@ -132,6 +132,40 @@ def _report_skip(
         on_skip(str(path), str(exc))
 
 
+def _classify(
+    entry: os.DirEntry[str],
+    ext_lower: str,
+    exclude_dirs: tuple[str, ...],
+    exclude_files: tuple[str, ...],
+    name_filter: Callable[[str], bool] | None,
+    on_skip: Callable[[str, str], None] | None,
+) -> tuple[str, Path] | None:
+    """Classify one directory entry.
+
+    Returns:
+        ``("dir", path)`` to descend into the (non-excluded) directory,
+        ``("file", path)`` for a file that passes every check, or
+        ``None`` to skip the entry. Unreadable entries are reported via
+        *on_skip* (silent when ``None``).
+    """
+    try:
+        if entry.is_dir(follow_symlinks=False):
+            if _is_excluded(entry.name, exclude_dirs):
+                return None
+            return ("dir", Path(entry.path))
+        if (
+            entry.is_file(follow_symlinks=False)
+            and _matches_extension(entry.name, ext_lower)
+            and not _is_excluded(entry.name, exclude_files)
+        ):
+            if name_filter is not None and not name_filter(entry.name):
+                return None
+            return ("file", Path(entry.path))
+    except OSError as exc:
+        _report_skip(on_skip, entry.path, exc)
+    return None
+
+
 def _scan_subtree(
     root: Path | str,
     ext_lower: str,
@@ -177,32 +211,27 @@ def _scan_subtree(
     try:
         with os.scandir(root) as entries:
             for entry in entries:
-                try:
-                    if entry.is_dir(follow_symlinks=False):
-                        if not _is_excluded(entry.name, exclude_dirs):
-                            files.extend(
-                                _scan_subtree(
-                                    entry.path,
-                                    ext_lower,
-                                    exclude_dirs,
-                                    exclude_files,
-                                    current_depth + 1,
-                                    max_depth,
-                                    on_skip,
-                                    name_filter,
-                                )
-                            )
-                        continue
-                    if (
-                        entry.is_file(follow_symlinks=False)
-                        and _matches_extension(entry.name, ext_lower)
-                        and not _is_excluded(entry.name, exclude_files)
-                    ):
-                        if name_filter is not None and not name_filter(entry.name):
-                            continue
-                        files.append(Path(entry.path))
-                except OSError as exc:
-                    _report_skip(on_skip, entry.path, exc)
+                classified = _classify(
+                    entry, ext_lower, exclude_dirs, exclude_files, name_filter, on_skip
+                )
+                if classified is None:
+                    continue
+                tag, path = classified
+                if tag == "dir":
+                    files.extend(
+                        _scan_subtree(
+                            path,
+                            ext_lower,
+                            exclude_dirs,
+                            exclude_files,
+                            current_depth + 1,
+                            max_depth,
+                            on_skip,
+                            name_filter,
+                        )
+                    )
+                else:
+                    files.append(path)
     except OSError as exc:
         _report_skip(on_skip, root, exc)
     return files
@@ -268,17 +297,11 @@ def scan_directory(
         try:
             with os.scandir(scan_path) as entries:
                 for entry in entries:
-                    try:
-                        if (
-                            entry.is_file(follow_symlinks=False)
-                            and _matches_extension(entry.name, ext_lower)
-                            and not _is_excluded(entry.name, exclude_files)
-                        ):
-                            if name_filter is not None and not name_filter(entry.name):
-                                continue
-                            files.append(Path(entry.path))
-                    except OSError as exc:
-                        _report_skip(on_skip, entry.path, exc)
+                    classified = _classify(
+                        entry, ext_lower, exclude_dirs, exclude_files, name_filter, on_skip
+                    )
+                    if classified is not None and classified[0] == "file":
+                        files.append(classified[1])
         except OSError as exc:
             _report_skip(on_skip, scan_path, exc)
         return sorted(files)
@@ -290,20 +313,16 @@ def scan_directory(
     try:
         with os.scandir(scan_path) as entries:
             for entry in entries:
-                try:
-                    if entry.is_dir(follow_symlinks=False):
-                        if not _is_excluded(entry.name, exclude_dirs):
-                            subdirs.append(Path(entry.path))
-                    elif (
-                        entry.is_file(follow_symlinks=False)
-                        and _matches_extension(entry.name, ext_lower)
-                        and not _is_excluded(entry.name, exclude_files)
-                    ):
-                        if name_filter is not None and not name_filter(entry.name):
-                            continue
-                        root_files.append(Path(entry.path))
-                except OSError as exc:
-                    _report_skip(on_skip, entry.path, exc)
+                classified = _classify(
+                    entry, ext_lower, exclude_dirs, exclude_files, name_filter, on_skip
+                )
+                if classified is None:
+                    continue
+                tag, path = classified
+                if tag == "dir":
+                    subdirs.append(path)
+                else:
+                    root_files.append(path)
     except OSError as exc:
         _report_skip(on_skip, scan_path, exc)
 
