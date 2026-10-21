@@ -194,14 +194,20 @@ def _scan_and_filter(
                 exclude_dirs=effective_exclude_dirs,
                 exclude_files=effective_exclude_files,
                 max_depth=effective_depth,
+                on_skip=lambda p, e: _events.scan_skipped(logger, path=p, error=e),
             )
             for file_path in files:
-                abs_path = str(file_path.resolve())
+                full_suffix = "".join(file_path.suffixes)
+
+                try:
+                    abs_path = str(file_path.resolve())
+                except OSError as exc:
+                    _events.scan_skipped(logger, path=str(file_path), error=str(exc))
+                    continue
+
                 if abs_path in seen_paths:
                     continue
                 seen_paths.add(abs_path)
-
-                full_suffix = "".join(file_path.suffixes)
 
                 if not _passes_extension_filter(full_suffix, extension, ext_stripped):
                     continue

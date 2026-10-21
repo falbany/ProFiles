@@ -14,6 +14,7 @@ import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 # Cache sys.platform to avoid the attribute lookup on every call.
@@ -75,6 +76,21 @@ def _is_excluded(name: str, patterns: tuple[str, ...]) -> bool:
     return any(fnmatch.fnmatchcase(name_lower, p.lower()) for p in patterns)
 
 
+def _report_skip(
+    on_skip: Callable[[str, str], None] | None, path: object, exc: BaseException
+) -> None:
+    """Report a scan skip through the caller's ``on_skip`` callback.
+
+    Args:
+        on_skip: The ``path, error_text`` callback (``None`` keeps the
+            historical silent behavior).
+        path: The unreadable entry or directory path.
+        exc: The OS error that caused the skip.
+    """
+    if on_skip is not None:
+        on_skip(str(path), str(exc))
+
+
 def _scan_subtree(
     root: Path | str,
     ext_lower: str,
@@ -82,6 +98,7 @@ def _scan_subtree(
     exclude_files: tuple[str, ...] = (),
     current_depth: int = 1,
     max_depth: int = 10,
+    on_skip: Callable[[str, str], None] | None = None,
 ) -> list[Path]:
     """Worker: recursively scan a directory subtree for matching files.
 
@@ -89,7 +106,9 @@ def _scan_subtree(
     Directories whose name matches any glob pattern in *exclude_dirs*
     are skipped entirely (including all their children).  Files whose
     name matches any glob pattern in *exclude_files* are skipped.
-    Silently skips directories without read permission.
+
+    Unreadable entries or directories are skipped and reported through
+    the *on_skip* callback (``None`` keeps silent behavior).
 
     Args:
         root: The root of the subtree to scan.
@@ -100,6 +119,8 @@ def _scan_subtree(
             basenames to skip during recursive walk.
         current_depth: Internal recursion tracker (root files = depth 0).
         max_depth: Maximum directory recursion depth.
+        on_skip: Optional ``(path, error_text)`` callback invoked for
+            every entry or directory that cannot be read.
 
     Returns:
         List of matching file paths in this subtree.
@@ -122,6 +143,7 @@ def _scan_subtree(
                                     exclude_files,
                                     current_depth + 1,
                                     max_depth,
+                                    on_skip,
                                 )
                             )
                         continue
@@ -131,10 +153,10 @@ def _scan_subtree(
                         and not _is_excluded(entry.name, exclude_files)
                     ):
                         files.append(Path(entry.path))
-                except (PermissionError, OSError):
-                    pass
-    except (PermissionError, OSError):
-        pass
+                except OSError as exc:
+                    _report_skip(on_skip, entry.path, exc)
+    except OSError as exc:
+        _report_skip(on_skip, root, exc)
     return files
 
 
@@ -145,6 +167,7 @@ def scan_directory(
     exclude_dirs: tuple[str, ...] = (),
     exclude_files: tuple[str, ...] = (),
     max_depth: int = 10,
+    on_skip: Callable[[str, str], None] | None = None,
 ) -> list[Path]:
     """Scan a directory for files matching the given extension.
 
@@ -155,10 +178,17 @@ def scan_directory(
     Files whose name matches any glob pattern in *exclude_files* are
     skipped (applies to both recursive and non-recursive scans).
 
+    Unreadable entries or directories are skipped; when *on_skip* is
+    given it receives ``(path, error_text)`` for each one (``None``
+    keeps the historical silent behavior).
+
     Args:
         directory: The directory to scan.
         extension: File extension to filter by (e.g., 'pdf').
-            If empty or 'All', returns all files.
+            NOTE: contrast with the search pipeline's extension filter
+            (:func:`profiles.utils.search_parser.match_filter`,
+            substring matching) — this parameter uses exact suffix
+            equality.  If empty or 'All', returns all files.
         recursive: If True, scan subdirectories recursively.
         exclude_dirs: Glob patterns (case-insensitive) for directory
             basenames to skip during recursive walk. Supports ``*``,
@@ -168,6 +198,8 @@ def scan_directory(
             basenames to skip. Supports the same wildcards as
             *exclude_dirs* (e.g. ``*backup*``, ``*.tmp``, ``~$*``).
         max_depth: Maximum recursion depth for recursive scan (default 10).
+        on_skip: Optional ``(path, error_text)`` callback invoked for
+            every entry or directory that cannot be read.
 
     Returns:
         Sorted list of matching file paths.
@@ -191,10 +223,10 @@ def scan_directory(
                             and not _is_excluded(entry.name, exclude_files)
                         ):
                             files.append(Path(entry.path))
-                    except (PermissionError, OSError):
-                        pass
-        except (PermissionError, OSError):
-            pass
+                    except OSError as exc:
+                        _report_skip(on_skip, entry.path, exc)
+        except OSError as exc:
+            _report_skip(on_skip, scan_path, exc)
         return sorted(files)
 
     # ── Recursive: parallel subtree scanning via os.scandir ──────────
@@ -214,27 +246,27 @@ def scan_directory(
                         and not _is_excluded(entry.name, exclude_files)
                     ):
                         root_files.append(Path(entry.path))
-                except (PermissionError, OSError):
-                    pass
-    except (PermissionError, OSError):
-        pass
+                except OSError as exc:
+                    _report_skip(on_skip, entry.path, exc)
+    except OSError as exc:
+        _report_skip(on_skip, scan_path, exc)
 
     # Scan each subdirectory subtree in parallel
     collections = [root_files]
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-        futures = [
+        future_to_dir = {
             executor.submit(
-                _scan_subtree, subdir, ext_lower, exclude_dirs, exclude_files, 1, max_depth
-            )
+                _scan_subtree, subdir, ext_lower, exclude_dirs, exclude_files, 1, max_depth, on_skip
+            ): subdir
             for subdir in subdirs
-        ]
-        for future in concurrent.futures.as_completed(futures):
+        }
+        for future in concurrent.futures.as_completed(future_to_dir):
             try:
                 result = future.result()
                 if result:
                     collections.append(result)
-            except Exception:  # noqa: BLE001  # guard against worker crashes
-                pass
+            except Exception as exc:  # noqa: BLE001  # guard against worker crashes
+                _report_skip(on_skip, future_to_dir[future], exc)
 
     # Flatten and sort
     all_files: list[Path] = []

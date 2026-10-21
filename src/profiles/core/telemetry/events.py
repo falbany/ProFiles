@@ -136,6 +136,11 @@ def scan_failed(logger: logging.Logger, *, directory: str, error: str) -> None:
     logger.warning('SCAN_FAILED dir=%s error="%s"', _quote(directory), error)
 
 
+def scan_skipped(logger: logging.Logger, *, path: str, error: str) -> None:
+    """Emit SCAN_SKIPPED at DEBUG (per-entry / per-directory scan skip)."""
+    logger.debug('SCAN_SKIPPED path=%s error="%s"', _quote(path), error)
+
+
 # ---------------------------------------------------------------------------
 # UI / Theme / Language
 # ---------------------------------------------------------------------------
