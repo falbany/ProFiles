@@ -82,7 +82,7 @@ class ScanTimer:
             error_count=self.error_count,
         )
 
-    def finish(self, file_count: int, level: int = logging.DEBUG) -> ScanMetrics | None:
+    def finish(self, file_count: int) -> ScanMetrics | None:
         """Record the final file count, stop the timer, and log metrics.
 
         Convenience wrapper for the common end-of-scan sequence:
@@ -90,7 +90,6 @@ class ScanTimer:
 
         Args:
             file_count: Number of files found by the scan.
-            level: Logging level (default DEBUG) - reserved for future use.
 
         Returns:
             The computed ScanMetrics, or ``None`` if the timer was

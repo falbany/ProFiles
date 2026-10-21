@@ -135,7 +135,7 @@ def _advance_session(session: WorkflowSession) -> None:
         session.ask_answered = False
         session.notify_message = None
 
-        if not step.evaluate_condition(session.file_path):
+        if not step.evaluate_condition():
             rec.status = "skipped"
             rec.message = "Condition not met"
             session.current_index += 1

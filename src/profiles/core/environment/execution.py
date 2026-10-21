@@ -350,13 +350,8 @@ def _run_synchronous_hook(
     if hook.when == "abort":
         return HookOutcome.ABORT
 
-    if hook.requires_success:
-        outcome = _failmode_outcome(config.launch_hook_failmode)
-        if outcome is not None:
-            return outcome
-        return None  # "warn" failmode continues pipeline
-
-    return None
+    # Failed hook on a non-abort phase: fatal only when the hook demands it.
+    return _failmode_outcome(config.launch_hook_failmode) if hook.requires_success else None
 
 
 def _outcome_on_success(when: str) -> HookOutcome | None:

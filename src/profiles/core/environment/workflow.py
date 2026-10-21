@@ -30,6 +30,40 @@ NotifyCallback = Callable[[str, bool], None]
 FailMode = Literal["warn", "abort", "skip"]
 
 
+def _emit_workflow_step(
+    logger: logging.Logger | None,
+    *,
+    index: int,
+    total: int,
+    action: str,
+    result: str,
+) -> None:
+    """Emit a WORKFLOW_STEP event when *logger* is available (no-op otherwise)."""
+    if logger is not None:
+        events.workflow_step(logger, index=index, total=total, action=action, result=result)
+
+
+def _ask_step_input(
+    ask_content: str,
+    *,
+    user_choice: Literal["yes", "skip", "no"] | None,
+    ask_callback: AskCallback | None,
+    headless: bool,
+) -> Literal["yes", "skip", "no"]:
+    """Resolve the user's choice for an ``ask`` guard.
+
+    Priority: explicit *user_choice* (test helper) → *ask_callback* →
+    the 3-way dialog (or its headless prompt).
+    """
+    if user_choice is not None:
+        return user_choice
+    if ask_callback is not None:
+        return ask_callback(ask_content)
+    return confirm_dialog_3way(ask_content, headless=headless)
+
+
+# pylint: disable-next=too-many-arguments
+# Public facade mirroring the workflow config surface; kwargs are additive.
 def run_workflow(
     steps: list[WorkflowStep],
     file_path: Path | None,
@@ -74,17 +108,15 @@ def run_workflow(
 
     for i, step in enumerate(steps):
         # If previous step was skipped via "skip", skip this step
-        # If previous step was skipped via "skip", skip this step
         if skip_next:
             if logger is not None:
                 logger.debug("Skipping step %d (action: %s)", i + 1, step.action)
             skip_next = False
             continue
 
-        if logger is not None:
-            events.workflow_step(
-                logger, index=i + 1, total=len(steps), action=step.action, result="start"
-            )
+        _emit_workflow_step(
+            logger, index=i + 1, total=len(steps), action=step.action, result="start"
+        )
 
         # Handle 'ask' confirmation guard if present
         if step.ask:
@@ -95,33 +127,26 @@ def run_workflow(
                 username=username,
                 hostname=hostname,
             )
-            choice: Literal["yes", "skip", "no"]
-            if user_choice is not None:
-                choice = user_choice
-            elif ask_callback is not None:
-                choice = ask_callback(ask_content)
-            else:
-                choice = confirm_dialog_3way(ask_content, headless=headless)
+            choice = _ask_step_input(
+                ask_content,
+                user_choice=user_choice,
+                ask_callback=ask_callback,
+                headless=headless,
+            )
 
             if choice == "no":
-                if logger is not None:
-                    events.workflow_step(
-                        logger,
-                        index=i + 1,
-                        total=len(steps),
-                        action=step.action,
-                        result="aborted",
-                    )
+                _emit_workflow_step(
+                    logger, index=i + 1, total=len(steps), action=step.action, result="aborted"
+                )
                 return WorkflowOutcome.ABORT
             if choice == "skip":
-                if logger is not None:
-                    events.workflow_step(
-                        logger,
-                        index=i + 1,
-                        total=len(steps),
-                        action=step.action,
-                        result="skipped-user",
-                    )
+                _emit_workflow_step(
+                    logger,
+                    index=i + 1,
+                    total=len(steps),
+                    action=step.action,
+                    result="skipped-user",
+                )
                 # If skipping the last step, return SKIP_LAUNCH
                 if i == len(steps) - 1:
                     return WorkflowOutcome.SKIP_LAUNCH
@@ -129,15 +154,14 @@ def run_workflow(
                 continue
 
         # Evaluate conditional guard
-        if not step.evaluate_condition(file_path):
-            if logger is not None:
-                events.workflow_step(
-                    logger,
-                    index=i + 1,
-                    total=len(steps),
-                    action=step.action,
-                    result="skipped-condition",
-                )
+        if not step.evaluate_condition():
+            _emit_workflow_step(
+                logger,
+                index=i + 1,
+                total=len(steps),
+                action=step.action,
+                result="skipped-condition",
+            )
             continue
 
         # Resolve effective timeout: per-step overrides global
@@ -211,6 +235,8 @@ def _resolve_failure(
     return None
 
 
+# Internal context fan-out: failmode/username/hostname/logger all step-scoped.
+# pylint: disable=too-many-arguments
 def _execute_step(
     step: WorkflowStep,
     file_path: Path | None,
@@ -237,18 +263,22 @@ def _execute_step(
         return None
 
     if step.action == "replace":
-        if logger is not None:
-            events.workflow_step(logger, index=0, total=1, action="replace", result=content)
+        _emit_workflow_step(logger, index=0, total=1, action="replace", result=content)
         # Launch replace command instead of OS default file launch
         success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
         if logger is not None:
             logger.debug("Replace command success: %s", success)
         return WorkflowOutcome.SKIP_LAUNCH
 
-    if step.action == "run":
-        if logger is not None:
-            events.workflow_step(logger, index=0, total=1, action="run", result=content)
-        success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
+    if step.action in ("run", "check"):
+        _emit_workflow_step(logger, index=0, total=1, action=step.action, result=content)
+        # "run" honors the step's wait flag; "check" always blocks.
+        success = _run_command(
+            content,
+            wait=step.wait if step.action == "run" else True,
+            timeout=timeout,
+            logger=logger,
+        )
         if not success:
             return _resolve_failure(
                 step.on_failure,
@@ -260,24 +290,8 @@ def _execute_step(
         return None
 
     if step.action == "run_after":
-        if logger is not None:
-            events.workflow_step(logger, index=0, total=1, action="run_after", result=content)
+        _emit_workflow_step(logger, index=0, total=1, action="run_after", result=content)
         _run_command(content, wait=False, timeout=None, logger=logger)
-        return None
-
-    if step.action == "check":
-        if logger is not None:
-            events.workflow_step(logger, index=0, total=1, action="check", result=content)
-        success = _run_command(content, wait=True, timeout=timeout, logger=logger)
-        if not success:
-            return _resolve_failure(
-                step.on_failure,
-                failmode,
-                step_content=content,
-                failure_context=failure_context,
-                logger=logger,
-            )
-        return None
 
     return None
 
@@ -323,6 +337,8 @@ def _run_command(
                 events.command_exit(logger, code=res.returncode, command=command)
             return res.returncode == 0
         else:
+            # Fire-and-forget spawn: Popen must outlive this call.
+            # pylint: disable-next=consider-using-with
             subprocess.Popen(command, shell=True)
             if logger is not None:
                 logger.debug("Command spawned in background")

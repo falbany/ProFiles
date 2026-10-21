@@ -5,6 +5,13 @@ from __future__ import annotations
 from profiles.core.environment.render import render_text
 
 
+def _print_headless(content: str, title: str) -> None:
+    """Print the rendered message to the console (headless fallback)."""
+    rendered = render_text(content, headless=True)
+    if isinstance(rendered, str):
+        print(f"[{title}] {rendered}")
+
+
 def show_notify_dialog(
     content: str,
     title: str = "Message",
@@ -20,9 +27,7 @@ def show_notify_dialog(
         headless: If True, prints formatted message to console instead of GUI.
     """
     if headless:
-        rendered = render_text(content, headless=True)
-        if isinstance(rendered, str):
-            print(f"[{title}] {rendered}")
+        _print_headless(content, title)
         return
 
     try:
@@ -59,9 +64,7 @@ def show_notify_dialog(
             root.after(3000, root.destroy)  # Auto-close after 3 seconds in non-blocking
     except (ImportError, tk.TclError):
         # Fallback to headless
-        rendered = render_text(content, headless=True)
-        if isinstance(rendered, str):
-            print(f"[{title}] {rendered}")
+        _print_headless(content, title)
 
 
 __all__ = ["show_notify_dialog"]

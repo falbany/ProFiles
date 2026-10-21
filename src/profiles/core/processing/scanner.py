@@ -19,7 +19,7 @@ from profiles.core.config.models import AppConfig
 from profiles.core.processing.column_extractor import ColumnExtractor
 from profiles.core.processing.file_classifier import (
     _build_column_extractor,
-    _strip_extension_from_version,
+    _extract_columns_with_defaults,
     get_file_info,
 )
 from profiles.core.telemetry import events as _events
@@ -141,6 +141,75 @@ def _resolve_scan_config(
     return eff_recursive, eff_depth, eff_exclude_dirs, eff_exclude_files
 
 
+def _extension_filter(extension: str) -> Callable[[str], bool] | None:
+    """Build a file-name predicate for *extension*, or ``None`` when not filtering.
+
+    ``"all"`` (case-insensitive) and an empty expression mean "no extension
+    filter": everything is a candidate.
+    """
+    stripped = extension.strip()
+    if not stripped or stripped.lower() == "all":
+        return None
+
+    def _predicate(name: str) -> bool:
+        # Substring (D1) matching on the file name's full compound suffix.
+        return match_filter(suffix_of_name(name), extension)
+
+    return _predicate
+
+
+def _register_abs_path(file_path: Path, seen_paths: set[str]) -> bool:
+    """Register the resolved absolute path of *file_path* in *seen_paths*.
+
+    Returns ``False`` when the file was skipped (unresolvable, logged via
+    ``SCAN_SKIPPED``) or already seen — so multi-root over-relapped scans
+    yield each physical file exactly once.
+    """
+    try:
+        abs_path = str(file_path.resolve())
+    except OSError as exc:
+        _events.scan_skipped(logger, path=str(file_path), error=str(exc))
+        return False
+    if abs_path in seen_paths:
+        return False
+    seen_paths.add(abs_path)
+    return True
+
+
+def _iter_directory_files(
+    directory: str,
+    *,
+    extension: str,
+    recursive: bool,
+    exclude_dirs: Sequence[str] | None,
+    exclude_files: Sequence[str] | None,
+    config: AppConfig | None,
+) -> Iterator[Path]:
+    """Scan one root directory and yield file paths passing the scan config.
+
+    The extension filter is pushed into the scan: names that cannot pass
+    the extension never become Path objects (Task 7). Scan-level errors
+    are reported via ``SCAN_SKIPPED`` by :func:`scan_directory` itself.
+    """
+    (
+        effective_recursive,
+        effective_depth,
+        effective_exclude_dirs,
+        effective_exclude_files,
+    ) = _resolve_scan_config(directory, recursive, exclude_dirs, exclude_files, config)
+
+    return scan_directory(
+        directory,
+        "",
+        recursive=effective_recursive,
+        exclude_dirs=effective_exclude_dirs,
+        exclude_files=effective_exclude_files,
+        max_depth=effective_depth,
+        on_skip=lambda p, e: _events.scan_skipped(logger, path=p, error=e),
+        name_filter=_extension_filter(extension),
+    )
+
+
 def _scan_and_filter(
     directories: Sequence[str] | str,
     *,
@@ -170,59 +239,29 @@ def _scan_and_filter(
         When multiple directories are provided, files are deduplicated by their absolute path (so identical files reached via different paths will only be yielded once).
     """
     directory_list = [directories] if isinstance(directories, str) else list(directories)
-
-    ext_stripped = extension.strip()
     seen_paths: set[str] = set()
     # Deduplicate only when several roots could yield the same file
     # (e.g. ``A`` and ``A/sub``); a single root cannot repeat itself.
     dedupe = len(directory_list) > 1
-
-    # Push the extension filter into the scan: names that cannot pass
-    # the filter never become Path objects (Task 7). Substring (D1)
-    # matching on the file name's full compound suffix.
-    name_filter: Callable[[str], bool] | None = None
-    if ext_stripped and ext_stripped.lower() != "all":
-
-        def _extension_predicate(name: str) -> bool:
-            return match_filter(suffix_of_name(name), extension)
-
-        name_filter = _extension_predicate
 
     for directory in directory_list:
         if not directory:
             continue
         try:
             base_path = Path(directory)
-
-            (
-                effective_recursive,
-                effective_depth,
-                effective_exclude_dirs,
-                effective_exclude_files,
-            ) = _resolve_scan_config(directory, recursive, exclude_dirs, exclude_files, config)
-
-            files = scan_directory(
+            files = _iter_directory_files(
                 directory,
-                "",
-                recursive=effective_recursive,
-                exclude_dirs=effective_exclude_dirs,
-                exclude_files=effective_exclude_files,
-                max_depth=effective_depth,
-                on_skip=lambda p, e: _events.scan_skipped(logger, path=p, error=e),
-                name_filter=name_filter,
+                extension=extension,
+                recursive=recursive,
+                exclude_dirs=exclude_dirs,
+                exclude_files=exclude_files,
+                config=config,
             )
             for file_path in files:
                 full_suffix = "".join(file_path.suffixes)
 
-                if dedupe:
-                    try:
-                        abs_path = str(file_path.resolve())
-                    except OSError as exc:
-                        _events.scan_skipped(logger, path=str(file_path), error=str(exc))
-                        continue
-                    if abs_path in seen_paths:
-                        continue
-                    seen_paths.add(abs_path)
+                if dedupe and not _register_abs_path(file_path, seen_paths):
+                    continue
 
                 display_path = _compute_display_path(file_path, base_path)
 
@@ -281,17 +320,9 @@ def _process_file_dynamic(
         ScannedFileDynamic with extracted column values.
     """
     full_path_str = str(display_path)
-    column_values = extractor.extract_all(full_path_str, column_names)
-
-    # File column always gets the full path
-    if "File" in column_names and "File" not in column_values:
-        column_values["File"] = full_path_str
-
-    # Strip extension from Version if present
-    if "Version" in column_values and extension:
-        column_values["Version"] = _strip_extension_from_version(
-            column_values["Version"], extension
-        )
+    column_values = _extract_columns_with_defaults(
+        full_path_str, extractor, column_names, extension
+    )
 
     return ScannedFileDynamic(file_path, column_values, display_path)
 
@@ -301,6 +332,8 @@ def _metrics_enabled(log_metrics: bool, config: AppConfig | None) -> bool:
     return log_metrics or (config is not None and config.scan_metrics)
 
 
+# pylint: disable-next=too-many-arguments
+# Facade multiplier: mirrors the kwargs of the public scan_* functions.
 def _run_scan_pipeline(
     directories: Sequence[str] | str,
     *,

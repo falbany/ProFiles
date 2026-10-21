@@ -46,7 +46,7 @@ class WorkflowStep:
     timeout: int | None = None
     if_: str | None = None
 
-    def evaluate_condition(self, file_path: Path | None = None) -> bool:
+    def evaluate_condition(self) -> bool:
         """Evaluate the ``if_`` conditional. Always True when ``if_`` is unset.
 
         Supports ``env:VAR`` (true when VAR is set) and ``env:VAR=value``

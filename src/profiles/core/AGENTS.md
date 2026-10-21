@@ -16,23 +16,35 @@ owns a single responsibility:
 | Sub-package / file       | Responsibility (SRP)                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------ |
 | `config/__init__.py`     | Single point of egress for the configuration subsystem (high-level API)              |
-| `config/models.py`       | Pure dataclasses (`AppConfig`, `MachineConfiguration`, `ColumnConfiguration`, `HookSpec`) |
+| `config/models.py`       | Pure dataclasses (`AppConfig`, `MachineConfiguration`, `ColumnConfiguration`, `HookSpec`, `WorkflowStep`) |
 | `config/service.py`      | Domain operations over `AppConfig` — find, merge, auto-select directories            |
 | `config/template.py`     | `STARTER_CONFIG_TEMPLATE` string — canonical starter `.profiles` body                |
 | `config/loader.py`       | Top-level entry points: `load_config`, `propose_config_creation`                     |
-| `config/reader.py`       | `ConfigReader` class — composes io primitives + models, knows INI structure           |
-| `config/io/__init__.py`  | Egress for low-level INI serialization layer                                          |
-| `config/io/ini_primitives.py` | Pure INI primitives (`parse_bool`, `find_config_file`) — no AppConfig coupling    |
-| `config/io/writer.py`    | Pure INI writer (`_write_config_value`, `save_config_bool`, `save_config_str`)        |
+| `config/reader.py`       | `ConfigReader` class — composes yaml_io + validator + inheritance into `AppConfig`   |
+| `config/schema.py`       | Pydantic YAML schema models (`AppConfigYaml`, `MachineConfig`, …) + `ConfigError`     |
+| `config/inheritance.py`  | ``defaults``/``extends`` resolution into fully-merged `MachineConfig` objects        |
+| `config/validator.py`    | Semantic validation of the raw YAML: unknown top-level keys, unknown extends, cycles  |
+| `config/matcher.py`      | Glob / `re:`-prefixed regex matching of machine-config criteria (hostname/IP/path)    |
+| `config/io/__init__.py`  | Egress for the low-level configuration I/O layer                                     |
+| `config/io/yaml_io.py`   | YAML read/parse + `.profiles` file discovery (`find_config_file`)                    |
 | `environment/__init__.py` | Egress for OS environment & process spawn                                            |
 | `environment/system.py`  | System info collection (`SystemInfo`, `collect_system_info`)                         |
-| `environment/execution.py` | Launch hooks engine (`HookOutcome`, `parse_hook_entries`, `run_hooks_for_file`, …)  |
+| `environment/execution.py` | Launch hooks engine, phase-based (`HookOutcome`, `parse_hook_entries`, `run_hooks_for_file`, …) |
+| `environment/workflow.py` | Step-based workflow engine (`WorkflowOutcome`, `run_workflow`)                       |
+| `environment/interactions.py` | User interaction primitives — ask/confirm dialogs (GUI + headless fallback)      |
+| `environment/message_dialog.py` | Notify dialog (blocking / auto-close / headless print) rendering Markdown subset |
+| `environment/render.py`  | Escape-sequence + Markdown-subset renderer (`render_text`, `TextSegment`, `RenderTree`) |
+| `environment/matcher.py` | Glob specificity matcher (`select_most_specific_pattern` — hook-pattern selection)   |
 | `processing/__init__.py` | Egress for file scanning / classification / column extraction                        |
 | `processing/scanner.py`  | File scanning + filtering pipeline (`scan_and_process`, `ScannedFile`, …)             |
 | `processing/column_extractor.py` | Regex-based dynamic column extraction (`ColumnRule`, `ColumnExtractor`, …)     |
 | `processing/file_classifier.py` | File-level domain helpers (`get_file_info`, `extract_version`, …)              |
+| `processing/file_metadata.py` | File metadata snapshot: hashes, timestamps, system attributes                    |
 | `telemetry/__init__.py`  | Egress for logging & diagnostics                                                     |
 | `telemetry/diagnostics.py` | `LoggerFactory`, `SourceFilter`, `configure_logger`, `get_logger`                 |
+| `telemetry/events.py`    | Structured event emitters — one helper per `profiles.log` event line                 |
+| `telemetry/metrics.py`   | Scan performance timing (`ScanTimer`, `ScanMetrics`)                                 |
+| `telemetry/log_viewer.py` | Log tail parsing into structured records (`parse_log_line`, `read_log_entries`)      |
 | `actions.py`             | Domain actions — file launch, config open, log open (returns `ActionResult`, never raises) |
 | `__init__.py`            | Re-exports the public core API for callers (`from profiles.core import …`)            |
 
@@ -76,7 +88,7 @@ core.config.load_config(path)         ← top-level entry point
         │
         └── core.config.reader.ConfigReader(path).load()
                 │
-                ├── core.config.io.parse_bool
+                ├── core.config.io.read_yaml             ← parses the YAML body
                 ├── core.config.models.AppConfig / MachineConfiguration / …
                 └── (writes populated AppConfig back to caller)
                         │
@@ -98,8 +110,8 @@ core.config.load_config(path)         ← top-level entry point
 - **Default sentinel values** as module-level constants when reused
   (e.g. `_DEFAULT_FILE_COLUMN_WIDTH = 600`).
 - **Static methods** on `ConfigReader` are reserved for *thin wrappers* over
-  primitives in `config.io.ini_primitives` (back-compat shims) — real parsing
-  logic lives in the primitive module.
+  the composition units in `config.io.yaml_io` / `config.service`
+  (back-compat shims) — real logic lives in the dedicated modules.
 - **`@staticmethod` vs free function** — prefer free function in the dedicated
   module; only add a `staticmethod` wrapper on `ConfigReader` when preserving
   back-compat for downstream callers (e.g. `ConfigReader._parse_bool`).

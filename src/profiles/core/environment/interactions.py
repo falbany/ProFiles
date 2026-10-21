@@ -12,7 +12,7 @@ from typing import Literal
 def confirm_dialog(
     message: str,
     title: str = "Confirmation",
-    timeout: int | None = None,
+    timeout: int | None = None,  # pylint: disable=unused-argument  (reserved)
 ) -> bool:
     """Show a yes/no confirmation dialog.
 
@@ -50,6 +50,16 @@ def confirm_dialog(
     return response in ("y", "yes")
 
 
+def _headless_3way_choice(message: str, title: str) -> Literal["yes", "skip", "no"]:
+    """Prompt the user via terminal input and map the answer to a 3-way choice."""
+    response = input(f"{title}: {message} [y/s/N]: ").strip().lower()
+    if response in ("y", "yes"):
+        return "yes"
+    if response in ("s", "skip"):
+        return "skip"
+    return "no"
+
+
 def confirm_dialog_3way(
     message: str,
     title: str = "Confirmation",
@@ -66,12 +76,7 @@ def confirm_dialog_3way(
         "yes", "skip", or "no".
     """
     if headless:
-        response = input(f"{title}: {message} [y/s/N]: ").strip().lower()
-        if response in ("y", "yes"):
-            return "yes"
-        if response in ("s", "skip"):
-            return "skip"
-        return "no"
+        return _headless_3way_choice(message, title)
 
     try:
         import tkinter as tk
@@ -110,12 +115,7 @@ def confirm_dialog_3way(
         return result[0]
     except (ImportError, tk.TclError):
         # Fallback to headless if Tkinter unavailable or no display
-        response = input(f"{title}: {message} [y/s/N]: ").strip().lower()
-        if response in ("y", "yes"):
-            return "yes"
-        if response in ("s", "skip"):
-            return "skip"
-        return "no"
+        return _headless_3way_choice(message, title)
 
 
 __all__ = [

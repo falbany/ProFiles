@@ -1,3 +1,11 @@
+"""Machine-configuration matching — match criteria evaluation.
+
+Single Responsibility: match a :class:`MachineConfiguration`'s criteria
+(hostname, IP, path) against the current environment using either
+``fnmatch`` globs or ``re:``-prefixed regex, with cross-platform path
+normalization. No I/O, no UI dependencies. Pure stdlib.
+"""
+
 import fnmatch
 import os
 import re

@@ -148,6 +148,31 @@ def _iter_columns(columns: object) -> list[tuple[str, object]]:
     return []
 
 
+def _extract_columns_with_defaults(
+    full_path: str,
+    extractor: ColumnExtractor,
+    column_names: tuple[str, ...],
+    extension: str,
+) -> dict[str, str]:
+    """Extract dynamic column values, then apply the built-in fallbacks.
+
+    The ``File`` column always receives the full path when the user has
+    not defined a custom ``File`` rule, and the ``Version`` value gets
+    the file extension stripped when present.
+    """
+    result = extractor.extract_all(full_path, column_names)
+
+    # File column always gets the full path, unless user defined custom COLUMN_File
+    if "File" in column_names and "File" not in result:
+        result["File"] = full_path
+
+    # Strip extension from Version if present (only if Version column exists)
+    if "Version" in result and extension:
+        result["Version"] = _strip_extension_from_version(result["Version"], extension)
+
+    return result
+
+
 def get_file_info_dynamic(
     file_path: str | Path,
     extension: str = "",
@@ -172,14 +197,4 @@ def get_file_info_dynamic(
     """
     full_path = str(file_path)
     extractor = _build_column_extractor(columns, column_names)
-    result = extractor.extract_all(full_path, column_names)
-
-    # File column always gets the full path, unless user defined custom COLUMN_File
-    if "File" in column_names and "File" not in result:
-        result["File"] = full_path
-
-    # Strip extension from Version if present (only if Version column exists)
-    if "Version" in result and extension:
-        result["Version"] = _strip_extension_from_version(result["Version"], extension)
-
-    return result
+    return _extract_columns_with_defaults(full_path, extractor, column_names, extension)

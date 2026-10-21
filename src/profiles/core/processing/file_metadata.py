@@ -8,6 +8,8 @@ Kept independent of any GUI/CLI front-end.
 from __future__ import annotations
 
 import hashlib
+import os
+import stat as stat_module
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict
@@ -117,8 +119,6 @@ def _detect_file_type(file_path: Path) -> str:
 
 def _extract_file_attributes(file_path: Path, stat_result: Any) -> dict[str, Any]:
     """Extract system-specific file attributes."""
-    import os
-
     attributes: dict[str, Any] = {
         "is_file": file_path.is_file(),
         "is_dir": file_path.is_dir(),
@@ -128,30 +128,27 @@ def _extract_file_attributes(file_path: Path, stat_result: Any) -> dict[str, Any
         "parent": str(file_path.parent),
     }
 
-    # Windows-specific attributes
+    # Windows-specific attributes. CPython maps the DOS read-only attribute
+    # onto st_mode: S_IWRITE is set when the file is writable, so read-only
+    # is its negation. (The archive/hidden attributes are not represented
+    # in st_mode and cannot be derived here.)
     if os.name == "nt":
         try:
-            import stat
-
             mode = stat_result.st_mode
-            attributes["is_readonly"] = bool(mode & stat.S_IREAD)
-            attributes["is_hidden"] = bool(mode & stat.S_IWRITE)
-            attributes["is_archive"] = bool(mode & stat.S_IARCH)
-        except Exception:
+            attributes["is_readonly"] = not mode & stat_module.S_IWRITE
+        except OSError:
             pass
     else:
         # Unix permissions
         try:
-            import stat
-
             mode = stat_result.st_mode
-            attributes["permissions"] = stat.filemode(mode)
+            attributes["permissions"] = stat_module.filemode(mode)
             attributes["owner_uid"] = stat_result.st_uid
             attributes["group_gid"] = stat_result.st_gid
-            attributes["is_executable"] = bool(mode & stat.S_IXUSR)
-            attributes["is_readable"] = bool(mode & stat.S_IRUSR)
-            attributes["is_writable"] = bool(mode & stat.S_IWUSR)
-        except Exception:
+            attributes["is_executable"] = bool(mode & stat_module.S_IXUSR)
+            attributes["is_readable"] = bool(mode & stat_module.S_IRUSR)
+            attributes["is_writable"] = bool(mode & stat_module.S_IWUSR)
+        except OSError:
             pass
 
     return attributes
