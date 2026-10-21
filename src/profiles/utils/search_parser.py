@@ -40,7 +40,8 @@ Examples::
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from functools import lru_cache
 
 
 def tokenize(query: str) -> list[str]:
@@ -138,7 +139,8 @@ def _group_matches(text: str, group_tokens: Sequence[str]) -> bool:
 def match_filter(filename: str, query: str) -> bool:
     """Check whether *filename* matches the Google-style *query* filter.
 
-    This is the single public entry point for the module.
+    This is the single public entry point for the module.  The query is
+    compiled once per distinct *query* string and memoized (256 entries).
 
     Args:
         filename: The filename (or relative path) to test.
@@ -156,16 +158,37 @@ def match_filter(filename: str, query: str) -> bool:
         raise TypeError(f"filename must be str, not {type(filename).__name__}")
     if not isinstance(query, str):
         raise TypeError(f"query must be str, not {type(query).__name__}")
+    return compile_query(query)(filename)
 
+
+def _match_all(_name: str) -> bool:
+    """Matcher for empty / whitespace-only queries: match everything."""
+    return True
+
+
+@lru_cache(maxsize=256)
+def compile_query(query: str) -> Callable[[str], bool]:
+    """Compile *query* into a reusable ``name -> bool`` predicate.
+
+    Tokenization and OR-group splitting run once per distinct query;
+    repeated calls with the same query reuse the compiled closure
+    (memoized via :func:`functools.lru_cache`, 256 entries).
+
+    Args:
+        query: The filter expression.
+
+    Returns:
+        A predicate callable taking a filename and returning bool.
+    """
     stripped = query.strip()
-    if not stripped:
-        return True  # empty filter matches everything
-
     tokens = tokenize(stripped)
     if not tokens:
-        return True
+        return _match_all
 
     or_groups = split_or_groups(tokens)
 
-    # OR semantics: at least one group must match
-    return any(_group_matches(filename, group) for group in or_groups)
+    def matcher(name: str) -> bool:
+        # OR semantics: at least one group must match
+        return any(_group_matches(name, group) for group in or_groups)
+
+    return matcher
