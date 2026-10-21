@@ -345,11 +345,11 @@ def _run_scan_pipeline(
             )
 
             if files_to_process:
-                # Use the thread pool at/above the threshold, sequential below
-                if len(files_to_process) >= _PARALLEL_THRESHOLD:
-                    results, error_count = _process_files_parallel(files_to_process, worker)
-                else:
-                    results, error_count = _process_files_sequential(files_to_process, worker)
+                # Use the thread pool at/above the threshold, inline below
+                max_workers = (
+                    _MAX_PROCESSING_WORKERS if len(files_to_process) >= _PARALLEL_THRESHOLD else 1
+                )
+                results, error_count = _process_files(files_to_process, worker, max_workers)
 
             return results
         finally:
@@ -359,67 +359,50 @@ def _run_scan_pipeline(
                 timer.finish(len(results))
 
 
-def _process_files_sequential(
+def _process_files(
     files: list[tuple[Path, str, str]],
     worker: Callable[[Path, str, str], T],
+    max_workers: int,
 ) -> tuple[list[T], int]:
-    """Process files sequentially (below the parallelism threshold).
+    """Process *files* through *worker* — the single processing path.
+
+    With ``max_workers <= 1`` tasks run inline (no pool). Otherwise a
+    thread pool collects results in submission order, so output order
+    always matches the input.  Per-file failures are logged via
+    ``PROCESSING_FAILED`` and counted, never fatal (identical semantics
+    on both modes).
 
     Args:
         files: List of (file_path, display_path, full_suffix) tuples.
-        worker: Per-file processor.
+        worker: Per-file processor (thread-safe when pooling).
+        max_workers: 0/1 runs inline; > 1 builds a thread pool.
 
     Returns:
         Tuple of (results in input order, number of failed files).
     """
     results: list[T] = []
     error_count = 0
-    for file_path, display_path, full_suffix in files:
-        try:
-            results.append(worker(file_path, display_path, full_suffix))
-        except Exception as exc:
-            _events.processing_failed(logger, path=str(file_path), error=str(exc))
-            error_count += 1
-    return results, error_count
 
-
-def _process_files_parallel(
-    files: list[tuple[Path, str, str]],
-    worker: Callable[[Path, str, str], T],
-) -> tuple[list[T], int]:
-    """Process files in parallel using a thread pool.
-
-    Preserves input order. Per-file failures are logged and skipped so a
-    single bad file never aborts the whole scan.
-
-    Args:
-        files: List of (file_path, display_path, full_suffix) tuples.
-        worker: Per-file processor (thread-safe).
-
-    Returns:
-        Tuple of (results in input order, number of failed files).
-    """
-    results: dict[int, T] = {}
-    error_count = 0
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_PROCESSING_WORKERS) as executor:
-        # Submit all tasks with their index for order preservation
-        future_to_index = {
-            executor.submit(worker, file_path, display_path, full_suffix): idx
-            for idx, (file_path, display_path, full_suffix) in enumerate(files)
-        }
-
-        # Collect results as they complete
-        for future in concurrent.futures.as_completed(future_to_index):
-            idx = future_to_index[future]
+    if max_workers <= 1:
+        for file_path, display_path, full_suffix in files:
             try:
-                results[idx] = future.result()
+                results.append(worker(file_path, display_path, full_suffix))
             except Exception as exc:
-                file_path, _display_path, _full_suffix = files[idx]
+                _events.processing_failed(logger, path=str(file_path), error=str(exc))
+                error_count += 1
+        return results, error_count
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(worker, *task) for task in files]
+        # Submission order == input order: iterate futures as submitted.
+        for future, (file_path, _display_path, _full_suffix) in zip(futures, files, strict=True):
+            try:
+                results.append(future.result())
+            except Exception as exc:
                 _events.processing_failed(logger, path=str(file_path), error=str(exc))
                 error_count += 1
 
-    return [results[idx] for idx in sorted(results)], error_count
+    return results, error_count
 
 
 def scan_and_process(
