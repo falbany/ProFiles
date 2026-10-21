@@ -67,5 +67,43 @@ class TestFindConfigFile:
         conf.write_text("version: 1\n", encoding="utf-8")
         assert find_config_file(start_path=tmp_path) == conf
 
+    def test_yaml_fallback_found(self, tmp_path: Path) -> None:
+        """The .profiles.yaml fallback is found when no primary exists."""
+        conf = tmp_path / ".profiles.yaml"
+        conf.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == conf
+
+    def test_yml_fallback_found(self, tmp_path: Path) -> None:
+        """The .profiles.yml fallback is found when no other config exists."""
+        conf = tmp_path / ".profiles.yml"
+        conf.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == conf
+
+    def test_primary_beats_yaml_fallback(self, tmp_path: Path) -> None:
+        """A .profiles anywhere in the tree beats a .profiles.yaml at the root."""
+        (tmp_path / ".profiles.yaml").write_text("version: 1\n", encoding="utf-8")
+        deep = tmp_path / "sub" / ".profiles"
+        deep.parent.mkdir()
+        deep.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == deep
+
+    def test_yaml_beats_yml_fallback(self, tmp_path: Path) -> None:
+        """When both fallbacks exist, .profiles.yaml wins over .profiles.yml."""
+        (tmp_path / ".profiles.yml").write_text("version: 1\n", encoding="utf-8")
+        yaml_conf = tmp_path / "sub" / ".profiles.yaml"
+        yaml_conf.parent.mkdir()
+        yaml_conf.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == yaml_conf
+
+    def test_closest_to_root_wins_within_a_tier(self, tmp_path: Path) -> None:
+        """Within one tier, the shallowest match wins."""
+        (tmp_path / "deep" / "deeper" / ".profiles").parent.mkdir(parents=True)
+        deep = tmp_path / "deep" / "deeper" / ".profiles"
+        deep.write_text("version: 1\n", encoding="utf-8")
+        shallow = tmp_path / "sub" / ".profiles"
+        shallow.parent.mkdir()
+        shallow.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == shallow
+
     def test_not_found(self, tmp_path: Path) -> None:
         assert find_config_file(start_path=tmp_path) is None

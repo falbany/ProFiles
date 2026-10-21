@@ -44,6 +44,23 @@ async def test_get_config_reports_path_and_existence(
 
 
 @pytest.mark.anyio
+async def test_load_yml_suffix_is_accepted(config_state: ServerState, tmp_path: Path) -> None:
+    config_path = tmp_path / ".profiles.yml"
+    config_path.write_text(
+        "version: 1\ndefaults:\n  search_dir: '/tmp/scan'\n",
+        encoding="utf-8",
+    )
+
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/load", json={"config_path": str(config_path)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["config_exists"] is True
+
+
+@pytest.mark.anyio
 async def test_load_valid_file_replaces_state(config_state: ServerState, tmp_path: Path) -> None:
     config_path = tmp_path / "loaded.profiles"
     config_path.write_text(

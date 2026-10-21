@@ -28,19 +28,44 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from profiles.core.config.io.yaml_io import (
+    CONFIG_FILE_NAMES,
+    FALLBACK_CONFIG_NAMES,
+    PRIMARY_CONFIG_NAME,
+)
+
 #: Canonical primary configuration file name (``.profiles``).
-CONFIG_SUFFIX = ".profiles"
+CONFIG_SUFFIX = PRIMARY_CONFIG_NAME
 
 #: Backward-compatible legacy configuration file name.
 FALLBACK_CONFIG_SUFFIX = ".profiles.yaml"
 
-_CONFIG_SUFFIXES = (CONFIG_SUFFIX, FALLBACK_CONFIG_SUFFIX)
+#: All backward-compatible fallback configuration file names, in priority order.
+FALLBACK_CONFIG_SUFFIXES = FALLBACK_CONFIG_NAMES
+
+#: Every accepted configuration file name (primary first).
+_CONFIG_SUFFIXES = CONFIG_FILE_NAMES
 
 #: Hard timeout for the macOS Finder probe.  Short enough that a hung
 #: AppleScript dialog cannot delay startup by more than a beat.
 _FINDER_PROBE_TIMEOUT_S = 2.0
 
 _IS_MACOS = sys.platform == "darwin"
+
+
+def _cwd_is_uninformative(cwd: Path | None) -> bool:
+    """True when *cwd* says nothing about the user's launch location.
+
+    GUI-style launches (double-click / Finder) typically inherit
+    ``CWD == "/"`` or an idle Python-runtime directory; only then is the
+    Finder probe worth consulting for the real launch folder.
+    """
+    if cwd is None or cwd == Path("/"):
+        return True
+    try:
+        return cwd.resolve().is_relative_to(Path(sys.prefix).resolve())
+    except OSError:
+        return True
 
 
 @dataclass(frozen=True)
@@ -140,27 +165,33 @@ def detect_launch_context(argv: list[str] | None = None) -> LaunchContext:
         ``explicit_config`` is intentionally left ``None`` here — parsing
         ``--config`` is the job of the CLI layer, which knows the flag
         grammar.  Use :func:`with_explicit_config` to attach it.
+        The macOS Finder probe is consulted only when the process CWD is
+        uninformative (``CWD ==  "/"`` or inside the Python runtime
+        directory) — the signature of a GUI-style, double-click launch.
+        A terminal launch always keeps its real CWD.
     """
     tokens = list(sys.argv if argv is None else argv)
     documents = _documents_from_argv(tokens)
 
-    probed = _finder_working_directory()
+    try:
+        cwd = Path.cwd()
+    except OSError:
+        cwd = None
+
+    probed = _finder_working_directory() if cwd is not None and _cwd_is_uninformative(cwd) else None
+
     if probed is not None:
         working_directory = probed
+        source = "launcher"
+    elif cwd is not None:
+        working_directory = cwd
+        source = "cwd"
     else:
-        try:
-            working_directory = Path.cwd()
-        except OSError:
-            working_directory = None
+        working_directory = None
+        source = "cwd"
 
     if documents:
         source = "document"
-    elif probed is not None:
-        # The folder came from the launcher (a Finder window), not from a
-        # terminal CWD — which is what makes the macOS shortcut work.
-        source = "launcher"
-    else:
-        source = "cwd"
 
     return LaunchContext(
         document_paths=documents,
@@ -195,6 +226,7 @@ def with_explicit_config(
 __all__ = [
     "CONFIG_SUFFIX",
     "FALLBACK_CONFIG_SUFFIX",
+    "FALLBACK_CONFIG_SUFFIXES",
     "LaunchContext",
     "detect_launch_context",
     "with_explicit_config",

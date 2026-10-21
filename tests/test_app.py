@@ -104,13 +104,15 @@ class TestSetupLogging:
 class TestLoadConfiguration:
     """_load_configuration loads config or exits on error."""
 
-    def test_loads_config_successfully(self, mocker) -> None:  # type: ignore[no-untyped-def]
+    def test_loads_config_successfully(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
         mocker.patch("profiles.app.configure_logger")
+        resolved = tmp_path / ".profiles"
+        mocker.patch("profiles.app.resolve_config_path", return_value=resolved)
         mock_load = mocker.patch("profiles.app.load_config")
         app = ProFileApp()
         mock_logger = mocker.MagicMock()
         app._load_configuration(mock_logger)
-        mock_load.assert_called_once_with(None)
+        mock_load.assert_called_once_with(resolved)
 
     def test_oserror_exits(self, mocker) -> None:  # type: ignore[no-untyped-def]
         mocker.patch("profiles.app.configure_logger")

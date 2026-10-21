@@ -15,6 +15,7 @@ from __future__ import annotations
 from profiles.launch.context import (
     CONFIG_SUFFIX,
     FALLBACK_CONFIG_SUFFIX,
+    FALLBACK_CONFIG_SUFFIXES,
     LaunchContext,
     detect_launch_context,
     with_explicit_config,
@@ -25,6 +26,7 @@ from profiles.launch.resolution import resolve_config_path
 __all__ = [
     "CONFIG_SUFFIX",
     "FALLBACK_CONFIG_SUFFIX",
+    "FALLBACK_CONFIG_SUFFIXES",
     "CreationResult",
     "LaunchContext",
     "detect_launch_context",

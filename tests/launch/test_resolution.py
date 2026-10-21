@@ -128,3 +128,32 @@ class TestResolveConfigPath:
         )
         result = resolve_config_path(ctx)
         assert result == config
+
+    def test_yml_suffix_is_found_by_search(self, tmp_path) -> None:
+        """The .profiles.yml suffix is also searched."""
+        config = tmp_path / ".profiles.yml"
+        config.write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=tmp_path,
+            explicit_config=None,
+            source="cwd",
+        )
+        result = resolve_config_path(ctx)
+        assert result == config
+
+    def test_search_tier_priority(self, tmp_path) -> None:
+        """Primary beats .yaml across the whole tree; .yaml beats .yml."""
+        (tmp_path / ".profiles.yml").write_text("x")
+        yaml_conf = tmp_path / "sub" / ".profiles.yaml"
+        yaml_conf.parent.mkdir()
+        yaml_conf.write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=tmp_path,
+            explicit_config=None,
+            source="cwd",
+        )
+        assert resolve_config_path(ctx) == yaml_conf

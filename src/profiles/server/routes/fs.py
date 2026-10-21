@@ -6,18 +6,27 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
+from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
+
 router = APIRouter(prefix="/api/fs", tags=["fs"])
+
+#: Suffix checks must run longest-first so ``.profiles.yaml``/``.profiles.yml``
+#: are not swallowed by the ``.profiles`` endswith match.
+_SUFFIXES_IN_ORDER = (
+    ".profiles.yaml",
+    ".profiles.yml",
+    ".profiles",
+)
 
 
 def _is_config_name(name: str) -> bool:
-    return name.endswith(".profiles") or name.endswith(".profiles.yaml")
+    return name.endswith(CONFIG_FILE_NAMES)
 
 
 def _config_extension(name: str) -> str:
-    if name.endswith(".profiles.yaml"):
-        return ".profiles.yaml"
-    if name.endswith(".profiles"):
-        return ".profiles"
+    for suffix in _SUFFIXES_IN_ORDER:
+        if name.endswith(suffix):
+            return suffix
     return Path(name).suffix
 
 

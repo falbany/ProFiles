@@ -7,14 +7,13 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.launch.creation import propose_creation
 from profiles.server.state import ServerState
 
 router = APIRouter(prefix="/api/config", tags=["config"])
-
-_CONFIG_SUFFIXES = (".profiles", ".profiles.yaml")
 
 
 class SelectDirectoryRequest(BaseModel):
@@ -30,18 +29,12 @@ class CreateConfigRequest(BaseModel):
 
 
 def _is_config_path(path: Path) -> bool:
-    return path.name.endswith(_CONFIG_SUFFIXES)
+    return path.name.endswith(CONFIG_FILE_NAMES)
 
 
 def _config_response(state: ServerState) -> dict:
     cfg: AppConfig = state.config
-    config_path = state.config_path or getattr(cfg, "config_path", None)
-    if config_path is None:
-        config_path = Path.cwd() / ".profiles"
-    elif isinstance(config_path, str):
-        config_path = Path(config_path)
-    else:
-        config_path = Path(config_path)
+    config_path = state.active_config_path()
 
     state.config_path = config_path
     cfg.config_path = config_path
@@ -132,7 +125,7 @@ async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> 
     if not _is_config_path(config_path):
         raise HTTPException(
             status_code=400,
-            detail=f"Config path must end with .profiles or .profiles.yaml: {config_path}",
+            detail=f"Not a ProFiles configuration file: {config_path}",
         )
 
     loaded = ConfigReader(config_path).load()

@@ -43,6 +43,7 @@ async def test_default_hides_hidden(fs_state: ServerState, tmp_path: Path) -> No
 async def test_include_hidden_reveals_only_configs(fs_state: ServerState, tmp_path: Path) -> None:
     (tmp_path / ".profiles").write_text("version: 1\n", encoding="utf-8")
     (tmp_path / ".hidden.profiles.yaml").write_text("version: 1\n", encoding="utf-8")
+    (tmp_path / ".profiles.yml").write_text("version: 1\n", encoding="utf-8")
     (tmp_path / ".git").mkdir()
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".notes").write_text("n", encoding="utf-8")
@@ -56,6 +57,7 @@ async def test_include_hidden_reveals_only_configs(fs_state: ServerState, tmp_pa
     names = {item["name"] for item in payload["items"]}
     assert ".profiles" in names
     assert ".hidden.profiles.yaml" in names
+    assert ".profiles.yml" in names
     assert ".git" not in names
     assert ".venv" not in names
     assert ".notes" not in names

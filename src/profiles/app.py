@@ -19,9 +19,7 @@ from profiles.core.telemetry import events
 from profiles.core.telemetry.diagnostics import configure_logger
 from profiles.gui.main_window import MainWindow
 from profiles.launch import (
-    CreationResult,
     detect_launch_context,
-    propose_creation,
     resolve_config_path,
     with_explicit_config,
 )
@@ -232,22 +230,10 @@ class ProFileApp:
             self._run_server_only()
             return
 
-        # Step 4b: Offer to create config if none found (not in server mode)
-        if self._config is None and not self._no_config_propose:
-            resolved, _ = self._resolve_startup_config(self._config_path)
-            if resolved is None:
-                # No config found anywhere - offer to create one
-                search_dir = Path.cwd()
-                result = propose_creation(search_dir)
-                if isinstance(result, CreationResult) and result.status == "CREATED":
-                    self._logger.info(result.message)
-                    # Reload with the newly created config
-                    self._config_path = result.path
-                    self._config = self._load_configuration(self._logger)
-                elif isinstance(result, CreationResult) and result.status == "SKIPPED":
-                    self._logger.info(result.message)
-
-        # Step 5: Create and run the GUI
+        # Step 4: Create and run the GUI
+        # (missing-config proposal lives in gui/window_actions.py for the
+        # Tkinter GUI and in the web frontend's config modal + the
+        # /api/config/create endpoint for the web backend.)
         self._logger.info(f"Selected GUI backend: {self._gui_backend}")
         if self._gui_backend == "web":
             self._run_web_gui()

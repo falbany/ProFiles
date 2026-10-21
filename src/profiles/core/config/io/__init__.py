@@ -1,7 +1,8 @@
 """Low-level YAML I/O for the configuration subsystem."""
 
 from profiles.core.config.io.yaml_io import (
-    FALLBACK_CONFIG_NAME,
+    CONFIG_FILE_NAMES,
+    FALLBACK_CONFIG_NAMES,
     PRIMARY_CONFIG_NAME,
     find_config_file,
     read_yaml,
@@ -9,7 +10,8 @@ from profiles.core.config.io.yaml_io import (
 )
 
 __all__ = [
-    "FALLBACK_CONFIG_NAME",
+    "CONFIG_FILE_NAMES",
+    "FALLBACK_CONFIG_NAMES",
     "PRIMARY_CONFIG_NAME",
     "find_config_file",
     "read_yaml",

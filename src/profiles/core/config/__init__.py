@@ -15,7 +15,7 @@ implementation details and may change without notice.
 
 from __future__ import annotations
 
-from profiles.core.config.io.yaml_io import find_config_file
+from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES, find_config_file
 from profiles.core.config.loader import load_config, propose_config_creation
 from profiles.core.config.models import (
     AppConfig,
@@ -54,4 +54,5 @@ __all__ = [
     "STARTER_CONFIG_TEMPLATE",
     # YAML I/O
     "find_config_file",
+    "CONFIG_FILE_NAMES",
 ]

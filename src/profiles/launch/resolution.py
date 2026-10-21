@@ -18,23 +18,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from profiles.core.config.io.yaml_io import find_config_file
-from profiles.launch.context import (
-    CONFIG_SUFFIX,
-    FALLBACK_CONFIG_SUFFIX,
-    LaunchContext,
-)
+from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES, find_config_file
+from profiles.launch.context import LaunchContext
 
 #: How many directory levels to search.  Matches ``find_config_file``'s
 #: documented default and the config file's own comment.
 _CONFIG_SEARCH_DEPTH = 5
 
-_CONFIG_NAMES = (CONFIG_SUFFIX, FALLBACK_CONFIG_SUFFIX)
-
 
 def _is_config_file(path: Path) -> bool:
     """True when *path* looks like a ProFiles configuration file."""
-    return path.name.endswith(_CONFIG_NAMES)
+    return path.name.endswith(CONFIG_FILE_NAMES)
 
 
 def resolve_config_path(ctx: LaunchContext) -> Path | None:

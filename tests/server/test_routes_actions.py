@@ -20,6 +20,51 @@ def test_state() -> ServerState:
 
 
 @pytest.mark.anyio
+async def test_open_config_uses_active_config_path(test_state: ServerState, tmp_path: Path) -> None:
+    """The Config button must open the ACTIVE config file, not cwd/.profiles."""
+    config_path = tmp_path / ".profiles.yaml"
+    config_path.write_text("version: 1\n", encoding="utf-8")
+    test_state.config_path = config_path
+    test_state.config.config_path = config_path
+    expected = ActionResult(status=ActionStatus.SUCCESS, message="opened", path=config_path)
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.open_config_file", return_value=expected
+    ) as open_mock:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/actions/open-config")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert open_mock.call_args.args[0] == config_path
+
+
+@pytest.mark.anyio
+async def test_open_config_falls_back_to_core_search_when_path_unknown(
+    test_state: ServerState, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no recorded config path, the core search drives resolution."""
+    test_state.config_path = None
+    test_state.config.config_path = None
+    config_path = tmp_path / ".profiles"
+    config_path.write_text("version: 1\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    expected = ActionResult(status=ActionStatus.SUCCESS, message="opened", path=config_path)
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.open_config_file", return_value=expected
+    ) as open_mock:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/actions/open-config")
+
+    assert response.status_code == 200
+    assert open_mock.call_args.args[0] == config_path
+
+
+@pytest.mark.anyio
 async def test_reveal_selects_file_and_returns_action_result(
     test_state: ServerState, tmp_path: Path
 ) -> None:

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from profiles.core import actions
 from profiles.core.processing.file_metadata import get_file_metadata
+from profiles.server.state import ServerState
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
 
@@ -88,10 +89,10 @@ async def open_log() -> dict:
 
 
 @router.post("/open-config")
-async def open_config() -> dict:
-    """Open configuration file in default application."""
-    config_path = Path.cwd() / ".profiles"
-    res = actions.open_config_file(config_path)
+async def open_config(request: Request) -> dict:
+    """Open the active configuration file in default application."""
+    state: ServerState = request.app.state.server_state
+    res = actions.open_config_file(state.active_config_path())
     return {
         "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),
         "message": res.message,

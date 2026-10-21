@@ -16,6 +16,7 @@ import pytest
 from profiles.launch.context import (
     CONFIG_SUFFIX,
     FALLBACK_CONFIG_SUFFIX,
+    FALLBACK_CONFIG_SUFFIXES,
     LaunchContext,
     _documents_from_argv,
     detect_launch_context,
@@ -31,6 +32,10 @@ class TestDocumentsFromArgv:
     def test_accepts_legacy_yaml_suffix(self) -> None:
         paths = _documents_from_argv(["prog", "/a/config.profiles.yaml"])
         assert paths == (Path("/a/config.profiles.yaml").resolve(),)
+
+    def test_accepts_yml_suffix(self) -> None:
+        paths = _documents_from_argv(["prog", "/a/config.profiles.yml"])
+        assert paths == (Path("/a/config.profiles.yml").resolve(),)
 
     def test_ignores_non_config_argv(self) -> None:
         assert _documents_from_argv(["prog", "file.mttl", "other.txt"]) == ()
@@ -54,6 +59,7 @@ class TestDocumentsFromArgv:
     def test_matches_the_declared_suffixes(self) -> None:
         assert CONFIG_SUFFIX == ".profiles"
         assert FALLBACK_CONFIG_SUFFIX == ".profiles.yaml"
+        assert FALLBACK_CONFIG_SUFFIXES == (".profiles.yaml", ".profiles.yml")
 
 
 class TestDetectLaunchContext:
@@ -124,14 +130,29 @@ class TestDetectLaunchContext:
         assert detect_launch_context(["prog"]).source == "cwd"
 
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only source label")
-    def test_source_is_launcher_when_probe_succeeds(self, monkeypatch, tmp_path) -> None:
-        """A launch with no document is attributed to the launcher on macOS."""
-        monkeypatch.chdir(tmp_path)
+    def test_source_is_launcher_when_cwd_is_uninformative(self, monkeypatch) -> None:
+        """A GUI-style launch (CWD == "/") attributes the folder to the launcher."""
+        monkeypatch.chdir("/")
         monkeypatch.setattr(
             "profiles.launch.context._finder_working_directory",
-            lambda: tmp_path,
+            lambda: Path("/Users/someone/ProjectFolder"),
         )
-        assert detect_launch_context(["prog"]).source == "launcher"
+        ctx = detect_launch_context(["prog"])
+        assert ctx.source == "launcher"
+        assert ctx.working_directory == Path("/Users/someone/ProjectFolder")
+
+    def test_real_cwd_beats_probe(self, monkeypatch, tmp_path) -> None:
+        """A terminal launch must never have its CWD hijacked by the probe."""
+        monkeypatch.chdir(tmp_path)
+        unrelated = Path("/the/front/finder/window")
+        monkeypatch.setattr(
+            "profiles.launch.context._finder_working_directory",
+            lambda: unrelated,
+        )
+        ctx = detect_launch_context(["prog"])
+        assert ctx.source == "cwd"
+        assert ctx.working_directory == tmp_path
+        assert ctx.working_directory != unrelated
 
     def test_detects_argv_from_sys_when_not_supplied(self, monkeypatch, tmp_path) -> None:
         monkeypatch.chdir(tmp_path)
