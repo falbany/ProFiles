@@ -152,8 +152,10 @@ async def test_scan_uses_config_exclusions_and_columns(test_state: ServerState) 
 
     assert resp.status_code == 200
     kwargs = scan_mock.call_args.kwargs
-    assert kwargs["exclude_dirs"] == ("build",)
-    assert kwargs["exclude_files"] == ("*.tmp",)
+    # Exclusions (exclude_dirs/exclude_files) are no longer passed by the
+    # route: they now resolve inside scan_and_process_dynamic via `config`
+    # (covered by the core scanner tests).
+    assert kwargs["config"] is test_state.config
     assert kwargs["column_names"] == ("File", "Version")
     assert kwargs["columns"] == test_state.config.columns
 

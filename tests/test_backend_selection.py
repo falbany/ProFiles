@@ -3,24 +3,30 @@
 from __future__ import annotations
 
 import os
+import sys
 from unittest.mock import patch
 
-from profiles.app import ProFileApp
+from profiles.app import ProFileApp, main
 from profiles.core.config.models import AppConfig
+
+
+def _resolved_backend(argv: list[str]) -> str:
+    """Run ``main()`` with *argv* and return the backend it constructs."""
+    with patch.object(sys, "argv", argv), patch("profiles.app.ProFileApp") as mock_app:
+        main()
+    call = mock_app.call_args
+    assert call is not None, "main() must construct ProFileApp"
+    return call.kwargs["gui_backend"]
 
 
 def test_backend_selection_default_web() -> None:
     with patch.dict(os.environ, {}, clear=True):
-        app = ProFileApp(headless=False)
-        backend = app.resolve_gui_backend()
-        assert backend == "web"
+        assert _resolved_backend(["profiles"]) == "web"
 
 
-def test_backend_selection_env_tk() -> None:
-    with patch.dict(os.environ, {"PROFILES_GUI_BACKEND": "tk"}):
-        app = ProFileApp(headless=False)
-        backend = app.resolve_gui_backend()
-        assert backend == "tk"
+def test_backend_selection_cli_tk() -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        assert _resolved_backend(["profiles", "--tkinter"]) == "tk"
 
 
 def test_launch_web_backend_calls_desktop() -> None:

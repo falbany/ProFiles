@@ -70,9 +70,27 @@ class TestChooseWorkingDir:
 
         importlib.reload(ProFiles)
 
-        # The function should add tmp_path/src to sys.path
-        with patch.object(ProFiles, "_project_root", return_value=tmp_path):
-            ProFiles._add_src_to_path(tmp_path)
+        # _add_src_to_path prepends <root>/src to sys.path and purges all
+        # profiles.* modules from sys.modules by design (runtime
+        # re-bootstrap). Snapshot both and restore them so this deliberate
+        # pollution cannot leak into unrelated tests.
+        saved_path = list(sys.path)
+        saved_profiles = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "profiles" or name.startswith("profiles.")
+        }
+        try:
+            # The function should add tmp_path/src to sys.path
+            with patch.object(ProFiles, "_project_root", return_value=tmp_path):
+                ProFiles._add_src_to_path(tmp_path)
 
-        # Verify src/ is in sys.path
-        assert any("src" in p and str(tmp_path) in p for p in sys.path)
+            # Verify src/ is in sys.path
+            assert any("src" in p and str(tmp_path) in p for p in sys.path)
+        finally:
+            sys.path[:] = saved_path
+            for name in [
+                name for name in sys.modules if name == "profiles" or name.startswith("profiles.")
+            ]:
+                del sys.modules[name]
+            sys.modules.update(saved_profiles)

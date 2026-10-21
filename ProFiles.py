@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import importlib.machinery
 import importlib.util
 from pathlib import Path
 
 _PYW_PATH = Path(__file__).with_name("ProFiles.pyw")
-_SPEC = importlib.util.spec_from_file_location("_pro_files_launcher", _PYW_PATH)
+# ``.pyw`` is only registered as a source suffix on Windows; passing an
+# explicit loader keeps the launcher module loadable on every OS.
+_LOADER = importlib.machinery.SourceFileLoader("_pro_files_launcher", str(_PYW_PATH))
+_SPEC = importlib.util.spec_from_loader(_LOADER.name, _LOADER, origin=str(_PYW_PATH))
 if _SPEC is None or _SPEC.loader is None:
     raise ImportError(f"Unable to load launcher module from {_PYW_PATH}")
 

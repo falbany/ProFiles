@@ -107,6 +107,9 @@ class TestLoadConfiguration:
     def test_loads_config_successfully(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
         mocker.patch("profiles.app.configure_logger")
         resolved = tmp_path / ".profiles"
+        # The file must exist: launch-time resolution flags a missing file
+        # and exits before load_config is ever reached.
+        resolved.write_text("", encoding="utf-8")
         mocker.patch("profiles.app.resolve_config_path", return_value=resolved)
         mock_load = mocker.patch("profiles.app.load_config")
         app = ProFileApp()
@@ -247,7 +250,7 @@ class TestRun:
         mock_window_instance = mocker.MagicMock()
         mock_main_window.return_value = mock_window_instance
 
-        app = ProFileApp()
+        app = ProFileApp(gui_backend="tk")
         app.run()
         mock_main_window.assert_called_once()
         mock_window_instance.run.assert_called_once()
@@ -271,7 +274,7 @@ class TestRun:
         mocker.patch("profiles.app.load_config", return_value=mock_config)
         mocker.patch("profiles.app.MainWindow", side_effect=RuntimeError("no screen available"))
 
-        app = ProFileApp()
+        app = ProFileApp(gui_backend="tk")
         with pytest.raises(SystemExit):
             app.run()
 
@@ -284,7 +287,7 @@ class TestRun:
 
         mocker.patch("profiles.app.MainWindow", side_effect=tkinter.TclError("display error"))
 
-        app = ProFileApp()
+        app = ProFileApp(gui_backend="tk")
         with pytest.raises(SystemExit):
             app.run()
 
@@ -296,7 +299,7 @@ class TestRun:
         mocker.patch("profiles.app.load_config", return_value=mock_config)
         mocker.patch("profiles.app.MainWindow", side_effect=RuntimeError("Tcl error"))
 
-        app = ProFileApp()
+        app = ProFileApp(gui_backend="tk")
         with pytest.raises(SystemExit):
             app.run()
 
@@ -399,7 +402,13 @@ class TestMain:
         mocker.patch("sys.argv", ["profiles", "--headless"])
         mock_app = mocker.patch("profiles.app.ProFileApp")
         main()
-        mock_app.assert_called_once_with(config_path=None, headless=True)
+        mock_app.assert_called_once_with(
+            config_path=None,
+            headless=True,
+            server_only=False,
+            no_config_propose=False,
+            gui_backend="web",
+        )
         mock_app.return_value.run.assert_called_once_with(file=None)
 
     def test_config_and_headless(self, mocker) -> None:  # type: ignore[no-untyped-def]
@@ -421,7 +430,13 @@ class TestMain:
         mocker.patch("sys.argv", ["profiles"])
         mock_app = mocker.patch("profiles.app.ProFileApp")
         main()
-        mock_app.assert_called_once_with(config_path=None, headless=False)
+        mock_app.assert_called_once_with(
+            config_path=None,
+            headless=False,
+            server_only=False,
+            no_config_propose=False,
+            gui_backend="web",
+        )
 
 
 # ── __main__.py ─────────────────────────────────────────────────────────────
