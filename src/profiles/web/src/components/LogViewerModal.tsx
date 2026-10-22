@@ -7,7 +7,6 @@ import {
   ExternalLink,
   FileText,
   Info,
-  Loader2,
   RefreshCw,
   Search,
   X,
@@ -355,9 +354,15 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
 
         {/* Footer — hosts the level filters and follow-tail control. */}
         <div className="border-t border-line/60 bg-elevated/50 px-5 py-2.5 text-[11px] text-ink-faint shadow-sm backdrop-blur-md sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            {/* Single atomic status message instead of competing live regions. */}
-            <span className="min-w-0 flex-1 truncate" role="status" aria-atomic="true">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {/* Status pinned to the far left; mr-auto pushes the buttons right so
+                the two never interact on the same line. On narrow windows the
+                status takes a full row above the buttons. */}
+            <span
+              className="mr-auto min-w-0 max-w-full basis-full truncate sm:basis-auto"
+              role="status"
+              aria-atomic="true"
+            >
               {loading && entries.length === 0
                 ? "Loading log entries…"
                 : `${entries.length} of ${formatSize(sizeBytes)} shown`}
@@ -411,7 +416,6 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
             </div>
 
             <span className="hidden items-center gap-1.5 lg:flex">
-              {loading && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
               <span className="hidden sm:inline">Ctrl + Shift + L</span>
               <span>opens externally</span>
             </span>
