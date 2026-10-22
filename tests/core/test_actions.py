@@ -739,7 +739,7 @@ class TestRevealInFileManager:
     def test_windows_uses_explorer_select(
         self, mock_popen: MagicMock, mock_open_explorer: MagicMock, tmp_path: Path
     ) -> None:
-        """On Windows we invoke ``explorer /select,<file>``."""
+        """On Windows we invoke ``explorer /select,"<file>"``."""
         target = tmp_path / "thing.txt"
         target.write_text("")
         with (
@@ -749,8 +749,7 @@ class TestRevealInFileManager:
             result = actions.reveal_in_file_manager(target)
         assert result.status is ActionStatus.SUCCESS
         args = mock_popen.call_args[0][0]
-        assert args[0] == "explorer"
-        assert args[1] == f"/select,{target}"
+        assert args == f'explorer /select,"{target}"'
         mock_open_explorer.assert_not_called()
 
     @patch("profiles.core.actions.open_file_explorer", return_value=True)
@@ -761,7 +760,10 @@ class TestRevealInFileManager:
         """On Linux we don't spawn a subprocess — we delegate to open_file_explorer."""
         target = tmp_path / "thing.txt"
         target.write_text("")
-        with patch("profiles.core.actions.sys.platform", "linux"):
+        with (
+            patch("profiles.core.actions.os.name", "posix"),
+            patch("profiles.core.actions.sys.platform", "linux"),
+        ):
             result = actions.reveal_in_file_manager(target)
         assert result.status is ActionStatus.SUCCESS
         mock_popen.assert_not_called()
@@ -775,7 +777,10 @@ class TestRevealInFileManager:
         """If the Linux fallback fails, status is FAILED."""
         target = tmp_path / "thing.txt"
         target.write_text("")
-        with patch("profiles.core.actions.sys.platform", "linux"):
+        with (
+            patch("profiles.core.actions.os.name", "posix"),
+            patch("profiles.core.actions.sys.platform", "linux"),
+        ):
             result = actions.reveal_in_file_manager(target)
         assert result.status is ActionStatus.FAILED
 

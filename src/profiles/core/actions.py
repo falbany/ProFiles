@@ -382,8 +382,12 @@ def reveal_in_file_manager(file_path: Path) -> ActionResult:
             with subprocess.Popen(["open", "-R", str(file_path)]) as proc:
                 proc.wait()
         elif os.name == "nt":
+            # Pass a command-line *string*, not an argv list:
+            # subprocess would quote the whole ``/select,<path>`` token when
+            # the path contains spaces, and Explorer parses that as an
+            # unrelated folder. Quote the path only.
             with subprocess.Popen(
-                ["explorer", f"/select,{file_path}"],
+                f'explorer /select,"{file_path}"',
                 **_POPEN_NO_WINDOW,
             ) as proc:
                 proc.wait()
