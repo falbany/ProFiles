@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { X, File, Folder, Calendar, Hash, ChevronDown, ChevronRight, Copy, Check, QrCode, Eye, Play, FolderOpen } from "lucide-react";
+import { X, File, Folder, Calendar, Hash, Copy, Check, QrCode, Eye, Play, FolderOpen, Lock, EyeOff, Link2 } from "lucide-react";
 import type { FileMetadata, ScannedFileItem } from "../api/types";
 import { fetchFileMetadata, launchFile, openFolder, revealFile } from "../api/client";
 import { BarcodeModal } from "./BarcodeModal";
-import { buildPropertiesSummary, formatFileSize, parentDirectory } from "../utils/fileProperties";
+import {
+  buildPropertiesSummary,
+  compactPath,
+  formatFileSize,
+  humanizeTimestamp,
+  parentDirectory,
+  truncateMiddle,
+} from "../utils/fileProperties";
 
 export interface FilePropertiesModalProps {
   isOpen: boolean;
@@ -11,21 +18,10 @@ export interface FilePropertiesModalProps {
   onClose: () => void;
 }
 
-interface CollapsibleSection {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-  content: React.ReactNode;
-}
-
-/** Sections expanded when the modal opens or resets. */
-const DEFAULT_EXPANDED_SECTIONS = ["basic", "hashes", "timestamps", "system"];
-
 export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesModalProps) {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(DEFAULT_EXPANDED_SECTIONS));
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -39,8 +35,6 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
   useEffect(() => {
     if (!isOpen) {
       previousFocusRef.current?.focus();
-      // Reset expanded sections when closing
-      setExpandedSections(new Set(DEFAULT_EXPANDED_SECTIONS));
       setShowQrModal(false);
     }
   }, [isOpen]);
@@ -134,18 +128,6 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
     return () => cancelAnimationFrame(focusFrame);
   }, [isOpen]);
 
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections(prev => {
-      const next = new Set(prev);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
-      }
-      return next;
-    });
-  };
-
   const copyToClipboard = async (text: string, fieldId: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -188,13 +170,14 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
     label: string,
     value: string,
     fieldId: string,
-    isMonospace = false
+    isMonospace = false,
+    displayValue?: string
   ) => (
     <div className="flex items-start gap-2 py-1.5 group">
       <span className="text-ink-muted min-w-[100px] text-xs">{label}:</span>
       <div className="flex-1 min-w-0">
         <span className={`text-ink text-xs break-all ${isMonospace ? "font-mono" : ""}`}>
-          {value}
+          {displayValue ?? value}
         </span>
       </div>
       <button
@@ -212,33 +195,34 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
     </div>
   );
 
-  const renderCollapsibleSection = (section: CollapsibleSection) => {
-    const isExpanded = expandedSections.has(section.id);
-    return (
-      <div className="rounded-lg bg-elevated overflow-hidden">
-        <button
-          onClick={() => toggleSection(section.id)}
-          className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surface transition-colors"
-          aria-expanded={isExpanded}
-        >
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-ink-muted" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-ink-muted" />
-          )}
-          <div className="flex items-center gap-2">
-            {section.icon}
-            <span className="text-sm font-medium text-ink">{section.title}</span>
-          </div>
-        </button>
-        {isExpanded && (
-          <div className="px-4 pb-4 pt-2 border-t border-line">
-            <div className="pt-2">{section.content}</div>
-          </div>
-        )}
+  const renderCard = (title: string, icon: React.ReactNode, content: React.ReactNode) => (
+    <div className="rounded-lg border border-line bg-elevated p-4">
+      <div className="mb-1 flex items-center gap-2">
+        {icon}
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{title}</span>
       </div>
-    );
-  };
+      {content}
+    </div>
+  );
+
+  /** Full-width clickable path bar; copies the complete path on click. */
+  const renderPathBar = () => (
+    <button
+      onClick={() => void copyToClipboard(metadata!.path, "path")}
+      className="group mb-3 flex w-full items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-left hover:bg-surface"
+      title="Click to copy full path"
+    >
+      <Folder className="text-amber-400 h-4 w-4 flex-shrink-0" />
+      <span className="text-ink min-w-0 flex-1 truncate font-mono text-xs">
+        {compactPath(metadata!.path)}
+      </span>
+      {copiedField === "path" ? (
+        <Check className="text-emerald-400 h-3.5 w-3.5" />
+      ) : (
+        <Copy className="text-ink-muted h-3.5 w-3.5" />
+      )}
+    </button>
+  );
 
   if (!isOpen || !file) return null;
   // Captures the narrowed file so JSX callbacks keep a non-null type.
@@ -252,13 +236,13 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       aria-modal="true"
       aria-labelledby="properties-modal-title"
     >
-      {/* Backdrop */}
-      <div onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      {/* Backdrop — covers the whole overlay; clicking outside closes */}
+      <div className="absolute inset-0" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
 
       {/* Modal content */}
       <div
         ref={dialogRef}
-        className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl border border-line bg-surface shadow-2xl flex flex-col"
+        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-line bg-surface shadow-2xl flex flex-col"
       >
         {/* Header */}
         <div className="flex-shrink-0 border-b border-line px-6 py-4">
@@ -330,104 +314,99 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           )}
 
           {metadata && !loading && !error && (
-            <div className="space-y-3">
-              {/* Basic Information */}
-              {renderCollapsibleSection({
-                id: "basic",
-                title: "Basic Information",
-                icon: <File className="h-4 w-4 text-indigo-400" />,
-                content: (
-                  <div className="space-y-0.5">
-                    {renderPropertyRow("Name", metadata.name, "name")}
-                    {renderPropertyRow("Type", metadata.type, "type")}
-                    {renderPropertyRow("Size", formatFileSize(metadata.size_bytes), "size")}
-                    {renderPropertyRow("Extension", metadata.name.includes(".") ? metadata.name.slice(metadata.name.lastIndexOf(".")) : "None", "extension")}
-                  </div>
-                ),
-              })}
+            <div>
+              {/* Hero strip: type, size, relative age — always visible */}
+              <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-line bg-elevated px-4 py-2.5">
+                <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-600/20 px-2 py-0.5 text-xs font-medium text-indigo-300">
+                  {metadata.type}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  Size <strong className="text-ink font-medium">{formatFileSize(metadata.size_bytes)}</strong>
+                </span>
+                <span className="text-xs text-ink-muted" title={metadata.modified}>
+                  Modified <strong className="text-ink font-medium">{humanizeTimestamp(metadata.modified)}</strong>
+                </span>
+                {metadata.attributes.is_symlink && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-fuchsia-500/30 bg-fuchsia-600/20 px-2 py-0.5 text-xs text-fuchsia-300">
+                    <Link2 className="h-3 w-3" /> Symlink
+                  </span>
+                )}
+              </div>
 
-              {/* Cryptographic Hashes */}
-              {renderCollapsibleSection({
-                id: "hashes",
-                title: "Cryptographic Hashes",
-                icon: <Hash className="h-4 w-4 text-purple-400" />,
-                content: (
-                  <div className="space-y-0.5">
-                    {renderPropertyRow("MD5", metadata.md5, "md5", true)}
-                    {renderPropertyRow("SHA256", metadata.sha256, "sha256", true)}
-                  </div>
-                ),
-              })}
+              {/* Click-to-copy full path */}
+              {renderPathBar()}
 
-              {/* Timestamps */}
-              {renderCollapsibleSection({
-                id: "timestamps",
-                title: "Timestamps",
-                icon: <Calendar className="h-4 w-4 text-sky-400" />,
-                content: (
+              {/* All-visible card grid */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {/* Hashes */}
+                {renderCard(
+                  "Hashes",
+                  <Hash className="text-purple-400 h-3.5 w-3.5" />,
+                  <div className="space-y-0.5">
+                    {renderPropertyRow("MD5", metadata.md5, "md5", true, truncateMiddle(metadata.md5, 10, 6))}
+                    {renderPropertyRow("SHA256", metadata.sha256, "sha256", true, truncateMiddle(metadata.sha256, 10, 6))}
+                  </div>
+                )}
+
+                {/* Timestamps */}
+                {renderCard(
+                  "Timestamps",
+                  <Calendar className="text-sky-400 h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("Created", metadata.created, "created", true)}
                     {renderPropertyRow("Modified", metadata.modified, "modified", true)}
                   </div>
-                ),
-              })}
+                )}
 
-              {/* File Location */}
-              {renderCollapsibleSection({
-                id: "location",
-                title: "File Location",
-                icon: <Folder className="h-4 w-4 text-amber-400" />,
-                content: (
+                {/* Identity */}
+                {renderCard(
+                  "Identity",
+                  <File className="text-indigo-400 h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
-                    {renderPropertyRow("Full Path", metadata.path, "path", true)}
+                    {renderPropertyRow("Type", metadata.type, "type")}
+                    {metadata.attributes.stem && renderPropertyRow("Stem", metadata.attributes.stem, "attrStem")}
+                    {renderPropertyRow(
+                      "Extension",
+                      metadata.name.includes(".") ? metadata.name.slice(metadata.name.lastIndexOf(".")) : "None",
+                      "extension"
+                    )}
                     {renderPropertyRow("Directory", parentDirectory(metadata.path) || "None", "directory", true)}
                   </div>
-                ),
-              })}
+                )}
 
-              {/* System Attributes */}
-              {renderCollapsibleSection({
-                id: "system",
-                title: "System Attributes",
-                icon: <File className="h-4 w-4 text-emerald-400" />,
-                content: (
-                  <div className="space-y-0.5">
-                    {renderPropertyRow(
-                      "File Type",
-                      metadata.attributes.is_file ? "Regular File" : metadata.attributes.is_dir ? "Directory" : "Other",
-                      "fileType"
-                    )}
-                    {metadata.attributes.extension && renderPropertyRow("Extension", metadata.attributes.extension, "attrExt")}
-                    {metadata.attributes.stem && renderPropertyRow("Filename (no ext)", metadata.attributes.stem, "attrStem")}
-                    {metadata.attributes.permissions && renderPropertyRow("Permissions", metadata.attributes.permissions, "permissions", true)}
-                    {metadata.attributes.is_readonly !== undefined && renderPropertyRow(
-                      "Read-only",
-                      metadata.attributes.is_readonly ? "Yes" : "No",
-                      "readonly"
-                    )}
-                    {metadata.attributes.is_hidden !== undefined && renderPropertyRow(
-                      "Hidden",
-                      metadata.attributes.is_hidden ? "Yes" : "No",
-                      "hidden"
-                    )}
-                    {metadata.attributes.is_symlink && renderPropertyRow(
-                      "Symlink",
-                      "Yes",
-                      "symlink"
-                    )}
-                    {metadata.attributes.owner_uid !== undefined && renderPropertyRow(
-                      "Owner UID",
-                      String(metadata.attributes.owner_uid),
-                      "ownerUid"
-                    )}
-                    {metadata.attributes.group_gid !== undefined && renderPropertyRow(
-                      "Group GID",
-                      String(metadata.attributes.group_gid),
-                      "groupGid"
-                    )}
+                {/* System */}
+                {renderCard(
+                  "System",
+                  <File className="text-emerald-400 h-3.5 w-3.5" />,
+                  <div>
+                    <div className="mb-1 flex min-h-[24px] flex-wrap items-center gap-1.5">
+                      {metadata.attributes.is_readonly && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-600/20 px-2 py-0.5 text-xs text-rose-300">
+                          <Lock className="h-3 w-3" /> Read-only
+                        </span>
+                      )}
+                      {metadata.attributes.is_hidden && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-slate-500/30 bg-slate-600/20 px-2 py-0.5 text-xs text-slate-300">
+                          <EyeOff className="h-3 w-3" /> Hidden
+                        </span>
+                      )}
+                      {!metadata.attributes.is_readonly && !metadata.attributes.is_hidden && !metadata.attributes.is_symlink && (
+                        <span className="text-xs text-ink-muted">No special flags</span>
+                      )}
+                    </div>
+                    <div className="space-y-0.5">
+                      {renderPropertyRow(
+                        "File Type",
+                        metadata.attributes.is_file ? "Regular File" : metadata.attributes.is_dir ? "Directory" : "Other",
+                        "fileType"
+                      )}
+                      {metadata.attributes.permissions && renderPropertyRow("Permissions", metadata.attributes.permissions, "permissions", true)}
+                      {metadata.attributes.owner_uid !== undefined && renderPropertyRow("Owner UID", String(metadata.attributes.owner_uid), "ownerUid")}
+                      {metadata.attributes.group_gid !== undefined && renderPropertyRow("Group GID", String(metadata.attributes.group_gid), "groupGid")}
+                    </div>
                   </div>
-                ),
-              })}
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -435,10 +414,10 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-line px-6 py-3">
           <div className="flex justify-between items-center gap-2">
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-ink-muted truncate">
               {actionMessage ?? "Click the copy icon next to any field to copy its value"}
             </p>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2 whitespace-nowrap">
               <button
                 onClick={() => void runFileAction("reveal", "Revealed in Explorer", () => revealFile(activeFile.path))}
                 disabled={actionBusy !== null}
@@ -465,7 +444,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
               </button>
               <button
                 onClick={onClose}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
+                className="rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
               >
                 Close
               </button>

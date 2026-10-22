@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { FileMetadata } from "../api/types";
-import { buildPropertiesSummary, formatFileSize, parentDirectory } from "./fileProperties";
+import {
+  buildPropertiesSummary,
+  compactPath,
+  formatFileSize,
+  humanizeTimestamp,
+  parentDirectory,
+  truncateMiddle,
+} from "./fileProperties";
 
 describe("formatFileSize", () => {
   it("returns '0 Bytes' for zero", () => {
@@ -75,5 +82,57 @@ describe("buildPropertiesSummary", () => {
     });
     expect(summary).not.toContain("MD5:");
     expect(summary).not.toContain("SHA256:");
+  });
+});
+
+describe("truncateMiddle", () => {
+  it("returns short values unchanged", () => {
+    expect(truncateMiddle("abc", 4, 2)).toBe("abc");
+  });
+
+  it("keeps head and tail with an ellipsis in between", () => {
+    expect(truncateMiddle("12345678901234", 8, 4)).toBe("12345678…1234");
+  });
+});
+
+describe("compactPath", () => {
+  it("returns short paths unchanged", () => {
+    expect(compactPath("C:\\dir\\file.txt")).toBe("C:\\dir\\file.txt");
+  });
+
+  it("keeps the first two segments and the filename with an ellipsis", () => {
+    expect(compactPath("C:\\dir\\very\\long\\sub\\path\\file.txt")).toBe("C:\\dir\\…\\path\\file.txt");
+  });
+
+  it("works with POSIX separators", () => {
+    expect(compactPath("/home/user/very/deep/nested/structure/file.txt")).toBe("/home/…/structure/file.txt");
+  });
+});
+
+describe("humanizeTimestamp", () => {
+  const now = new Date("2026-10-22T12:00:00");
+
+  it("reports just now for very recent values", () => {
+    expect(humanizeTimestamp("2026-10-22 11:59:40", now)).toBe("just now");
+  });
+
+  it("reports minutes", () => {
+    expect(humanizeTimestamp("2026-10-22 11:45:00", now)).toBe("15 minutes ago");
+  });
+
+  it("reports hours, singular", () => {
+    expect(humanizeTimestamp("2026-10-22 11:00:00", now)).toBe("1 hour ago");
+  });
+
+  it("reports days", () => {
+    expect(humanizeTimestamp("2026-10-20 08:15:00", now)).toBe("2 days ago");
+  });
+
+  it("reports years", () => {
+    expect(humanizeTimestamp("2020-01-02 00:00:00", now)).toBe("6 years ago");
+  });
+
+  it("treats future timestamps as just now", () => {
+    expect(humanizeTimestamp("2026-10-23 00:00:00", now)).toBe("just now");
   });
 });
