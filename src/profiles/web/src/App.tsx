@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeHash,
   executeScan,
@@ -21,6 +21,7 @@ import { ControlsBar } from "./components/ControlsBar";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
+import { InitErrorPanel } from "./components/InitErrorPanel";
 import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
@@ -33,6 +34,12 @@ import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
 import { parseBarcodeInput } from "./utils/barcodeScanner";
 import { exportToCsv } from "./utils/exportCsv";
+import { matchFilter } from "./utils/searchSyntax";
+
+/** Debounce for the client-side prefilter derivation while typing (lane #1). */
+const PREFILTER_DEBOUNCE_MS = 120;
+/** Debounce for the deferred server auto-rescan after the last filter keystroke. */
+const AUTO_RESCAN_DEBOUNCE_MS = 800;
 
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -47,15 +54,27 @@ export default function App() {
   const [totalCount, setTotalCount] = useState<number>(0);
   const [hasScanned, setHasScanned] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  /** Reason the initial load failed, when it did — drives the retry panel. */
+  const [initError, setInitError] = useState<string | null>(null);
+  const [initRetrying, setInitRetrying] = useState(false);
   /** Column the list is ordered by, or `null` for scan order. */
   const [sort, setSort] = useState<ScanSort | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [scanning, setScanning] = useState<boolean>(false);
   const scanGenerationRef = useRef(0);
+  /** Controller for the current generation's scan fetches; aborted when superseded. */
+  const scanAbortRef = useRef<AbortController | null>(null);
+  /** Timeout id of the deferred server auto-rescan scheduled on filter typing. */
+  const pendingAutoRescanRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Bluetooth-free prefilter — the perceptibly-instant client-side list.
+  // The query applied to the list lags the input by ~120ms so a burst of
+  // keystrokes only re-derives the filter once (see lane #1).
+  const [prefilterQuery, setPrefilterQuery] = useState("");
 
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string>("");
+  const [toastMessage, setToastMessage] = useState<{ message: string; kind: "info" | "error" } | null>(null);
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
@@ -90,14 +109,38 @@ export default function App() {
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showToast = (msg: string) => {
+  /**
+   * Show a transient toast above the action bar.
+   *
+   * Info toasts auto-dismiss after 3.5s; error toasts stay a little longer and
+   * carry an inline dismiss button, so they never vanish before being read.
+   */
+  const showToast = (msg: string, kind: "info" | "error" = "info") => {
     if (!msg) return; // never blank an existing toast with an empty message
-    setToastMessage(msg);
+    setToastMessage({ message: msg, kind });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToastMessage(""), 3500);
+    toastTimerRef.current = setTimeout(
+      () => setToastMessage(null),
+      kind === "error" ? 10000 : 3500,
+    );
+  };
+
+  const dismissToast = () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(null);
   };
 
   const beginScan = () => {
+    // Collision rule: any explicit scan (Enter, Scan button, programmatic
+    // filter change, barcode apply…) supersedes a pending deferred
+    // auto-rescan so the two never double-scan.
+    if (pendingAutoRescanRef.current) {
+      clearTimeout(pendingAutoRescanRef.current);
+      pendingAutoRescanRef.current = null;
+    }
+    // Abort superseded in-flight scan fetches from the previous generation.
+    scanAbortRef.current?.abort();
+    scanAbortRef.current = new AbortController();
     const generation = ++scanGenerationRef.current;
     setScanning(true);
     setLoadingMore(false);
@@ -109,6 +152,59 @@ export default function App() {
   const finishScan = (generation: number) => {
     if (isCurrentScan(generation)) setScanning(false);
   };
+
+  /**
+   * Path of the currently selected row. Selection is re-anchored by path when
+   * the visible (filtered) set changes, so it never silently drifts onto an
+   * unrelated file.
+   */
+  const selectedPathRef = useRef<string | null>(null);
+
+  // Derive the prefilter query from the raw input, debounced ~120ms so a
+  // keystroke burst only re-filters the loaded list once.
+  useEffect(() => {
+    if (!filterText.trim()) {
+      // Empty query short-circuits: the visible list IS the loaded list.
+      setPrefilterQuery("");
+      return;
+    }
+    const id = window.setTimeout(() => setPrefilterQuery(filterText), PREFILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [filterText]);
+
+  /** Rows rendered in the table — prefiltered client-side over rel_path. */
+  const visibleFiles = useMemo(
+    () =>
+      prefilterQuery.trim() === ""
+        ? files
+        : files.filter((f) => matchFilter(f.rel_path, prefilterQuery)),
+    [files, prefilterQuery],
+  );
+
+  /**
+   * Coverage hint (lane #1): the loaded page is smaller than the backend's
+   * full result set, so the prefilter only describes part of it — point the
+   * user at the full server search (Enter).
+   */
+  const prefilterNote =
+    filterText.trim() && files.length < totalCount
+      ? `Prefiltering loaded results — press Enter to search all ${totalCount}`
+      : null;
+
+  // Selection reconcile: when a new visible set arrives, follow the previously
+  // selected file (matched by path) if it is still visible — even though its
+  // index moved — otherwise clamp into the shrunken set.
+  useEffect(() => {
+    const queryPath = selectedPathRef.current;
+    const followed = queryPath
+      ? visibleFiles.findIndex((f) => f.path === queryPath)
+      : -1;
+    if (followed >= 0) {
+      setSelectedIndex((prev) => (followed !== prev ? followed : prev));
+      return;
+    }
+    setSelectedIndex((prev) => Math.min(prev, Math.max(0, visibleFiles.length - 1)));
+  }, [visibleFiles]);
 
   /**
    * Fetch the first page of scan results and replace the list.
@@ -124,6 +220,7 @@ export default function App() {
       limit: SCAN_PAGE_SIZE,
       sort_by: sortOrder?.column,
       sort_dir: sortOrder?.direction,
+      signal: scanAbortRef.current?.signal,
     });
     if (!isCurrentScan(generation)) return false;
     setFiles(res.items);
@@ -137,8 +234,10 @@ export default function App() {
     params: Parameters<typeof executeScan>[0],
   ) => {
     if (!isCurrentScan(generation)) return false;
-    await executeScan(params);
+    await executeScan(params, scanAbortRef.current?.signal);
     if (!isCurrentScan(generation) || !(await loadScanResults(generation))) return false;
+    // Fresh authoritative results — selection restarts at the top.
+    selectedPathRef.current = null;
     setSelectedIndex(0);
     return true;
   };
@@ -161,7 +260,8 @@ export default function App() {
       setFiles((prev) => [...prev, ...res.items.filter((f) => !existing.has(f.path || f.filename))]);
       setTotalCount(res.count);
     } catch {
-      /* paging failure is non-fatal; user can keep scrolling to retry */
+      // Paging failure is non-fatal; retry happens on the next scroll attempt.
+      showToast("Couldn't load more results — scroll to try again.", "error");
     } finally {
       if (isCurrentScan(generation)) setLoadingMore(false);
     }
@@ -187,7 +287,7 @@ export default function App() {
       }
       return cfg;
     } catch (err: any) {
-      showToast(`Failed to load configuration: ${err.message}`);
+      showToast(`Failed to load configuration: ${err.message}`, "error");
       return null;
     }
   };
@@ -218,7 +318,7 @@ export default function App() {
         });
       }
     } catch (err: any) {
-      showToast(`Failed to reload configuration: ${err.message}`);
+      showToast(`Failed to reload configuration: ${err.message}`, "error");
     } finally {
       setReloading(false);
       // 4. Finish scan if it's still the current generation
@@ -251,7 +351,7 @@ export default function App() {
           recursive: cfg.recursive_search,
         });
       } catch (err: any) {
-        showToast(`Scan failed after config load: ${err.message}`);
+        showToast(`Scan failed after config load: ${err.message}`, "error");
       } finally {
         finishScan(scanGeneration);
       }
@@ -295,7 +395,7 @@ export default function App() {
         recursive,
       });
     } catch (err: any) {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err.message}`);
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err.message}`, "error");
     } finally {
       finishScan(scanGeneration);
     }
@@ -336,27 +436,46 @@ export default function App() {
           filter_text: initialFilter,
           recursive: cfg.recursive_search,
         });
-      } catch (scanErr) {
-        if (isCurrentScan(scanGeneration)) console.error("Initial scan error:", scanErr);
+      } catch (scanErr: any) {
+        if (isCurrentScan(scanGeneration)) showToast(`Initial scan failed: ${scanErr.message}`, "error");
       }
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    async function init() {
-      const scanGeneration = ++scanGenerationRef.current;
-      try {
-        const sys = await fetchSystemInfo();
-        setSystemInfo(sys);
-        const cfg = await fetchConfig();
-        await initializeFromConfig(cfg, scanGeneration);
-      } catch (err) {
-        console.error("Initialization error:", err);
-      }
+  // Initial load (also re-run by the retry panel when it fails).
+  const runInitialLoad = async () => {
+    const scanGeneration = ++scanGenerationRef.current;
+    setInitError(null);
+    setInitRetrying(true);
+    try {
+      const sys = await fetchSystemInfo();
+      setSystemInfo(sys);
+      const cfg = await fetchConfig();
+      await initializeFromConfig(cfg, scanGeneration);
+    } catch (err: any) {
+      // Initial load failure is recoverable — surface it in a retry panel
+      // instead of a toast so the user has a place to act from.
+      setInitError(err?.message || "Couldn't fetch system info or configuration.");
+    } finally {
+      setInitRetrying(false);
     }
-    init();
+  };
+
+  useEffect(() => {
+    void runInitialLoad();
   }, []);
+
+  // Teardown: drop any pending deferred rescan and abort in-flight scan fetches.
+  useEffect(
+    () => () => {
+      if (pendingAutoRescanRef.current) {
+        clearTimeout(pendingAutoRescanRef.current);
+        pendingAutoRescanRef.current = null;
+      }
+      scanAbortRef.current?.abort();
+    },
+    [],
+  );
 
   // Directory change handler
   const handleDirectoryChange = async (newDir: string) => {
@@ -380,8 +499,8 @@ export default function App() {
         filter_text: nextFilter,
         recursive,
       });
-    } catch (err) {
-      if (isCurrentScan(scanGeneration)) console.error("Directory change error:", err);
+    } catch (err: any) {
+      if (isCurrentScan(scanGeneration)) showToast(`Directory change failed: ${err.message}`, "error");
     } finally {
       finishScan(scanGeneration);
     }
@@ -405,6 +524,28 @@ export default function App() {
     }
   };
 
+  // Latest handleScan for deferred callbacks (avoids stale closures above).
+  const handleScanRef = useRef(handleScan);
+  useEffect(() => {
+    handleScanRef.current = handleScan;
+  });
+
+  /**
+   * Filter input handler (ControlsBar onChange). Applies the text instantly
+   * for the client-side prefilter, and schedules the deferred server
+   * auto-rescan 800ms after the last keystroke. Enter/Scan clicks and
+   * programmatic filter changes cancel the pending rescan from beginScan —
+   * the explicit scan wins.
+   */
+  const handleFilterTextChange = (text: string) => {
+    setFilterText(text);
+    if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
+    pendingAutoRescanRef.current = setTimeout(() => {
+      pendingAutoRescanRef.current = null;
+      void handleScanRef.current();
+    }, AUTO_RESCAN_DEBOUNCE_MS);
+  };
+
   const handleClearFilter = async () => {
     setFilterText("");
     if (!activeDirectory) return;
@@ -418,6 +559,25 @@ export default function App() {
       });
     } catch (err) {
       if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    } finally {
+      finishScan(scanGeneration);
+    }
+  };
+
+  /** Re-run the scan with recursive subdirectories turned off (empty-state action). */
+  const handleDisableRecursive = async () => {
+    setRecursive(false);
+    if (!activeDirectory) return;
+    const scanGeneration = beginScan();
+    try {
+      await runScan(scanGeneration, {
+        directory: activeDirectory,
+        extension: activeExtension,
+        filter_text: filterText,
+        recursive: false,
+      });
+    } catch (err: any) {
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err.message}`, "error");
     } finally {
       finishScan(scanGeneration);
     }
@@ -438,14 +598,20 @@ export default function App() {
       });
       showToast(`Launched ${file.filename}`);
     } catch (err: any) {
-      showToast(`Launch error: ${err.message}`);
+      showToast(`Launch error: ${err.message}`, "error");
     }
   };
 
   const handleExecute = () => {
-    if (files.length > 0 && files[selectedIndex]) {
-      handleLaunch(files[selectedIndex]);
+    if (visibleFiles.length > 0 && visibleFiles[selectedIndex]) {
+      handleLaunch(visibleFiles[selectedIndex]);
     }
+  };
+
+  /** Row-click selection — re-anchors the selection tracker by path. */
+  const handleSelectIndex = (idx: number) => {
+    selectedPathRef.current = visibleFiles[idx]?.path ?? null;
+    setSelectedIndex(idx);
   };
 
   // Context menu actions
@@ -458,7 +624,7 @@ export default function App() {
       await revealFile(file.path);
       showToast("Revealed in file manager.");
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -467,7 +633,7 @@ export default function App() {
       await openFolder(file.path);
       showToast("Folder opened in file manager.");
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -476,7 +642,7 @@ export default function App() {
       const res = await openTerminal(file.path);
       showToast(res.message || "Terminal opened.");
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -485,7 +651,7 @@ export default function App() {
       await handleDirectoryChange(directory);
       showToast(`Scanned directory: ${directory}`);
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -538,7 +704,7 @@ export default function App() {
       navigator.clipboard.writeText(res.hash);
       showToast(`${algorithm.toUpperCase()} hash copied: ${res.hash.slice(0, 12)}...`);
     } catch (err: any) {
-      showToast(`Hash computation failed: ${err.message}`);
+      showToast(`Hash computation failed: ${err.message}`, "error");
     }
   };
 
@@ -548,7 +714,7 @@ export default function App() {
       navigator.clipboard.writeText(uri);
       showToast("File URI copied to clipboard.");
     } catch (err: any) {
-      showToast(`URI copy failed: ${err.message}`);
+      showToast(`URI copy failed: ${err.message}`, "error");
     }
   };
 
@@ -568,7 +734,7 @@ export default function App() {
         showToast(`❌  ${algorithm.toUpperCase()} mismatch`);
       }
     } catch (err: any) {
-      showToast(`Verification failed: ${err.message}`);
+      showToast(`Verification failed: ${err.message}`, "error");
     }
   };
 
@@ -593,7 +759,7 @@ export default function App() {
       // Refresh the file list
       handleScan();
     } catch (err: any) {
-      showToast(`Delete failed: ${err.message}`);
+      showToast(`Delete failed: ${err.message}`, "error");
     }
   };
 
@@ -609,7 +775,7 @@ export default function App() {
       await openFolder(activeDirectory);
       showToast("Directory opened in file manager.");
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -619,7 +785,7 @@ export default function App() {
       await openTerminal(directory);
       showToast("Terminal opened in directory.");
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -629,7 +795,7 @@ export default function App() {
       await handleDirectoryChange("~");
       showToast("Directory set to home folder.");
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -644,7 +810,7 @@ export default function App() {
         showToast("Already at root directory.");
       }
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, "error");
     }
   };
 
@@ -666,7 +832,7 @@ export default function App() {
       URL.revokeObjectURL(url);
       showToast(`Exported ${files.length} files to CSV.`);
     } catch (err: any) {
-      showToast(`Export failed: ${err.message}`);
+      showToast(`Export failed: ${err.message}`, "error");
     }
   };
 
@@ -690,18 +856,22 @@ export default function App() {
     if (nextDir) {
       const scanGeneration = beginScan();
       try {
-        await executeScan({
-          directory: nextDir,
-          extension: nextExt,
-          filter_text: nextFilter,
-          recursive: nextRecursive,
-        });
+        await executeScan(
+          {
+            directory: nextDir,
+            extension: nextExt,
+            filter_text: nextFilter,
+            recursive: nextRecursive,
+          },
+          scanAbortRef.current?.signal,
+        );
 
         const res = await fetchScanResults({
           offset: 0,
           limit: SCAN_PAGE_SIZE,
           sort_by: sort?.column,
           sort_dir: sort?.direction,
+          signal: scanAbortRef.current?.signal,
         });
 
         if (!isCurrentScan(scanGeneration)) return;
@@ -709,13 +879,16 @@ export default function App() {
         setFiles(res.items);
         setTotalCount(res.count);
         setHasScanned(true);
+        // Reset the selection anchor; a fresh result set is authoritative.
+        selectedPathRef.current = null;
         setSelectedIndex(0);
 
         if (res.count === 1 && res.items.length === 1) {
           setSingleMatchFile(res.items[0]);
         }
       } catch (err: any) {
-        showToast(`Scan error: ${err.message}`);
+        // Aborted (superseded) camera scans stay silent.
+        if (isCurrentScan(scanGeneration)) showToast(`Scan error: ${err.message}`, "error");
       } finally {
         finishScan(scanGeneration);
       }
@@ -864,7 +1037,7 @@ export default function App() {
       }
 
       if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
-        const file = files[selectedIndex];
+        const file = visibleFiles[selectedIndex];
         if (!file) return;
         e.preventDefault();
         const row = document.querySelector<HTMLElement>(`[data-row-index="${selectedIndex}"]`);
@@ -973,7 +1146,7 @@ export default function App() {
 
       // P: Open file properties (when a file is selected)
       if (e.key.toLowerCase() === "p" && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const file = files[selectedIndex];
+        const file = visibleFiles[selectedIndex];
         if (file) {
           e.preventDefault();
           handleProperties(file);
@@ -981,13 +1154,21 @@ export default function App() {
         return;
       }
 
-      // Table navigation
+      // Table navigation — indexed over the VISIBLE (filtered) rows.
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, Math.max(0, files.length - 1)));
+        setSelectedIndex((prev) => {
+          const next = Math.min(prev + 1, Math.max(0, visibleFiles.length - 1));
+          selectedPathRef.current = visibleFiles[next]?.path ?? null;
+          return next;
+        });
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.max(prev - 1, 0));
+        setSelectedIndex((prev) => {
+          const next = Math.max(prev - 1, 0);
+          selectedPathRef.current = visibleFiles[next]?.path ?? null;
+          return next;
+        });
       } else if (e.key === "Enter") {
         e.preventDefault();
         handleExecute();
@@ -995,7 +1176,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [files, selectedIndex, activeDirectory, activeExtension, filterText, recursive, barcodeMode]);
+  }, [visibleFiles, selectedIndex, activeDirectory, activeExtension, filterText, recursive, barcodeMode]);
 
   // Apply theme attribute + persist preference
   useEffect(() => {
@@ -1024,7 +1205,7 @@ export default function App() {
         onExtensionChange={setActiveExtension}
         filterOptions={config?.filters || []}
         filterText={filterText}
-        onFilterTextChange={setFilterText}
+        onFilterTextChange={handleFilterTextChange}
         recursive={recursive}
         onRecursiveChange={setRecursive}
         onScan={handleScan}
@@ -1041,43 +1222,63 @@ export default function App() {
         onTimerClick={() => setShowTimerModal(true)}
       />
 
-      <FileListTable
-        files={files}
-        totalCount={totalCount}
-        onLoadMore={handleLoadMore}
-        loadingMore={loadingMore}
-        scanning={scanning}
-        hasScanned={hasScanned}
-        filterText={filterText}
-        onClearFilter={handleClearFilter}
-        columnHeaders={config?.column_headers || []}
-        columnNames={config?.column_names || []}
-        selectedIndex={selectedIndex}
-        onSelectIndex={setSelectedIndex}
-        onLaunch={handleLaunch}
-        onContextMenu={(e, file, idx) => {
-          e.preventDefault();
-          setSelectedIndex(idx);
-          setContextMenuPos({ x: e.clientX, y: e.clientY, file });
-        }}
-        rowColors={config?.row_colors || []}
-        sort={sort}
-        onSortChange={(next) => {
-          setSort(next);
-          setSelectedIndex(0);
-          const generation = scanGenerationRef.current;
-          setLoadingMore(false);
-          void loadScanResults(generation, next);
-        }}
-      />
+      {initError ? (
+        <InitErrorPanel
+          message={initError}
+          onRetry={() => void runInitialLoad()}
+          retrying={initRetrying}
+        />
+      ) : (
+        <FileListTable
+          files={visibleFiles}
+          totalCount={totalCount}
+          onLoadMore={handleLoadMore}
+          loadingMore={loadingMore}
+          scanning={scanning}
+          hasScanned={hasScanned}
+          scanningDirectory={activeDirectory}
+          activeDirectory={activeDirectory}
+          recursive={recursive}
+          onDisableRecursive={handleDisableRecursive}
+          onOpenDirectory={handleOpenActiveDirectory}
+          onOpenConfig={() => setShowConfigPicker(true)}
+          filterText={filterText}
+          onClearFilter={handleClearFilter}
+          columnHeaders={config?.column_headers || []}
+          columnNames={config?.column_names || []}
+          selectedIndex={selectedIndex}
+          onSelectIndex={handleSelectIndex}
+          prefilterNote={prefilterNote}
+          onLaunch={handleLaunch}
+          onContextMenu={(e, file, idx) => {
+            e.preventDefault();
+            selectedPathRef.current = file.path;
+            setSelectedIndex(idx);
+            setContextMenuPos({ x: e.clientX, y: e.clientY, file });
+          }}
+          rowColors={config?.row_colors || []}
+          sort={sort}
+          onSortChange={(next) => {
+            setSort(next);
+            // Reset the selection anchor; a re-ordered set is authoritative.
+            selectedPathRef.current = null;
+            setSelectedIndex(0);
+            const generation = scanGenerationRef.current;
+            setLoadingMore(false);
+            void loadScanResults(generation, next);
+          }}
+        />
+      )}
 
       <ActionBar
         onExecute={handleExecute}
         scanning={scanning}
-        hasSelection={files.length > 0}
-        fileCount={totalCount}
+        hasSelection={visibleFiles.length > 0}
+        fileCount={visibleFiles.length}
+        totalCount={totalCount}
         onExport={handleExport}
         toastMessage={toastMessage}
+        onToastDismiss={dismissToast}
       />
 
       <StatusBar
@@ -1092,7 +1293,7 @@ export default function App() {
             const res = await openConfigFile();
             showToast(res.message);
           } catch (err: any) {
-            showToast(`Failed to open config: ${err.message}`);
+            showToast(`Failed to open config: ${err.message}`, "error");
           }
         }}
         onLoadConfig={() => setShowConfigPicker(true)}
@@ -1185,7 +1386,7 @@ export default function App() {
           if (status === "completed") {
             showToast(msg || "Workflow launched successfully.");
           } else if (status === "aborted" || status === "failed") {
-            showToast(`Workflow stopped: ${msg}`);
+            showToast(`Workflow stopped: ${msg}`, "error");
           }
         }}
       />

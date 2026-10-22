@@ -87,16 +87,20 @@ export async function browseDirectory(path: string): Promise<BrowseResult> {
   return res.json();
 }
 
-export async function executeScan(params: {
-  directory?: string;
-  extension: string;
-  filter_text: string;
-  recursive: boolean;
-}): Promise<{ count: number; directory: string }> {
+export async function executeScan(
+  params: {
+    directory?: string;
+    extension: string;
+    filter_text: string;
+    recursive: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<{ count: number; directory: string }> {
   const res = await fetch("/api/scan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
+    signal,
   });
   if (!res.ok) throw new Error("Failed to execute scan");
   return res.json();
@@ -111,6 +115,8 @@ export async function fetchScanResults(params?: {
   sort_by?: string;
   /** Sort direction; alternating clicks flip between `"asc"` and `"desc"`. */
   sort_dir?: SortDirection;
+  /** Abort signal so superseded in-flight requests can be cancelled. */
+  signal?: AbortSignal;
 }): Promise<ScanResultsResponse> {
   const search = new URLSearchParams();
   if (params?.offset != null) search.set("offset", String(params.offset));
@@ -119,7 +125,7 @@ export async function fetchScanResults(params?: {
   if (params?.sort_dir) search.set("sort_dir", params.sort_dir);
   const qs = search.toString();
   const url = `/api/scan/results${qs ? `?${qs}` : ""}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch scan results");
   return res.json();
 }

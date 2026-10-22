@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, FileCode, Loader2, Webhook } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, FileCode, Info, Loader2, Webhook } from "lucide-react";
 import type { ScanSort, ScannedFileItem } from "../api/types";
+import { ScanSkeletonRows, ScanStatusStrip } from "./ScanStatusStrip";
 
 interface ScrollableStickyHeaderItem {
   label: string;
@@ -37,7 +38,7 @@ interface ScrollableStickyHeaderProps {
 function ScrollableStickyHeader({ items, columnTemplate, resizePointerRef, resizeMovedRef }: ScrollableStickyHeaderProps) {
   return (
     <div
-      className="sticky top-0 z-10 grid select-none items-center border-b border-l-2 border-l-transparent border-line bg-surface font-medium text-ink-muted"
+      className="grid select-none items-center border-b border-l-2 border-l-transparent border-line bg-surface font-medium text-ink-muted"
       role="row"
       aria-rowindex={1}
       data-file-list-header
@@ -165,8 +166,25 @@ interface FileListTableProps {
   scanning?: boolean;
   /** Whether at least one scan has completed. */
   hasScanned?: boolean;
+  /** Directory the running scan targets; shown compacted in the scan strip. */
+  scanningDirectory?: string;
+  /** Current directory in the controls; branches the empty states. */
+  activeDirectory?: string;
+  /** Whether recursive scanning is on; controls the "Turn off recursive" action. */
+  recursive?: boolean;
+  /** Re-run the scan with recursive turned off. */
+  onDisableRecursive?: () => void;
+  /** Open the current directory in the OS file manager. */
+  onOpenDirectory?: () => void;
+  /** Open the configuration picker (used when no directory is configured). */
+  onOpenConfig?: () => void;
   filterText: string;
   onClearFilter: () => void;
+  /**
+   * Coverage hint for client-side prefiltering (lane #1); `null`/`undefined`
+   * renders nothing. Quieter than the scan strip / error feedback.
+   */
+  prefilterNote?: string | null;
   columnHeaders: string[];
   columnNames: string[];
   selectedIndex: number;
@@ -219,8 +237,15 @@ export function FileListTable({
   loadingMore = false,
   scanning = false,
   hasScanned = false,
+  scanningDirectory = "",
+  activeDirectory = "",
+  recursive = false,
+  onDisableRecursive,
+  onOpenDirectory,
+  onOpenConfig,
   filterText,
   onClearFilter,
+  prefilterNote,
   columnHeaders,
   columnNames,
   selectedIndex,
@@ -396,6 +421,10 @@ export function FileListTable({
   // scrolling to trigger the next page instead of hitting a dead end.
   const spacerHeight = (hasMore ? Math.max(total, loadedCount + visibleCount) : total) * ROW_HEIGHT;
 
+  /** Shared styling for the empty-state action buttons (row-button idiom). */
+  const emptyActionButtonClass =
+    "rounded-md border border-line bg-elevated px-3 py-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors";
+
   return (
     <div
       ref={scrollRef}
@@ -411,11 +440,12 @@ export function FileListTable({
       aria-activedescendant={loadedCount > 0 ? `file-row-${selectedIndex}` : undefined}
       tabIndex={0}
     >
-      <ScrollableStickyHeader
-        columnTemplate={columnTemplate}
-        resizePointerRef={resizePointerRef}
-        resizeMovedRef={resizeMovedRef}
-        items={
+      <div className="sticky top-0 z-10" role="presentation">
+        <ScrollableStickyHeader
+          columnTemplate={columnTemplate}
+          resizePointerRef={resizePointerRef}
+          resizeMovedRef={resizeMovedRef}
+          items={
           [
             { label: "#", icon: <FileCode className="h-3.5 w-3.5" /> },
             ...columnSlots.map(({ key, header }) => ({
@@ -449,7 +479,26 @@ export function FileListTable({
             })),
           ] satisfies ScrollableStickyHeaderItem[]
         }
-      />
+        />
+        {/* Scan progress strip pins with the header so feedback stays visible. */}
+        {scanning && <ScanStatusStrip directory={scanningDirectory} />}
+      </div>
+      {scanning && (
+        <ScanSkeletonRows columnTemplate={columnTemplate} columnCount={resolvedKeys.length + 1} />
+      )}
+
+      {/* Prefilter coverage hint — inline (scrolls), visually quieter than the
+          scan strip and the empty-state feedback above. */}
+      {prefilterNote && loadedCount > 0 && (
+        <div
+          role="note"
+          data-testid="prefilter-note"
+          className="flex items-center gap-1.5 border-b border-line/40 bg-surface px-3 py-1 text-[11px] text-ink-faint"
+        >
+          <Info className="h-3 w-3 shrink-0 text-ink-faint" aria-hidden="true" />
+          <span className="min-w-0 truncate">{prefilterNote}</span>
+        </div>
+      )}
 
       {loadedCount === 0 ? (
         <div role="row" aria-rowindex={2} data-testid="file-list-empty">
@@ -459,23 +508,73 @@ export function FileListTable({
                 <Loader2 className="h-5 w-5 animate-spin text-indigo-400 motion-reduce:animate-none" />
                 <span>Scanning files...</span>
               </div>
+            ) : !activeDirectory.trim() && onOpenConfig ? (
+              <div className="flex flex-col items-center gap-3">
+                <span>Select a directory first.</span>
+                <button
+                  type="button"
+                  onClick={onOpenConfig}
+                  className={emptyActionButtonClass}
+                >
+                  Choose configuration
+                </button>
+              </div>
             ) : !hasScanned ? (
               <span>Select a directory and scan to find files.</span>
             ) : filterText.trim() ? (
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-3">
                 <span>No files match “{filterText}”.</span>
-                <button
-                  type="button"
-                  onClick={onClearFilter}
-                  className="rounded-md px-3 py-1.5 text-ink-secondary underline underline-offset-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                >
-                  Clear filter and scan again
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onClearFilter}
+                    className={emptyActionButtonClass}
+                  >
+                    Clear filter
+                  </button>
+                  {recursive && onDisableRecursive && (
+                    <button
+                      type="button"
+                      onClick={onDisableRecursive}
+                      className={emptyActionButtonClass}
+                    >
+                      Turn off recursive
+                    </button>
+                  )}
+                  {onOpenDirectory && (
+                    <button
+                      type="button"
+                      onClick={onOpenDirectory}
+                      className={emptyActionButtonClass}
+                    >
+                      Open directory
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-3">
                 <span>No files found for the current directory and extension.</span>
-                <span className="text-ink-muted">Try another directory or extension.</span>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {recursive && onDisableRecursive && (
+                    <button
+                      type="button"
+                      onClick={onDisableRecursive}
+                      className={emptyActionButtonClass}
+                    >
+                      Turn off recursive
+                    </button>
+                  )}
+                  {onOpenDirectory && (
+                    <button
+                      type="button"
+                      onClick={onOpenDirectory}
+                      className={emptyActionButtonClass}
+                    >
+                      Open directory
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

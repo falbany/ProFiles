@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { ArrowRight, Camera, Folder, FolderOpen, Home, Play, QrCode, RefreshCw, Search, Terminal, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
+import { FilterSyntaxHelper } from "./FilterSyntaxHelper";
 
 const OPERATOR_HELP = (
   <span className="flex flex-col gap-1 whitespace-nowrap text-left">
@@ -74,6 +76,9 @@ export function ControlsBar({
   autoRescanActive,
   onTimerClick,
 }: ControlsBarProps) {
+  // Whether the filter input itself has focus — drives the live syntax helper.
+  const [filterFocused, setFilterFocused] = useState(false);
+
   return (
     <div className="flex flex-col gap-2.5 border-b border-line bg-surface-glass p-3 text-xs">
       {/* Row 1: Directory selection — spans the full window width */}
@@ -197,7 +202,15 @@ export function ControlsBar({
       {/* Row 2: Search filters and Actions */}
       <div className="flex w-full flex-wrap items-center gap-3">
         <Tooltip text={OPERATOR_HELP}>
-          <div className="relative min-w-0 flex-1 basis-64">
+          <div
+            className="relative min-w-0 flex-1 basis-64"
+            onFocusCapture={(event) => {
+              if ((event.target as HTMLElement).tagName === "INPUT") setFilterFocused(true);
+            }}
+            onBlurCapture={(event) => {
+              if ((event.target as HTMLElement).tagName === "INPUT") setFilterFocused(false);
+            }}
+          >
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-ink-secondary" />
             <EditableCombobox
               id="filter-combobox"
@@ -210,6 +223,8 @@ export function ControlsBar({
               inputClassName="pl-9 pr-3"
               optionLabel={(filter) => filter || "(No filter)"}
             />
+            {/* Live filter interpretation — visual only, never blocks the input. */}
+            <FilterSyntaxHelper query={filterText} visible={filterFocused && filterText.trim().length > 0} />
           </div>
         </Tooltip>
 
