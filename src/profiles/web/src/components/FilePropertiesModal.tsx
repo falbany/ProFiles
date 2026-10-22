@@ -317,17 +317,30 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
             <div>
               {/* Hero strip: type, size, relative age — always visible */}
               <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-line bg-elevated px-4 py-2.5">
-                <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-600/20 px-2 py-0.5 text-xs font-medium text-indigo-300">
+                <span className="inline-flex items-center gap-1 rounded-md border border-chip-indigo-border bg-chip-indigo-bg px-2 py-0.5 text-xs font-semibold text-chip-indigo-text">
                   {metadata.type}
                 </span>
-                <span className="text-xs text-ink-muted">
+                {metadata.attributes.extension && (
+                  <span className="inline-flex items-center rounded-md border border-line bg-surface px-2 py-0.5 text-xs font-medium text-ink-muted">
+                    {metadata.attributes.extension}
+                  </span>
+                )}
+                <span className="text-xs text-ink-muted" title={`${metadata.size_bytes} bytes`}>
                   Size <strong className="text-ink font-medium">{formatFileSize(metadata.size_bytes)}</strong>
+                </span>
+                <span className="text-xs text-ink-muted" title={metadata.created}>
+                  Created <strong className="text-ink font-medium">{humanizeTimestamp(metadata.created)}</strong>
                 </span>
                 <span className="text-xs text-ink-muted" title={metadata.modified}>
                   Modified <strong className="text-ink font-medium">{humanizeTimestamp(metadata.modified)}</strong>
                 </span>
+                {metadata.md5 && (
+                  <span className="inline-flex items-center rounded-md border border-chip-purple-border bg-chip-purple-bg px-2 py-0.5 font-mono text-xs font-medium text-chip-purple-text" title={`MD5 ${metadata.md5}`}>
+                    {truncateMiddle(metadata.md5, 4, 4)}
+                  </span>
+                )}
                 {metadata.attributes.is_symlink && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-fuchsia-500/30 bg-fuchsia-600/20 px-2 py-0.5 text-xs text-fuchsia-300">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-chip-fuchsia-border bg-chip-fuchsia-bg px-2 py-0.5 text-xs font-medium text-chip-fuchsia-text">
                     <Link2 className="h-3 w-3" /> Symlink
                   </span>
                 )}

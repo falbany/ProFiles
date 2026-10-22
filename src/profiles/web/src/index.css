@@ -24,6 +24,33 @@
   color-scheme: dark;
 }
 
+/* Themed accent-chip tokens (badges). Dark variants pair a soft tinted fill
+   with light text; light variants pair a solid pastel fill with dark text. */
+:root,
+[data-theme="dark"] {
+  --chip-indigo-bg: rgb(99 102 241 / 0.25);
+  --chip-indigo-border: rgb(129 140 248 / 0.5);
+  --chip-indigo-text: #c7d2fe; /* indigo-200 */
+  --chip-purple-bg: rgb(168 85 247 / 0.25);
+  --chip-purple-border: rgb(192 132 252 / 0.5);
+  --chip-purple-text: #f3e8ff; /* purple-100 */
+  --chip-fuchsia-bg: rgb(192 38 211 / 0.25);
+  --chip-fuchsia-border: rgb(232 121 249 / 0.5);
+  --chip-fuchsia-text: #f5d0fe; /* fuchsia-200 */
+}
+
+[data-theme="light"] {
+  --chip-indigo-bg: #e0e7ff; /* indigo-100 */
+  --chip-indigo-border: #a5b4fc; /* indigo-300 */
+  --chip-indigo-text: #3730a3; /* indigo-800 */
+  --chip-purple-bg: #f3e8ff; /* purple-100 */
+  --chip-purple-border: #d8b4fe; /* purple-300 */
+  --chip-purple-text: #6b21a8; /* purple-800 */
+  --chip-fuchsia-bg: #fae8ff; /* fuchsia-100 */
+  --chip-fuchsia-border: #f0abfc; /* fuchsia-300 */
+  --chip-fuchsia-text: #86198f; /* fuchsia-800 */
+}
+
 [data-theme="light"] {
   --app-bg: #f8fafc; /* slate-50 */
   --app-surface: #ffffff;
@@ -51,6 +78,15 @@
   --color-ink-secondary: var(--app-text-secondary);
   --color-ink-muted: var(--app-text-muted);
   --color-ink-faint: var(--app-text-faint);
+  --color-chip-indigo-bg: var(--chip-indigo-bg);
+  --color-chip-indigo-border: var(--chip-indigo-border);
+  --color-chip-indigo-text: var(--chip-indigo-text);
+  --color-chip-purple-bg: var(--chip-purple-bg);
+  --color-chip-purple-border: var(--chip-purple-border);
+  --color-chip-purple-text: var(--chip-purple-text);
+  --color-chip-fuchsia-bg: var(--chip-fuchsia-bg);
+  --color-chip-fuchsia-border: var(--chip-fuchsia-border);
+  --color-chip-fuchsia-text: var(--chip-fuchsia-text);
 }
 
 body {
