@@ -173,12 +173,16 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
     }
   };
 
-  const actionButtonClass = (actionId: string) =>
-    `inline-flex items-center gap-1 rounded-md border border-indigo-500/30 px-2 py-1 text-xs ${
-      actionBusy === actionId
-        ? "bg-indigo-600/10 text-indigo-400/60"
-        : "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30"
-    } disabled:cursor-not-allowed`;
+  const actionButtonClass = (actionId: string) => {
+    const styles: Record<string, string> = {
+      reveal: "bg-sky-600/20 text-sky-300 hover:bg-sky-600/30 border-sky-500/30 focus-visible:ring-sky-400/60",
+      launch: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500/30 font-semibold focus-visible:ring-emerald-400",
+      folder: "bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 border-amber-500/30 focus-visible:ring-amber-400/60",
+    };
+    return `inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${
+      styles[actionId] ?? "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border-indigo-500/30"
+    } disabled:opacity-40 disabled:cursor-not-allowed`;
+  };
 
   const renderPropertyRow = (
     label: string,
