@@ -281,6 +281,39 @@ async def test_scan_applies_exclusions_from_config_matching_scan_path(
 
 
 @pytest.mark.anyio
+async def test_scan_recursive_flag_overrides_machine_recursive_entry(
+    test_state: ServerState,
+) -> None:
+    """The web checkbox is explicit intent: recursive=false beats recursive_search=True."""
+    sub = test_state.active_directory / "sub"
+    sub.mkdir()
+    (sub / "nested.mttl").write_text("nested", encoding="utf-8")
+    test_state.config.configurations = [
+        MachineConfiguration(
+            name="programs",
+            scan=(str(test_state.active_directory),),
+            recursive_search=True,
+        )
+    ]
+    app = create_app(test_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # recursive=false wins over the matching entry's recursive_search=True.
+        await client.post("/api/scan", json={"recursive": False})
+        flat_response = await client.get("/api/scan/results")
+        flat_names = [item["filename"] for item in flat_response.json()["items"]]
+        assert "app_1.0_PROD.mttl" in flat_names
+        assert "nested.mttl" not in flat_names
+
+        # recursive=true counterpart finds the subdirectory file.
+        await client.post("/api/scan", json={"recursive": True})
+        deep_response = await client.get("/api/scan/results")
+        deep_names = [item["filename"] for item in deep_response.json()["items"]]
+        assert "app_1.0_PROD.mttl" in deep_names
+        assert "nested.mttl" in deep_names
+
+
+@pytest.mark.anyio
 async def test_actions_hash(test_state: ServerState, tmp_path: Path) -> None:
     target_file = tmp_path / "programs" / "app_1.0_PROD.mttl"
     app = create_app(test_state)

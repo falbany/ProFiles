@@ -605,6 +605,97 @@ class TestScanPipelineSharedOrchestration:
         assert len(results) == 1
         assert results[0].filename == "level1/level2/level3/deep.mttl"
 
+    def test_recursive_override_beats_machine_entry_and_param(self, tmp_path: Path) -> None:
+        """recursive_override wins over both the machine entry and the param.
+
+        Precedence: recursive_override > machine-entry recursive_search >
+        the ``recursive`` argument.
+        """
+        (tmp_path / "top.mttl").write_text("top")
+        sub = tmp_path / "level1"
+        sub.mkdir()
+        (sub / "deep.mttl").write_text("deep")
+
+        config = AppConfig(
+            configurations=[MachineConfiguration(scan=(str(tmp_path),), recursive_search=True)]
+        )
+
+        # Override False beats the entry's recursive_search=True: flat scan.
+        flat = scan_and_process(
+            str(tmp_path),
+            extension=".mttl",
+            recursive=True,
+            config=config,
+            recursive_override=False,
+        )
+        assert [r.filename for r in flat] == ["top.mttl"]
+
+        # Override True beats both the entry and the param (param says False).
+        deep = scan_and_process(
+            str(tmp_path),
+            extension=".mttl",
+            recursive=False,
+            config=config,
+            recursive_override=True,
+        )
+        assert sorted(r.filename for r in deep) == ["level1/deep.mttl", "top.mttl"]
+
+    def test_machine_entry_recursive_search_beats_param_without_override(
+        self, tmp_path: Path
+    ) -> None:
+        """Without an override, a matching entry's recursive_search wins."""
+        (tmp_path / "top.mttl").write_text("top")
+        sub = tmp_path / "level1"
+        sub.mkdir()
+        (sub / "deep.mttl").write_text("deep")
+
+        config = AppConfig(
+            configurations=[MachineConfiguration(scan=(str(tmp_path),), recursive_search=False)]
+        )
+
+        # Entry says flat; the recursive=True param loses.
+        flat = scan_and_process(str(tmp_path), extension=".mttl", recursive=True, config=config)
+        assert [r.filename for r in flat] == ["top.mttl"]
+
+        # With no entry knob the param rules again (override None defers).
+        config_on = AppConfig(
+            configurations=[MachineConfiguration(scan=(str(tmp_path),), recursive_search=None)]
+        )
+        deep = scan_and_process(str(tmp_path), extension=".mttl", recursive=True, config=config_on)
+        assert sorted(r.filename for r in deep) == ["level1/deep.mttl", "top.mttl"]
+
+    def test_dynamic_scan_honors_recursive_override(self, tmp_path: Path) -> None:
+        """The dynamic (web) scan path threads the override the same way."""
+        (tmp_path / "top.mttl").write_text("top")
+        sub = tmp_path / "level1"
+        sub.mkdir()
+        (sub / "deep.mttl").write_text("deep")
+
+        config = AppConfig(
+            configurations=[MachineConfiguration(scan=(str(tmp_path),), recursive_search=True)]
+        )
+
+        flat = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            recursive=True,
+            config=config,
+            recursive_override=False,
+        )
+        assert [item.column_values["File"] for item in flat] == ["top.mttl"]
+
+        deep = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            recursive=False,
+            config=config,
+            recursive_override=True,
+        )
+        assert sorted(item.column_values["File"] for item in deep) == [
+            "level1/deep.mttl",
+            "top.mttl",
+        ]
+
     def test_dynamic_single_file_column_equivalent_to_legacy(self, tmp_path: Path) -> None:
         """The legacy GUI mode (column_names=("File",)) equals the dynamic path.
 

@@ -115,12 +115,22 @@ def _resolve_scan_config(
     exclude_dirs: Sequence[str] | None,
     exclude_files: Sequence[str] | None,
     config: AppConfig | None,
+    *,
+    recursive_override: bool | None = None,
 ) -> tuple[bool, int, tuple[str, ...], tuple[str, ...]]:
-    """Resolve effective search configuration for a directory."""
+    """Resolve effective search configuration for a directory.
+
+    Recursive precedence: ``recursive_override`` (explicit request-time
+    intent, when not ``None``) → ``active.recursive_search`` (matching
+    machine/directory config entry, when defined) → ``recursive`` param.
+    """
     active = config_service.find_active_config(config, directory) if config else None
-    eff_recursive = (
-        active.recursive_search if (active and active.recursive_search is not None) else recursive
-    )
+    if recursive_override is not None:
+        eff_recursive = recursive_override
+    elif active and active.recursive_search is not None:
+        eff_recursive = active.recursive_search
+    else:
+        eff_recursive = recursive
     eff_depth = (
         active.max_search_depth
         if (active and active.max_search_depth is not None)
@@ -184,6 +194,7 @@ def _iter_directory_files(
     exclude_dirs: Sequence[str] | None,
     exclude_files: Sequence[str] | None,
     config: AppConfig | None,
+    recursive_override: bool | None = None,
 ) -> Iterator[Path]:
     """Scan one root directory and yield file paths passing the scan config.
 
@@ -196,7 +207,14 @@ def _iter_directory_files(
         effective_depth,
         effective_exclude_dirs,
         effective_exclude_files,
-    ) = _resolve_scan_config(directory, recursive, exclude_dirs, exclude_files, config)
+    ) = _resolve_scan_config(
+        directory,
+        recursive,
+        exclude_dirs,
+        exclude_files,
+        config,
+        recursive_override=recursive_override,
+    )
 
     return scan_directory(
         directory,
@@ -219,6 +237,7 @@ def _scan_and_filter(
     exclude_dirs: Sequence[str] | None = None,
     exclude_files: Sequence[str] | None = None,
     config: AppConfig | None = None,
+    recursive_override: bool | None = None,
 ) -> Iterator[tuple[Path, str, str]]:
     """Shared scanning + filtering generator used by all ``scan_*`` functions.
 
@@ -233,6 +252,8 @@ def _scan_and_filter(
         exclude_dirs: Directory names to skip during recursion.
         exclude_files: File name glob patterns to skip during scanning.
         config: Optional AppConfig for overrides and excludes.
+        recursive_override: Explicit recursive-search override; \
+``None`` = defer to config-entry/param precedence.
 
     Yields:
         Tuples of (absolute Path, display path str, full suffix str).
@@ -256,6 +277,7 @@ def _scan_and_filter(
                 exclude_dirs=exclude_dirs,
                 exclude_files=exclude_files,
                 config=config,
+                recursive_override=recursive_override,
             )
             for file_path in files:
                 full_suffix = "".join(file_path.suffixes)
@@ -332,7 +354,7 @@ def _metrics_enabled(log_metrics: bool, config: AppConfig | None) -> bool:
     return log_metrics or (config is not None and config.scan_metrics)
 
 
-# pylint: disable-next=too-many-arguments
+# pylint: disable=too-many-arguments
 # Facade multiplier: mirrors the kwargs of the public scan_* functions.
 def _run_scan_pipeline(
     directories: Sequence[str] | str,
@@ -345,6 +367,7 @@ def _run_scan_pipeline(
     enable_metrics: bool,
     worker: Callable[[Path, str, str], T],
     config: AppConfig | None = None,
+    recursive_override: bool | None = None,
 ) -> list[T]:
     """Shared scan → filter → process orchestration for all ``scan_*`` functions.
 
@@ -364,6 +387,8 @@ def _run_scan_pipeline(
         exclude_files: File name glob patterns to skip during scanning.
         enable_metrics: If True, time the scan and log DEBUG metrics.
         worker: Per-file processor ``(file_path, display_path, full_suffix) -> T``.
+        recursive_override: Explicit recursive-search override; \
+``None`` = defer to config-entry/param precedence.
 
     Returns:
         Processed results in scan order (failing files are skipped).
@@ -389,6 +414,7 @@ def _run_scan_pipeline(
                     exclude_dirs=exclude_dirs,
                     exclude_files=exclude_files,
                     config=config,
+                    recursive_override=recursive_override,
                 )
             )
 
@@ -453,6 +479,8 @@ def _process_files(
     return results, error_count
 
 
+# pylint: disable=too-many-arguments
+# Public facade with additive kwargs above the 8-arg design cap.
 def scan_and_process(
     directories: Sequence[str] | str,
     *,
@@ -463,6 +491,7 @@ def scan_and_process(
     exclude_files: Sequence[str] | None = None,
     log_metrics: bool = False,
     config: AppConfig | None = None,
+    recursive_override: bool | None = None,
 ) -> list[ScannedFile]:
     """Scan directory(ies), process each file, apply filters, return matches.
 
@@ -479,6 +508,8 @@ def scan_and_process(
         exclude_files: File name glob patterns to skip during scanning.
         log_metrics: If True, log performance metrics at DEBUG level.
         config: Optional AppConfig to check scan_metrics setting.
+        recursive_override: Explicit recursive-search override; \
+``None`` = defer to config-entry/param precedence.
 
     Returns:
         List of ``ScannedFile`` entries that pass both filters (files that
@@ -494,6 +525,7 @@ def scan_and_process(
         enable_metrics=_metrics_enabled(log_metrics, config),
         worker=_process_file,
         config=config,
+        recursive_override=recursive_override,
     )
 
 
@@ -511,6 +543,7 @@ def scan_and_process_dynamic(
     columns: dict[str, object] | None = None,
     log_metrics: bool = False,
     config: AppConfig | None = None,
+    recursive_override: bool | None = None,
 ) -> list[ScannedFileDynamic]:
     """Scan directory(ies) with dynamic column extraction.
 
@@ -528,6 +561,8 @@ def scan_and_process_dynamic(
         columns: Dictionary of ColumnConfiguration objects from config.
         log_metrics: If True, log performance metrics at DEBUG level.
         config: Optional AppConfig to check scan_metrics setting.
+        recursive_override: Explicit recursive-search override; \
+``None`` = defer to config-entry/param precedence.
 
     Returns:
         List of ``ScannedFileDynamic`` entries with column values (files
@@ -548,4 +583,5 @@ def scan_and_process_dynamic(
         enable_metrics=_metrics_enabled(log_metrics, config),
         worker=dynamic_worker,
         config=config,
+        recursive_override=recursive_override,
     )

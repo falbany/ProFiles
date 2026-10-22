@@ -58,6 +58,10 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
             extension=payload.extension,
             filter_text=payload.filter_text,
             recursive=payload.recursive,
+            # The web checkbox is explicit user intent: it always wins over
+            # any matching machine-config recursive_search override
+            # (recursive= is still honored when the override is somehow None).
+            recursive_override=payload.recursive,
             column_names=state.config.column_names,
             columns=state.config.columns,
         )
