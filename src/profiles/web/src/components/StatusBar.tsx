@@ -1,4 +1,4 @@
-import { FileCog, FileText, Globe, HardDrive, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { Download, FileCog, FileText, Globe, HardDrive, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
@@ -14,6 +14,10 @@ interface StatusBarProps {
   onLoadConfig?: () => void;
   onShowShortcuts: () => void;
   onReloadConfig?: () => void;
+  /** Export the current results as CSV; the button renders only when set. */
+  onExport?: () => void;
+  /** Disable export while a scan runs or nothing is loaded yet. */
+  exportDisabled?: boolean;
   language?: Language;
   onLanguageChange?: (lang: Language) => void;
   activeConfigName?: string;
@@ -30,6 +34,8 @@ export function StatusBar({
   onLoadConfig,
   onShowShortcuts,
   onReloadConfig,
+  onExport,
+  exportDisabled = false,
   language = "en",
   onLanguageChange,
   activeConfigName,
@@ -85,6 +91,19 @@ export function StatusBar({
           >
             <RefreshCw className="h-3 w-3" />
             <span>Reload</span>
+          </button>
+        )}
+
+        {/* Export CSV Button (advanced feature relocated from the action bar) */}
+        {onExport && (
+          <button
+            onClick={onExport}
+            disabled={exportDisabled}
+            title="Export the current results as CSV"
+            className="flex items-center gap-1 rounded text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 disabled:hover:text-ink-muted"
+          >
+            <Download className="h-3 w-3" />
+            <span>Export CSV</span>
           </button>
         )}
 

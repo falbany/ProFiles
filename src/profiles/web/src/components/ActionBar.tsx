@@ -1,4 +1,5 @@
-import { Download, Play, Sparkles, X, XCircle } from "lucide-react";
+import { Play, X, XCircle } from "lucide-react";
+import { ScanStatusStrip } from "./ScanStatusStrip";
 
 /** Shape of the transient status message exchanged with App. */
 export interface ActionBarToast {
@@ -17,7 +18,8 @@ interface ActionBarProps {
    * (client-side prefilter active), the bar shows "Showing X of N".
    */
   totalCount?: number;
-  onExport?: () => void;
+  /** Directory the running scan targets; shown compacted in the scan status. */
+  scanningDirectory?: string;
   /** Transient status message; rendered centered above the bar while set. */
   toastMessage?: ActionBarToast | null;
   /** Dismiss the current toast; only used by the inline button on error toasts. */
@@ -30,7 +32,7 @@ export function ActionBar({
   hasSelection,
   fileCount,
   totalCount,
-  onExport,
+  scanningDirectory = "",
   toastMessage,
   onToastDismiss,
 }: ActionBarProps) {
@@ -73,34 +75,19 @@ export function ActionBar({
         </div>
       )}
 
-      <div className="flex items-center gap-3">
-        {scanning && (
-          <div className="flex items-center gap-2 text-indigo-400">
-            <Sparkles className="h-3.5 w-3.5 animate-pulse motion-reduce:animate-none" />
-            <span>Scanning directory...</span>
-          </div>
-        )}
+      <div className="flex min-w-0 items-center gap-3">
+        {scanning && <ScanStatusStrip directory={scanningDirectory} />}
         {totalCount !== undefined && totalCount !== fileCount && (
           <span data-testid="action-bar-count" className="text-ink-muted">
             Showing {fileCount} of {totalCount}
           </span>
-        )}
-        {onExport && (
-          <button
-            onClick={onExport}
-            disabled={fileCount === 0 || scanning}
-            className="flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-elevated px-3 py-1.5 text-xs font-medium text-ink-secondary hover:border-indigo-500 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
-          </button>
         )}
       </div>
 
       <button
         onClick={onExecute}
         disabled={!hasSelection || scanning}
-        className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 font-semibold text-white shadow hover:bg-emerald-500 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+        className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 font-semibold text-white shadow hover:bg-emerald-500 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
       >
         <Play className="h-3.5 w-3.5 fill-current" />
         <span>Execute</span>

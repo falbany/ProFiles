@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, FileCode, Info, Loader2, Webhook } from "lucide-react";
 import type { ScanSort, ScannedFileItem } from "../api/types";
-import { ScanSkeletonRows, ScanStatusStrip } from "./ScanStatusStrip";
 
 interface ScrollableStickyHeaderItem {
   label: string;
@@ -166,11 +165,8 @@ interface FileListTableProps {
   scanning?: boolean;
   /** Whether at least one scan has completed. */
   hasScanned?: boolean;
-  /** Directory the running scan targets; shown compacted in the scan strip. */
-  scanningDirectory?: string;
   /** Current directory in the controls; branches the empty states. */
-  activeDirectory?: string;
-  /** Whether recursive scanning is on; controls the "Turn off recursive" action. */
+  activeDirectory?: string;  /** Whether recursive scanning is on; controls the "Turn off recursive" action. */
   recursive?: boolean;
   /** Re-run the scan with recursive turned off. */
   onDisableRecursive?: () => void;
@@ -182,7 +178,7 @@ interface FileListTableProps {
   onClearFilter: () => void;
   /**
    * Coverage hint for client-side prefiltering (lane #1); `null`/`undefined`
-   * renders nothing. Quieter than the scan strip / error feedback.
+   * renders nothing. Quieter than the scan status bar / error feedback.
    */
   prefilterNote?: string | null;
   columnHeaders: string[];
@@ -237,7 +233,6 @@ export function FileListTable({
   loadingMore = false,
   scanning = false,
   hasScanned = false,
-  scanningDirectory = "",
   activeDirectory = "",
   recursive = false,
   onDisableRecursive,
@@ -480,15 +475,10 @@ export function FileListTable({
           ] satisfies ScrollableStickyHeaderItem[]
         }
         />
-        {/* Scan progress strip pins with the header so feedback stays visible. */}
-        {scanning && <ScanStatusStrip directory={scanningDirectory} />}
       </div>
-      {scanning && (
-        <ScanSkeletonRows columnTemplate={columnTemplate} columnCount={resolvedKeys.length + 1} />
-      )}
 
       {/* Prefilter coverage hint — inline (scrolls), visually quieter than the
-          scan strip and the empty-state feedback above. */}
+          scan status bar and the empty-state feedback above. */}
       {prefilterNote && loadedCount > 0 && (
         <div
           role="note"

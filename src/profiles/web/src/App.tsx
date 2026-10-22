@@ -546,6 +546,24 @@ export default function App() {
     }, AUTO_RESCAN_DEBOUNCE_MS);
   };
 
+  /**
+   * Recursive checkbox handler (ControlsBar). Applies the new value to
+   * state, then schedules the same deferred server auto-rescan as the
+   * filter input — so toggling the checkbox rescans immediately instead
+   * of waiting for the next explicit scan. Rapid toggles are
+   * race-correct: beginScan cancels any pending deferred rescan, so the
+   * explicit scan always wins, and the timer callback reads the latest
+   * recursive state via handleScanRef.
+   */
+  const handleRecursiveToggle = (next: boolean) => {
+    setRecursive(next);
+    if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
+    pendingAutoRescanRef.current = setTimeout(() => {
+      pendingAutoRescanRef.current = null;
+      void handleScanRef.current();
+    }, AUTO_RESCAN_DEBOUNCE_MS);
+  };
+
   const handleClearFilter = async () => {
     setFilterText("");
     if (!activeDirectory) return;
@@ -1207,7 +1225,7 @@ export default function App() {
         filterText={filterText}
         onFilterTextChange={handleFilterTextChange}
         recursive={recursive}
-        onRecursiveChange={setRecursive}
+        onRecursiveChange={handleRecursiveToggle}
         onScan={handleScan}
         scanning={scanning}
         onBrowseDirectory={handleBrowseDirectory}
@@ -1236,7 +1254,6 @@ export default function App() {
           loadingMore={loadingMore}
           scanning={scanning}
           hasScanned={hasScanned}
-          scanningDirectory={activeDirectory}
           activeDirectory={activeDirectory}
           recursive={recursive}
           onDisableRecursive={handleDisableRecursive}
@@ -1273,10 +1290,10 @@ export default function App() {
       <ActionBar
         onExecute={handleExecute}
         scanning={scanning}
+        scanningDirectory={activeDirectory}
         hasSelection={visibleFiles.length > 0}
         fileCount={visibleFiles.length}
         totalCount={totalCount}
-        onExport={handleExport}
         toastMessage={toastMessage}
         onToastDismiss={dismissToast}
       />
@@ -1299,6 +1316,8 @@ export default function App() {
         onLoadConfig={() => setShowConfigPicker(true)}
         onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
+        onExport={handleExport}
+        exportDisabled={files.length === 0 || scanning}
         language={language}
         onLanguageChange={setLanguage}
         activeConfigName={config?.config_path ? config.config_path.split(/[\\/]/).pop() || config.config_path : undefined}
