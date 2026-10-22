@@ -179,7 +179,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       launch: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500/30 font-semibold focus-visible:ring-emerald-400",
       folder: "bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 border-amber-500/30 focus-visible:ring-amber-400/60",
     };
-    return `inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${
+    return `inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs ${
       styles[actionId] ?? "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border-indigo-500/30"
     } disabled:opacity-40 disabled:cursor-not-allowed`;
   };
