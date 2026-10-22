@@ -1,11 +1,10 @@
-import { Download, FileCog, FileText, Globe, HardDrive, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { Activity, Download, FileCog, FileText, Globe, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
 
 interface StatusBarProps {
   systemInfo: SystemInfo | null;
-  activeDirectory: string;
   fileCount: number;
   theme: "dark" | "light";
   onToggleTheme: () => void;
@@ -25,7 +24,6 @@ interface StatusBarProps {
 
 export function StatusBar({
   systemInfo,
-  activeDirectory,
   fileCount,
   theme,
   onToggleTheme,
@@ -47,10 +45,31 @@ export function StatusBar({
           <User className="h-3 w-3 text-ink-faint" />
           <span>{systemInfo?.username || "operator"}</span>
         </div>
-        <div className="flex items-center gap-1.5 font-mono text-ink-muted">
-          <HardDrive className="h-3 w-3 text-ink-faint" />
-          <span className="truncate max-w-[280px]">{activeDirectory || "No directory selected"}</span>
-        </div>
+        {/* Hostname / IP links — moved here from the header. */}
+        {systemInfo && (
+          <div className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-ink-secondary">
+            <Activity className="h-3 w-3 text-emerald-400" />
+            <a
+              href={`http://${systemInfo.hostname}:${window.location.port}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ProFiles on ${systemInfo.hostname}`}
+              className="font-mono hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 py-0.5"
+            >
+              {systemInfo.hostname}
+            </a>
+            <span className="text-ink-faint">|</span>
+            <a
+              href={`http://${systemInfo.ip}:${window.location.port}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ProFiles on ${systemInfo.ip}`}
+              className="font-mono hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 py-0.5"
+            >
+              {systemInfo.ip}
+            </a>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

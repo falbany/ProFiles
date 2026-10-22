@@ -17,11 +17,11 @@ import {
 import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import { ActionBar } from "./components/ActionBar";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
-import { ControlsBar } from "./components/ControlsBar";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { InitErrorPanel } from "./components/InitErrorPanel";
+import { SearchBar } from "./components/SearchBar";
 import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
@@ -531,7 +531,7 @@ export default function App() {
   });
 
   /**
-   * Filter input handler (ControlsBar onChange). Applies the text instantly
+   * Filter input handler (SearchBar onChange). Applies the text instantly
    * for the client-side prefilter, and schedules the deferred server
    * auto-rescan 800ms after the last keystroke. Enter/Scan clicks and
    * programmatic filter changes cancel the pending rescan from beginScan —
@@ -547,7 +547,7 @@ export default function App() {
   };
 
   /**
-   * Recursive checkbox handler (ControlsBar). Applies the new value to
+   * Recursive checkbox handler (SearchBar). Applies the new value to
    * state, then schedules the same deferred server auto-rescan as the
    * filter input — so toggling the checkbox rescans immediately instead
    * of waiting for the next explicit scan. Rapid toggles are
@@ -1213,13 +1213,17 @@ export default function App() {
       <HeaderBar
         title={config?.title || ""}
         release={config?.release || ""}
-        systemInfo={systemInfo}
-      />
-
-      <ControlsBar
         directories={config?.directories || []}
         activeDirectory={activeDirectory}
         onDirectoryChange={handleDirectoryChange}
+        onBrowseDirectory={handleBrowseDirectory}
+        onGoToParentDirectory={handleGoToParentDirectory}
+        onGoToHomeDirectory={handleGoToHomeDirectory}
+        onOpenActiveDirectory={handleOpenActiveDirectory}
+        onOpenTerminal={handleOpenDirectoryInTerminal}
+      />
+
+      <SearchBar
         extensions={config?.extensions || []}
         activeExtension={activeExtension}
         onExtensionChange={setActiveExtension}
@@ -1230,11 +1234,6 @@ export default function App() {
         onRecursiveChange={handleRecursiveToggle}
         onScan={handleScan}
         scanning={scanning}
-        onBrowseDirectory={handleBrowseDirectory}
-        onGoToParentDirectory={handleGoToParentDirectory}
-        onGoToHomeDirectory={handleGoToHomeDirectory}
-        onOpenActiveDirectory={handleOpenActiveDirectory}
-        onOpenTerminal={handleOpenDirectoryInTerminal}
         barcodeMode={barcodeMode}
         onBarcodeToggle={handleBarcodeToggle}
         onCameraBarcodeClick={() => setShowCameraScanner(true)}
@@ -1302,7 +1301,6 @@ export default function App() {
 
       <StatusBar
         systemInfo={systemInfo}
-        activeDirectory={activeDirectory}
         fileCount={totalCount}
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
