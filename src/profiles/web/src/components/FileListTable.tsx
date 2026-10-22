@@ -37,7 +37,7 @@ interface ScrollableStickyHeaderProps {
 function ScrollableStickyHeader({ items, columnTemplate, resizePointerRef, resizeMovedRef }: ScrollableStickyHeaderProps) {
   return (
     <div
-      className="grid select-none items-center border-b border-l-2 border-l-transparent border-line bg-surface font-medium text-ink-muted"
+      className="grid select-none items-center border-b border-l-2 border-l-transparent border-line/40 bg-surface/60 font-medium text-ink-muted shadow-sm backdrop-blur-md"
       role="row"
       aria-rowindex={1}
       data-file-list-header
