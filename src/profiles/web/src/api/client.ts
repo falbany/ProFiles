@@ -1,6 +1,7 @@
 import type {
   AppConfigData,
   BrowseResult,
+  FileMetadata,
   LogLevel,
   LogResponse,
   ScanResultsResponse,
@@ -215,6 +216,18 @@ export async function generateBarcode(params: { filePath?: string; file_path?: s
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("Failed to generate barcode");
+  return res.json();
+}
+
+/** Fetch metadata (size, hashes, timestamps, attributes) for a single file. */
+export async function fetchFileMetadata(filePath: string, signal?: AbortSignal): Promise<FileMetadata> {
+  const res = await fetch("/api/actions/metadata", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath }),
+    signal,
+  });
+  if (!res.ok) throw new Error("Failed to fetch metadata");
   return res.json();
 }
 

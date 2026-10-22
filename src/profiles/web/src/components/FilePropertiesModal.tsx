@@ -1,24 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { X, File, Folder, Calendar, Hash, ChevronDown, ChevronRight, Copy, Check, QrCode } from "lucide-react";
-import type { ScannedFileItem } from "../api/types";
+import { X, File, Folder, Calendar, Hash, ChevronDown, ChevronRight, Copy, Check, QrCode, Eye, Play, FolderOpen } from "lucide-react";
+import type { FileMetadata, ScannedFileItem } from "../api/types";
+import { fetchFileMetadata, launchFile, openFolder, revealFile } from "../api/client";
 import { BarcodeModal } from "./BarcodeModal";
+import { buildPropertiesSummary, formatFileSize, parentDirectory } from "../utils/fileProperties";
 
 export interface FilePropertiesModalProps {
   isOpen: boolean;
   file: ScannedFileItem | null;
   onClose: () => void;
-}
-
-interface FileMetadata {
-  name: string;
-  path: string;
-  size_bytes: number;
-  modified: string;
-  created: string;
-  type: string;
-  md5: string;
-  sha256: string;
-  attributes: Record<string, any>;
 }
 
 interface CollapsibleSection {
@@ -28,69 +18,121 @@ interface CollapsibleSection {
   content: React.ReactNode;
 }
 
+/** Sections expanded when the modal opens or resets. */
+const DEFAULT_EXPANDED_SECTIONS = ["basic", "hashes", "timestamps", "system"];
+
 export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesModalProps) {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["basic", "hashes", "timestamps", "system"]));
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(DEFAULT_EXPANDED_SECTIONS));
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  /** Controller of the in-flight metadata request; older epochs never write state. */
+  const activeFetchRef = useRef<AbortController | null>(null);
 
+  // Restore focus and reset transient UI state when the modal closes.
   useEffect(() => {
     if (!isOpen) {
       previousFocusRef.current?.focus();
       // Reset expanded sections when closing
-      setExpandedSections(new Set(["basic", "hashes", "timestamps", "system"]));
+      setExpandedSections(new Set(DEFAULT_EXPANDED_SECTIONS));
       setShowQrModal(false);
-      return;
     }
+  }, [isOpen]);
 
-    previousFocusRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+  // Fetch metadata for the opened file; aborts on close or file change so a
+  // slow response for a previous file can never overwrite the current one.
+  useEffect(() => {
+    if (!isOpen || !file) return;
 
-    if (file) {
-      void fetchMetadata(file.path);
-    }
+    const controller = new AbortController();
+    activeFetchRef.current = controller;
+    setMetadata(null);
+    setActionMessage(null);
+    setLoading(true);
+    setError(null);
 
-    const focusFrame = requestAnimationFrame(() => {
-      dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    });
+    void (async () => {
+      try {
+        const meta = await fetchFileMetadata(file.path, controller.signal);
+        if (activeFetchRef.current !== controller) return;
+        setMetadata(meta);
+      } catch (err) {
+        if (activeFetchRef.current !== controller) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setError(err instanceof Error ? err.message : "Failed to load properties");
+      } finally {
+        if (activeFetchRef.current === controller) setLoading(false);
+      }
+    })();
 
     return () => {
-      cancelAnimationFrame(focusFrame);
-      previousFocusRef.current?.focus();
+      activeFetchRef.current = null;
+      controller.abort();
     };
   }, [isOpen, file]);
 
-  const fetchMetadata = async (filePath: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/actions/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file_path: filePath }),
-      });
-      if (!res.ok) throw new Error("Failed to fetch metadata");
-      const meta: FileMetadata = await res.json();
-      setMetadata(meta);
-    } catch (err: any) {
-      setError(err.message || "Failed to load properties");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Lock background scrolling while the modal is open.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
+  // Escape closes the modal; Tab is trapped inside the dialog.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        // The nested barcode modal handles its own Escape.
+        if (showQrModal) return;
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (event.shiftKey) {
+        if (active === first || !dialog.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, showQrModal, onClose]);
+
+  // Initial focus goes to the dialog's first button.
+  useEffect(() => {
+    if (!isOpen) return;
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocusRef.current = active;
+    const focusFrame = requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    });
+    return () => cancelAnimationFrame(focusFrame);
+  }, [isOpen]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
@@ -113,6 +155,30 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       console.error("Failed to copy:", err);
     }
   };
+
+  const runFileAction = async (
+    actionId: string,
+    successMessage: string,
+    run: () => Promise<unknown>,
+  ) => {
+    setActionBusy(actionId);
+    setActionMessage(null);
+    try {
+      await run();
+      setActionMessage(successMessage);
+    } catch {
+      setActionMessage("Action failed");
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const actionButtonClass = (actionId: string) =>
+    `inline-flex items-center gap-1 rounded-md border border-indigo-500/30 px-2 py-1 text-xs ${
+      actionBusy === actionId
+        ? "bg-indigo-600/10 text-indigo-400/60"
+        : "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30"
+    } disabled:cursor-not-allowed`;
 
   const renderPropertyRow = (
     label: string,
@@ -171,6 +237,9 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
   };
 
   if (!isOpen || !file) return null;
+  // Captures the narrowed file so JSX callbacks keep a non-null type.
+  const activeFile = file;
+  const directory = parentDirectory(activeFile.path);
 
   return (
     <div
@@ -206,8 +275,24 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 </p>
               </div>
               <button
+                onClick={() => {
+                  if (!metadata) return;
+                  void copyToClipboard(buildPropertiesSummary(metadata), "all");
+                }}
+                disabled={!metadata || loading || error !== null}
+                className="ml-2 flex items-center gap-1 rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 disabled:opacity-50"
+                title="Copy all properties to clipboard"
+                aria-label="Copy all properties"
+              >
+                {copiedField === "all" ? (
+                  <Check className="h-4 w-4 text-emerald-400" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </button>
+              <button
                 onClick={() => setShowQrModal(true)}
-                className="ml-2 rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30"
+                className="rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30"
                 title="Generate Barcode/QR Code"
               >
                 <QrCode className="h-4 w-4" />
@@ -291,12 +376,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 content: (
                   <div className="space-y-0.5">
                     {renderPropertyRow("Full Path", metadata.path, "path", true)}
-                    {renderPropertyRow(
-                      "Directory",
-                      metadata.path.slice(0, metadata.path.lastIndexOf("\\") || metadata.path.lastIndexOf("/")),
-                      "directory",
-                      true
-                    )}
+                    {renderPropertyRow("Directory", parentDirectory(metadata.path) || "None", "directory", true)}
                   </div>
                 ),
               })}
@@ -352,14 +432,40 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
         <div className="flex-shrink-0 border-t border-line px-6 py-3">
           <div className="flex justify-between items-center gap-2">
             <p className="text-xs text-ink-muted">
-              Click the copy icon next to any field to copy its value
+              {actionMessage ?? "Click the copy icon next to any field to copy its value"}
             </p>
-            <button
-              onClick={onClose}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                onClick={() => void runFileAction("reveal", "Revealed in Explorer", () => revealFile(activeFile.path))}
+                disabled={actionBusy !== null}
+                className={actionButtonClass("reveal")}
+                title="Show file in Explorer"
+              >
+                <Eye className="h-3.5 w-3.5" /> Reveal
+              </button>
+              <button
+                onClick={() => void runFileAction("launch", "Launched", () => launchFile({ directory, filename: activeFile.filename }))}
+                disabled={actionBusy !== null}
+                className={actionButtonClass("launch")}
+                title="Launch file with default association"
+              >
+                <Play className="h-3.5 w-3.5" /> Launch
+              </button>
+              <button
+                onClick={() => void runFileAction("folder", "Opened folder", () => openFolder(activeFile.path))}
+                disabled={actionBusy !== null}
+                className={actionButtonClass("folder")}
+                title="Open containing folder"
+              >
+                <FolderOpen className="h-3.5 w-3.5" /> Open Folder
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-md bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

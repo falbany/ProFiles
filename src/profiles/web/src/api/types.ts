@@ -113,3 +113,30 @@ export interface LogResponse {
   total_returned: number;
   entries: LogEntry[];
 }
+
+/** Attributes payload attached to metadata endpoint responses. */
+export interface FileMetadataAttributes {
+  is_file?: boolean;
+  is_dir?: boolean;
+  extension?: string;
+  stem?: string;
+  permissions?: string;
+  is_readonly?: boolean;
+  is_hidden?: boolean;
+  is_symlink?: boolean;
+  owner_uid?: number;
+  group_gid?: number;
+}
+
+/** Response of `POST /api/actions/metadata` for a single file. */
+export interface FileMetadata {
+  name: string;
+  path: string;
+  size_bytes: number;
+  modified: string;
+  created: string;
+  type: string;
+  md5: string;
+  sha256: string;
+  attributes: FileMetadataAttributes;
+}
