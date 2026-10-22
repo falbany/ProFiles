@@ -86,6 +86,21 @@ class TestAppEvents:
             app_started(logger, version="1.0.0", headless=False)
         assert 'APP_STARTED version="1.0.0" headless=false' in caplog.text
 
+    def test_started_with_environment(self, caplog: pytest.LogCaptureFixture) -> None:
+        """APP_STARTED carries the Python version and OS when provided."""
+        logger = logging.getLogger("test_started_env")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            app_started(
+                logger,
+                version="2026.8.0",
+                headless=False,
+                python_version="3.11.4",
+                os_name="Windows 11",
+            )
+        assert 'APP_STARTED version="2026.8.0" headless=false' in caplog.text
+        assert 'python="3.11.4"' in caplog.text
+        assert 'os="Windows 11"' in caplog.text
+
     def test_started_headless(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("test_started_headless")
         with caplog.at_level(logging.INFO, logger=logger.name):
@@ -226,6 +241,37 @@ class TestScanEvents:
         with caplog.at_level(logging.WARNING, logger=logger.name):
             scan_failed(logger, directory="/bad", error="permission denied")
         assert "SCAN_FAILED" in caplog.text
+
+    def test_slow_scan_emits_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A scan slower than the threshold also emits SLOW_SCAN at WARNING."""
+        logger = logging.getLogger("test_slow_scan")
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            scan_complete(
+                logger,
+                directory="/remote",
+                extension="*",
+                filter_text="",
+                files=10,
+                recursive=True,
+                duration_ms=7500.0,
+            )
+        assert "SLOW_SCAN" in caplog.text
+        assert "duration_ms=7500.000" in caplog.text
+
+    def test_fast_scan_emits_no_slow_scan(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A fast scan does not emit SLOW_SCAN."""
+        logger = logging.getLogger("test_fast_scan")
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            scan_complete(
+                logger,
+                directory="/local",
+                extension="*",
+                filter_text="",
+                files=1000,
+                recursive=False,
+                duration_ms=25.0,
+            )
+        assert "SLOW_SCAN" not in caplog.text
 
 
 # ---------------------------------------------------------------------------

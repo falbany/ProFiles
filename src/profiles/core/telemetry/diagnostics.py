@@ -16,7 +16,12 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import os
+import sys
+import types
 from pathlib import Path
+
+from profiles.core.telemetry.events import log_rotated, uncaught_exception
 
 # log format
 LOG_FORMAT = "%(asctime)s - %(levelname)-4s - %(source)s: %(message)s"
@@ -37,6 +42,67 @@ class SourceFilter(logging.Filter):
         """Add the source field to every log record."""
         record.source = self.source
         return True
+
+
+class TelemetryRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Rotating file handler that emits a LOG_ROTATED event on rollover.
+
+    The event is written just before the rotation, so it lands as the
+    first line of the freshly opened log file.
+    """
+
+    def __init__(
+        self,
+        filename: str,
+        mode: str = "a",
+        maxBytes: int = 0,  # noqa: N803 — matches logging.handlers signature
+        backupCount: int = 0,  # noqa: N803 — matches logging.handlers signature
+        encoding: str | None = None,
+        delay: bool = False,
+    ) -> None:
+        self.event_logger: logging.Logger | None = None
+        super().__init__(filename, mode, maxBytes, backupCount, encoding, delay)
+
+    def doRollover(self) -> None:  # noqa: N802 — overrides stdlib method name
+        """Emit LOG_ROTATED as the first line of the fresh log, then rotate."""
+        try:
+            old_size = os.path.getsize(self.baseFilename)
+        except OSError:
+            old_size = 0
+        super().doRollover()
+        if self.event_logger is None or old_size == 0:
+            return
+        # Guard against recursion: a temporary maxBytes of 0 disables
+        # shouldRollover while the event is emitted through this handler.
+        original_max = self.maxBytes
+        self.maxBytes = 0
+        try:
+            log_rotated(self.event_logger, old_size_bytes=old_size)
+        finally:
+            self.maxBytes = original_max
+
+
+def install_crash_hook(logger: logging.Logger) -> None:
+    """Route uncaught exceptions into the log as UNCAUGHT_EXCEPTION (CRITICAL).
+
+    Chains the previously installed ``sys.excepthook`` so default crash
+    reporting is preserved after the event is logged.
+
+    Args:
+        logger: The "profiles" logger to receive the CRITICAL event.
+    """
+    previous_hook = sys.excepthook
+
+    def _log_crash(
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        type_name = getattr(exc_type, "__name__", "Unknown")
+        uncaught_exception(logger, type_name=str(type_name), error=str(exc_value))
+        previous_hook(exc_type, exc_value, traceback)
+
+    sys.excepthook = _log_crash  # type: ignore[assignment]
 
 
 class LoggerFactory:
@@ -109,7 +175,7 @@ class LoggerFactory:
         source_filter = SourceFilter(source=self._source)
 
         # --- File handler with rotation ---
-        file_handler = logging.handlers.RotatingFileHandler(
+        file_handler = TelemetryRotatingFileHandler(
             filename=str(self._log_path),
             maxBytes=self._max_bytes,
             backupCount=self._backup_count,
@@ -118,6 +184,7 @@ class LoggerFactory:
         file_handler.setLevel(self._level)
         file_handler.setFormatter(formatter)
         file_handler.addFilter(source_filter)
+        file_handler.event_logger = logger
         logger.addHandler(file_handler)
 
         # --- Console handler (stderr) — mirrors the configured level ---

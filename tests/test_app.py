@@ -89,13 +89,27 @@ class TestSetupLogging:
 
     def test_returns_logger(self, mocker) -> None:  # type: ignore[no-untyped-def]
         mocker.patch("profiles.app.get_hostname", return_value="HOST")
+        mocker.patch("profiles.app.get_username", return_value="testuser")
         mock_configure = mocker.patch("profiles.app.configure_logger")
         app = ProFileApp()
         app._setup_logging()
         mock_configure.assert_called_once()
         args, kwargs = mock_configure.call_args
-        assert kwargs["source"] == "HOST"
+        assert kwargs["source"] == "testuser@HOST"
         assert kwargs["level"] == 20  # logging.INFO
+
+    def test_installs_crash_hook(self, mocker) -> None:  # type: ignore[no-untyped-def]
+        """_setup_logging installs the uncaught-exception hook on the logger."""
+        import logging as logging_module
+
+        mocker.patch("profiles.app.get_hostname", return_value="HOST")
+        mocker.patch("profiles.app.get_username", return_value="testuser")
+        logger = logging_module.getLogger("app_test_crash_hook")
+        mocker.patch("profiles.app.configure_logger", return_value=logger)
+        mock_hook = mocker.patch("profiles.app.install_crash_hook")
+        app = ProFileApp()
+        result = app._setup_logging()
+        mock_hook.assert_called_once_with(result)
 
 
 # ── ProFileApp._load_configuration ───────────────────────────────────────

@@ -19,6 +19,7 @@ from profiles.core.environment.system import (
     SystemInfo,
     apply_source_to_logger,
     collect_system_info,
+    format_user_host,
 )
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "SystemInfo",
     "collect_system_info",
     "apply_source_to_logger",
+    "format_user_host",
     # Execution (launch hooks)
     "HookOutcome",
     "parse_hook_entries",

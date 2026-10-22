@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import importlib.resources
 import logging
+import platform
 import queue
 import re
 import threading
@@ -376,7 +377,9 @@ class MainWindow:
         self._ip_label.config(text=info.ip)
 
         # Update logger source with actual hostname
-        system.apply_source_to_logger(self._logger, info.hostname)
+        system.apply_source_to_logger(
+            self._logger, system.format_user_host(info.username, info.hostname)
+        )
 
     def _auto_select_directory(self) -> None:
         """Auto-select the directory matching the current hostname.
@@ -1339,5 +1342,11 @@ class MainWindow:
     def run(self) -> None:
         """Start the application main loop."""
         self._start_time = time.time()
-        events.app_started(self._logger, version=__version__, headless=False)
+        events.app_started(
+            self._logger,
+            version=__version__,
+            headless=False,
+            python_version=platform.python_version(),
+            os_name=f"{platform.system()} {platform.release()}",
+        )
         self._root.mainloop()

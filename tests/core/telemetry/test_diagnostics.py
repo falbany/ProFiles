@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import logging.handlers
+import sys
 from pathlib import Path
 
 import pytest
@@ -380,3 +381,102 @@ class TestGetLogger:
         logger1 = configure_logger(log_path=log_file, source="EXIST")
         logger2 = get_logger()
         assert logger2 is logger1  # same instance
+
+
+# ── LOG_ROTATED (rollover telemetry) ───────────────────────────────────────
+
+
+class TestRolloverEvent:
+    """The rotating handler emits LOG_ROTATED when the log file rolls over."""
+
+    def test_rollover_emits_event(self, tmp_path: Path) -> None:
+        """Writing past max_bytes rolls the file over and records LOG_ROTATED."""
+        log_file = tmp_path / "rotate.log"
+        factory = LoggerFactory(
+            log_path=log_file,
+            source="TEST",
+            level=logging.DEBUG,
+            max_bytes=200,
+            backup_count=2,
+        )
+        logger = factory.create_logger()
+        try:
+            for _ in range(4):
+                logger.info("x" * 120)  # each record exceeds 200 bytes with overhead
+        finally:
+            for handler in logger.handlers[:]:
+                with contextlib.suppress(Exception):
+                    handler.close()
+                logger.removeHandler(handler)
+
+        text = log_file.read_text(encoding="utf-8")
+        assert "LOG_ROTATED" in text
+
+    def test_rollover_without_event_logs_normally(self, tmp_path: Path) -> None:
+        """Rolling over also preserves normal log content after rotation."""
+        log_file = tmp_path / "rotate2.log"
+        factory = LoggerFactory(
+            log_path=log_file,
+            source="TEST",
+            level=logging.DEBUG,
+            max_bytes=300,
+            backup_count=2,
+        )
+        logger = factory.create_logger()
+        try:
+            for _ in range(6):
+                logger.info("y" * 150)
+        finally:
+            for handler in logger.handlers[:]:
+                with contextlib.suppress(Exception):
+                    handler.close()
+                logger.removeHandler(handler)
+
+        text = log_file.read_text(encoding="utf-8")
+        assert "LOG_ROTATED" in text
+        assert "yyy" in text
+
+
+# ── UNCAUGHT_EXCEPTION (crash hook) ────────────────────────────────────────
+
+
+class TestInstallCrashHook:
+    """install_crash_hook() routes uncaught exceptions to the log."""
+
+    def test_crash_hook_logs_critical(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An exc raised through the hook is emitted as UNCAUGHT_EXCEPTION CRITICAL."""
+        from profiles.core.telemetry.diagnostics import install_crash_hook
+
+        log_file = tmp_path / "crash.log"
+        logger = configure_logger(log_path=log_file, source="TEST", level=logging.DEBUG)
+        previous_hook = sys.excepthook
+        install_crash_hook(logger)
+        try:
+            with caplog.at_level(logging.CRITICAL, logger="profiles"):
+                sys.excepthook(ValueError, ValueError("boom"), None)
+        finally:
+            sys.excepthook = previous_hook
+
+        assert "UNCAUGHT_EXCEPTION" in caplog.text
+        assert 'type="ValueError"' in caplog.text
+        assert 'error="boom"' in caplog.text
+
+    def test_crash_hook_delegates_to_previous(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The hook still calls the previous excepthook after logging."""
+        from profiles.core.telemetry.diagnostics import install_crash_hook
+
+        logger = configure_logger(log_path=tmp_path / "crash2.log", source="TEST")
+        called: list[tuple] = []
+        monkeypatch.setattr(sys, "excepthook", lambda *args: called.append(args))
+        install_crash_hook(logger)
+        try:
+            sys.excepthook(RuntimeError, RuntimeError("bang"), None)
+        finally:
+            _reset_profile_logger()
+
+        assert len(called) == 1
+        assert called[0][0] is RuntimeError

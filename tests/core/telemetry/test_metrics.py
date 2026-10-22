@@ -6,6 +6,8 @@ relying on log capture which can cause issues in some environments.
 
 from pathlib import Path
 
+import pytest
+
 from profiles.core.config.models import AppConfig
 from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry.metrics import ScanMetrics, ScanTimer
@@ -101,6 +103,89 @@ class TestScanTimer:
         assert result["files_per_second"] == 200.0
         assert result["recursive"] is True
         assert result["error_count"] == 0
+
+
+class TestScanTimerExtensionFilter:
+    """ScanTimer threads the real extension/filter values into SCAN_COMPLETE."""
+
+    def test_finish_logs_extension_and_filter(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """finish() emits SCAN_COMPLETE carrying the extension and filter given."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="profiles"):
+            with ScanTimer(
+                str(tmp_path), recursive=False, extension=".mttl", filter_text="MuTest"
+            ) as timer:
+                pass
+
+            timer.finish(7)
+
+        scan_lines = (r for r in caplog.records if "SCAN_COMPLETE" in r.message)
+        assert any("ext=.mttl" in r.message for r in scan_lines)
+        assert any("filter=MuTest" in r.message for r in caplog.records)
+
+    def test_finish_quotes_filter_with_space(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Filter values containing spaces are emitted quoted."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="profiles"):
+            with ScanTimer(
+                str(tmp_path), recursive=False, extension=".txt", filter_text="Mu Test"
+            ) as timer:
+                pass
+
+            timer.finish(3)
+
+        assert any('filter="Mu Test"' in r.message for r in caplog.records)
+
+    def test_default_timer_keeps_wildcards(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A ScanTimer built without extension/filter keeps the legacy defaults."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="profiles"):
+            with ScanTimer(str(tmp_path), recursive=False) as timer:
+                pass
+
+            timer.finish(2)
+
+        scan_lines = [r.message for r in caplog.records if "SCAN_COMPLETE" in r.message]
+        assert scan_lines and "ext=*" in scan_lines[0]
+        assert 'filter=""' in scan_lines[0]
+
+
+class TestScanExtensionFilterIntegration:
+    """Scanner-level SCAN_COMPLETE carries the actual extension/filter text."""
+
+    def test_scan_and_process_logs_real_filter(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """scan_and_process with filter_text emits SCAN_COMPLETE with it."""
+        import logging
+
+        for i in range(3):
+            (tmp_path / f"beta_{i}.txt").write_text(f"content {i}")
+        (tmp_path / "alpha_skip.log").write_text("skipped")
+
+        config = AppConfig(scan_metrics=True)
+        with caplog.at_level(logging.DEBUG, logger="profiles"):
+            results = scan_and_process(
+                str(tmp_path),
+                extension=".txt",
+                filter_text="alpha",
+                config=config,
+            )
+
+        assert len(results) == 0
+        scan_lines = [r.message for r in caplog.records if "SCAN_COMPLETE" in r.message]
+        assert scan_lines
+        assert "ext=.txt" in ";".join(scan_lines)
+        assert "filter=alpha" in ";".join(scan_lines)
 
 
 class TestScanMetricsIntegration:

@@ -48,6 +48,18 @@ def test_parse_log_line_flags_warning_and_above_as_errors() -> None:
     ).is_error
 
 
+def test_parse_log_line_handles_user_host_source() -> None:
+    """Sources in ``user@host`` form (e.g. f.albany@ST-465) stay intact."""
+    entry = parse_log_line(
+        '2026-10-22 15:05:22 - INFO  - f.albany@ST-465: SCAN_COMPLETE dir="base" '
+        "ext=.mttl filter=MuTest files=51 recursive=true"
+    )
+
+    assert entry.source == "f.albany@ST-465"
+    assert entry.level == "INFO"
+    assert entry.event == "SCAN_COMPLETE"
+
+
 def test_parse_log_line_preserves_unrecognised_lines() -> None:
     entry = parse_log_line(TORN_LINE)
 

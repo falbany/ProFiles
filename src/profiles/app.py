@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import argparse
 import logging
+import platform
 import sys
 import tkinter as tk
 from pathlib import Path
 
 from profiles.core import AppConfig, actions, load_config
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
+from profiles.core.environment.system import format_user_host
 from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry import events
-from profiles.core.telemetry.diagnostics import configure_logger
+from profiles.core.telemetry.diagnostics import configure_logger, install_crash_hook
 from profiles.gui.main_window import MainWindow
 from profiles.launch import (
     detect_launch_context,
@@ -114,8 +116,8 @@ class ProFileApp:
     def _setup_logging(self, level: int | str = logging.INFO) -> logging.Logger:
         """Configure the logging subsystem.
 
-        Configures a rotating file logger with the hostname as the
-        source identifier.
+        Configures a rotating file logger with the ``user@host`` source
+        identifier and routes uncaught exceptions into the log.
 
         Args:
             level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
@@ -123,11 +125,13 @@ class ProFileApp:
         Returns:
             Configured logger instance.
         """
-        return configure_logger(
+        logger = configure_logger(
             log_path=self._log_path,
-            source=get_hostname(),
+            source=format_user_host(get_username(), get_hostname()),
             level=level,
         )
+        install_crash_hook(logger)
+        return logger
 
     def _resolve_startup_config(
         self,
@@ -331,7 +335,13 @@ class ProFileApp:
         assert _config is not None
 
         if file_path:
-            events.app_started(_logger, version=_config.release, headless=True)
+            events.app_started(
+                _logger,
+                version=_config.release,
+                headless=True,
+                python_version=platform.python_version(),
+                os_name=f"{platform.system()} {platform.release()}",
+            )
         else:
             events.scan_complete(
                 _logger,

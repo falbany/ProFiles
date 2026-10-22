@@ -44,9 +44,17 @@ class ScanMetrics:
 class ScanTimer:
     """Context manager for timing scan operations."""
 
-    def __init__(self, directory: str, recursive: bool = False) -> None:
+    def __init__(
+        self,
+        directory: str,
+        recursive: bool = False,
+        extension: str = "*",
+        filter_text: str = "",
+    ) -> None:
         self.directory = directory
         self.recursive = recursive
+        self.extension = extension
+        self.filter_text = filter_text
         self.start_time: float | None = None
         self.end_time: float | None = None
         self.file_count: int = 0
@@ -102,8 +110,8 @@ class ScanTimer:
             scan_complete(
                 logger,
                 directory=metrics.directory,
-                extension="*",
-                filter_text="",
+                extension=self.extension,
+                filter_text=self.filter_text,
                 files=metrics.file_count,
                 recursive=metrics.recursive,
                 duration_ms=metrics.duration_ms,

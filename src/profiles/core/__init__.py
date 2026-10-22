@@ -42,6 +42,7 @@ from profiles.core.environment import (
     SystemInfo,
     apply_source_to_logger,
     collect_system_info,
+    format_user_host,
     parse_hook_entries,
     run_hooks_for_file,
 )
@@ -93,6 +94,7 @@ __all__ = [
     "SystemInfo",
     "collect_system_info",
     "apply_source_to_logger",
+    "format_user_host",
     # Actions
     "ActionResult",
     "ActionStatus",

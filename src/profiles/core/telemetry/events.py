@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import logging
 
+# A scan slower than this (ms) also emits SLOW_SCAN as a WARNING.
+SLOW_SCAN_THRESHOLD_MS = 5000.0
+
 # ---------------------------------------------------------------------------
 # Internal utilities
 # ---------------------------------------------------------------------------
@@ -35,14 +38,44 @@ def _quote(s: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def app_started(logger: logging.Logger, *, version: str, headless: bool) -> None:
-    """Emit APP_STARTED."""
-    logger.info('APP_STARTED version="%s" headless=%s', version, _bool(headless))
+def app_started(
+    logger: logging.Logger,
+    *,
+    version: str,
+    headless: bool,
+    python_version: str = "",
+    os_name: str = "",
+) -> None:
+    """Emit APP_STARTED, optionally with the running environment snapshot."""
+    parts = [f'version="{version}"', f"headless={_bool(headless)}"]
+    if python_version:
+        parts.append(f'python="{python_version}"')
+    if os_name:
+        parts.append(f'os="{os_name}"')
+    logger.info("APP_STARTED %s", " ".join(parts))
 
 
 def app_closed(logger: logging.Logger, *, uptime_s: float) -> None:
     """Emit APP_CLOSED."""
     logger.info("APP_CLOSED uptime_s=%.0f", uptime_s)
+
+
+def log_rotated(logger: logging.Logger, *, old_size_bytes: int) -> None:
+    """Emit LOG_ROTATED — the rotating file handler rolled the log over."""
+    logger.info("LOG_ROTATED old_size_bytes=%d", old_size_bytes)
+
+
+def uncaught_exception(logger: logging.Logger, *, type_name: str, error: str) -> None:
+    """Emit UNCAUGHT_EXCEPTION — an exception escaped the excepthook."""
+    logger.critical('UNCAUGHT_EXCEPTION type="%s" error="%s"', type_name, error)
+
+
+def web_client(logger: logging.Logger, *, ip: str, path: str, user_agent: str = "") -> None:
+    """Emit WEB_CLIENT — a web UI client connected for the first time."""
+    parts = ['event="connected"', f'ip="{ip}"', f"path={_quote(path)}"]
+    if user_agent:
+        parts.append(f'ua="{user_agent}"')
+    logger.info("WEB_CLIENT %s", " ".join(parts))
 
 
 def app_restarting(logger: logging.Logger) -> None:
@@ -111,7 +144,7 @@ def scan_complete(
     duration_ms: float,
     errors: int = 0,
 ) -> None:
-    """Emit SCAN_COMPLETE at INFO; SCAN_METRICS at DEBUG."""
+    """Emit SCAN_COMPLETE at INFO; SCAN_METRICS at DEBUG; SLOW_SCAN at WARNING."""
     logger.info(
         "SCAN_COMPLETE dir=%s ext=%s filter=%s files=%d recursive=%s",
         _quote(directory),
@@ -120,6 +153,14 @@ def scan_complete(
         files,
         _bool(recursive),
     )
+    if duration_ms > SLOW_SCAN_THRESHOLD_MS:
+        logger.warning(
+            "SLOW_SCAN dir=%s duration_ms=%.3f files=%d errors=%d",
+            _quote(directory),
+            duration_ms,
+            files,
+            errors,
+        )
     if logger.isEnabledFor(logging.DEBUG):
         rate = files / (duration_ms / 1000) if duration_ms > 0 else 0.0
         logger.debug(

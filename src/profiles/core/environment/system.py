@@ -27,6 +27,24 @@ def collect_system_info() -> SystemInfo:
     )
 
 
+def format_user_host(username: str, hostname: str) -> str:
+    """Format a log source identifier as ``user@host``.
+
+    Falls back to whichever part is available when the other is empty,
+    and to an empty string when both are.
+
+    Args:
+        username: OS login name (e.g. ``"f.albany"``).
+        hostname: Machine name (e.g. ``"ST-465"``).
+
+    Returns:
+        The combined identifier, e.g. ``"f.albany@ST-465"``.
+    """
+    if username and hostname:
+        return f"{username}@{hostname}"
+    return username or hostname
+
+
 def apply_source_to_logger(logger: logging.Logger, source: str) -> None:
     """Update the ``SourceFilter.source`` on every handler of *logger*.
 

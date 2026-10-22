@@ -191,7 +191,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
         aria-modal="true"
         aria-labelledby="log-viewer-title"
         onKeyDown={handleDialogKeyDown}
-        className="flex h-[min(84dvh,760px)] w-[min(94vw,900px)] min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl sm:rounded-2xl"
+        className="flex h-[min(84dvh,760px)] w-[clamp(560px,85vw,1500px)] min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Header */}
@@ -340,6 +340,18 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
           onScroll={handleScroll}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-app px-2 py-2 font-mono text-xs leading-relaxed sm:px-3"
         >
+          {/* Sticky column header — glassmorphism panel aligned to the fixed-width row columns. */}
+          <div
+            className="sticky top-0 z-10 mb-1 flex items-center gap-2 rounded-md border border-line/40 bg-surface/60 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-muted shadow-sm backdrop-blur-md"
+            role="row"
+          >
+            <span className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="w-[138px] shrink-0 text-ink/70">Time</span>
+            <span className="w-[52px] shrink-0 text-ink/70">Level</span>
+            <span className="w-[150px] shrink-0 text-ink/70">Source</span>
+            <span className="min-w-0 flex-1 text-ink/70">Message</span>
+          </div>
+
           {error && (
             <p role="alert" className="px-3 py-6 text-center text-xs text-rose-400">
               {error}
@@ -370,6 +382,12 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                   <span className="w-[138px] shrink-0 text-ink-faint">{entry.timestamp}</span>
                   <span className={`w-[52px] shrink-0 text-[10px] font-semibold ${style.className}`}>
                     {entry.level}
+                  </span>
+                  <span
+                    className="w-[150px] shrink-0 truncate text-ink-faint"
+                    title={entry.source}
+                  >
+                    {entry.source}
                   </span>
                   <span className="min-w-0 flex-1 break-words text-ink-secondary">{entry.message}</span>
                 </li>

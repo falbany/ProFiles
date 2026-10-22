@@ -4,8 +4,33 @@ from __future__ import annotations
 
 import logging
 
-from profiles.core.environment.system import SystemInfo, apply_source_to_logger, collect_system_info
+from profiles.core.environment.system import (
+    SystemInfo,
+    apply_source_to_logger,
+    collect_system_info,
+    format_user_host,
+)
 from profiles.core.telemetry.diagnostics import SourceFilter
+
+
+class TestFormatUserHost:
+    """Tests for format_user_host()."""
+
+    def test_combines_username_and_hostname(self) -> None:
+        """Username and hostname combine as user@host."""
+        assert format_user_host("f.albany", "ST-465") == "f.albany@ST-465"
+
+    def test_empty_username_falls_back_to_hostname(self) -> None:
+        """Without a username only the hostname is returned."""
+        assert format_user_host("", "ST-465") == "ST-465"
+
+    def test_empty_hostname_falls_back_to_username(self) -> None:
+        """Without a hostname only the username is returned."""
+        assert format_user_host("f.albany", "") == "f.albany"
+
+    def test_both_empty_returns_empty(self) -> None:
+        """Both empty yields an empty source string."""
+        assert format_user_host("", "") == ""
 
 
 class TestCollectSystemInfo:

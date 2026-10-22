@@ -397,7 +397,11 @@ def _run_scan_pipeline(
         first_dir = directories
     else:
         first_dir = directories[0] if directories else ""
-    timer = ScanTimer(first_dir, recursive) if enable_metrics and first_dir else None
+    timer = (
+        ScanTimer(first_dir, recursive, extension=extension, filter_text=filter_text)
+        if enable_metrics and first_dir
+        else None
+    )
     timer_cm = timer if timer is not None else contextlib.nullcontext()
 
     with timer_cm:
