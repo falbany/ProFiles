@@ -195,7 +195,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
         onClick={(event) => event.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
               <FileText className="h-5 w-5 text-indigo-400" aria-hidden="true" />
@@ -211,7 +211,24 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Fills all space between the title and the action buttons. */}
+          <div className="relative min-w-[220px] flex-1">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint"
+              aria-hidden="true"
+            />
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Filter log lines…"
+              aria-label="Filter log lines"
+              className="w-full rounded-lg border border-line bg-elevated py-1.5 pl-8 pr-2.5 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setLive((value) => !value)}
@@ -272,66 +289,6 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-        </div>
-
-        {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-app/40 px-5 py-3 sm:px-6">
-          <div
-            className="flex overflow-hidden rounded-lg border border-line text-[11px]"
-            role="group"
-            aria-label="Filter by log level"
-          >
-            {LEVEL_FILTERS.map((option) => {
-              const active = level === option.value;
-              const count = option.value ? (levelCounts.get(option.value) ?? 0) : entries.length;
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => setLevel(option.value)}
-                  aria-pressed={active}
-                  title={option.value ? `Show ${option.value} and above` : "Show all levels"}
-                  className={`flex items-center gap-1 px-2.5 py-1 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-                    active ? "bg-indigo-600 text-white" : "text-ink-muted hover:bg-elevated hover:text-ink"
-                  }`}
-                >
-                  {option.label}
-                  <span className={active ? "text-indigo-200" : "text-ink-faint"}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="relative min-w-[200px] flex-1">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint"
-              aria-hidden="true"
-            />
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filter log lines…"
-              aria-label="Filter log lines"
-              className="w-full rounded-lg border border-line bg-elevated py-1.5 pl-8 pr-2.5 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setFollowTail(true)}
-            aria-pressed={followTail}
-            title="Scroll to the newest entry"
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-              followTail
-                ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
-                : "border-line bg-elevated text-ink-muted hover:text-ink"
-            }`}
-          >
-            <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
-            Follow tail
-          </button>
         </div>
 
         {/* Log body */}
@@ -396,19 +353,69 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
           </ul>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-line px-5 py-3 text-[11px] text-ink-faint sm:px-6">
-          {/* Single atomic status message instead of competing live regions. */}
-          <span role="status" aria-atomic="true">
-            {loading && entries.length === 0
-              ? "Loading log entries…"
-              : `${entries.length} of ${formatSize(sizeBytes)} shown`}
-          </span>
-          <span className="flex items-center gap-1.5">
-            {loading && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
-            <span className="hidden sm:inline">Ctrl + Shift + L</span>
-            <span>opens externally</span>
-          </span>
+        {/* Footer — hosts the level filters and follow-tail control. */}
+        <div className="border-t border-line/60 bg-elevated/50 px-5 py-2.5 text-[11px] text-ink-faint shadow-sm backdrop-blur-md sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            {/* Single atomic status message instead of competing live regions. */}
+            <span className="min-w-0 flex-1 truncate" role="status" aria-atomic="true">
+              {loading && entries.length === 0
+                ? "Loading log entries…"
+                : `${entries.length} of ${formatSize(sizeBytes)} shown`}
+            </span>
+
+            <div className="flex items-center gap-2">
+              <div
+                className="flex overflow-hidden rounded-lg border border-line/60 text-[11px] backdrop-blur-sm"
+                role="group"
+                aria-label="Filter by log level"
+              >
+                {LEVEL_FILTERS.map((option) => {
+                  const active = level === option.value;
+                  const count = option.value ? (levelCounts.get(option.value) ?? 0) : entries.length;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => setLevel(option.value)}
+                      aria-pressed={active}
+                      title={option.value ? `Show ${option.value} and above` : "Show all levels"}
+                      className={`flex items-center gap-1 px-2.5 py-1 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                        active
+                          ? "bg-indigo-600 text-white"
+                          : "text-ink-muted hover:bg-elevated hover:text-ink"
+                      }`}
+                    >
+                      {option.label}
+                      <span className={active ? "text-indigo-200" : "text-ink-faint"}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFollowTail(true)}
+                aria-pressed={followTail}
+                title="Scroll to the newest entry"
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                  followTail
+                    ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
+                    : "border-line bg-elevated text-ink-muted hover:text-ink"
+                }`}
+              >
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Follow tail</span>
+              </button>
+            </div>
+
+            <span className="hidden items-center gap-1.5 lg:flex">
+              {loading && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+              <span className="hidden sm:inline">Ctrl + Shift + L</span>
+              <span>opens externally</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
