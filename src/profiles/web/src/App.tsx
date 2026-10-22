@@ -1207,7 +1207,9 @@ export default function App() {
   }, [theme]);
 
   return (
-    <div className="flex h-screen flex-col bg-app font-sans text-ink transition-colors">
+    <div className="flex h-dvh flex-col bg-elevated/30 p-1 font-sans text-ink transition-colors sm:p-1.5">
+      {/* Rounded app frame — thin modern border around the whole app. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-frame-line bg-app shadow-[0_2px_6px_rgb(0_0_0/0.35)] sm:rounded-xl">
       <HeaderBar
         title={config?.title || ""}
         release={config?.release || ""}
@@ -1322,6 +1324,7 @@ export default function App() {
         onLanguageChange={setLanguage}
         activeConfigName={config?.config_path ? config.config_path.split(/[\\/]/).pop() || config.config_path : undefined}
       />
+      </div>
 
       {/* Config Picker Modal */}
       <LoadConfigModal

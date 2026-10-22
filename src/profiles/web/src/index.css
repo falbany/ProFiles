@@ -15,6 +15,7 @@
   --app-elevated: #1e293b; /* slate-800 */
   --app-hover: #334155; /* slate-700 */
   --app-border: #334155; /* slate-700 */
+  --app-frame-border: rgb(148 163 184 / 0.3); /* slate-400 @ 30% — hairline frame edge */
   --app-text-primary: #f8fafc;
   --app-text-secondary: #cbd5e1; /* slate-300 */
   --app-text-muted: #94a3b8; /* slate-400 */
@@ -57,6 +58,7 @@
   --app-elevated: #f1f5f9; /* slate-100 */
   --app-hover: #e2e8f0; /* slate-200 */
   --app-border: #cbd5e1; /* slate-300 */
+  --app-frame-border: rgb(15 23 42 / 0.16); /* slate-900 @ 16% — hairline frame edge */
   --app-text-primary: #0f172a; /* slate-900 */
   --app-text-secondary: #334155; /* slate-700 */
   --app-text-muted: #475569; /* slate-600 */
@@ -74,6 +76,7 @@
   --color-elevated: var(--app-elevated);
   --color-hover-surface: var(--app-hover);
   --color-line: var(--app-border);
+  --color-frame-line: var(--app-frame-border);
   --color-ink: var(--app-text-primary);
   --color-ink-secondary: var(--app-text-secondary);
   --color-ink-muted: var(--app-text-muted);
