@@ -16,7 +16,44 @@
 - **Operating System**: Windows, Linux, or macOS
 - **Permissions**: Write permissions in project directory
 
-## Method 1: Installation with Wizard (Recommended)
+## Method 1: Native Installer (Recommended — no Python required)
+
+Download the installer for your platform from the
+[Releases](../../releases) page and double-click it:
+
+- **Windows**: `ProFiles-<version>.msi` — run it; if SmartScreen warns,
+  click **More info → Run anyway**. A Start Menu entry and desktop
+  shortcut are created.
+- **macOS**: `ProFiles-<version>.dmg` — open it and drag `ProFiles.app`
+  to `/Applications`. First launch: right-click → **Open** (builds are
+  not signed).
+- **Linux**: `profiles_<version>_amd64.deb`
+  (`sudo dpkg -i ... && sudo apt-get install -f`) or
+  `ProFiles-<version>.AppImage` (`chmod +x`, then double-click — no
+  installation required).
+
+Launch ProFiles from your Start Menu (Windows), `/Applications` (macOS),
+or your application launcher (Linux). No Python installation is needed.
+
+## Method 2: One-Line Install (Developers)
+
+Requires Python 3.11+ on the machine.
+
+```bash
+# Variant A — from PyPI (when published)
+uv tool install profiles-app
+
+# Variant B — from a GitHub release wheel
+uv tool install profiles-app --from <url-to-profiles_app-<version>-py3-none-any.whl>
+
+# pipx equivalent
+pipx install profiles-app
+```
+
+Upgrade with `uv tool upgrade profiles-app`. The `profiles` and
+`ProFiles` commands land on your PATH automatically.
+
+## Method 3: Installation with Wizard
 
 ProFiles includes an interactive installation wizard that guides users through the process.
 
@@ -76,7 +113,7 @@ Quick Start:
 
 ---
 
-## Method 2: Manual Installation
+## Method 4: Manual Installation
 
 ### 1. Create a virtual environment (recommended)
 
@@ -124,10 +161,8 @@ python -m profiles --help
 
 ### Main Dependencies
 
-- `pywebview` — Native desktop window hosting the web UI (Edge WebView2 on Windows)
-- `fastapi` + `uvicorn` — Backend API server serving the web frontend
-- `sv-ttk` — Sun Valley ttk theme (legacy Tkinter backend only)
-- `darkdetect` — Automatic system theme detection (legacy Tkinter backend only)
+- `pywebview` + `fastapi`/`uvicorn` — web GUI backend (default)
+- `sv-ttk`, `darkdetect` — **dev-only** since 2026.8, for the deprecated Tkinter backend
 
 These are declared in `pyproject.toml` and installed automatically with `pip install .`.
 
@@ -254,6 +289,22 @@ python -m profiles --config /path/to/.profiles
 ```bash
 python -m profiles --init
 ```
+
+---
+
+## Tkinter Backend (Deprecated)
+
+The original Tkinter frontend is **deprecated** (developer/advanced use
+only) and will be removed in a future release. The web backend
+(pywebview + FastAPI, the default) replaces it.
+
+```bash
+profiles --tkinter   # prints a deprecation banner, then launches Tk GUI
+```
+
+Tk-mode dependencies (`sv-ttk`, `darkdetect`) are dev-only: install with
+`pip install -e ".[dev]"` or `uv sync`. Inside Briefcase bundles the
+Tkinter backend is not available — use the default web GUI.
 
 ---
 
@@ -734,41 +785,6 @@ profiles/
 ├── pyproject.toml          # Package configuration
 └── .profiles               # User configuration
 ```
-
----
-
-## Method 4: Native Installer (Briefcase)
-
-Pre-built installers are produced by the Briefcase CI pipeline and
-attached to each GitHub release.
-
-### Download the artifact
-
-From the [Actions](../../actions) tab or the [Releases](../../releases)
-page, download the artifact matching your platform:
-
-- `ProFiles-windows` → `ProFiles-2026.8.0.msi`
-- `ProFiles-macos` → `ProFiles-2026.8.0.dmg`
-- `ProFiles-ubuntu` → `profiles_2026.8.0_amd64.deb` and
-  `ProFiles-2026.8.0.AppImage`
-
-### Install
-
-- **macOS**: open the `.dmg`, drag `ProFiles.app` to `/Applications`.
-  First launch: right-click → **Open** (Gatekeeper bypass; builds are
-  not signed).
-- **Windows**: run the `.msi`. If SmartScreen warns, click
-  **More info** → **Run anyway**.
-- **Linux (`.deb`)**: `sudo dpkg -i profiles_2026.8.0_amd64.deb` then
-  `sudo apt-get install -f` if it complains about missing
-  dependencies.
-- **Linux (`.AppImage`)**: `chmod +x ProFiles-2026.8.0.AppImage` and
-  double-click. No installation required.
-
-### Launch
-
-From your Start Menu (Windows), `/Applications` (macOS), or your
-desktop environment's application launcher (Linux).
 
 ---
 
