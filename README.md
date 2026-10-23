@@ -63,15 +63,31 @@
 
 ## 🚀 Installation
 
-Requires **Python 3.11+**. The default interface is a **React + TypeScript PWA** served by the built-in **FastAPI** backend and displayed in a native **PyWebView** desktop shell. Node.js/npm is only needed to rebuild the frontend from source (pre-built assets ship with the package). The legacy Tkinter backend (deprecated) additionally uses `sv-ttk` + `darkdetect`.
+### Option 1: Native Installer (Recommended)
 
-### Quick Install (Recommended)
+Download the installer for your OS from
+[Releases](../../releases) and double-click — no Python required:
+
+- Windows: `ProFiles-<version>.msi`
+- macOS: `ProFiles-<version>.dmg`
+- Linux: `.deb` or `.AppImage`
+
+### Option 2: One-Line Install (Developers)
+
+```bash
+uv tool install profiles-app      # or: pipx install profiles-app
+```
+
+*(requires Python 3.11+; from GitHub release wheel: add `--from <wheel-url>`)*
+
+### Option 3: Wizard / Manual
+
 ```bash
 python install.py
 ```
 *Runs an interactive wizard that installs the package.*
 
-### Manual Install
+From a source clone:
 
 #### Option 1: pip (system-wide)
 ```bash
