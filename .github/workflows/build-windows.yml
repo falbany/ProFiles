@@ -1,0 +1,23 @@
+name: Windows packaging dry-run
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "src/**"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run briefcase build windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ProFiles-windows-bundle
+          path: windows/ProFiles/
+          retention-days: 7
