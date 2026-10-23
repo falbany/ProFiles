@@ -14,7 +14,7 @@ BRIEFCASE := $(UV) run briefcase
 # ============================================
 # Installation
 # ============================================
-.PHONY: install install-system install-system-dev uninstall install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-clean
+.PHONY: install install-system install-system-dev uninstall install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-package-windows briefcase-package-macos briefcase-package-linux-deb briefcase-package-linux-appimage briefcase-package-local briefcase-clean
 
 install: ## Install with uv (recommended)
 	@echo "📦 Installing ProFiles with uv..."
@@ -69,6 +69,42 @@ briefcase-package: ## Package the native installer (.msi / .dmg / .deb)
 briefcase-clean: ## Remove Briefcase build artifacts
 	@echo "🧹 Cleaning Briefcase artifacts..."
 	$(BRIEFCASE) clean
+
+# Host detection for local packaging dispatch (Briefcase cannot cross-compile)
+ifeq ($(OS),Windows_NT)
+    HOST_PKG := briefcase-package-windows
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+        HOST_PKG := briefcase-package-macos
+    else
+        HOST_PKG := briefcase-package-linux-deb
+    endif
+endif
+
+briefcase-package-windows: ## Package the Windows installer (.msi) — Windows host only
+	@echo "📦 Packaging Windows MSI (requires Windows host)..."
+	$(BRIEFCASE) package windows -p msi
+	@echo "✅ Installer written to dist/"
+
+briefcase-package-macos: ## Package the macOS disk image (.dmg) — macOS host only
+	@echo "📦 Packaging macOS DMG (requires macOS host)..."
+	$(BRIEFCASE) package macos -p dmg
+	@echo "✅ Installer written to dist/"
+
+briefcase-package-linux-deb: ## Package the Linux .deb — Linux host only
+	@echo "📦 Packaging Linux .deb (requires Linux host)..."
+	$(BRIEFCASE) package linux -p deb
+	@echo "✅ Package written to dist/"
+
+briefcase-package-linux-appimage: ## Package the Linux .AppImage — Linux host only
+	@echo "📦 Packaging Linux AppImage (requires Linux host)..."
+	$(BRIEFCASE) package linux -p appimage
+	@echo "✅ AppImage written to dist/"
+
+briefcase-package-local: ## Package for the current host OS (auto-detect)
+	@echo "📦 Detected host package target: $(HOST_PKG)"
+	$(MAKE) $(HOST_PKG)
 
 # ============================================
 # Testing
