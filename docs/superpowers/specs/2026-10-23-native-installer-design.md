@@ -169,6 +169,26 @@ New file `.github/workflows/release.yml`, triggered on version tags
   build only, fastest lane, so packaging regressions surface before a
   release tag.
 
+#### Local build targets (Makefile)
+
+Add explicit per-platform targets alongside the existing generic
+`briefcase-package` (which stays). Briefcase cannot cross-compile, so
+each target prints a reminder that it must run on the matching host:
+
+| Target | Command | Host required |
+| --- | --- | --- |
+| `briefcase-package-windows` | `$(BRIEFCASE) package windows -p msi` | Windows |
+| `briefcase-package-macos` | `$(BRIEFCASE) package macos -p dmg` | macOS |
+| `briefcase-package-linux-deb` | `$(BRIEFCASE) package linux -p deb` | Linux |
+| `briefcase-package-linux-appimage` | `$(BRIEFCASE) package linux -p appimage` | Linux |
+| `briefcase-package-local` | Detects host OS (`$(OS)` / `uname -s`) and dispatches to the matching target above | any |
+| `briefcase-clean` *(exists)* | unchanged | any |
+
+Built artifacts land in Briefcase's default output directory
+(`dist/` per platform). These targets exist for local smoke-testing
+(§5.6 manual smoke) and for building a wheel/release asset by hand when
+CI is not available; CI remains the canonical release path.
+
 ### 5.5 Developer channel documentation
 
 Update `README.md`, `docs/installation-guide.en.md`, and
@@ -230,4 +250,6 @@ Code signing; Tkinter code removal; PyPI publishing; auto-update story.
    second, existing methods unchanged below.
 7. `install.py` and the `make install-system` target are byte-for-byte
    unchanged.
-8. Full quality gate passes: pytest ≥ 85 % coverage, ruff, pylint ≥ 8.0.
+8. `make briefcase-package-local` (and its per-platform variants)
+   produce the platform installer locally on the matching host.
+9. Full quality gate passes: pytest ≥ 85 % coverage, ruff, pylint ≥ 8.0.
