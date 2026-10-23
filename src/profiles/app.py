@@ -10,8 +10,8 @@ import argparse
 import logging
 import platform
 import sys
-import tkinter as tk
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from profiles.core import AppConfig, actions, load_config
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
@@ -19,7 +19,6 @@ from profiles.core.environment.system import format_user_host
 from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry import events
 from profiles.core.telemetry.diagnostics import configure_logger, install_crash_hook
-from profiles.gui.main_window import MainWindow
 from profiles.launch import (
     detect_launch_context,
     resolve_config_path,
@@ -27,7 +26,19 @@ from profiles.launch import (
 )
 from profiles.utils.network import get_hostname, get_username
 
+if TYPE_CHECKING:
+    from profiles.gui.main_window import MainWindow
+
 _DEFAULT_PORT = 8088
+
+_TKINTER_DEPRECATION_BANNER = (
+    "⚠  The Tkinter frontend is deprecated (developer/advanced use only) and\n"
+    "   will be removed in a future release. The default web GUI replaces it."
+)
+_TKINTER_UNAVAILABLE_MSG = (
+    "ERROR: The Tkinter frontend requires a full Python installation with Tk\n"
+    "       (tkinter). Use the default web GUI instead: profiles"
+)
 
 
 def _stop_port_owner_command(port: int) -> str:
@@ -294,10 +305,19 @@ class ProFileApp:
         """Create and run the GUI.
 
         Handles GUI creation and error cases (e.g., no display available).
+        tkinter is imported lazily so the web backend and headless mode work
+        on Python distributions without Tk (e.g., Briefcase embeddable bundles).
 
         Exits:
-            SystemExit(1) if GUI initialization fails.
+            SystemExit(1) if tkinter is unavailable or GUI initialization fails.
         """
+        try:
+            import tkinter as tk
+
+            from profiles.gui.main_window import MainWindow
+        except ImportError:
+            print(_TKINTER_UNAVAILABLE_MSG, file=sys.stderr)
+            sys.exit(1)
         try:
             self._window = MainWindow(config=self._config)
         except (RuntimeError, tk.TclError) as exc:
@@ -468,7 +488,7 @@ def main() -> None:
 Examples:
   profiles                                  Launch GUI with web backend (default)
   profiles --web                            Launch GUI with web backend
-  profiles --tkinter                        Launch GUI with Tkinter backend
+  profiles --tkinter                Deprecated Tkinter GUI (developer use only)
   profiles --config /path/to/.profiles      Use explicit config file
   profiles --headless                       Headless: scan & launch all
   profiles --headless file.mttl             Headless: launch specific file
@@ -504,7 +524,7 @@ Examples:
     parser.add_argument(
         "--tkinter",
         action="store_true",
-        help="Use Tkinter GUI backend (default is web)",
+        help="Use Tkinter GUI backend (deprecated; developer use only, will be removed)",
     )
     parser.add_argument(
         "--web",
@@ -527,6 +547,7 @@ Examples:
     # Determine GUI backend from arguments
     if args.tkinter:
         gui_backend = "tk"
+        print(_TKINTER_DEPRECATION_BANNER)
     elif args.web:
         gui_backend = "web"
     else:

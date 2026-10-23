@@ -260,7 +260,7 @@ class TestRun:
         mock_config = mocker.MagicMock()
         mock_config.verbose = "INFO"
         mocker.patch("profiles.app.load_config", return_value=mock_config)
-        mock_main_window = mocker.patch("profiles.app.MainWindow")
+        mock_main_window = mocker.patch("profiles.gui.main_window.MainWindow")
         mock_window_instance = mocker.MagicMock()
         mock_main_window.return_value = mock_window_instance
 
@@ -286,7 +286,10 @@ class TestRun:
         mock_config = mocker.MagicMock()
         mock_config.verbose = "INFO"
         mocker.patch("profiles.app.load_config", return_value=mock_config)
-        mocker.patch("profiles.app.MainWindow", side_effect=RuntimeError("no screen available"))
+        mocker.patch(
+            "profiles.gui.main_window.MainWindow",
+            side_effect=RuntimeError("no screen available"),
+        )
 
         app = ProFileApp(gui_backend="tk")
         with pytest.raises(SystemExit):
@@ -299,7 +302,10 @@ class TestRun:
         mocker.patch("profiles.app.load_config", return_value=mock_config)
         import tkinter
 
-        mocker.patch("profiles.app.MainWindow", side_effect=tkinter.TclError("display error"))
+        mocker.patch(
+            "profiles.gui.main_window.MainWindow",
+            side_effect=tkinter.TclError("display error"),
+        )
 
         app = ProFileApp(gui_backend="tk")
         with pytest.raises(SystemExit):
@@ -311,7 +317,10 @@ class TestRun:
         mock_config = mocker.MagicMock()
         mock_config.verbose = "INFO"
         mocker.patch("profiles.app.load_config", return_value=mock_config)
-        mocker.patch("profiles.app.MainWindow", side_effect=RuntimeError("Tcl error"))
+        mocker.patch(
+            "profiles.gui.main_window.MainWindow",
+            side_effect=RuntimeError("Tcl error"),
+        )
 
         app = ProFileApp(gui_backend="tk")
         with pytest.raises(SystemExit):

@@ -56,6 +56,7 @@ Test files mirror the `src/profiles/` tree 1:1 — each source module has a matc
 | File | Source Module | Focus Areas |
 |---|---|---|
 | tests/test_app.py | profiles.app | ProFileApp, main(), init_default_config, ShortcutsDialog |
+| tests/app/test_lazy_tkinter.py | profiles.app | Lazy tkinter imports: web/headless run without Tk, --tkinter deprecation banner, clean error without Tk |
 | tests/core/test_actions.py | profiles.core.actions | launch_selected_file, open_config_file, write_starter_config, clear_file, ActionResult |
 | tests/core/config/test_models.py | profiles.core.config.models | AppConfig, MachineConfiguration, HookSpec dataclasses |
 | tests/core/config/test_service.py | profiles.core.config.service | find_configuration_by_hostname, auto_select_directory, merge_config_overrides |
