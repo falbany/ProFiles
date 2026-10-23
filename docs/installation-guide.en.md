@@ -69,7 +69,7 @@ The wizard displays quick start commands:
 
 Quick Start:
 1. Activate venv:    .venv\Scripts\activate
-2. Launch GUI:       profiles
+2. Launch app:       profiles          (web UI in a desktop window)
 3. Headless mode:    profiles --headless
 4. Run as module:    python -m profiles
 ```
@@ -124,8 +124,10 @@ python -m profiles --help
 
 ### Main Dependencies
 
-- `sv-ttk` — Sun Valley ttk theme (Material Design 3 inspired)
-- `darkdetect` — Automatic system theme detection (light/dark)
+- `pywebview` — Native desktop window hosting the web UI (Edge WebView2 on Windows)
+- `fastapi` + `uvicorn` — Backend API server serving the web frontend
+- `sv-ttk` — Sun Valley ttk theme (legacy Tkinter backend only)
+- `darkdetect` — Automatic system theme detection (legacy Tkinter backend only)
 
 These are declared in `pyproject.toml` and installed automatically with `pip install .`.
 
@@ -201,13 +203,13 @@ Edit the `.profiles` file to adapt:
 - Row colors
 - Per-machine settings
 
-See [Configuration .profiles](./configuration-pylaunch.en.md) for details.
+See [Configuration .profiles](./configuration-profile.en.md) for details.
 
 ---
 
 ## Usage Modes
 
-### GUI Mode
+### Web Mode (default)
 
 ```bash
 python -m profiles
@@ -217,6 +219,22 @@ or
 
 ```bash
 profiles
+```
+
+Starts the FastAPI server and opens the React web UI in a PyWebView desktop window.
+
+### Browser / Server-only Mode
+
+```bash
+python -m profiles --server-only
+```
+
+Runs the FastAPI server without the desktop window — open `http://<host>:8088` from any browser.
+
+### Legacy Tkinter Mode (deprecated)
+
+```bash
+python -m profiles --tkinter
 ```
 
 ### Headless Mode (CLI)
@@ -337,7 +355,7 @@ See [AGENTS.md](../AGENTS.md) for architecture details.
 
 ### Issue: Wizard fails to install dependencies
 
-**Symptoms**: Installation stops with an error about `sv-ttk` or `darkdetect`.
+**Symptoms**: Installation stops with an error about `sv-ttk` or `darkdetect` (legacy Tkinter backend dependencies).
 
 **Diagnosis**:
 - Network connectivity issues
@@ -419,21 +437,23 @@ sudo pip install -e .
 
 ### Issue: GUI not displaying
 
-**Symptoms**: Application starts but no window appears, or Tkinter error.
+**Symptoms**: Application starts but no window appears, or a Tkinter/PyWebView error.
 
 **Diagnosis**:
-- Tkinter not installed (common on minimal Linux installs)
+- The default **web** backend needs PyWebView plus an installed web runtime (Edge WebView2 on Windows) — not Tkinter
+- Tkinter errors only affect the deprecated `--tkinter` backend (common on minimal Linux installs)
 - Display environment not set (Linux remote sessions)
 - X11 forwarding not enabled
 
 **Solution**:
 
-**Windows**: Tkinter is included by default. Reinstall Python if needed.
+**Windows**: PyWebView uses the Edge WebView2 runtime, bundled with Windows 10/11. Reinstall Python/WebView2 if needed.
 
-**Linux**:
+**Linux** (only when using `--tkinter`, or headless WebView dependencies for PyWebView):
 ```bash
 # Ubuntu/Debian
-sudo apt-get install python3-tk
+sudo apt-get install python3-tk        # legacy Tkinter backend
+sudo apt-get install libwebkit2gtk-4.1-dev   # PyWebView shell
 
 # RHEL/CentOS
 sudo dnf install python3-tkinter
@@ -442,13 +462,13 @@ sudo dnf install python3-tkinter
 sudo pacman -S python-tkinter
 ```
 
-**Remote SSH**:
+**Remote SSH**: Prefer `ProFiles --server-only` and a browser on your machine instead of X11 forwarding:
 ```bash
-# Enable X11 forwarding in SSH
-ssh -X user@host
-
-# Or use VNC/X forwarding
+ssh user@host
+ProFiles --server-only   # then open http://<host>:8088 locally
 ```
+
+**Legacy Tkinter backend**: install python3-tk as shown above, or run `python -m tkinter` to verify Tkinter works.
 
 ### Issue: Configuration file not found
 
@@ -620,10 +640,15 @@ options:
   -h, --help       show this help message and exit
   --config CONFIG  Path to .profiles configuration file (default: auto-search folder tree)
   --headless       Run in headless mode (no GUI)
+  --server-only    Run local FastAPI server only (no desktop window, for browser/PWA use)
+  --tkinter        Use Tkinter GUI backend (legacy, deprecated; default is web)
+  --web            Use web GUI backend (default)
   --init           Generate a default .profiles configuration file in the current directory
 
 Examples:
-  profiles                              Launch GUI (auto-search config)
+  profiles                              Launch web UI (default; auto-search config)
+  profiles --server-only                Run FastAPI server only (browser/PWA access)
+  profiles --tkinter                    Legacy Tkinter interface (deprecated)
   profiles --config /path/to/.profiles  Use explicit config file
   profiles --headless                   Headless: scan & launch all
   profiles --headless file.mttl         Headless: launch specific file
@@ -636,7 +661,7 @@ Examples:
 
 ### Documentation
 
-- **Configuration**: [configuration-pylaunch.en.md](./configuration-pylaunch.en.md)
+- **Configuration**: [configuration-profile.en.md](./configuration-profile.en.md)
 - **Architecture**: [AGENTS.md](../AGENTS.md)
 - **README**: [README.md](../README.md)
 
@@ -658,9 +683,9 @@ Examples:
 ## Version Information
 
 - **Python**: 3.11+
-- **Tkinter**: Required for GUI
-- **sv-ttk**: Sun Valley ttk theme (auto-installed)
-- **darkdetect**: System theme detection (auto-installed)
+- **Web UI (default)**: React + TypeScript + Vite PWA, served by FastAPI (port 8088), desktop shell via PyWebView
+- **Node.js/npm**: Optional — only needed to rebuild the frontend (`python -m profiles.web.build --force`)
+- **Tkinter (deprecated)**: Only required for the legacy `--tkinter` backend (`sv-ttk`, `darkdetect` auto-install with it)
 - **License**: See `LICENCE` file
 
 ---
@@ -696,7 +721,10 @@ profiles/
 ├── src/
 │   └── profiles/
 │       ├── core/           # Shared business logic
-│       ├── gui/            # Tkinter interface
+│       ├── server/         # FastAPI backend (REST API)
+│       ├── web/            # React + TypeScript + Vite PWA frontend
+│       ├── desktop/        # PyWebView desktop shell & server lifecycle
+│       ├── gui/            # Legacy Tkinter interface (deprecated)
 │       ├── utils/          # Utility functions
 │       ├── app.py          # Application lifecycle
 │       └── config.py       # Configuration

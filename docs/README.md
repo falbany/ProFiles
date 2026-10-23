@@ -16,18 +16,8 @@ Welcome to the ProFiles documentation. This documentation is available in **Engl
 
 ### Configuration
 
-- **English**: [.profiles Configuration](./configuration-pylaunch.en.md)
-- **Français**: [Configuration .profiles](./configuration-pylaunch.fr.md)
-
-Detailed reference for the `.profiles` configuration file (also applies to `.profile` legacy naming):
-- Global `defaults` settings
-- Per-machine `configs` sections
-- Search operators and syntax
-- Row coloring rules
-- CLI command lines
-- Launch hooks (`hooks` section)
-
-> **Note**: The configuration file is named `.profiles`. Older documentation may reference `configuration-profile.*.md` files — these are superseded by `configuration-pylaunch.*.md` but the content is equivalent.
+- **English**: [.profiles Configuration](./configuration-profile.en.md)
+- **Français**: [Configuration .profiles](./configuration-profile.fr.md)
 
 ### Installation
 
@@ -76,6 +66,22 @@ Covers headless automation, programmatic API usage, custom front-ends (CLI/Web),
   - Optimize scan configuration
   - Benchmark and troubleshoot performance
 
+### Network Server
+
+- **English**: [Network Server Guide](./network-server-guide.en.md)
+- **Français**: [Guide du serveur réseau](./network-server-guide.fr.md)
+
+  - Start ProFiles with the built-in FastAPI server (`--server-only`, port 8088)
+  - Access the web UI from any browser on the network
+  - Firewall, static IP and troubleshooting guidance
+
+### Log Format
+
+- **English**: [Log File Format](./operations/log-format.md)
+
+  - Structure of `profiles.log` event lines (source, timestamps)
+  - Telemetry events and the built-in log viewer modal
+
 ### Barcode Scanner
 
 - **English**: [Barcode Scanner Mode](./barcode-scanner.en.md)
@@ -97,7 +103,7 @@ python install.py
 # Or install manually
 pip install -e .
 
-# Launch the GUI
+# Launch the app (web backend by default: FastAPI server + PyWebView shell)
 python -m profiles
 ```
 
@@ -115,7 +121,7 @@ python -m profiles --init
 
 1. **Installation** — Follow the installation guide for your language
 2. **Configuration** — Learn how to customize `.profiles`
-3. **Usage** — Launch ProFiles in GUI or headless mode
+3. **Usage** — Launch ProFiles in web mode (default), browser mode, or headless mode
 
 ### For Developers
 
@@ -128,31 +134,32 @@ python -m profiles --init
 ---
 ## 🔧 Available Commands
 
-| Command                              | Description                     |
-| ------------------------------------ | ------------------------------- |
-| `python -m profiles`                 | Launch GUI                      |
-| `python -m profiles --headless`      | Run in CLI mode                 |
-| `python -m profiles --headless FILE` | Launch specific file (no GUI)   |
-| `python -m profiles --init`          | Generate configuration file     |
-| `python -m profiles --config PATH`   | Use specific configuration file |
-| `ProFiles`                           | Console script (same as above)  |
-| `python install.py`                  | Run installation wizard         |
+| Command                                | Description                                    |
+| -------------------------------------- | ---------------------------------------------- |
+| `python -m profiles`                   | Launch the web UI in a PyWebView desktop shell (default) |
+| `python -m profiles --web`             | Same as above (explicit)                       |
+| `python -m profiles --server-only`     | Run the FastAPI server only (browser/PWA use)  |
+| `python -m profiles --tkinter`         | Legacy Tkinter interface (deprecated)          |
+| `python -m profiles --headless`        | Run in CLI mode                                |
+| `python -m profiles --headless FILE`   | Launch specific file (no GUI)                  |
+| `python -m profiles --init`            | Generate configuration file                    |
+| `python -m profiles --config PATH`     | Use specific configuration file                |
+| `ProFiles`                             | Console script (same as above)                 |
+| `python install.py`                    | Run installation wizard                        |
 
 ---
 ## 📁 Project Structure
 
 ```
-PyLaunch/
+ProFiles/
 ├── src/profiles/
-│   ├── core/
-│   │   ├── config/         # Configuration subsystem (models, service, loader, reader, io)
-│   │   ├── environment/    # OS environment & process spawn (system, execution/hooks)
-│   │   ├── processing/     # File scanning, classification, column extraction
-│   │   ├── telemetry/      # Logging & diagnostics
-│   │   └── actions.py      # Domain actions (launch, config open, log open)
-│   ├── gui/                # Tkinter presentation layer
+│   ├── core/               # Domain logic: config, environment/hooks, processing, telemetry
+│   ├── server/             # FastAPI backend — REST API, workflow & scan sessions
+│   ├── web/                # React + TypeScript + Vite PWA frontend (src/, dist/, build.py)
+│   ├── desktop/            # PyWebView desktop shell & background server lifecycle
+│   ├── gui/                # Legacy Tkinter presentation layer (deprecated)
 │   ├── utils/              # Stateless utility functions
-│   ├── app.py              # Application lifecycle (GUI & headless)
+│   ├── app.py              # Application lifecycle (web desktop, server-only, Tk, headless)
 │   └── config.py           # Convenience re-exports for config API
 ├── tests/                  # Unit tests
 ├── docs/                   # This documentation
@@ -170,10 +177,12 @@ Choose your preferred language for documentation:
 
 | Topic         | English                                                        | Français                                                       |
 | ------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
-| Configuration | [configuration-pylaunch.en.md](./configuration-pylaunch.en.md) | [configuration-pylaunch.fr.md](./configuration-pylaunch.fr.md) |
+| Configuration | [configuration-profile.en.md](./configuration-profile.en.md)    | [configuration-profile.fr.md](./configuration-profile.fr.md)   |
 | Installation  | [installation-guide.en.md](./installation-guide.en.md)         | [installation-guide.fr.md](./installation-guide.fr.md)         |
 | Advanced      | [advanced-guide.en.md](./advanced/advanced-guide.en.md)        | [guide-avance.fr.md](./advanced/guide-avance.fr.md)            |
-| Hooks         | [hooks-guide.en.md](./hooks-guide.en.md)                      | —                                                              |
+| Hooks         | [hooks-guide.en.md](./hooks-guide.en.md)                       | [hooks-guide.fr.md](./hooks-guide.fr.md)                       |
+| Network       | [network-server-guide.en.md](./network-server-guide.en.md)     | [network-server-guide.fr.md](./network-server-guide.fr.md)     |
+| Barcode       | [barcode-scanner.en.md](./barcode-scanner.en.md)               | [barcode-scanner.fr.md](./barcode-scanner.fr.md)               |
 
 ---
 ## 📞 Support
@@ -189,9 +198,10 @@ For additional support:
 ## 🔄 Version Information
 
 - **Python**: 3.11+
-- **GUI**: Tkinter + [Sun Valley ttk theme](https://github.com/rdbende/Sun-Valley-ttk-theme) (`sv-ttk`) + `darkdetect` (system theme)
+- **Interface**: Web UI (React + TypeScript + Vite PWA) served by FastAPI, desktop shell via PyWebView
+- **Legacy GUI (deprecated)**: Tkinter + [Sun Valley ttk theme](https://github.com/rbdende/Sun-Valley-ttk-theme) (`sv-ttk`) + `darkdetect` — use `--tkinter`, kept for compatibility only
 - **License**: See `LICENCE` file
 
 ---
 
-*Last updated: 2026-08-02*
+*Last updated: 2026-10-23*

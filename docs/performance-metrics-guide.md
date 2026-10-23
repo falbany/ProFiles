@@ -1,7 +1,7 @@
 # Performance Metrics Guide
 
 > 🏠 **[Documentation Home](./README.md)** | 
-> ⚙️ **[Configuration](./configuration-pylaunch.en.md)** | 
+> ⚙️ **[Configuration](./configuration-profile.en.md)** | 
 > 🔧 **[Hooks](./hooks-guide.en.md)** | 
 > 📊 **[Dynamic Columns](./columns-guide.en.md)**
 
@@ -283,7 +283,7 @@ logging.basicConfig(
 
 ## 📚 Related Documentation
 
-- **[Configuration Reference](./configuration-pylaunch.en.md)** - Full `.profiles` configuration guide
+- **[Configuration Reference](./configuration-profile.en.md)** - Full `.profiles` configuration guide
 - **[Advanced Guide](./advanced/advanced-guide.en.md)** - CLI automation and programmatic API
 - **[AGENTS.md](../AGENTS.md)** - Architecture and performance best practices
 

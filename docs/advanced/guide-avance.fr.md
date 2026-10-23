@@ -71,7 +71,9 @@ filter=.py;ext=toml;recursive=0;dir=/path/to/scannedir;scan=1
 
 ## Interfaces Personnalisées
 
-L'architecture de ProFiles sépare la logique principale de la couche de présentation, permettant des interfaces personnalisées.
+## Interfaces Personnalisées
+
+ProFiles embarque par défaut une interface web : une **PWA React + TypeScript** sous `src/profiles/web/`, servie par le backend **FastAPI** intégré (`src/profiles/server/`) et affichée dans une fenêtre de bureau PyWebView — ou dans n'importe quel navigateur avec `ProFiles --server-only`. L'architecture sépare toujours la logique principale de la couche de présentation, ce qui permet de créer des interfaces alternatives (CLI, TUI, tableaux de bord) sur le même cœur.
 
 ### Aperçu de l'Architecture
 
@@ -161,7 +163,9 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-### Créer une Interface Web
+### Créer une Interface Web (exemple pédagogique)
+
+> **Remarque** : ProFiles embarque déjà une interface web complète (React PWA + serveur FastAPI intégré, voir `src/profiles/web/` et `src/profiles/server/`). L'exemple ci-dessous montre simplement comment s'appuyer sur l'API Python du cœur pour créer une interface alternative minimaliste.
 
 ```python
 from flask import Flask, jsonify, request
@@ -564,7 +568,7 @@ results = scan_and_process(
 - **API Principale** : Voir `src/profiles/core/` pour la documentation des modules
 - **Architecture** : Voir `AGENTS.md` pour les détails de l'architecture en couches
 - **Tests** : Voir `tests/test_core_*` pour des exemples d'utilisation
-- **Configuration** : Voir [configuration-pylaunch.fr.md](../configuration-pylaunch.fr.md)
+- **Configuration** : Voir [configuration-profile.fr.md](../configuration-profile.fr.md)
 
 ---
 

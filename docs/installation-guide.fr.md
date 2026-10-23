@@ -69,7 +69,7 @@ L'assistant affiche les commandes de démarrage rapide :
 
 Quick Start:
 1. Activate venv:    .venv\Scripts\activate
-2. Launch GUI:       profiles
+2. Lancer le logiciel : profiles        (interface web dans la fenêtre de bureau)
 3. Headless mode:    profiles --headless
 4. Run as module:    python -m profiles
 ```
@@ -159,8 +159,10 @@ python -m profiles.web.build --force
 
 ### Dépendances principales
 
-- `sv-ttk` — Thème Sun Valley ttk (inspiration Material Design 3)
-- `darkdetect` — Détection automatique du thème système (clair/sombre)
+- `pywebview` — Fenêtre de bureau native hébergeant l'interface web (Edge WebView2 sous Windows)
+- `fastapi` + `uvicorn` — Serveur backend serviteur de l'API REST et du frontend web
+- `sv-ttk` — Thème Sun Valley ttk (backend Tkinter historique uniquement)
+- `darkdetect` — Détection automatique du thème système (backend Tkinter historique uniquement)
 
 Ces dépendances sont déclarées dans `pyproject.toml` et installées automatiquement avec `pip install .`.
 
@@ -236,13 +238,13 @@ Cela crée un fichier `.profiles` dans le répertoire courant avec les paramètr
 - Couleurs de lignes
 - Paramètres par machine
 
-Voir [Configuration .profiles](./configuration-pylaunch.fr.md) pour les détails.
+Voir [Configuration .profiles](./configuration-profile.fr.md) pour les détails.
 
 ---
 
 ## Modes d'Utilisation
 
-### Mode Graphique (GUI)
+### Mode Web (par défaut)
 
 ```bash
 python -m profiles
@@ -252,6 +254,22 @@ ou
 
 ```bash
 profiles
+```
+
+Démarre le serveur FastAPI et ouvre l'interface web React dans une fenêtre de bureau PyWebView.
+
+### Mode Navigateur (serveur seul)
+
+```bash
+python -m profiles --server-only
+```
+
+Exécute le serveur FastAPI sans fenêtre de bureau — ouvrez `http://<hôte>:8088` depuis n'importe quel navigateur.
+
+### Mode Tkinter Historique (obsolète)
+
+```bash
+python -m profiles --tkinter
 ```
 
 ### Mode Sans Interface (CLI)
@@ -372,7 +390,7 @@ Voir [AGENTS.md](../AGENTS.md) pour les détails de l'architecture.
 
 ### Problème : L'assistant échoue à installer les dépendances
 
-**Symptômes** : L'installation s'arrête avec une erreur concernant `sv-ttk` ou `darkdetect`.
+**Symptômes** : L'installation s'arrête avec une erreur concernant `sv-ttk` ou `darkdetect` (dépendances du backend Tkinter historique).
 
 **Diagnostic** :
 - Problèmes de connectivité réseau
@@ -454,21 +472,23 @@ sudo pip install -e .
 
 ### Problème : Interface graphique ne s'affiche pas
 
-**Symptômes** : L'application démarre mais aucune fenêtre n'apparaît, ou erreur Tkinter.
+**Symptômes** : L'application démarre mais aucune fenêtre n'apparaît, ou erreur Tkinter/PyWebView.
 
 **Diagnostic** :
-- Tkinter non installé (courant sur les installations Linux minimales)
+- Le backend **web** (par défaut) requiert PyWebView et un moteur web (Edge WebView2 sous Windows) — pas Tkinter
+- Les erreurs Tkinter ne concernent que le backend `--tkinter` (désormais obsolète, courant sur les installations Linux minimales)
 - Environnement d'affichage non défini (sessions distantes Linux)
 - Transfert X11 non activé
 
 **Solution** :
 
-**Windows** : Tkinter est inclus par défaut. Réinstallez Python si nécessaire.
+**Windows** : PyWebView utilise le moteur Edge WebView2, inclus avec Windows 10/11. Réinstallez Python/WebView2 si nécessaire.
 
-**Linux** :
+**Linux** (uniquement pour `--tkinter`, ou les dépendances WebView de PyWebView) :
 ```bash
 # Ubuntu/Debian
-sudo apt-get install python3-tk
+sudo apt-get install python3-tk                 # backend Tkinter historique
+sudo apt-get install libwebkit2gtk-4.1-dev      # fenêtre de bureau PyWebView
 
 # RHEL/CentOS
 sudo dnf install python3-tkinter
@@ -477,13 +497,13 @@ sudo dnf install python3-tkinter
 sudo pacman -S python-tkinter
 ```
 
-**SSH à distance** :
+**SSH à distance** : Préférez `ProFiles --server-only` et un navigateur sur votre machine au lieu du transfert X11 :
 ```bash
-# Activer le transfert X11 dans SSH
-ssh -X user@host
-
-# Ou utiliser VNC/X forwarding
+ssh user@host
+ProFiles --server-only   # puis ouvrez http://<hôte>:8088 en local
 ```
+
+**Backend Tkinter historique** : installez python3-tk comme indiqué ci-dessus, ou exécutez `python -m tkinter` pour vérifier que Tkinter fonctionne.
 
 ### Problème : Fichier de configuration non trouvé
 
@@ -644,14 +664,18 @@ Editable: true
 
 **`python -m profiles --help`** :
 ```
-usage: profiles [-h] [--config CONFIG] [--headless] [--init]
+usage: profiles [-h] [--config CONFIG] [--headless] [--init] [--server-only]
+                [--no-config-propose] [--tkinter] [--web] [file]
 
-ProFiles - Production File Launcher
+ProFiles - Python MuTool Project Launcher
 
 options:
   -h, --help       show this help message and exit
   --config CONFIG  Path to configuration file
   --headless       Run without GUI
+  --server-only    Run local FastAPI server only (no desktop window, browser/PWA)
+  --tkinter        Tkinter GUI backend (legacy, deprecated; default is web)
+  --web            Web GUI backend (default)
   --init           Generate starter configuration file
 ```
 
@@ -661,7 +685,7 @@ options:
 
 ### Documentation
 
-- **Configuration** : [configuration-pylaunch.fr.md](./configuration-pylaunch.fr.md)
+- **Configuration** : [configuration-profile.fr.md](./configuration-profile.fr.md)
 - **Architecture** : [AGENTS.md](../AGENTS.md)
 - **README** : [README.md](../README.md)
 
@@ -683,7 +707,9 @@ options:
 ## Informations de Version
 
 - **Python** : 3.11+
-- **Tkinter** : Requis pour l'interface graphique
+- **Interface Web (par défaut)** : React + TypeScript + Vite PWA, servie par FastAPI (port 8088), fenêtre de bureau via PyWebView
+- **Node.js/npm** : Optionnel — nécessaire uniquement pour reconstruire le frontend (`python -m profiles.web.build --force`)
+- **Tkinter (obsolète)** : Requis uniquement pour le backend historique `--tkinter` (`sv-ttk`, `darkdetect` installés avec lui)
 - **Rich** : Requis pour l'assistant CLI
 - **Licence** : Voir le fichier `LICENCE`
 
@@ -720,7 +746,10 @@ profiles/
 ├── src/
 │   └── profiles/
 │       ├── core/           # Logique métier partagée
-│       ├── gui/            # Interface Tkinter
+│       ├── server/         # Backend FastAPI (API REST)
+│       ├── web/            # Frontend React + TypeScript + Vite PWA
+│       ├── desktop/        # Fenêtre de bureau PyWebView & cycle de vie serveur
+│       ├── gui/            # Interface Tkinter historique (obsolète)
 │       ├── utils/          # Fonctions utilitaires
 │       ├── app.py          # Cycle de vie application
 │       └── config.py       # Configuration

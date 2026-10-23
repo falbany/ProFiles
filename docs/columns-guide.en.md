@@ -117,7 +117,7 @@ columns:
 
 ### 2. Extracting Versions
 
-Given filenames containing version tags like `_V01-Rel6.2.1`:
+Given filenames containing version tags like `_V1.0.2-beta`:
 
 ```yaml
 columns:

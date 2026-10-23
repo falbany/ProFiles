@@ -97,8 +97,9 @@ Affiche un message à l'utilisateur avec support partiel du Markdown.
 
 **Comportement** :
 
-- **GUI mode** : Affiche une fenêtre Tkinter avec texte formaté
-- **Headless mode** : Imprime le message formaté sur la sortie standard
+- **Mode web (par défaut)** : La notification s'affiche dans une modale de workflow du frontend web (la fenêtre de bureau / le navigateur attend la confirmation utilisateur pour les étapes bloquantes)
+- **Mode headless** : Imprime le message formaté sur la sortie standard
+- **Backend Tkinter historique** : Affiche une fenêtre Tkinter avec le texte formaté
 - **Toujours réussi** : Ne peut pas échouer, donc `on_failure` est ignoré
 - **Support Markdown** : `# Heading`, `**bold**`, `*italic*`, `` `code` ``, `\\n`
 
@@ -711,17 +712,19 @@ outcome = run_workflow(
 
 ### Problème : Le Dialogue de Notification ne s'Affiche Pas
 
-**Cause** : Mode headless ou Tkinter manquant.
+**Cause** : Mode headless, ou notification en attente côté interface web.
 
 **Comportement attendu** :
 
+- En mode web : La notification s'ouvre dans une modale de workflow du frontend (vérifiez la fenêtre de bureau / l'onglet navigateur)
 - En mode headless : Le message est imprimé sur la sortie standard
-- Si Tkinter manquant : Fallback automatique vers headless
+- Backend Tkinter sans Tkinter : fallback automatique vers headless
 
 **Solutions** :
 
-1. Vérifier que Tkinter est installé (`python -m tkinter`)
-2. En mode headless, vérifier la console pour les messages
+1. En mode web, regardez la modale de workflow dans le frontend (elle attend peut-être votre confirmation)
+2. En mode headless, vérifiez la console pour les messages
+3. Avec `--tkinter`, vérifiez que Tkinter est installé (`python -m tkinter`)
 
 ### Problème : Timeout Fréquent
 

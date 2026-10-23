@@ -16,14 +16,14 @@ The `.profiles` file is a **YAML-format** configuration file that customizes Pro
 
 If no `.profiles` file is found:
 
-- In GUI mode: ProFiles proposes to create a default configuration file
+- In interactive mode (web UI, desktop or browser): ProFiles proposes to create a default configuration file
 - In headless mode: ProFiles uses default values identical to those presented in this document
 
 ## Creating the Configuration File
 
-### Method 1: Automatic Proposal (GUI Mode)
+### Method 1: Automatic Proposal (Interactive Mode)
 
-On first launch in GUI mode, if no `.profiles` file is found, ProFiles proposes to create a default configuration file in the current working directory.
+On first launch in interactive mode (web UI in the PyWebView shell or browser), if no `.profiles` file is found, ProFiles proposes to create a default configuration file in the current working directory.
 
 ### Method 2: Command Line
 
@@ -67,7 +67,7 @@ This section defines default parameters applicable to all machines.
 | `search_dir`          | string             | `""`                 | Default search directory for Directory field                                                                                                                      |
 | `recursive_search`    | bool               | `false`              | Initial state of Recursive checkbox                                                                                                                               |
 | `extensions`          | array of strings   | `[All, .lnk]`        | Extension combobox presets (fallback for `configs` sections)                                                                                                     |
-| `filters`             | array of strings   | `["", ST_PRO, ST_ENG]` | Filter combobox presets ("" = show all files)                                                                                                                     |
+| `filters`             | array of strings   | `["", PROD, DEV]` | Filter combobox presets ("" = show all files)                                                                                                                     |
 | `row_colors`          | array of objects   | `[]`                 | Generic row-coloring rules applied to ALL configurations. Each object has `pattern` (string) and `color` (#RRGGBB)                                                |
 | `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Directory basenames (case-insensitive glob patterns) skipped during recursive scan. Supports `*`, `?`, `[seq]` wildcards (`*tmp`, `node_modules`, `Debug*`, etc.) |
 | `search_exclude_files` | array of strings | `[]`                 | File basenames (case-insensitive glob patterns) skipped during scan. Applies to recursive AND non-recursive scans. Same wildcard syntax as `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Per-config entries are APPENDED. |
@@ -91,7 +91,7 @@ defaults:
   search_dir: "C:/Users/YourName/Workspace"
   recursive_search: true
   extensions: [All, .lnk, .pdf, .docx]
-  filters: ["", ST_PRO, ST_ENG, DEV]
+  filters: ["", PROD, DEV, DEV]
   row_colors:
     - pattern: PROD
       color: "#1565C0"
@@ -167,7 +167,7 @@ configs:
       hostname: ["*"]
     scan: "C:/Users/YourName/Workspace"
     extensions: [All, .lnk]
-    filters: ["", ST_PRO]
+    filters: ["", PROD]
     row_colors:
       - pattern: SPECIFIC
         color: "#FF0000"
@@ -281,7 +281,7 @@ In this example:
 ## CLI Command Lines
 
 ```bash
-# GUI mode (reads .profiles)
+# Interactive mode (reads .profiles)
 python -m profiles
 
 # Explicit configuration file
@@ -311,7 +311,7 @@ defaults:
   columns: File, Version, Classification, Date
   column_widths: 500, 120, 150, 100
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
-  filters: ["", ST_PRO, ST_ENG, DEV, TMP]
+  filters: ["", PROD, DEV, DEV, TMP]
   row_colors:
     - pattern: PROD
       color: "#1565C0"
@@ -355,7 +355,7 @@ configs:
       hostname: ["*"]
     scan: /path/to/production
     extensions: [.lnk]
-    filters: ["", ST_PRO]
+    filters: ["", PROD]
     row_colors: []
 ```
 

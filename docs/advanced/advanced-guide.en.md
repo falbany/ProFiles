@@ -51,7 +51,7 @@ python -m profiles --headless --config /path/to/.profiles
 
 > 📖 **Full documentation**: [Barcode Scanner Mode](../barcode-scanner.en.md)
 
-ProFiles supports USB HID barcode scanner input as a keyboard wedge device. When enabled (via the `QrCode` button in the ControlsBar or `Ctrl+B`), barcode scans are parsed into `key=value` pairs and auto-applied to the scan controls, optionally triggering an immediate scan.
+ProFiles supports USB HID barcode scanner input as a keyboard wedge device. When enabled (via the `QrCode` button in the SearchBar or `Ctrl+B`), barcode scans are parsed into `key=value` pairs and auto-applied to the scan controls, optionally triggering an immediate scan.
 
 **Quick reference — payload format:**
 
@@ -71,7 +71,7 @@ filter=.py;ext=toml;recursive=0;dir=/path/to/scannedir;scan=1
 
 ## Custom Front-Ends
 
-ProFiles's architecture separates core logic from the presentation layer, enabling custom front-ends.
+ProFiles ships a web front-end by default: a **React + TypeScript PWA** under `src/profiles/web/`, served by the built-in **FastAPI** backend (`src/profiles/server/`) and shown in a PyWebView desktop shell — or in any browser with `ProFiles --server-only`. The architecture still separates core logic from the presentation layer, so you can build alternative front-ends (CLI, TUI, kiosk dashboards) on top of the same core.
 
 ### Architecture Overview
 
@@ -166,7 +166,9 @@ if __name__ == "__main__":
 
 > **Note**: `profiles.core` re-exports the public API. You can also import from the sub-packages directly: `profiles.core.processing.scanner`, `profiles.core.config.service`, `profiles.core.actions`, etc.
 
-### Creating a Web Front-End
+### Creating a Web Front-End (pedagogical example)
+
+> **Note**: ProFiles already ships a complete web front-end (React PWA + integrated FastAPI server — see `src/profiles/web/` and `src/profiles/server/`). The example below simply shows how to build a minimal alternative front-end on top of the core Python API.
 
 ```python
 from flask import Flask, jsonify, request
@@ -616,7 +618,7 @@ results = scan_and_process(
 - **Core API**: See `src/profiles/core/` for module documentation
 - **Architecture**: See `AGENTS.md` for layered architecture details
 - **Tests**: See `tests/test_core_*` for usage examples
-- **Configuration**: See [configuration-pylaunch.en.md](../configuration-pylaunch.en.md)
+- **Configuration**: See [configuration-profile.en.md](../configuration-profile.en.md)
 
 ---
 

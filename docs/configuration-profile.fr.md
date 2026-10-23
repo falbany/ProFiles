@@ -15,14 +15,14 @@
 Le fichier `.profiles` est un fichier de configuration au format **YAML** qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires. Le premier fichier trouvé est utilisé.
 
 Si aucun fichier `.profiles` n'est trouvé :
-- En mode GUI : ProFiles propose de créer un fichier de configuration par défaut
+- En mode interactif (interface web, bureau ou navigateur) : ProFiles propose de créer un fichier de configuration par défaut
 - En mode headless : ProFiles utilise des valeurs par défaut identiques à celles présentées dans ce document
 
 ## Création du fichier de configuration
 
-### Méthode 1 : Proposition automatique (mode GUI)
+### Méthode 1 : Proposition automatique (mode interactif)
 
-Au premier lancement en mode GUI, si aucun fichier `.profiles` n'est trouvé, ProFiles propose de créer un fichier de configuration par défaut dans le répertoire courant.
+Au premier lancement en mode interactif (interface web dans la fenêtre PyWebView ou dans le navigateur), si aucun fichier `.profiles` n'est trouvé, ProFiles propose de créer un fichier de configuration par défaut dans le répertoire courant.
 
 ### Méthode 2 : Commande ligne de commande
 
@@ -59,14 +59,14 @@ Cette section définit les paramètres par défaut applicables à toutes les mac
 | Clé                   | Type               | Valeur par défaut    | Description                                                                 |
 | --------------------- | ------------------ | -------------------- | --------------------------------------------------------------------------- |
 | `title`               | string             | `""`                 | Titre personnalisé ajouté à la fenêtre principale                           |
-| `gui_auto_launch`     | bool               | `true`               | Afficher l'interface graphique lors de `python -m profiles`               |
+| `gui_auto_launch`     | bool               | `true`               | Afficher la fenêtre de l'interface web lors de `python -m profiles`       |
 | `close_after_execute` | bool               | `false`              | Fermer la fenêtre après un lancement réussi                                 |
 | `theme`               | enum               | `"light"`            | Thème d'interface : `"light"` ou `"dark"` (Material Design 3)               |
 | `language`            | enum               | `"en"`               | Langue de l'interface : `"en"` (anglais) ou `"fr"` (français) ; basculable via le bouton langue de la barre de statut (cycle en → fr → en) |
 | `search_dir`          | string             | `""`                 | Répertoire de recherche par défaut pour le champ Directory                  |
 | `recursive_search`    | bool               | `false`              | État initial de la case à cocher Recursive                                  |
 | `extensions`          | array of strings   | `[All, .lnk]`        | Présélections du combobox Extension (remplies par `configs`)      |
-| `filters`             | array of strings   | `["", ST_PRO, ST_ENG]` | Présélections du combobox Filter ("" = tous les fichiers)                   |
+| `filters`             | array of strings   | `["", PROD, DEV]` | Présélections du combobox Filter ("" = tous les fichiers)                   |
 | `row_colors`          | array of objects   | `[]`                 | Règles de coloration génériques appliquées à TOUS les configurations. Chaque objet a `pattern` (string) et `color` (#RRGGBB)        |
 | `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Noms de répertoires (motifs glob insensibles à la casse) ignorés lors du scan récursif. Prend en charge les jokers `*`, `?`, `[seq]` (`*tmp`, `node_modules`, `Debug*`, etc.) |
 | `search_exclude_files` | array of strings | `[]`                 | Noms de fichiers (motifs glob insensibles à la casse) ignorés lors du scan. S'applique aux scans récursifs ET non récursifs. Même syntaxe de jokers que `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Les motifs par configuration sont AJOUTÉS. |
@@ -90,7 +90,7 @@ defaults:
   search_dir: "C:/Users/YourName/Workspace"
   recursive_search: true
   extensions: [All, .lnk, .pdf, .docx]
-  filters: ["", ST_PRO, ST_ENG, DEV]
+  filters: ["", PROD, DEV, ENG]
   row_colors:
     - pattern: PROD
       color: "#1565C0"
@@ -166,7 +166,7 @@ configs:
       hostname: ["*"]
     scan: "C:/Users/YourName/Workspace"
     extensions: [All, .lnk]
-    filters: ["", ST_PRO]
+    filters: ["", PROD]
     row_colors:
       - pattern: SPECIFIC
         color: "#FF0000"
@@ -279,7 +279,7 @@ Dans cet exemple :
 ## Lignes de commande CLI
 
 ```bash
-# Interface graphique (lit .profiles)
+# Mode interactif (lit .profiles)
 python -m profiles
 
 # Fichier de configuration explicite
@@ -309,7 +309,7 @@ defaults:
   columns: File, Version, Classification, Date
   column_widths: 500, 120, 150, 100
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
-  filters: [, ST_PRO, ST_ENG, DEV, TMP]
+  filters: [, PROD, DEV, DEV, TMP]
   row_colors:
     - pattern: PROD
       color: "#1565C0"
@@ -353,7 +353,7 @@ configs:
       hostname: ["*"]
     scan: /chemin/vers/production
     extensions: [.lnk]
-    filters: [, ST_PRO]
+    filters: [, PROD]
     row_colors: []
 ```
 

@@ -586,7 +586,7 @@ columns:
     default: "Standard"
 ```
 
-### Version avec Suffixe (_V01-beta, _V01-alpha)
+### Version avec Suffixe (_V1.0.2-beta, _V01-alpha)
 ```yaml
   VersionWithSuffix:
     name: VersionWithSuffix
@@ -910,15 +910,15 @@ columns:
 
 ### Exemple 1 : Fichiers de Production
 ```
-QTY_PRO_Device_ABC123_MOD001A_V01-Rel6.2.1_Prod_x64.mttl
-QTY_ENG_Device_XYZ789_MOD001B_V02-Rel6.3.0_Dev_x64.mttl
+QTY_PRO_Device_ABC123_MOD001A_V1.0.2-beta_Prod_x64.mttl
+QTY_ENG_Device_XYZ789_MOD001B_V02-alpha_Dev_x64.mttl
 ```
 
 **Colonnes recommandées :**
 - `QualityLevel` → `QTY_PRO`, `QTY_ENG`
 - `DeviceID` → `ABC123`, `XYZ789`
 - `Model` → `MOD001A`, `MOD001B`
-- `VersionFull` → `01-Rel6.2.1`, `02-Rel6.3.0`
+- `VersionFull` → `1.0.2-beta`, `02-alpha`
 - `Environment` → `Prod`, `Dev`
 - `Arch` → `x64`
 

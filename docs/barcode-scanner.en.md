@@ -19,7 +19,7 @@ This feature is ideal for kiosk deployments, inventory management, and rapid fil
 
 ### Via the UI
 
-1. Click the **Barcode** button in the **ControlsBar** (Row 1, rightmost button before the Timer).
+1. Click the **Barcode** button in the **SearchBar** (rightmost group, beside the Timer).
 2. The button icon (`QrCode`) will begin **pulsing** to indicate that barcode mode is active.
 3. The button's aria-label changes to "Disable barcode mode" while active.
 
@@ -67,7 +67,7 @@ This sets the filter field to `project-report-final` and (if `scan` is not speci
 
 When a barcode is scanned:
 
-1. **Parsed values are applied** to the ControlsBar fields (directory, filter, extension, recursive toggle).
+1. **Parsed values are applied** to the controls (directory in the header bar; filter, extension, recursive toggle in the search bar).
 2. If the `scan=1` key is present (or if the payload is a structured `key=value` set), ProFiles **automatically triggers a scan** with the new criteria.
 3. A **toast notification** confirms the scan was initiated.
 
@@ -75,7 +75,7 @@ When a barcode is scanned:
 
 ## UI Indicators
 
-### ControlsBar Button
+### SearchBar Button
 
 | State | Icon | Behavior |
 |-------|------|----------|
@@ -129,7 +129,7 @@ The button uses consistent app styling:
                        ▼
 ┌──────────────────────────────────────────────────┐
 │  App.tsx — handleBarcodeSubmit()                 │
-│  — Applies values to ControlsBar state          │
+│  — Applies values to search/header controls     │
 │  — Triggers scan if scan=1                      │
 │  — Shows toast notification                     │
 └──────────────────────────────────────────────────┘

@@ -19,7 +19,7 @@ Cette fonctionnalité est idéale pour les déploiements en kiosque, la gestion 
 
 ### Via l'interface
 
-1. Cliquez sur le bouton **Code-barres** dans la **Barre de Contrôle** (ligne 1, dernier bouton avant le chronomètre).
+1. Cliquez sur le bouton **Code-barres** dans la **Barre de Recherche** (groupe de droite, à côté du chronomètre).
 2. L'icône (`QrCode`) commence à **pulser** pour indiquer que le mode code-barres est actif.
 3. L'étiquette `aria-label` du bouton change en "Désactiver le mode code-barres" lorsqu'il est actif.
 
@@ -67,7 +67,7 @@ Cela définit le champ de filtre sur `rapport-urgent-final` et ne déclenche **p
 
 Lorsqu'un code-barres est scanné :
 
-1. **Les valeurs analysées sont appliquées** aux contrôles de la Barre de Contrôle (répertoire, filtre, extension, bouton de récursion).
+1. **Les valeurs analysées sont appliquées** aux contrôles (répertoire dans la barre d'en-tête ; filtre, extension, bouton de récursion dans la barre de recherche).
 2. Si la clé `scan=1` est présente (ou si le payload est un jeu structuré `key=value`), ProFiles **déclenche automatiquement un scan** avec les nouveaux critères.
 3. Une **notification toast** confirme le lancement du scan.
 
@@ -75,7 +75,7 @@ Lorsqu'un code-barres est scanné :
 
 ## Indicateurs d'interface
 
-### Bouton de la Barre de Contrôle
+### Bouton de la Barre de Recherche
 
 | État | Icône | Comportement |
 |------|------|----------|

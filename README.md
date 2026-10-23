@@ -14,7 +14,7 @@
 
 ---
 
-**ProFiles** adapts to any file-based workflow through flexible configuration without touching code. Browse directories, filter with Google-style operators, extract metadata from filenames, and launch files via OS associations or custom arguments.
+**ProFiles** adapts to any file-based workflow through flexible configuration without touching code. Browse directories, filter with Google-style operators, extract metadata from filenames, and launch files via OS associations or custom arguments. The default interface is a modern **web UI** (React PWA) bundled with an integrated FastAPI server — usable as a desktop window, in any browser on the network, or fully headless.
 
 <details>
 <summary><b>Table of Contents</b></summary>
@@ -28,7 +28,9 @@
   - [Manual Install](#manual-install)
   - [Desktop Shortcut](#desktop-shortcut)
 - [💻 Usage](#-usage)
-  - [GUI Mode](#gui-mode)
+  - [Web Mode (default)](#web-mode-default)
+  - [Browser / PWA Mode (shared servers)](#browser--pwa-mode-shared-servers)
+  - [Legacy Tkinter Mode (deprecated)](#legacy-tkinter-mode-deprecated)
   - [CLI / Headless Mode (work in progress)](#cli--headless-mode-work-in-progress)
 - [🛠 Configuration](#-configuration)
 - [🏗 Architecture](#-architecture)
@@ -46,6 +48,8 @@
 * **Glob Exclusion**: Skip noisy directories (e.g., `node_modules`, `.venv`) and filter out files matching glob patterns (e.g., `*backup*`, `~$*`).
 
 ### 🚀 Execute & Automate
+* **Modern Web UI**: React + Vite PWA served by an integrated FastAPI backend — desktop shell (PyWebView), any browser on the LAN, or headless.
+* **Structured Log Viewer**: Built-in modal with level filters, live tail, and external log opening.
 * **Launch Workflows (Hooks)**: Intercept file launches with powerful step-based YAML workflows. Run background scripts, display Markdown notifications, or completely replace the OS default launcher.
 * **One-Click Launch**: Native OS execution (Windows `os.startfile`, macOS `open`, Linux `xdg-open`).
 * **Custom CLI Arguments**: Right-click to launch with custom arguments, remembered per row.
@@ -59,7 +63,7 @@
 
 ## 🚀 Installation
 
-Requires **Python 3.11+**. Minimal dependencies: `sv-ttk` (Material Design 3 theme), `darkdetect` (system theme detection).
+Requires **Python 3.11+**. The default interface is a **React + TypeScript PWA** served by the built-in **FastAPI** backend and displayed in a native **PyWebView** desktop shell. Node.js/npm is only needed to rebuild the frontend from source (pre-built assets ship with the package). The legacy Tkinter backend (deprecated) additionally uses `sv-ttk` + `darkdetect`.
 
 ### Quick Install (Recommended)
 ```bash
@@ -126,8 +130,6 @@ python -m profiles.web.build --force
 ```
 
 Download Node.js from https://nodejs.org
-poetry run pytest --cov  # run tests
-```
 
 ### Desktop Shortcut
 Run the built-in script to generate a native shortcut (Windows `.lnk`, macOS Alias, or Linux `.desktop`):
@@ -139,15 +141,32 @@ python create_shortcut.py
 
 The console entry point is **`ProFiles`** (capital P, F) — registered in `pyproject.toml` as `[project.scripts]`. `python -m profiles` is equivalent.
 
-### GUI Mode
+### Web Mode (default)
+
 ```bash
 ProFiles
 # or
 python -m profiles
 ```
-* **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives.
-* **Shortcuts**: `Ctrl+F` (focus filter), `F5` (refresh), `Ctrl+Shift+L` (toggle theme).
-* **Language**: The GUI chrome is bilingual (English / French). Use the language button in the status bar to switch on the fly, or set `language: en` / `language: fr` in the `defaults` section.
+
+Launches the local FastAPI server and opens the React frontend in a native PyWebView desktop window.
+
+* **Interface**: The web chrome is bilingual (English / French). Use the language switcher in the status bar to change on the fly, or set `language: en` / `language: fr` in the `defaults` section.
+* **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives, and `"..."` for exact phrases.
+* **Keyboard shortcuts**: `Ctrl+F` (focus filter) · `Ctrl+D` (focus directory) · `Ctrl+E` (focus extension) · `F5` (rescan) · `Ctrl+R` (reload config + rescan) · `Ctrl+H` (home directory) · `Ctrl+Shift+L` (log viewer) · `Ctrl+,` (open config) · `Ctrl+Shift+T` (cycle theme) · `Ctrl+B` (barcode scanner mode) · `Ctrl+Shift+B` (camera barcode scanner) · `Ctrl+T` (auto-rescan timer) · `?` (shortcuts dialog).
+* **PWA**: The frontend ships a service worker precache, so the page can be installed in the browser as an app.
+
+### Browser / PWA Mode (shared servers)
+```bash
+ProFiles --server-only
+```
+Runs the FastAPI server **without** the desktop window. Point any browser on the network at `http://<host>:8088` (default port). See the [Network Server Guide](./docs/network-server-guide.en.md) for firewall, hostname and multi-client setup.
+
+### Legacy Tkinter Mode (deprecated)
+```bash
+ProFiles --tkinter
+```
+The original Tkinter desktop interface is kept for compatibility only and is **deprecated** — new features land exclusively on the web frontend.
 
 ### CLI / Headless Mode (work in progress)
 ```bash
@@ -177,7 +196,7 @@ defaults:
   search_dir: "C:/Users/YourName/Workspace"
   recursive_search: false
   extensions: [All, .lnk, .pdf]
-  filters: ["", ST_PRO, ST_ENG]
+  filters: ["", PROD, DEV]
   row_colors:
     - pattern: PROD
       color: "#1565C0"
@@ -264,17 +283,15 @@ hooks:
 Clean layered design separating domain logic from presentation.
 
 ```text
-PyLaunch/
+ProFiles/
 ├── src/profiles/
-│   ├── core/
-│   │   ├── config/        # Configuration subsystem (models, service, loader, reader, io)
-│   │   ├── environment/   # OS environment & process spawn (system, execution/hooks)
-│   │   ├── processing/    # File scanning, classification, column extraction
-│   │   ├── telemetry/     # Logging & diagnostics
-│   │   └── actions.py     # Domain actions (launch, config open, log open)
-│   ├── gui/               # Tkinter presentation layer (main_window, theme, context_menu)
+│   ├── core/              # Domain logic: config, environment/hooks, processing, telemetry
+│   ├── server/            # FastAPI backend — REST API routes, workflow & scan sessions
+│   ├── web/               # React + TypeScript + Vite PWA frontend (src/, dist/, build.py)
+│   ├── desktop/           # PyWebView desktop shell & background server lifecycle
+│   ├── gui/               # Legacy Tkinter presentation layer (deprecated)
 │   ├── utils/             # Stateless helpers (file ops, network, search parser, shortcut)
-│   ├── app.py             # Application lifecycle (GUI & headless)
+│   ├── app.py             # Application lifecycle (web desktop, server-only, Tk, headless)
 │   └── config.py          # Convenience re-exports for config API
 ├── docs/                  # User documentation (EN/FR)
 └── tests/                 # Pytest suite
@@ -292,8 +309,16 @@ ruff format .        # Formatting
 pylint src/profiles/ # Static analysis
 ```
 
+Web frontend (Node.js required):
+
+```bash
+cd src/profiles/web
+npm install
+npm run build        # tsc + vite build — outputs dist/ and refreshes the PWA precache
+```
+
 ## 📄 License & Support
 
 * **Author**: [Florent ALBANY](https://github.com/falbany)
 * **License**: [MIT](./LICENCE)
-* **Version**: 2026.7.0
+* **Version**: 2026.8.0
