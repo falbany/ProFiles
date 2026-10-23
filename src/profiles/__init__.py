@@ -48,3 +48,16 @@ def _resolve_version() -> str:
 
 
 __version__ = _resolve_version()
+
+
+def __getattr__(name: str):
+    """Expose selected callables lazily (PEP 562).
+
+    The Briefcase stub resolves ``profiles.main``; keep it a lazy attribute
+    so ``import profiles`` stays cheap for headless/web usage.
+    """
+    if name == "main":
+        from profiles.app import main as _main
+
+        return _main
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
