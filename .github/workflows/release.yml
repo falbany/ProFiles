@@ -1,0 +1,76 @@
+name: Release native installers
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Verify tag matches [project] and [tool.briefcase] versions
+        env:
+          TAG_VERSION: ${{ github.ref_name }}
+        run: |
+          uv run python - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          data = tomllib.loads(
+              pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          )
+          project = data["project"]["version"]
+          briefcase = data["tool"]["briefcase"]["version"]
+          tag = os.environ["TAG_VERSION"].lstrip("v")
+          assert tag == project == briefcase, (
+              f"Version mismatch: tag={tag!r} project={project!r} "
+              f"briefcase={briefcase!r}"
+          )
+          print(f"Version guard OK: {tag}")
+          PY
+
+  windows:
+    needs: guard
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run briefcase package windows -p msi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.msi
+
+  macos:
+    needs: guard
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run briefcase package macos -p dmg
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.dmg
+
+  linux:
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run briefcase upgrade linuxdeploy
+      - run: uv run briefcase package linux -p deb
+      - run: uv run briefcase package linux -p appimage
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/*.deb
+            dist/**/*.AppImage
