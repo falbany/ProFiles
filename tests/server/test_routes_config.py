@@ -55,7 +55,7 @@ async def test_get_config_uses_presets_for_selected_scan_directory(test_state: S
     assert response.status_code == 200
     data = response.json()
     assert data["extensions"] == ["mttl OR mttx", "mttl", ".mttl"]
-    assert data["filters"] == ["", "tmp", "prod", "ST_PRO", "ST_ENG"]
+    assert data["filters"] == ["", "tmp", "prod", "PROD", "DEV"]
 
 
 @pytest.mark.anyio

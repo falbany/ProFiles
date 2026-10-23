@@ -239,7 +239,7 @@ class AppConfig:
     column_headers: tuple[str, ...] = ()  # Display names from ColumnConfiguration.name
     columns: dict[str, ColumnConfiguration] = field(default_factory=dict)
     extensions: tuple[str, ...] = ("All", ".lnk")
-    filters: tuple[str, ...] = ("", "ST_PRO", "ST_ENG")
+    filters: tuple[str, ...] = ("", "PROD", "DEV")
     search_exclude_dirs: tuple[str, ...] = (".git",)
     search_exclude_files: tuple[str, ...] = ()
     row_colors: tuple[tuple[str, str], ...] = ()

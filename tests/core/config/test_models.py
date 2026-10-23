@@ -25,7 +25,7 @@ class TestAppConfig:
         assert config.column_names == ()  # Empty by default, built from "columns" section
         assert config.column_widths == ()  # Empty by default
         assert config.extensions == ("All", ".lnk")
-        assert config.filters == ("", "ST_PRO", "ST_ENG")
+        assert config.filters == ("", "PROD", "DEV")
         assert config.search_exclude_dirs == (".git",)
         assert config.search_exclude_files == ()
         assert config.theme == "light"

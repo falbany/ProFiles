@@ -15,12 +15,12 @@ def _cfg(**kwargs) -> AppConfigYaml:
 class TestResolveConfigs:
     def test_defaults_applied(self) -> None:
         cfg = _cfg(
-            defaults={"extensions": ["All", ".lnk"], "filters": ["", "ST_PRO"]},
+            defaults={"extensions": ["All", ".lnk"], "filters": ["", "PROD"]},
             configs={"base": {"directory": "/x"}},
         )
         resolved = resolve_configs(cfg)
         assert resolved["base"].extensions == ["All", ".lnk"]
-        assert resolved["base"].filters == ["", "ST_PRO"]
+        assert resolved["base"].filters == ["", "PROD"]
 
     def test_local_overrides_scalar(self) -> None:
         cfg = _cfg(

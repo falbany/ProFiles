@@ -91,7 +91,7 @@ defaults:
   recursive_search: false
   max_search_depth: 10
   extensions: [All, .lnk]
-  filters: ["", ST_PRO, ST_ENG]
+  filters: ["", PROD, DEV]
   row_colors:
     - pattern: TMP
       color: "#BAC015"

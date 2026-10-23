@@ -116,7 +116,7 @@ class TestScanTimerExtensionFilter:
 
         with caplog.at_level(logging.DEBUG, logger="profiles"):
             with ScanTimer(
-                str(tmp_path), recursive=False, extension=".mttl", filter_text="MuTest"
+                str(tmp_path), recursive=False, extension=".mttl", filter_text="Tester"
             ) as timer:
                 pass
 
@@ -124,7 +124,7 @@ class TestScanTimerExtensionFilter:
 
         scan_lines = (r for r in caplog.records if "SCAN_COMPLETE" in r.message)
         assert any("ext=.mttl" in r.message for r in scan_lines)
-        assert any("filter=MuTest" in r.message for r in caplog.records)
+        assert any("filter=Tester" in r.message for r in caplog.records)
 
     def test_finish_quotes_filter_with_space(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture

@@ -46,7 +46,7 @@ def extract_version(filename: str, extension: str = "") -> str:
     The version is extracted from the pattern '_V<version>' (case-insensitive),
     For example::
 
-        ST_PRO_Mutest_IM611B_0866_V01-Rel6.2.1.mttl -> '01-Rel6.2.1'
+        PROD_Tester_DUTID_V1.0.2-beta -> '1.0.2-beta'
 
     Args:
         filename: The file name to extract the version from.
@@ -67,7 +67,7 @@ def strip_extension_from_version(version: str, extension: str) -> str:
     """Strip the file extension suffix from a version string if present.
 
     Args:
-        version: The version string (e.g. ``"01-Rel6.2.1.mttl"``).
+        version: The version string (e.g. ``"1.0.2-beta.mttl"``).
         extension: The file extension to strip (e.g. ``"mttl"``).
 
     Returns:

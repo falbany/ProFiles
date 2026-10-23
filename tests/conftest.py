@@ -29,7 +29,7 @@ version: 1
 defaults:
     title: "ProFiles Test"
     extensions: [".txt", ".py"]
-    filters: ["ST_PRO", "ST_ENG"]
+    filters: ["PROD", "DEV"]
     search_exclude_dirs: [".git", "build"]
     search_exclude_files: ["*.tmp"]
     row_colors:

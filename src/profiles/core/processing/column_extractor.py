@@ -10,9 +10,9 @@ Usage:
     extractor.add_rule("Device", r"Device_(\\w+)")
     extractor.add_rule("Version", r"_V(.+)", priority=10)
 
-    filename = "ST_PRO_Device_ABC123_V01-Rel6.2.1.mttl"
+    filename = "PROD_Device_ABC123_V1.0.2-beta.mttl"
     values = extractor.extract_all(filename)
-    # {"File": "ST_PRO_Device_ABC123_V01-Rel6.2.1.mttl", "Device": "ABC123", "Version": "01-Rel6.2.1"}
+    # {"File": "PROD_Device_ABC123_V1.0.2-beta.mttl", "Device": "ABC123", "Version": "1.0.2-beta"}
 """
 
 from __future__ import annotations
@@ -158,8 +158,8 @@ class ColumnExtractor:
         extractor.add_rule("Version", r"_V([^_]+)", priority=10)
         extractor.add_rule("Device", r"Device_([A-Z0-9]+)", priority=5)
 
-        values = extractor.extract_all("ST_PRO_Device_ABC123_V01.mttl")
-        # {"File": "ST_PRO_Device_ABC123_V01.mttl", "Version": "01", "Device": "ABC123"}
+        values = extractor.extract_all("PROD_Device_ABC123_V01.mttl")
+        # {"File": "PROD_Device_ABC123_V01.mttl", "Version": "01", "Device": "ABC123"}
     """
 
     def __init__(self) -> None:

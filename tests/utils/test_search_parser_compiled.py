@@ -35,10 +35,10 @@ class TestCompileQueryParity:
         """2000 seeded random (name, query) pairs agree with the frozen reference."""
         rng = random.Random(20261021)
         token_pool = [
-            "ST_PRO",
+            "PROD",
             "ENG",
             "OR",
-            "-Mutest",
+            "-Tester",
             "+V01",
             '"exact name"',
             "x",
@@ -46,13 +46,13 @@ class TestCompileQueryParity:
             "-V02",
             "Scan Me",
             "PDF",
-            "_IM611B",
+            "_DUT-ID",
         ]
         names = [
-            "ST_PRO_Mutest_V01.mttl",
-            "ST_ENG_Test_V02.mttl",
+            "PROD_Tester_V01.mttl",
+            "DEV_Test_V02.mttl",
             "Scan Me.PDF",
-            "ST_PRO_Mutest_V01.mttx.lnk",
+            "PROD_Tester_V1.mttx.lnk",
             "file.backup.pdf",
             "README",
             ".bashrc",
@@ -61,7 +61,7 @@ class TestCompileQueryParity:
             "x.mttl",
             "exact name.mttl",
             "exact name.pdf",
-            "IM611B_0866.pdf",
+            "DUT-ID_0866.pdf",
         ]
         mismatches: list[tuple[str, str, bool, bool]] = []
         for _ in range(2000):
@@ -91,11 +91,11 @@ class TestCompileQueryCaching:
         for query in ("", "   ", '""'):
             matcher = compile_query(query)
             assert matcher("anything.pdf") is True
-            assert matcher("ST_PRO") is True
+            assert matcher("PROD") is True
 
     def test_casefold_term_mismatch_still_delegates(self) -> None:
         """Basic operator semantics preserved through the compiled closure."""
-        matcher = compile_query("ST_PRO -Mutest")
-        assert matcher("ST_PRO_Test.mttl") is True
-        assert matcher("ST_PRO_Mutest.mttl") is False
+        matcher = compile_query("PROD -Tester")
+        assert matcher("PROD_Test.mttl") is True
+        assert matcher("PROD_Tester.mttl") is False
         assert matcher("st_pro_test.MTTL") is True

@@ -57,14 +57,14 @@ class TestExtractVersion:
     """extract_version — extract _V<version> from filenames."""
 
     def test_with_version(self) -> None:
-        assert extract_version("ST_PRO_Mutest_V01-Rel6.2.1.mttl") == "01-Rel6.2.1.mttl"
+        assert extract_version("PROD_Tester_V1.0.2-beta.mttl") == "1.0.2-beta.mttl"
 
     def test_no_version(self) -> None:
-        assert extract_version("ST_PRO_Mutest.mttl") == ""
+        assert extract_version("PROD_Tester.mttl") == ""
 
     def test_with_extension_strip(self) -> None:
-        result = extract_version("ST_PRO_Mutest_V01-Rel6.2.1.mttl", extension=".mttl")
-        assert result == "01-Rel6.2.1"
+        result = extract_version("PROD_Tester_V1.0.2-beta.mttl", extension=".mttl")
+        assert result == "1.0.2-beta"
 
     def test_case_insensitive_v(self) -> None:
         assert extract_version("file_v1.0.txt") == "1.0.txt"
@@ -93,14 +93,14 @@ class TestGetFileInfo:
     """get_file_info — returns (filename, version)."""
 
     def test_prod_file_with_version(self, tmp_path: Path) -> None:
-        f = tmp_path / "ST_PRO_Test_V1.0.mttl"
+        f = tmp_path / "PROD_Test_V1.0.mttl"
         f.write_text("", encoding="utf-8")
         filename, version = get_file_info(f, extension=".mttl")
-        assert filename == "ST_PRO_Test_V1.0.mttl"
+        assert filename == "PROD_Test_V1.0.mttl"
         assert version == "1.0"
 
     def test_dev_file_no_version(self, tmp_path: Path) -> None:
-        f = tmp_path / "ST_ENG_Test.mttl"
+        f = tmp_path / "DEV_Test.mttl"
         f.write_text("", encoding="utf-8")
         filename, version = get_file_info(f)
         assert version == ""
@@ -126,14 +126,14 @@ class TestGetFileInfoDynamic:
         }
 
         result = get_file_info_dynamic(
-            "test_Device_ABC123_V01-Rel6.2.1.mttl",
+            "test_Device_ABC123_V1.0.2-beta.mttl",
             "mttl",
             ("File", "Version", "Device"),
             columns,
         )
 
-        assert result["File"] == "test_Device_ABC123_V01-Rel6.2.1.mttl"
-        assert result["Version"] == "01-Rel6.2.1"  # Extension stripped
+        assert result["File"] == "test_Device_ABC123_V1.0.2-beta.mttl"
+        assert result["Version"] == "1.0.2-beta"  # Extension stripped
         assert result["Device"] == "ABC123"
 
     def test_extract_with_default_value(self) -> None:
@@ -181,13 +181,13 @@ class TestGetFileInfoDynamic:
         }
 
         result = get_file_info_dynamic(
-            "test_V01-Rel6.2.1.mttl",
+            "test_V1.0.2-beta.mttl",
             "mttl",
             ("File", "Version"),
             columns,
         )
 
-        assert result["Version"] == "01-Rel6.2.1"  # .mttl stripped
+        assert result["Version"] == "1.0.2-beta"  # .mttl stripped
 
     def test_column_without_match_skipped(self) -> None:
         """A column config without a match pattern is not added as a rule."""
@@ -220,7 +220,7 @@ class TestGetFileInfoDynamic:
         }
 
         result = get_file_info_dynamic(
-            "ST_PRO_Test_V01.mttl",
+            "PROD_Test_V01.mttl",
             "mttl",
             ("File",),
             columns,
@@ -231,12 +231,12 @@ class TestGetFileInfoDynamic:
     def test_non_dict_columns_ignored(self) -> None:
         """A truthy non-dict columns value yields no rules."""
         result = get_file_info_dynamic(
-            "ST_PRO_Test_V01.mttl",
+            "PROD_Test_V01.mttl",
             "mttl",
             ("File", "Version"),
             "not-a-dict",  # type: ignore[arg-type]
         )
-        assert result["File"] == "ST_PRO_Test_V01.mttl"
+        assert result["File"] == "PROD_Test_V01.mttl"
         assert result["Version"] == ""
 
     def test_version_without_extension_kept(self) -> None:
@@ -248,10 +248,10 @@ class TestGetFileInfoDynamic:
         }
 
         result = get_file_info_dynamic(
-            "test_V01-Rel6.2.1.mttl",
+            "test_V1.0.2-beta.mttl",
             "",
             ("File", "Version"),
             columns,
         )
 
-        assert result["Version"] == "01-Rel6.2.1.mttl"
+        assert result["Version"] == "1.0.2-beta.mttl"

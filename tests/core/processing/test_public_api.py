@@ -64,5 +64,5 @@ class TestPublicClassifierNames:
         assert file_classifier._strip_extension_from_version is strip_extension_from_version
 
     def test_strip_extension_from_version_behavior(self) -> None:
-        assert strip_extension_from_version("01-Rel6.2.1.mttl", "mttl") == "01-Rel6.2.1"
-        assert strip_extension_from_version("01-Rel6.2.1", "mttl") == "01-Rel6.2.1"
+        assert strip_extension_from_version("1.0.2-beta.mttl", "mttl") == "1.0.2-beta"
+        assert strip_extension_from_version("1.0.2-beta", "mttl") == "1.0.2-beta"

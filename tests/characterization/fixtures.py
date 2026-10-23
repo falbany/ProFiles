@@ -38,9 +38,9 @@ def build_tree(root: Path) -> None:
 
     # Special names (the shapes the plan cares about)
     for name in (
-        "ST_PRO_Mutest_V01.mttx.lnk",
-        "ST_ENG_Test.mttl",
-        "ST_PRO_Mutest_IM611B_0866_V01-Rel6.2.1.mttl",
+        "PROD_Tester_V1.mttx.lnk",
+        "DEV_Test.mttl",
+        "PROD_Tester_DUTID_V1.0.2-beta",
         "README",
         ".bashrc",
         "report.",
@@ -52,7 +52,7 @@ def build_tree(root: Path) -> None:
         put(name)
 
     # Excluded-only folders: scanned when no exclude list is in effect
-    put("Projects/Debug_out/ST_PRO_Debug_V02.mttl")
+    put("Projects/Debug_out/PROD_Debug_V02.mttl")
     put("Projects/Debug_out/debug_note.txt")
     put(".git/config")
     put(".git/hooks/pre-commit")
@@ -60,24 +60,24 @@ def build_tree(root: Path) -> None:
     put("node_modules/pkg/lib.js")
 
     # Nested structure (depth ≥ 2 below the root)
-    put("Projects/ST_PRO_Mutest_V02.mttl")
-    put("Projects/ST_PRO_Mutest_V03.mttl")
-    put("Projects/release/ST_ENG_Release_V01.mttl")
-    put("Projects/release/ST_PRO_Display_V01.lnk")
+    put("Projects/PROD_Tester_V02.mttl")
+    put("Projects/PROD_Tester_V03.mttl")
+    put("Projects/release/DEV_Release_V01.mttl")
+    put("Projects/release/PROD_Display_V01.lnk")
     put("docs/guide.pdf")
     put("docs/spec.v1.pdf")
     put("docs/internal/draft.pdf")
     put("attachments/scan.pdf")
     put("attachments/photo.png")
-    put("attachments/deep/nested/ST_PRO_Nested_V01.mttl")
+    put("attachments/deep/nested/PROD_Nested_V01.mttl")
     put("temp/a.tmp")
     put("temp/~$scratch.xlsx")
     put("temp/ST_TEMP_V09.mttl")
 
     # Generated filler — deterministic names
     for i in range(1, 21):
-        put(f"ST_PRO_Filler_{i:02d}_V01.mttl")
-        put(f"Projects/ST_ENG_Filler_{i:02d}_V01.mttl")
+        put(f"PROD_Filler_{i:02d}_V01.mttl")
+        put(f"Projects/DEV_Filler_{i:02d}_V01.mttl")
     for i in range(1, 31):
         put(f"attachments/case_{i:02d}.pdf")
     for i in range(1, 21):
@@ -154,33 +154,33 @@ def reference_match_filter(filename: str, query: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _NAME_MIXED_CASE = "Scan Me.PDF"
-_NAME_LNK = "ST_PRO_Mutest_V01.mttx.lnk"
+_NAME_LNK = "PROD_Tester_V1.mttx.lnk"
 _NAME_BACKUP_PDF = "file.backup.pdf"
 
 # (filename, query, expected) — expected = reference_match_filter(name, query)
 MATCH_CORPUS: list[tuple[str, str, bool]] = [
     # plain AND terms
-    ("ST_PRO_Mutest_V01.mttl", "ST_PRO", True),
-    ("ST_ENG_Test.mttl", "ST_PRO", False),
-    ("ST_PRO_Mutest_V01.mttl", "ST_PRO Mutest", True),
-    ("ST_PRO_Test_V01.mttl", "ST_PRO Mutest", False),
+    ("PROD_Tester_V01.mttl", "PROD", True),
+    ("DEV_Test.mttl", "PROD", False),
+    ("PROD_Tester_V01.mttl", "PROD Tester", True),
+    ("PROD_Test_V01.mttl", "PROD Tester", False),
     ("a_b-c_d.mttl", "a_b-c_d", True),
     ("a_b-c_d.mttl", "a_b c_d", True),
     # OR groups
-    ("ST_ENG_Test.mttl", "ST_PRO OR ST_ENG", True),
-    ("Other.mttl", "ST_PRO OR ST_ENG", False),
+    ("DEV_Test.mttl", "PROD OR DEV", True),
+    ("Other.mttl", "PROD OR DEV", False),
     ("a.pdf", "x OR y OR z", False),
     ("b.pdf", "b OR z", True),
-    ("ST_ENG_Only.mttl", "ST_PRO OR ST_ENG OR -Only", True),
-    ("ST_ENG_Only.mttl", "ST_PRO OR ST_ENG", True),
-    ("ST_ENG_Only.mttl", "ST_ENG OR -ENG", True),
+    ("DEV_Only.mttl", "PROD OR DEV OR -Only", True),
+    ("DEV_Only.mttl", "PROD OR DEV", True),
+    ("DEV_Only.mttl", "DEV OR -ENG", True),
     # consecutive OR → empty group is skipped
     ("a.pdf", "a OR OR b", True),
     ("a.pdf", "OR a", True),
     ("a.pdf", "a OR", True),
     # negation
-    ("ST_PRO_Mutest.mttl", "ST_PRO -Mutest", False),
-    ("ST_PRO_Test.mttl", "ST_PRO -Mutest", True),
+    ("PROD_Tester.mttl", "PROD -Tester", False),
+    ("PROD_Test.mttl", "PROD -Tester", True),
     ("-a.pdf", "-a OR b", False),
     ("b.pdf", "-a OR b", True),
     # explicit inclusion
@@ -189,11 +189,11 @@ MATCH_CORPUS: list[tuple[str, str, bool]] = [
     ("alpha.pdf", "+alpha +pdf", True),
     ("alpha.gif", "+alpha +pdf", False),
     # quoted phrases
-    ("ST_PRO_Mutest V01.mttl", '"Mutest V01"', True),
-    ("ST_PRO_Mutest_XV01.mttl", '"Mutest V01"', False),
+    ("PROD_Tester V01.mttl", '"Tester V01"', True),
+    ("PROD_Tester_XV01.mttl", '"Tester V01"', False),
     ("file.mttl", '"exact name"', False),
     ('"exact name".mttl', '"exact name"', True),
-    ('ST_PRO "Mutest V01" test.mttl', 'ST_PRO "Mutest V01"', True),
+    ('PROD "Tester V01" test.mttl', 'PROD "Tester V01"', True),
     # case differences
     ("SCAN.PDF", "scan", True),
     ("scan.pdf", "SCAN", True),
@@ -209,9 +209,9 @@ MATCH_CORPUS: list[tuple[str, str, bool]] = [
     ('"foo bar', '"foo bar', reference_match_filter('"foo bar', '"foo bar')),
     ('"foo bar.pdf', '"foo bar', reference_match_filter('"foo bar.pdf', '"foo bar')),
     (
-        'ST_PRO "unclosed',
-        'ST_PRO "unclosed',
-        reference_match_filter('ST_PRO "unclosed', 'ST_PRO "unclosed'),
+        'PROD "unclosed',
+        'PROD "unclosed',
+        reference_match_filter('PROD "unclosed', 'PROD "unclosed'),
     ),
     # extension / suffix shaped names
     (_NAME_LNK, "lnk", True),
@@ -228,17 +228,17 @@ MATCH_CORPUS: list[tuple[str, str, bool]] = [
     ("a..b", "a..b", True),
     ("a..b", ".b", True),
     # combined operators
-    ("ST_PRO_Mutest_V01.mttl", "ST_PRO -Mutest", False),
-    ("ST_PRO_Test_V01.mttl", "ST_PRO -Mutest V01", True),
-    ("ST_PRO_Test_V02.mttl", "ST_PRO -Mutest V01", False),
+    ("PROD_Tester_V01.mttl", "PROD -Tester", False),
+    ("PROD_Test_V01.mttl", "PROD -Tester V01", True),
+    ("PROD_Test_V02.mttl", "PROD -Tester V01", False),
     ("a.pdf", "a OR b -c", True),
     ("b_c.pdf", "a OR b -c", False),
     ("b_c.pdf", "a OR b -x", True),
     ("b_c.d_e.pdf", '"d_e"', True),
     ("d_e.pdf", '"d_e"', True),
     ("dxe.pdf", '"d_e"', False),
-    ("ST_PRO_Mutest_V01.mttx.lnk", "mutest lnk", True),
-    ("ST_PRO_Mutest_V01.mttx.lnk", "mttl lnk", False),
+    ("PROD_Tester_V1.mttx.lnk", "Tester lnk", True),
+    ("PROD_Tester_V1.mttx.lnk", "mttl lnk", False),
 ]
 
 FULL_CORPUS: list[tuple[str, str, bool]] = MATCH_CORPUS
@@ -249,7 +249,7 @@ FULL_CORPUS: list[tuple[str, str, bool]] = MATCH_CORPUS
 # ---------------------------------------------------------------------------
 
 _EXTENSIONS = ("", "All", "pdf", "lnk", "mttx.lnk")
-_FILTERS = ("", "ST_PRO", "ST_PRO OR ST_ENG", "-Mutest")
+_FILTERS = ("", "PROD", "PROD OR DEV", "-Tester")
 
 # (recursive, extension, filter_text) — 40 combinations
 SCAN_CASES: list[tuple[bool, str, str]] = [

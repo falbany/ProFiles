@@ -50,7 +50,7 @@ def test_machine_configuration_model_init():
     )
     mc = MachineConfiguration(
         extensions=(".txt",),
-        filters=("ST_PRO",),
+        filters=("PROD",),
         row_colors=(("pattern", "color"),),
         search_exclude_files=("*.tmp",),
         match=match,

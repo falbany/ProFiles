@@ -23,17 +23,17 @@ Operator precedence (highest to lowest):
 
 Examples::
 
-    >>> match_filter("ST_PRO_Mutest_V01.mttl", "ST_PRO")
+    >>> match_filter("PROD_Tester_V01.mttl", "PROD")
     True
-    >>> match_filter("ST_ENG_Test.mttl", "ST_PRO OR ST_ENG")
+    >>> match_filter("DEV_Test.mttl", "PROD OR DEV")
     True
-    >>> match_filter("ST_PRO_Mutest.mttl", "ST_PRO -Mutest")
+    >>> match_filter("PROD_Tester.mttl", "PROD -Tester")
     False
     >>> match_filter("file.mttl", '"exact name"')
     False
-    >>> match_filter("ST_PRO_Mutest_V01.mttl", "ST_PRO Mutest V01")
+    >>> match_filter("PROD_Tester_V01.mttl", "PROD Tester V01")
     True
-    >>> match_filter("ST_ENG_Only.mttl", "ST_PRO OR ST_ENG OR -Only")
+    >>> match_filter("DEV_Only.mttl", "PROD OR DEV OR -Only")
     True
 """
 

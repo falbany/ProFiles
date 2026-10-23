@@ -52,7 +52,7 @@ def test_parse_log_line_handles_user_host_source() -> None:
     """Sources in ``user@host`` form (e.g. f.albany@ST-465) stay intact."""
     entry = parse_log_line(
         '2026-10-22 15:05:22 - INFO  - f.albany@ST-465: SCAN_COMPLETE dir="base" '
-        "ext=.mttl filter=MuTest files=51 recursive=true"
+        "ext=.mttl filter=Tester files=51 recursive=true"
     )
 
     assert entry.source == "f.albany@ST-465"

@@ -104,7 +104,7 @@ class Defaults(BaseModel):
     search_dir: str = ""
     recursive_search: bool = False
     extensions: list[str] = Field(default_factory=lambda: ["All", ".lnk"])
-    filters: list[str] = Field(default_factory=lambda: ["", "ST_PRO", "ST_ENG"])
+    filters: list[str] = Field(default_factory=lambda: ["", "PROD", "DEV"])
     row_colors: list[RowColor] = Field(default_factory=list)
     search_exclude_dirs: list[str] = Field(default_factory=lambda: [".git"])
     search_exclude_files: list[str] = Field(default_factory=list)

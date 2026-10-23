@@ -71,12 +71,12 @@ class TestColumnExtractor:
         extractor.add_rule("Device", r"Device_([A-Z0-9]+)", group=1, priority=5)
 
         result = extractor.extract_all(
-            "ST_PRO_Device_ABC123_V01-Rel6.2.1.mttl",
+            "PROD_Device_ABC123_V1.0.2-beta.mttl",
             ("File", "Version", "Device"),
         )
 
-        assert result["File"] == "ST_PRO_Device_ABC123_V01-Rel6.2.1.mttl"
-        assert result["Version"] == "01-Rel6.2.1.mttl"
+        assert result["File"] == "PROD_Device_ABC123_V1.0.2-beta.mttl"
+        assert result["Version"] == "1.0.2-beta.mttl"
         assert result["Device"] == "ABC123"
 
     def test_priority_order(self) -> None:
@@ -197,7 +197,7 @@ class TestColumnExtractorImmutability:
         extractor.add_rule("Device", r"Device_([A-Z0-9]+)", group=1, priority=5)
 
         filenames = [
-            f"ST_PRO_{name}_V{version}.mttl"
+            f"PROD_{name}_V{version}.mttl"
             for name in ("ABC", "DEF", "GHI")
             for version in ("01", "02", "03", "04")
         ]

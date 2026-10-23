@@ -48,7 +48,7 @@ class TestDefaults:
     def test_defaults(self) -> None:
         d = Defaults()
         assert d.extensions == ["All", ".lnk"]
-        assert d.filters == ["", "ST_PRO", "ST_ENG"]
+        assert d.filters == ["", "PROD", "DEV"]
         assert d.theme == "auto"
         assert d.verbose == "INFO"
 
