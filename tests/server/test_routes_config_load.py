@@ -43,6 +43,97 @@ async def test_get_config_reports_path_and_existence(
     assert payload["active_directory"] == str(tmp_path)
 
 
+VALID_DROP = "defaults:\n  title: Dropped\n"
+
+
+class TestLoadContentEndpoint:
+    """POST /api/config/load-content — session-only trial from dropped files."""
+
+    @pytest.mark.anyio
+    async def test_valid_content_swaps_config_only(
+        self, config_state: ServerState, tmp_path: Path
+    ) -> None:
+        # Baseline a real resolved path (mirrors the GET test): the shared
+        # _config_response helper normalizes config_path, so "unchanged"
+        # is only meaningful from a set value.
+        config_state.config_path = tmp_path / ".profiles"
+        path_before = config_state.config_path
+        active_before = config_state.active_directory
+        app = create_app(config_state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/config/load-content",
+                json={"filename": "my.profiles", "content": VALID_DROP},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["session_trial"] is True
+        assert body["title"] == "Dropped"
+        # Session-only: resolution state must be untouched.
+        assert config_state.config_path == path_before
+        assert config_state.active_directory == active_before
+
+    @pytest.mark.anyio
+    async def test_invalid_content_returns_400_and_keeps_config(
+        self, config_state: ServerState
+    ) -> None:
+        original = config_state.config
+        app = create_app(config_state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/config/load-content",
+                json={"filename": "broken.profiles", "content": "defaults: [unclosed"},
+            )
+
+        assert response.status_code == 400
+        assert "broken.profiles" in response.json()["detail"]
+        assert config_state.config is original
+
+    @pytest.mark.anyio
+    async def test_wrong_filename_rejected(self, config_state: ServerState) -> None:
+        app = create_app(config_state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/config/load-content",
+                json={"filename": "notes.txt", "content": VALID_DROP},
+            )
+
+        assert response.status_code == 400
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        "filename",
+        ["my.profiles", ".profiles", "prod.profiles.yaml", "data.yml", "config.yaml"],
+    )
+    async def test_accepted_suffixes(self, config_state: ServerState, filename: str) -> None:
+        app = create_app(config_state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/config/load-content",
+                json={"filename": filename, "content": VALID_DROP},
+            )
+
+        assert response.status_code == 200, f"{filename} should be accepted"
+        assert response.json()["session_trial"] is True
+
+    @pytest.mark.anyio
+    async def test_no_disk_writes(
+        self, config_state: ServerState, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        before = sorted(str(p) for p in tmp_path.rglob("*"))
+        app = create_app(config_state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/config/load-content",
+                json={"filename": "my.profiles", "content": VALID_DROP},
+            )
+
+        assert response.status_code == 200
+        assert sorted(str(p) for p in tmp_path.rglob("*")) == before
+
+
 @pytest.mark.anyio
 async def test_load_yml_suffix_is_accepted(config_state: ServerState, tmp_path: Path) -> None:
     config_path = tmp_path / ".profiles.yml"

@@ -24,6 +24,11 @@ class LoadConfigRequest(BaseModel):
     config_path: str
 
 
+class LoadContentRequest(BaseModel):
+    filename: str
+    content: str
+
+
 class CreateConfigRequest(BaseModel):
     directory: str
 
@@ -133,6 +138,41 @@ async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> 
     state.config_path = config_path
     state.active_directory = _choose_active_directory(config_path, loaded)
     return _config_response(state)
+
+
+_ACCEPTED_DROP_SUFFIXES = (
+    ".profiles",
+    ".profiles.yaml",
+    ".profiles.yml",
+    ".yaml",
+    ".yml",
+)
+
+
+@router.post("/load-content")
+async def load_content_endpoint(payload: LoadContentRequest, request: Request) -> dict:
+    """Apply a dropped configuration file as a session-only trial.
+
+    The content is parsed in memory and swaps the live configuration.
+    Nothing is written to disk, and ``config_path``/``active_directory``
+    stay untouched, so restart resolution is unaffected.
+    """
+    state: ServerState = request.app.state.server_state
+    if not payload.filename.lower().endswith(_ACCEPTED_DROP_SUFFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not a ProFiles configuration file: {payload.filename}",
+        )
+
+    try:
+        loaded = ConfigReader.from_content(payload.content, display_name=payload.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    state.config = loaded
+    response = _config_response(state)
+    response["session_trial"] = True
+    return response
 
 
 @router.post("/create")
