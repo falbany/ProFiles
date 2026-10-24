@@ -286,6 +286,7 @@ $RECYCLE.BIN/
 .sisyphus/
 .omo/
 .profiles*
+*.profiles
 *.log
 *superpowers/
 !docs/superpowers/
