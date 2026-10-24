@@ -116,12 +116,18 @@ requires = [
 # Declared so that a Briefcase build registers ``*.profiles`` (e.g.
 # ``my.profiles``) as a ProFiles document on every platform: Info.plist
 # document types on macOS, the registry on Windows, .desktop MIME on Linux.
-# This is inert until a Briefcase build runs; the literal dotfile ``.profiles``
-# is not claimable (no filename extension for the OS to match).
+# Briefcase 0.4.x binds the SINGULAR ``document_type`` table (the plural
+# ``document_types`` key is absorbed by **kwargs and overwritten with {}),
+# and each entry requires extension/icon/description/url. The literal
+# dotfile ``.profiles`` is not claimable (no filename extension to match).
 # See docs/superpowers/specs/2026-10-13-launch-and-config-handoff-design.md
-document_types = ["profiles"]
+[tool.briefcase.app.profiles.document_type.profiles]
+extension = "profiles"
+description = "ProFiles launch-handoff document"
+icon = "img/profiles"
+url = "https://github.com/falbany/profiles"
 
-[tool.briefcase.app.profiles.macOS]
+[tool.briefcase.app.profiles.document_type.profiles.macOS]
 CFBundleTypeRole = "Editor"
 LSHandlerRank = "Owner"
 

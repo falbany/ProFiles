@@ -61,6 +61,29 @@ def test_only_release_workflow_triggers_on_version_tags() -> None:
     )
 
 
+def test_briefcase_document_type_uses_singular_table_with_url() -> None:
+    """Briefcase 0.4.x binds the *singular* ``document_type`` table param.
+
+    The plural ``document_types`` key is absorbed by **kwargs and then
+    overwritten with ``{}`` (AppConfig.__init__ assigns from the singular
+    ``document_type`` param only), so no CFBundleDocumentTypes ever reach
+    Info.plist and macOS cannot associate ``*.profiles`` files. Each entry
+    requires extension/icon/description/url (validate_document_type_config).
+    """
+    data = _load()
+    doc_types = data["tool"]["briefcase"]["app"]["profiles"]["document_type"]
+    assert isinstance(doc_types, dict) and "profiles" in doc_types
+    entry = doc_types["profiles"]
+    assert entry["extension"] == "profiles"
+    assert entry["extension"].isalnum()
+    assert isinstance(entry["icon"], str) and entry["icon"]
+    assert isinstance(entry["description"], str) and entry["description"]
+    assert entry["url"].startswith("https://")
+    mac = entry.get("macOS", {})
+    assert mac.get("CFBundleTypeRole") == "Editor"
+    assert mac.get("LSHandlerRank") == "Owner"
+
+
 def test_briefcase_requires_runtime_complete_and_tk_free() -> None:
     requires = " ".join(_load()["tool"]["briefcase"]["app"]["profiles"]["requires"]).lower()
     for pkg in ("pydantic", "fastapi", "uvicorn", "pywebview", "sse-starlette", "qrcode", "ruamel"):
