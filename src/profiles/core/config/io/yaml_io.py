@@ -45,6 +45,19 @@ def read_yaml(path: Path | str) -> dict:
         return _yaml.load(fh) or {}
 
 
+def read_yaml_text(text: str) -> dict:
+    """Parse a YAML string into a plain dict (or raise).
+
+    In-memory counterpart of :func:`read_yaml` — same parser, no disk
+    access. Used for content that never touches a file (e.g. dropped
+    configuration previews).
+
+    Raises:
+        ruamel.yaml.YAMLError: If *text* is not valid YAML.
+    """
+    return _yaml.load(text) or {}
+
+
 def write_value(path: Path | str, dotted_key: str, value: object) -> None:
     """Set a nested key in the YAML file, preserving comments/formatting.
 

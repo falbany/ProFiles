@@ -11,7 +11,7 @@ from pathlib import Path
 
 from profiles.core.config.inheritance import resolve_configs
 from profiles.core.config.io.yaml_io import find_config_file as _find_config_file
-from profiles.core.config.io.yaml_io import read_yaml
+from profiles.core.config.io.yaml_io import read_yaml, read_yaml_text
 from profiles.core.config.models import (
     AppConfig,
     ColumnConfiguration,
@@ -60,6 +60,53 @@ class ConfigReader:
         if config is None:
             config = self.load()
         return _find_configuration_by_hostname(config, hostname)
+
+    @classmethod
+    def from_content(cls, text: str, *, display_name: str = "<dropped config>") -> AppConfig:
+        """Parse configuration *text* in memory, strictly.
+
+        In-memory counterpart of :meth:`load` for dropped configuration
+        files. Unlike :meth:`load`, this never falls back to defaults and
+        never touches the disk: content that cannot be parsed or
+        validated raises :class:`ValueError` so the caller can report the
+        problem and keep the previously active configuration.
+
+        Args:
+            text: Raw YAML configuration content.
+            display_name: Human-readable file name for error messages.
+
+        Returns:
+            The parsed :class:`AppConfig` (no ``config_path`` — it came
+            from content, not a file).
+
+        Raises:
+            ValueError: If *text* is empty, invalid YAML, or violates the
+                configuration schema.
+        """
+        try:
+            raw = read_yaml_text(text)
+            if not raw:
+                raise ValueError("configuration file is empty")
+            validate(raw)
+            schema = AppConfigYaml.model_validate(raw)
+            config = AppConfig()
+            # A throwaway reader bound to a <memory> sentinel: the apply
+            # helpers are instance methods but never read instance state
+            # (verified: none reference ``_config_path``), and no step
+            # touches the disk.
+            reader = cls(Path("<memory>"))
+            reader._apply_defaults(config, schema)
+            reader._apply_columns(config, schema)
+            reader._apply_hooks(config, schema)
+            config.configurations = reader._build_configurations(schema)
+            reader._build_column_configs(config)
+            return config
+        except ValueError as exc:
+            raise ValueError(f"Invalid dropped configuration ({display_name}): {exc}") from exc
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid dropped configuration ({display_name}): {type(exc).__name__}: {exc}"
+            ) from exc
 
     def load(self) -> AppConfig:
         """Load and parse the configuration file.

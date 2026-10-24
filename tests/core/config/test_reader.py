@@ -4,12 +4,40 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from profiles.core.config.reader import ConfigReader
 
 
 def _write_yaml(path: Path, body: str) -> Path:
     path.write_text(body, encoding="utf-8")
     return path
+
+
+class TestFromContent:
+    """Strict in-memory parsing for dropped configuration files (no disk I/O)."""
+
+    def test_valid_content_applies_settings(self) -> None:
+        config = ConfigReader.from_content("defaults:\n  title: Dropped Config\n  theme: dark\n")
+        assert config.title == "Dropped Config"
+        assert config.theme == "dark"
+
+    def test_invalid_yaml_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="my dropped config"):
+            ConfigReader.from_content("defaults: [unclosed", display_name="my dropped config")
+
+    def test_empty_content_raises(self) -> None:
+        with pytest.raises(ValueError):
+            ConfigReader.from_content("")
+
+    def test_schema_violation_raises(self) -> None:
+        with pytest.raises(ValueError):
+            ConfigReader.from_content('defaults: "not-a-mapping"\n')
+
+    def test_creates_no_files(self, tmp_path: Path) -> None:
+        before = sorted(p.name for p in tmp_path.iterdir())
+        ConfigReader.from_content("defaults:\n  title: X\n")
+        assert sorted(p.name for p in tmp_path.iterdir()) == before
 
 
 class TestConfigReader:
