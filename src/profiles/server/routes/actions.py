@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from profiles.core import actions
 from profiles.core.processing.file_metadata import get_file_metadata
+from profiles.core.telemetry.diagnostics import default_log_path
 from profiles.server.state import ServerState
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
@@ -80,7 +81,7 @@ async def launch_with_args(payload: LaunchWithArgsRequest) -> dict:
 @router.post("/open-log")
 async def open_log() -> dict:
     """Open log file in default application."""
-    log_path = Path.cwd() / "profiles.log"
+    log_path = default_log_path()
     res = actions.open_log_file(log_path)
     return {
         "status": str(res.status.value) if hasattr(res.status, "value") else str(res.status),

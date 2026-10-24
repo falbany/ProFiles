@@ -227,6 +227,20 @@ def get_logger() -> logging.Logger:
     return _DEFAULT_LOGGER
 
 
+def default_log_path() -> Path:
+    """Return the per-user default log path: ``~/.profiles/profiles.log``.
+
+    CWD-independent on purpose: Briefcase bundles launch the app with
+    ``CWD=/`` (read-only on macOS), so a CWD-relative log path crashes
+    with ``OSError: [Errno 30]`` at the first log write.
+
+    Returns:
+        Absolute path under the user folder in a dedicated ``.profiles``
+        directory (matching the ``.profiles`` config-file convention).
+    """
+    return Path.home() / ".profiles" / "profiles.log"
+
+
 def configure_logger(
     log_path: Path | str = "profiles.log",
     source: str = "ProFiles",

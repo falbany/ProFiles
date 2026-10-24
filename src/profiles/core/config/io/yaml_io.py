@@ -105,6 +105,20 @@ def _find_named_file(start: Path, name: str, max_depth: int) -> Path | None:
     return None
 
 
+def _is_unsafe_search_root(path: Path) -> bool:
+    """Return True when *path* must never be walked as a search root.
+
+    Briefcase bundles launch the app with ``CWD=/``; a depth-N subtree
+    scan from the filesystem root (POSIX ``/``, Windows drive roots)
+    would walk the entire disk looking for a config file.
+    """
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return True
+    return resolved.parent == resolved
+
+
 def find_config_file(
     start_path: Path | None = None,
     max_depth: int = 5,
@@ -127,6 +141,9 @@ def find_config_file(
 
     start = start_path.resolve()
     if not start.is_dir():
+        return None
+
+    if _is_unsafe_search_root(start):
         return None
 
     for name in CONFIG_FILE_NAMES:

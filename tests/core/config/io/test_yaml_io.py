@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from profiles.core.config.io.yaml_io import find_config_file, read_yaml, write_value
+from profiles.core.config.io.yaml_io import (
+    _is_unsafe_search_root,
+    find_config_file,
+    read_yaml,
+    write_value,
+)
 
 
 class TestReadYaml:
@@ -107,3 +112,21 @@ class TestFindConfigFile:
 
     def test_not_found(self, tmp_path: Path) -> None:
         assert find_config_file(start_path=tmp_path) is None
+
+
+class TestFilesystemRootGuard:
+    """find_config_file must never walk the filesystem root as a search root.
+
+    Briefcase bundles launch with ``CWD=/``; a depth-N subtree scan from
+    there walks the entire disk (observed as a multi-minute stall in the
+    bundled app before any window opens).
+    """
+
+    def test_root_predicate_flags_filesystem_roots(self) -> None:
+        assert _is_unsafe_search_root(Path("/")) is True
+        assert _is_unsafe_search_root(Path.home()) is False
+        assert _is_unsafe_search_root(Path("/Users")) is False
+
+    def test_find_config_file_never_scans_filesystem_root(self) -> None:
+        """A root start path yields no config immediately — no disk walk."""
+        assert find_config_file(start_path=Path("/")) is None

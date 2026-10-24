@@ -18,7 +18,11 @@ from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.environment.system import format_user_host
 from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry import events
-from profiles.core.telemetry.diagnostics import configure_logger, install_crash_hook
+from profiles.core.telemetry.diagnostics import (
+    configure_logger,
+    default_log_path,
+    install_crash_hook,
+)
 from profiles.launch import (
     detect_launch_context,
     resolve_config_path,
@@ -82,7 +86,7 @@ class ProFileApp:
     def __init__(
         self,
         config_path: str | Path | None = None,
-        log_path: str | Path = "profiles.log",
+        log_path: str | Path | None = None,
         headless: bool = False,
         server_only: bool = False,
         no_config_propose: bool = False,
@@ -100,7 +104,7 @@ class ProFileApp:
             gui_backend: GUI backend to use ('tk' or 'web'). Defaults to 'web'.
         """
         self._config_path = Path(config_path) if config_path is not None else None
-        self._log_path = Path(log_path)
+        self._log_path = Path(log_path) if log_path is not None else default_log_path()
         self._headless = headless
         self._server_only = server_only
         self._no_config_propose = no_config_propose

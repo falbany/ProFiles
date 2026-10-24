@@ -27,6 +27,7 @@ TORN_LINE = "Traceback (most recent call last):"
 def log_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ServerState:
     """State whose log file lives in a temp dir, isolated from the repo."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("profiles.server.routes.logs._DEFAULT_LOG_PATH", tmp_path / "profiles.log")
     return ServerState(config=AppConfig(title="Test Bench"))
 
 
@@ -110,7 +111,7 @@ def test_read_log_entries_respects_limit(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_get_logs_returns_entries_and_size(log_state: ServerState) -> None:
+async def test_get_logs_returns_entries_and_size(log_state: ServerState, tmp_path: Path) -> None:
     Path("profiles.log").write_text(GOOD_LINE + "\n" + ERROR_LINE + "\n", encoding="utf-8")
     app = create_app(log_state)
 
@@ -119,7 +120,7 @@ async def test_get_logs_returns_entries_and_size(log_state: ServerState) -> None
 
     assert response.status_code == 200
     data = response.json()
-    assert data["path"] == "profiles.log"
+    assert data["path"] == str(tmp_path / "profiles.log")
     assert data["total_returned"] == 2
     assert data["size_bytes"] > 0
     assert data["entries"][0]["event"] == "SCAN_COMPLETE"

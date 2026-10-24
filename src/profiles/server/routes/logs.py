@@ -5,11 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from profiles.core.telemetry import log_viewer
+from profiles.core.telemetry.diagnostics import default_log_path
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 # Matches the default used by ProFileApp; overridable per request.
-_DEFAULT_LOG_PATH = "profiles.log"
+_DEFAULT_LOG_PATH = default_log_path()
 
 
 @router.get("")

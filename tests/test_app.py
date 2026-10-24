@@ -14,6 +14,7 @@ import pytest
 
 import profiles
 from profiles.app import ProFileApp, init_default_config, main
+from profiles.core.telemetry.diagnostics import default_log_path
 from profiles.desktop.lifecycle import ServerStartError
 from profiles.gui.main_window import MainWindow
 
@@ -56,7 +57,7 @@ class TestProFileAppInit:
     def test_default_construction(self) -> None:
         app = ProFileApp()
         assert app._config_path is None
-        assert app._log_path == Path("profiles.log")
+        assert app._log_path == default_log_path()
         assert app._headless is False
         assert app._config is None
         assert app._window is None

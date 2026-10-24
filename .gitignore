@@ -302,3 +302,6 @@ $RECYCLE.BIN/
 # `pip install .` produces a working UI without a Node.js toolchain.
 # (See src/profiles/web/.gitignore, which negates this entry.)
 !src/profiles/web/dist/
+
+# Legacy CWD-relative log output (now defaults to ~/.profiles/profiles.log)
+profiles.log
