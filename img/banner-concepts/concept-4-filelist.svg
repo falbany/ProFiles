@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1408" height="768" viewBox="0 0 1408 768">
+  <!-- Concept 4 — Product Shot: wordmark left, scanned-file list card right -->
+  <rect width="1408" height="768" fill="#0d1017"/>
+
+  <!-- app mark -->
+  <g transform="translate(120 150)">
+    <rect width="260" height="260" rx="49" fill="#4f46e5"/>
+    <rect x="65" y="65"  width="130" height="24.4" fill="#ffffff"/>
+    <rect x="65" y="113" width="130" height="24.4" fill="#ffffff"/>
+    <rect x="65" y="161" width="81"  height="24.4" fill="#ffffff"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="120" y="530" font-family="'SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif"
+        font-size="120" font-weight="700" letter-spacing="-2.5" fill="#ffffff">ProFiles</text>
+
+  <!-- accent underline -->
+  <rect x="124" y="562" width="170" height="9" rx="4.5" fill="#6366f1"/>
+
+  <!-- tagline -->
+  <text x="120" y="634" font-family="'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif"
+        font-size="32" fill="#9aa3b2">Launch the right program,</text>
+  <text x="120" y="680" font-family="'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif"
+        font-size="32" fill="#9aa3b2">for the right machine, instantly.</text>
+
+  <!-- file list card -->
+  <g>
+    <rect x="700" y="120" width="560" height="528" rx="28" fill="#151b28" stroke="#232c3f" stroke-width="2"/>
+
+    <!-- card header -->
+    <circle cx="744" cy="164" r="10" fill="#f87171"/>
+    <circle cx="776" cy="164" r="10" fill="#fbbf24"/>
+    <circle cx="808" cy="164" r="10" fill="#34d399"/>
+    <text x="1196" y="172" text-anchor="end"
+          font-family="Menlo,Consolas,monospace" font-size="24" fill="#5b6478">scan: 3 found</text>
+
+    <!-- row 1 -->
+    <rect x="732" y="204" width="496" height="108" rx="16" fill="#1e2736"/>
+    <rect x="760" y="232" width="36" height="36" rx="9" fill="#4f46e5"/>
+    <rect x="766" y="240" width="24" height="4.5" fill="#ffffff"/>
+    <rect x="766" y="248" width="24" height="4.5" fill="#ffffff"/>
+    <rect x="766" y="256" width="15" height="4.5" fill="#ffffff"/>
+    <text x="820" y="252" font-family="Menlo,Consolas,monospace" font-size="28" fill="#e2e8f0">program_A.mttl</text>
+    <rect x="820" y="272" width="180" height="12" rx="6" fill="#2c3648"/>
+    <text x="1196" y="288" text-anchor="end" font-family="Menlo,Consolas,monospace" font-size="24" fill="#34d399">ready</text>
+
+    <!-- row 2 -->
+    <rect x="732" y="332" width="496" height="108" rx="16" fill="#1e2736"/>
+    <rect x="760" y="360" width="36" height="36" rx="9" fill="#4f46e5"/>
+    <rect x="766" y="368" width="24" height="4.5" fill="#ffffff"/>
+    <rect x="766" y="376" width="24" height="4.5" fill="#ffffff"/>
+    <rect x="766" y="384" width="15" height="4.5" fill="#ffffff"/>
+    <text x="820" y="380" font-family="Menlo,Consolas,monospace" font-size="28" fill="#e2e8f0">module_B.mttl</text>
+    <rect x="820" y="400" width="140" height="12" rx="6" fill="#2c3648"/>
+    <text x="1196" y="416" text-anchor="end" font-family="Menlo,Consolas,monospace" font-size="24" fill="#34d399">ready</text>
+
+    <!-- row 3 (selected) -->
+    <rect x="732" y="460" width="496" height="108" rx="16" fill="#2a3350" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="760" y="488" width="36" height="36" rx="9" fill="#818cf8"/>
+    <rect x="766" y="496" width="24" height="4.5" fill="#ffffff"/>
+    <rect x="766" y="504" width="24" height="4.5" fill="#ffffff"/>
+    <rect x="766" y="512" width="15" height="4.5" fill="#ffffff"/>
+    <text x="820" y="508" font-family="Menlo,Consolas,monospace" font-size="28" fill="#ffffff">my.profiles</text>
+    <rect x="820" y="528" width="200" height="12" rx="6" fill="#3d4874"/>
+    <text x="1196" y="544" text-anchor="end" font-family="Menlo,Consolas,monospace" font-size="24" fill="#a5b4fc">selected</text>
+  </g>
+</svg>

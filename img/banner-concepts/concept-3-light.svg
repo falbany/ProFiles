@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1408" height="768" viewBox="0 0 1408 768">
+  <!-- Concept 3 — Light & Minimal: white canvas, centered mark, indigo wordmark -->
+  <rect width="1408" height="768" fill="#ffffff"/>
+
+  <!-- faint oversized bars, background texture -->
+  <g fill="#4f46e5" opacity="0.05">
+    <rect x="-80" y="60"  width="480" height="70" rx="35"/>
+    <rect x="-80" y="170" width="480" height="70" rx="35"/>
+    <rect x="-80" y="280" width="290" height="70" rx="35"/>
+    <rect x="1010" y="430" width="480" height="70" rx="35"/>
+    <rect x="1010" y="540" width="480" height="70" rx="35"/>
+    <rect x="1010" y="650" width="290" height="70" rx="35"/>
+  </g>
+
+  <!-- app mark -->
+  <g transform="translate(594 130)">
+    <rect width="220" height="220" rx="41" fill="#4f46e5"/>
+    <rect x="55" y="55"  width="110" height="20.6" fill="#ffffff"/>
+    <rect x="55" y="96"  width="110" height="20.6" fill="#ffffff"/>
+    <rect x="55" y="137" width="68"  height="20.6" fill="#ffffff"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="704" y="520" text-anchor="middle"
+        font-family="'SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif"
+        font-size="140" font-weight="700" letter-spacing="-3" fill="#4f46e5">ProFiles</text>
+
+  <!-- divider -->
+  <rect x="634" y="560" width="140" height="6" rx="3" fill="#e0e7ff"/>
+
+  <!-- tagline -->
+  <text x="704" y="632" text-anchor="middle"
+        font-family="'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif"
+        font-size="38" fill="#6b7280">A modern GUI launcher for production test programs</text>
+</svg>
