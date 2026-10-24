@@ -1,15 +1,16 @@
 <div align="center">
-  <h1>ProFiles</h1>
 
-  <p><strong>The Highly Configurable, Multi-Purpose File Launcher</strong></p>
+![ProFiles banner](img/ProFiles_banner.png)
 
-  ![ProFiles_banner](img/ProFiles_banner.png)
 
-  [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-  [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-  [![Pylint](https://img.shields.io/badge/linting-pylint-09A64D.svg)](https://github.com/pylint-dev/pylint)
-  [![License](https://img.shields.io/badge/license-MIT-brightgreen)](./LICENCE)
-  [![GitHub](https://img.shields.io/badge/GitHub-falbany/ProFiles-181717?logo=github)](https://github.com/falbany/ProFiles)
+
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Pylint](https://img.shields.io/badge/linting-pylint-09A64D.svg)](https://github.com/pylint-dev/pylint)
+[![License](https://img.shields.io/badge/license-MIT-brightgreen)](./LICENCE)
+[![GitHub](https://img.shields.io/badge/GitHub-falbany/ProFiles-181717?logo=github)](https://github.com/falbany/ProFiles)
+
+🇬🇧 **English** | 🇫🇷 [Français](./README.fr.md)
 </div>
 
 ---
@@ -24,8 +25,14 @@
   - [🚀 Execute \& Automate](#-execute--automate)
   - [⚙️ Auto-Configuration](#️-auto-configuration)
 - [🚀 Installation](#-installation)
-  - [Quick Install (Recommended)](#quick-install-recommended)
-  - [Manual Install](#manual-install)
+  - [Option 1: Native Installer (Recommended)](#option-1-native-installer-recommended)
+  - [Option 2: One-Line Install (Developers)](#option-2-one-line-install-developers)
+  - [Option 3: Wizard / Manual](#option-3-wizard--manual)
+    - [Option 1: pip (system-wide)](#option-1-pip-system-wide)
+    - [Option 2: pipx (recommended for system-wide)](#option-2-pipx-recommended-for-system-wide)
+    - [Option 3: uv (development)](#option-3-uv-development)
+    - [Option 4: Poetry (development)](#option-4-poetry-development)
+  - [Web Frontend Build](#web-frontend-build)
   - [Desktop Shortcut](#desktop-shortcut)
 - [💻 Usage](#-usage)
   - [Web Mode (default)](#web-mode-default)
@@ -42,24 +49,27 @@
 ## ✨ Key Features
 
 ### 🔍 Smart Search & Browse
-* **Google-Style Operators**: Implicit AND, `OR`, NOT (`-`), exact phrase (`"..."`).
-* **Dynamic Columns**: Extract metadata (version, device, revision) from filenames using regex rules.
-* **Parallel Recursion**: High-performance background thread scanning keeps the UI responsive.
-* **Glob Exclusion**: Skip noisy directories (e.g., `node_modules`, `.venv`) and filter out files matching glob patterns (e.g., `*backup*`, `~$*`).
+
+- **Google-Style Operators**: Implicit AND, `OR`, NOT (`-`), exact phrase (`"..."`).
+- **Dynamic Columns**: Extract metadata (version, device, revision) from filenames using regex rules.
+- **Parallel Recursion**: High-performance background thread scanning keeps the UI responsive.
+- **Glob Exclusion**: Skip noisy directories (e.g., `node_modules`, `.venv`) and filter out files matching glob patterns (e.g., `*backup*`, `~$*`).
 
 ### 🚀 Execute & Automate
-* **Modern Web UI**: React + Vite PWA served by an integrated FastAPI backend — desktop shell (PyWebView), any browser on the LAN, or headless.
-* **Structured Log Viewer**: Built-in modal with level filters, live tail, and external log opening.
-* **Launch Workflows (Hooks)**: Intercept file launches with powerful step-based YAML workflows. Run background scripts, display Markdown notifications, or completely replace the OS default launcher.
-* **One-Click Launch**: Native OS execution (Windows `os.startfile`, macOS `open`, Linux `xdg-open`).
-* **Custom CLI Arguments**: Right-click to launch with custom arguments, remembered per row.
-* **Headless Mode**: Trigger file launches via CLI for CI/CD or scripts.
-* **File Operations**: Bulk launch, copy path, hash verification (SHA-256), and safe deletion.
+
+- **Modern Web UI**: React + Vite PWA served by an integrated FastAPI backend — desktop shell (PyWebView), any browser on the LAN, or headless.
+- **Structured Log Viewer**: Built-in modal with level filters, live tail, and external log opening.
+- **Launch Workflows (Hooks)**: Intercept file launches with powerful step-based YAML workflows. Run background scripts, display Markdown notifications, or completely replace the OS default launcher.
+- **One-Click Launch**: Native OS execution (Windows `os.startfile`, macOS `open`, Linux `xdg-open`).
+- **Custom CLI Arguments**: Right-click to launch with custom arguments, remembered per row.
+- **Headless Mode**: Trigger file launches via CLI for CI/CD or scripts.
+- **File Operations**: Bulk launch, copy path, hash verification (SHA-256), and safe deletion.
 
 ### ⚙️ Auto-Configuration
-* **Zero-Touch Deployment**: Detects hostname/IP/path to auto-select matching configurations for multi-station setups.
-* **Visual Formatting**: Rules-based row coloring with automatic contrast adjustment.
-* **No-Config Fallback**: Sensible defaults allow immediate use without a `.profiles` file.
+
+- **Zero-Touch Deployment**: Detects hostname/IP/path to auto-select matching configurations for multi-station setups.
+- **Visual Formatting**: Rules-based row coloring with automatic contrast adjustment.
+- **No-Config Fallback**: Sensible defaults allow immediate use without a `.profiles` file.
 
 ## 🚀 Installation
 
@@ -78,18 +88,20 @@ Download the installer for your OS from
 uv tool install profiles-app      # or: pipx install profiles-app
 ```
 
-*(requires Python 3.11+; from GitHub release wheel: add `--from <wheel-url>`)*
+_(requires Python 3.11+; from GitHub release wheel: add `--from <wheel-url>`)_
 
 ### Option 3: Wizard / Manual
 
 ```bash
 python install.py
 ```
-*Runs an interactive wizard that installs the package.*
+
+_Runs an interactive wizard that installs the package._
 
 From a source clone:
 
 #### Option 1: pip (system-wide)
+
 ```bash
 git clone https://github.com/falbany/ProFiles.git
 cd ProFiles
@@ -97,6 +109,7 @@ pip install .
 ```
 
 #### Option 2: pipx (recommended for system-wide)
+
 ```bash
 git clone https://github.com/falbany/ProFiles.git
 cd ProFiles
@@ -104,6 +117,7 @@ pipx install .
 ```
 
 #### Option 3: uv (development)
+
 ```bash
 git clone https://github.com/falbany/ProFiles.git
 cd ProFiles
@@ -113,6 +127,7 @@ uv run pytest --cov  # run tests
 ```
 
 #### Option 4: Poetry (development)
+
 ```bash
 git clone https://github.com/falbany/ProFiles.git
 cd ProFiles
@@ -126,6 +141,7 @@ ProFiles includes a React web frontend that is automatically built during instal
 
 **With npm installed:**
 If Node.js and npm are installed, the web frontend will be built automatically:
+
 ```bash
 pip install .
 # Building web frontend...
@@ -134,6 +150,7 @@ pip install .
 
 **Without npm:**
 If npm is not installed, ProFiles will use pre-built web assets:
+
 ```bash
 pip install .
 # WARNING: npm not found. Using pre-built web assets.
@@ -141,6 +158,7 @@ pip install .
 
 **Manual rebuild:**
 To rebuild the web frontend after modifications:
+
 ```bash
 python -m profiles.web.build --force
 ```
@@ -148,7 +166,9 @@ python -m profiles.web.build --force
 Download Node.js from https://nodejs.org
 
 ### Desktop Shortcut
+
 Run the built-in script to generate a native shortcut (Windows `.lnk`, macOS Alias, or Linux `.desktop`):
+
 ```bash
 python create_shortcut.py
 ```
@@ -167,24 +187,29 @@ python -m profiles
 
 Launches the local FastAPI server and opens the React frontend in a native PyWebView desktop window.
 
-* **Interface**: The web chrome is bilingual (English / French). Use the language switcher in the status bar to change on the fly, or set `language: en` / `language: fr` in the `defaults` section.
-* **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives, and `"..."` for exact phrases.
-* **Keyboard shortcuts**: `Ctrl+F` (focus filter) · `Ctrl+D` (focus directory) · `Ctrl+E` (focus extension) · `F5` (rescan) · `Ctrl+R` (reload config + rescan) · `Ctrl+H` (home directory) · `Ctrl+Shift+L` (log viewer) · `Ctrl+,` (open config) · `Ctrl+Shift+T` (cycle theme) · `Ctrl+B` (barcode scanner mode) · `Ctrl+Shift+B` (camera barcode scanner) · `Ctrl+T` (auto-rescan timer) · `?` (shortcuts dialog).
-* **PWA**: The frontend ships a service worker precache, so the page can be installed in the browser as an app.
+- **Interface**: The web chrome is bilingual (English / French). Use the language switcher in the status bar to change on the fly, or set `language: en` / `language: fr` in the `defaults` section.
+- **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives, and `"..."` for exact phrases.
+- **Keyboard shortcuts**: `Ctrl+F` (focus filter) · `Ctrl+D` (focus directory) · `Ctrl+E` (focus extension) · `F5` (rescan) · `Ctrl+R` (reload config + rescan) · `Ctrl+H` (home directory) · `Ctrl+Shift+L` (log viewer) · `Ctrl+,` (open config) · `Ctrl+Shift+T` (cycle theme) · `Ctrl+B` (barcode scanner mode) · `Ctrl+Shift+B` (camera barcode scanner) · `Ctrl+T` (auto-rescan timer) · `?` (shortcuts dialog).
+- **PWA**: The frontend ships a service worker precache, so the page can be installed in the browser as an app.
 
 ### Browser / PWA Mode (shared servers)
+
 ```bash
 ProFiles --server-only
 ```
+
 Runs the FastAPI server **without** the desktop window. Point any browser on the network at `http://<host>:8088` (default port). See the [Network Server Guide](./docs/network-server-guide.en.md) for firewall, hostname and multi-client setup.
 
 ### Legacy Tkinter Mode (deprecated)
+
 ```bash
 ProFiles --tkinter
 ```
+
 The original Tkinter desktop interface is kept for compatibility only and is **deprecated** — new features land exclusively on the web frontend.
 
 ### CLI / Headless Mode (work in progress)
+
 ```bash
 # Launch a specific file directly without GUI
 ProFiles --headless "path/to/script.py"
@@ -246,7 +271,7 @@ configs:
     match:
       hostname: ["*"]
     scan: "C:/Users/YourName/Workspace"
-    
+
   production:
     extends: base
     match:
@@ -278,7 +303,7 @@ hooks:
       - action: run_after
         content: "logger.exe --opened {{filename}}"
         wait: false
-    
+
     "*.exe":
       - action: notify
         content: "**Warning** : Executable launch\\nVerify file origin."
@@ -292,7 +317,7 @@ hooks:
         on_failure: stop
 ```
 
-*See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/columns-guide.en.md), and **[Launch Workflows Guide](./docs/hooks-guide.en.md)** for complete workflow automation.*
+_See [Configuration Reference](./docs/configuration-profile.en.md), [Dynamic Columns Guide](./docs/columns-guide.en.md), and **[Launch Workflows Guide](./docs/hooks-guide.en.md)** for complete workflow automation._
 
 ## 🏗 Architecture
 
@@ -335,6 +360,6 @@ npm run build        # tsc + vite build — outputs dist/ and refreshes the PWA 
 
 ## 📄 License & Support
 
-* **Author**: [Florent ALBANY](https://github.com/falbany)
-* **License**: [MIT](./LICENCE)
-* **Version**: 2026.8.0
+- **Author**: [Florent ALBANY](https://github.com/falbany)
+- **License**: [MIT](./LICENCE)
+- **Version**: 2026.8.0
