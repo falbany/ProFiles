@@ -48,6 +48,19 @@ def test_briefcase_available_as_dev_dependency() -> None:
         assert "briefcase" in where
 
 
+def test_only_release_workflow_triggers_on_version_tags() -> None:
+    """Exactly one workflow may trigger on `v*` tags: release.yml (stale duplicates pollute releases)."""
+    workflows = (_PYPROJECT.parent / ".github" / "workflows").glob("*.yml")
+    tag_triggers = set()
+    for wf in workflows:
+        text = wf.read_text(encoding="utf-8")
+        if "tags:" in text and "'v*'" in text.replace('"v*"', "'v*'"):
+            tag_triggers.add(wf.name)
+    assert tag_triggers == {"release.yml"}, (
+        f"workflows co-triggering on v* tags: {sorted(tag_triggers)}"
+    )
+
+
 def test_briefcase_requires_runtime_complete_and_tk_free() -> None:
     requires = " ".join(_load()["tool"]["briefcase"]["app"]["profiles"]["requires"]).lower()
     for pkg in ("pydantic", "fastapi", "uvicorn", "pywebview", "sse-starlette", "qrcode", "ruamel"):
