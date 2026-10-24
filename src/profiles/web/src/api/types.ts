@@ -7,6 +7,8 @@ export interface SystemInfo {
 
 export interface AppConfigData {
   title: string;
+  /** True when the config came from a dropped file (session-only, not persisted). */
+  session_trial?: boolean;
   release: string;
   search_dir: string;
   recursive_search: boolean;

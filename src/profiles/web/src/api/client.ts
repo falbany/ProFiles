@@ -64,6 +64,25 @@ export async function loadConfigFile(configPath: string): Promise<AppConfigData>
   return res.json();
 }
 
+export async function loadConfigContent(filename: string, content: string): Promise<AppConfigData> {
+  const res = await fetch("/api/config/load-content", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename, content }),
+  });
+  if (!res.ok) {
+    let detail = `Failed to apply dropped config (${filename})`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep the generic message
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 export async function createConfigFile(directory: string): Promise<AppConfigData> {
   const res = await fetch("/api/config/create", {
     method: "POST",

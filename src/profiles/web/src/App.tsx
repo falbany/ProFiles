@@ -13,11 +13,14 @@ import {
   revealFile,
   selectDirectory,
   browseDirectory,
+  loadConfigContent,
 } from "./api/client";
 import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
+import { pickConfigFile } from "./utils/configDrop";
 import { ActionBar } from "./components/ActionBar";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
+import { DropConfigOverlay } from "./components/DropConfigOverlay";
 import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { InitErrorPanel } from "./components/InitErrorPanel";
@@ -359,6 +362,64 @@ export default function App() {
       finishScan(scanGeneration);
     }
   };
+
+  // Dropped configuration files: window-level drag/drop, session-only trial.
+  const [dropOverlayVisible, setDropOverlayVisible] = useState(false);
+  const dragDepth = useRef(0);
+  const dropHandlerRef = useRef<(file: File) => void>(() => {});
+
+  const handleDroppedConfig = async (file: File) => {
+    try {
+      const content = await file.text();
+      const cfg = await loadConfigContent(file.name, content);
+      await handleConfigLoaded(cfg);
+      showToast(`Session config applied: ${file.name}`);
+    } catch (err: any) {
+      showToast(err.message || "Failed to apply dropped configuration", "error");
+    }
+  };
+  dropHandlerRef.current = (file: File) => {
+    void handleDroppedConfig(file);
+  };
+
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) =>
+      Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const onDragEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current += 1;
+      setDropOverlayVisible(true);
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    };
+    const onDragLeave = () => {
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDropOverlayVisible(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDropOverlayVisible(false);
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      const picked = pickConfigFile(files);
+      if (!picked) {
+        if (files.length > 0) showToast("Not a ProFiles configuration file.", "error");
+        return;
+      }
+      dropHandlerRef.current(picked);
+    };
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
 
   const handleBrowseDirectory = () => {
     setShowDirPicker(true);
@@ -1331,6 +1392,12 @@ export default function App() {
         configExists={config?.config_exists}
         onClose={() => setShowConfigPicker(false)}
         onLoaded={handleConfigLoaded}
+      />
+
+      {/* Dropped configuration files (session-only trial) */}
+      <DropConfigOverlay
+        visible={dropOverlayVisible}
+        onFileSelected={(file) => dropHandlerRef.current(file)}
       />
 
       {/* Directory Picker Modal */}
