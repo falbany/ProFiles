@@ -73,6 +73,10 @@ parts/
 sdist/
 var/
 wheels/
+# Vendored wheels for Briefcase requires (packaging/wheels/README.md) —
+# un-ignore this vendored path; the blanket `wheels/` rule above is for venv dirs.
+!packaging/wheels/
+!packaging/wheels/**
 
 # Briefcase native installer artifacts
 .briefcase/

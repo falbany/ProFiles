@@ -60,7 +60,7 @@ briefcase-build: ## Build the platform-native Briefcase app bundle
 
 briefcase-run: ## Run the built Briefcase app bundle
 	@echo "▶️  Running Briefcase-built bundle..."
-	$(BRIEFCASE) run profiles
+	$(BRIEFCASE) run
 
 briefcase-package: ## Package the native installer (.msi / .dmg / .deb)
 	@echo "📦 Packaging native installer via Briefcase..."

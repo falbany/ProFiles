@@ -56,6 +56,7 @@ dev = [
     "pyright>=1.1.0",
     "deptry>=0.22.0",
     "httpx>=0.27.0",
+    "briefcase>=0.4.4",
     # Tkinter frontend (deprecated, developer use only; see 2026-10-23-native-installer-design.md)
     "sv-ttk>=2.5.0",
     "darkdetect>=0.8.0",
@@ -97,6 +98,10 @@ icon = "img/profiles"
 sources = ["src/profiles"]
 # Runtime dependencies installed into the Briefcase bundle. Must mirror
 # [project].dependencies minus the deprecated Tk extras (sv-ttk, darkdetect).
+# proxy_tools is vendored as a local wheel because pywebview depends on it,
+# it ships only an sdist on PyPI, and Briefcase installs macOS requirements
+# with `--only-binary :all:` (universal py3-none-any wheel; see
+# packaging/wheels/README.md for provenance).
 requires = [
     "pydantic>=2.0.0",
     "fastapi>=0.115.0",
@@ -105,6 +110,7 @@ requires = [
     "sse-starlette>=2.1.0",
     "qrcode[pil]>=7.5.0",
     "ruamel.yaml>=0.18.0",
+    "packaging/wheels/proxy_tools-0.1.0-py3-none-any.whl",
 ]
 
 # Declared so that a Briefcase build registers ``*.profiles`` (e.g.
@@ -197,6 +203,7 @@ dev = [
     "pyright>=1.1.0",
     "deptry>=0.22.0",
     "httpx>=0.27.0",
+    "briefcase>=0.4.4",
     # Tkinter frontend (deprecated, developer use only; see 2026-10-23-native-installer-design.md)
     "sv-ttk>=2.5.0",
     "darkdetect>=0.8.0",

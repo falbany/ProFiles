@@ -39,6 +39,15 @@ def test_dev_dependency_lists_stay_in_sync() -> None:
     assert extras_dev == groups_dev
 
 
+def test_briefcase_available_as_dev_dependency() -> None:
+    """CI runs `uv run briefcase` without a global install: briefcase must be in dev deps."""
+    data = _load()
+    extras_dev = " ".join(data["project"]["optional-dependencies"]["dev"]).lower()
+    groups_dev = " ".join(data["dependency-groups"]["dev"]).lower()
+    for where in (extras_dev, groups_dev):
+        assert "briefcase" in where
+
+
 def test_briefcase_requires_runtime_complete_and_tk_free() -> None:
     requires = " ".join(_load()["tool"]["briefcase"]["app"]["profiles"]["requires"]).lower()
     for pkg in ("pydantic", "fastapi", "uvicorn", "pywebview", "sse-starlette", "qrcode", "ruamel"):
