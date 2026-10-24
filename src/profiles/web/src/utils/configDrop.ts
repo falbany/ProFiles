@@ -28,3 +28,40 @@ export function pickConfigFile(files: File[]): File | null {
   }
   return null;
 }
+
+export interface DragTrackerState {
+  depth: number;
+  overlayVisible: boolean;
+}
+
+export type DragEventType = "enter" | "leave" | "drop";
+
+export function resetDragState(): DragTrackerState {
+  return { depth: 0, overlayVisible: false };
+}
+
+/** Pure reducer for the window-level drag lifecycle (overlay visibility).
+
+The browser fires nested dragenter/dragleave pairs while crossing child
+elements, so the depth counts all pairs; the overlay hides only when the
+depth returns to zero (last leave) or the drop completes.
+ */
+export function nextDragState(
+  state: DragTrackerState,
+  eventType: DragEventType,
+  hasFiles: boolean,
+): DragTrackerState {
+  switch (eventType) {
+    case "enter": {
+      if (!hasFiles) return state;
+      const depth = state.depth + 1;
+      return { depth, overlayVisible: true };
+    }
+    case "leave": {
+      const depth = Math.max(0, state.depth - 1);
+      return { depth, overlayVisible: state.depth > 0 && depth > 0 };
+    }
+    case "drop":
+      return resetDragState();
+  }
+}

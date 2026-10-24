@@ -16,7 +16,13 @@ import {
   loadConfigContent,
 } from "./api/client";
 import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
-import { pickConfigFile } from "./utils/configDrop";
+import {
+  nextDragState,
+  pickConfigFile,
+  resetDragState,
+  type DragTrackerState,
+} from "./utils/configDrop";
+import { resolveSessionTheme } from "./utils/theme";
 import { ActionBar } from "./components/ActionBar";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
@@ -332,6 +338,10 @@ export default function App() {
   const handleConfigLoaded = async (cfg: AppConfigData) => {
     const scanGeneration = beginScan();
     setConfig(cfg);
+    // Session-only configs apply their theme to the running session but
+    // must NOT persist it (no localStorage write — that would leak the
+    // trial into the next session).
+    setTheme(resolveSessionTheme(cfg.theme));
     const targetDirectory = cfg.active_directory || activeDirectory || (cfg.directories[0] ?? "");
     const nextExtension = cfg.extensions.includes(activeExtension)
       ? activeExtension
@@ -344,7 +354,9 @@ export default function App() {
     setFilterText(nextFilter);
     setRecursive(cfg.recursive_search);
 
-    showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
+    if (!cfg.session_trial) {
+      showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
+    }
     if (targetDirectory) {
       try {
         await runScan(scanGeneration, {
@@ -365,7 +377,11 @@ export default function App() {
 
   // Dropped configuration files: window-level drag/drop, session-only trial.
   const [dropOverlayVisible, setDropOverlayVisible] = useState(false);
-  const dragDepth = useRef(0);
+  const dragStateRef = useRef<DragTrackerState>(resetDragState());
+  const applyDragState = (state: DragTrackerState) => {
+    dragStateRef.current = state;
+    setDropOverlayVisible(state.overlayVisible);
+  };
   const dropHandlerRef = useRef<(file: File) => void>(() => {});
 
   const handleDroppedConfig = async (file: File) => {
@@ -386,21 +402,17 @@ export default function App() {
     const hasFiles = (e: DragEvent) =>
       Array.from(e.dataTransfer?.types ?? []).includes("Files");
     const onDragEnter = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      dragDepth.current += 1;
-      setDropOverlayVisible(true);
+      applyDragState(nextDragState(dragStateRef.current, "enter", hasFiles(e)));
     };
     const onDragOver = (e: DragEvent) => {
       if (hasFiles(e)) e.preventDefault();
     };
-    const onDragLeave = () => {
-      dragDepth.current = Math.max(0, dragDepth.current - 1);
-      if (dragDepth.current === 0) setDropOverlayVisible(false);
+    const onDragLeave = (e: DragEvent) => {
+      applyDragState(nextDragState(dragStateRef.current, "leave", hasFiles(e)));
     };
     const onDrop = (e: DragEvent) => {
       e.preventDefault();
-      dragDepth.current = 0;
-      setDropOverlayVisible(false);
+      applyDragState(resetDragState());
       const files = Array.from(e.dataTransfer?.files ?? []);
       const picked = pickConfigFile(files);
       if (!picked) {
@@ -1098,6 +1110,9 @@ export default function App() {
         setShowShortcuts(false);
         setShowLogViewer(false);
         setShowTimerModal(false);
+        // Cancelled drags may never fire dragleave (WKWebView) — make
+        // Escape a hard reset for the drop overlay.
+        applyDragState(resetDragState());
         return;
       }
 
