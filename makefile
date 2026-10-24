@@ -68,7 +68,8 @@ briefcase-package: ## Package the native installer (.msi / .dmg / .deb)
 
 briefcase-clean: ## Remove Briefcase build artifacts
 	@echo "🧹 Cleaning Briefcase artifacts..."
-	$(BRIEFCASE) clean
+	rm -rf build dist
+	@echo "✅ Briefcase artifacts removed!"
 
 # Host detection for local packaging dispatch (Briefcase cannot cross-compile)
 ifeq ($(OS),Windows_NT)
