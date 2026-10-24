@@ -2,11 +2,12 @@
 
 ![Bannière ProFiles](img/ProFiles_banner.png)
 
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Pylint](https://img.shields.io/badge/linting-pylint-09A64D.svg)](https://github.com/pylint-dev/pylint)
-[![License](https://img.shields.io/badge/license-MIT-brightgreen)](./LICENCE)
-[![GitHub](https://img.shields.io/badge/GitHub-falbany/ProFiles-181717?logo=github)](https://github.com/falbany/ProFiles)
+[![Plateformes](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat)](#-installation)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat)](https://github.com/astral-sh/ruff)
+[![Pylint](https://img.shields.io/badge/linting-pylint-09A64D?style=flat&logo=pylint&logoColor=white)](https://github.com/pylint-dev/pylint)
+[![License](https://img.shields.io/github/license/falbany/ProFiles?style=flat&color=brightgreen)](./LICENCE)
+[![GitHub](https://img.shields.io/badge/GitHub-falbany%2FProFiles-181717?style=flat&logo=github)](https://github.com/falbany/ProFiles)
 
 🇬🇧 [English](./README.md) | 🇫🇷 **Français**
 
