@@ -53,7 +53,7 @@ jobs:
       # satisfying requires-python) has no wheels yet for some binary
       # dependencies (e.g. uvloop on macOS).
       - run: uv sync --python 3.13 --locked
-      - run: uv run briefcase package windows -p msi
+      - run: uv run briefcase package windows -p msi --no-input
       - uses: actions/upload-artifact@v4
         with:
           name: installer-windows
@@ -68,7 +68,9 @@ jobs:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --python 3.13 --locked
-      - run: uv run briefcase package macos -p dmg
+      # --no-input: CI has no TTY; without it briefcase prompts for a
+      # signing identity and aborts. It auto-selects ad-hoc signing.
+      - run: uv run briefcase package macos -p dmg --no-input
       - uses: actions/upload-artifact@v4
         with:
           name: installer-macos
@@ -85,12 +87,14 @@ jobs:
       # ubuntu-24.04 runners ship without libfuse2, which the linuxdeploy /
       # AppImage packaging tooling needs to execute.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2
-      - run: uv sync --python 3.13 --locked
-      - run: uv run briefcase package linux -p deb
+      # The deb (system) backend requires briefcase to run under the
+      # system python3 — pin the sync interpreter to it.
+      - run: uv sync --python /usr/bin/python3 --locked
+      - run: uv run briefcase package linux -p deb --no-input
       # No `briefcase upgrade linuxdeploy`: on a fresh runner linuxdeploy
       # is not yet a managed install, so `upgrade` exits 200. The package
       # step downloads the linuxdeploy it needs on demand.
-      - run: uv run briefcase package linux -p appimage
+      - run: uv run briefcase package linux -p appimage --no-input
       - uses: actions/upload-artifact@v4
         with:
           name: installer-linux
