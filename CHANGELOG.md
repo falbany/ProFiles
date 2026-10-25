@@ -13,7 +13,10 @@ Release candidate for 1.0.0. First release under Semantic Versioning
 ### Added
 
 - Native installers built and published from the `v*` tag pipeline:
-  Windows MSI, macOS DMG, Linux `.deb` and AppImage (Briefcase 0.4.x).
+  Windows MSI, macOS DMG, Linux `.deb` (Briefcase 0.4.x). AppImage is
+  not shipped: its Briefcase backend is currently broken upstream
+  (template/cookiecutter 2.7 incompatibility) and deprecated in favour
+  of system packages.
 - SHA256 checksums generated for every release artifact.
 - Release guard validating the tag is SemVer and matches
   `[project].version`.
