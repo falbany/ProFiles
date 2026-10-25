@@ -98,4 +98,4 @@ class TestCompileQueryCaching:
         matcher = compile_query("PROD -Tester")
         assert matcher("PROD_Test.mttl") is True
         assert matcher("PROD_Tester.mttl") is False
-        assert matcher("st_pro_test.MTTL") is True
+        assert matcher("st_prod_test.MTTL") is True

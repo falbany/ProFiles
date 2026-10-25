@@ -1,4 +1,9 @@
-"""Test backend selection gateway in ProFiles app."""
+"""Test backend selection gateway in ProFiles app.
+
+The deprecated ``--tkinter`` selection test lives under
+``tests/gui/test_app_tk_lifecycle.py`` (skipped with the rest of the
+Tkinter surface).
+"""
 
 from __future__ import annotations
 
@@ -22,11 +27,6 @@ def _resolved_backend(argv: list[str]) -> str:
 def test_backend_selection_default_web() -> None:
     with patch.dict(os.environ, {}, clear=True):
         assert _resolved_backend(["profiles"]) == "web"
-
-
-def test_backend_selection_cli_tk() -> None:
-    with patch.dict(os.environ, {}, clear=True):
-        assert _resolved_backend(["profiles", "--tkinter"]) == "tk"
 
 
 def test_launch_web_backend_calls_desktop() -> None:

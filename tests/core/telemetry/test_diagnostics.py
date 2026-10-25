@@ -443,10 +443,16 @@ class TestRolloverEvent:
 class TestInstallCrashHook:
     """install_crash_hook() routes uncaught exceptions to the log."""
 
+    @pytest.mark.qt_no_exception_capture
     def test_crash_hook_logs_critical(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """An exc raised through the hook is emitted as UNCAUGHT_EXCEPTION CRITICAL."""
+        """An exc raised through the hook is emitted as UNCAUGHT_EXCEPTION CRITICAL.
+
+        The ``qt_no_exception_capture`` marker opts out of pytest-qt's
+        excepthook capture, which would otherwise turn the deliberately
+        invoked ``sys.excepthook(...)`` call below into a test error.
+        """
         from profiles.core.telemetry.diagnostics import install_crash_hook
 
         log_file = tmp_path / "crash.log"

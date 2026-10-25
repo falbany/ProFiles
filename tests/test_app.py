@@ -1,15 +1,16 @@
 """Tests for profiles.app — ProFileApp, main(), init_default_config.
 
 Also tests profiles.__init__ package metadata and __main__ entry point.
+
+Tkinter-backend lifecycle tests live under ``tests/gui`` (deprecated
+frontend; skipped there in preparation for removal).
 """
 
 from __future__ import annotations
 
 import sys
-import tkinter as tk
 import tomllib
 from pathlib import Path
-from tkinter import ttk
 
 import pytest
 
@@ -17,21 +18,6 @@ import profiles
 from profiles.app import ProFileApp, init_default_config, main
 from profiles.core.telemetry.diagnostics import default_log_path
 from profiles.desktop.lifecycle import ServerStartError
-from profiles.gui.main_window import MainWindow
-
-# ── Tkinter availability guard ──────────────────────────────────────────────
-
-_tk_available = True
-try:
-    _tk_root = tk.Tk()
-    _tk_root.destroy()
-except (tk.TclError, RuntimeError):
-    _tk_available = False
-
-needs_tk = pytest.mark.skipif(
-    not _tk_available,
-    reason="Tkinter not available (headless CI or missing Tcl/Tk)",
-)
 
 # ── Package metadata (__init__.py) ──────────────────────────────────────────
 
@@ -262,21 +248,11 @@ class TestRunHeadless:
 
 
 class TestRun:
-    """ProFileApp.run — lifecycle orchestration."""
+    """ProFileApp.run — lifecycle orchestration (web/headless branches).
 
-    def test_gui_mode_creates_window(self, mocker) -> None:  # type: ignore[no-untyped-def]
-        mocker.patch("profiles.app.configure_logger")
-        mock_config = mocker.MagicMock()
-        mock_config.verbose = "INFO"
-        mocker.patch("profiles.app.load_config", return_value=mock_config)
-        mock_main_window = mocker.patch("profiles.gui.main_window.MainWindow")
-        mock_window_instance = mocker.MagicMock()
-        mock_main_window.return_value = mock_window_instance
-
-        app = ProFileApp(gui_backend="tk")
-        app.run()
-        mock_main_window.assert_called_once()
-        mock_window_instance.run.assert_called_once()
+    The deprecated tk-backend branch is covered by
+    ``tests/gui/test_app_tk_lifecycle.py``.
+    """
 
     def test_headless_branch_calls_run_headless(self, mocker) -> None:  # type: ignore[no-untyped-def]
         mocker.patch("profiles.app.configure_logger")
@@ -289,51 +265,6 @@ class TestRun:
         with pytest.raises(SystemExit):
             app.run()
         mock_run_headless.assert_called_once()
-
-    def test_tk_runtime_error_handling(self, mocker) -> None:  # type: ignore[no-untyped-def]
-        mocker.patch("profiles.app.configure_logger")
-        mock_config = mocker.MagicMock()
-        mock_config.verbose = "INFO"
-        mocker.patch("profiles.app.load_config", return_value=mock_config)
-        mocker.patch(
-            "profiles.gui.main_window.MainWindow",
-            side_effect=RuntimeError("no screen available"),
-        )
-
-        app = ProFileApp(gui_backend="tk")
-        with pytest.raises(SystemExit):
-            app.run()
-
-    def test_tk_tcl_error_handling(self, mocker) -> None:  # type: ignore[no-untyped-def]
-        mocker.patch("profiles.app.configure_logger")
-        mock_config = mocker.MagicMock()
-        mock_config.verbose = "INFO"
-        mocker.patch("profiles.app.load_config", return_value=mock_config)
-        import tkinter
-
-        mocker.patch(
-            "profiles.gui.main_window.MainWindow",
-            side_effect=tkinter.TclError("display error"),
-        )
-
-        app = ProFileApp(gui_backend="tk")
-        with pytest.raises(SystemExit):
-            app.run()
-
-    def test_gui_non_display_error(self, mocker) -> None:  # type: ignore[no-untyped-def]
-        """RuntimeError without 'screen'/'display' keyword uses generic message."""
-        mocker.patch("profiles.app.configure_logger")
-        mock_config = mocker.MagicMock()
-        mock_config.verbose = "INFO"
-        mocker.patch("profiles.app.load_config", return_value=mock_config)
-        mocker.patch(
-            "profiles.gui.main_window.MainWindow",
-            side_effect=RuntimeError("Tcl error"),
-        )
-
-        app = ProFileApp(gui_backend="tk")
-        with pytest.raises(SystemExit):
-            app.run()
 
     def test_web_gui_startup_failure_exits_cleanly(self, mocker, capsys) -> None:  # type: ignore[no-untyped-def]
         """A port collision exits 1 with an actionable message, no traceback."""
@@ -488,68 +419,3 @@ class TestMainModule:
         assert isinstance(last.value, ast.Call)
         assert isinstance(last.value.func, ast.Name)
         assert last.value.func.id == "main"
-
-
-# ── Shortcuts dialog (MainWindow._on_show_shortcuts) ─────────────────────────
-
-
-@needs_tk
-class TestShortcutsDialog:
-    """The shortcuts dialog exposes both Keyboard and Mouse sections."""
-
-    def test_shortcuts_dialog_has_mouse_section(self) -> None:
-        """Render the dialog on a minimal host and confirm both section headers."""
-
-        class _Host:
-            """Minimal duck-typed host with the surface _on_show_shortcuts touches."""
-
-            def __init__(self, root: tk.Tk) -> None:
-                self._root = root
-                # Stubs for attributes _shortcut_entries references at build time.
-                self._refresh_file_list = lambda: None
-                self._on_refresh = lambda: None
-                self._on_open_log = lambda: None
-                self._on_open_config = lambda: None
-                self._on_toggle_theme = lambda: None
-                self._on_close = lambda: None
-                self._on_execute = lambda: None
-                self._dir_combo = tk.Entry(root)
-                self._ext_combo = tk.Entry(root)
-                self._filter_combo = tk.Entry(root)
-                self._tree = ttk.Treeview(root)
-                self._filter_var = tk.StringVar(root)
-
-            _shortcut_entries = MainWindow._shortcut_entries
-            _mouse_entries = MainWindow._mouse_entries
-            _on_show_shortcuts = MainWindow._on_show_shortcuts
-
-        root = tk.Tk()
-        try:
-            host = _Host(root)
-            host._on_show_shortcuts()
-            root.update_idletasks()
-
-            toplevels = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)]
-            assert toplevels, "Expected _on_show_shortcuts to create a Toplevel dialog"
-            dlg = toplevels[-1]
-
-            def _text_of(widget: tk.Misc) -> str | None:
-                if not isinstance(widget, (tk.Widget, ttk.Widget)):
-                    return None
-                try:
-                    return str(widget.cget("text"))
-                except (tk.TclError, AttributeError):
-                    return None
-
-            labels_text = [t for t in (_text_of(w) for w in dlg.winfo_children()) if t]
-            labels_text += [
-                t
-                for child in dlg.winfo_children()
-                if isinstance(child, (tk.Frame, ttk.Frame))
-                for t in (_text_of(w) for w in child.winfo_children())
-                if t
-            ]
-            assert "Keyboard Shortcuts" in labels_text
-            assert "Mouse Actions" in labels_text
-        finally:
-            root.destroy()

@@ -14,13 +14,6 @@ from textwrap import dedent
 import pytest
 
 
-def pytest_configure(config):
-    """Configure custom pytest markers."""
-    config.addinivalue_line(
-        "markers", "requires_tkinter: mark test as requiring Tkinter to be available"
-    )
-
-
 @pytest.fixture(scope="function")
 def sample_config_path(tmp_path: Path) -> Path:
     """Create a sample .profiles YAML file for baseline testing."""

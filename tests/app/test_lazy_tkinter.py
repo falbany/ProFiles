@@ -113,19 +113,3 @@ def test_tkinter_clean_error_when_unavailable(
     assert "deprecated" in captured.out.lower()
     assert "full Python installation" in captured.err
     assert "Traceback" not in captured.err
-
-
-def test_theme_fallback_without_sv_ttk(monkeypatch: pytest.MonkeyPatch) -> None:
-    """apply_theme survives sv_ttk absence (clam fallback path in gui/theme.py)."""
-    pytest.importorskip("tkinter")
-    import tkinter as tk
-
-    from profiles.gui import theme as theme_module
-
-    monkeypatch.setitem(sys.modules, "sv_ttk", None)  # import sv_ttk -> ImportError
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        theme_module.apply_theme(root, theme_module.DARK_THEME)
-    finally:
-        root.destroy()

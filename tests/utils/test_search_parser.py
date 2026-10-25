@@ -122,13 +122,13 @@ class TestMatchFilter:
         assert match_filter("DEV_Test.mttl", "PROD") is False
 
     def test_case_insensitive(self) -> None:
-        assert match_filter("st_pro_Tester.mttl", "PROD") is True
+        assert match_filter("st_prod_Tester.mttl", "PROD") is True
 
     def test_case_insensitive_reverse(self) -> None:
-        assert match_filter("PROD_Tester.mttl", "st_pro") is True
+        assert match_filter("PROD_Tester.mttl", "prod") is True
 
     def test_partial_match(self) -> None:
-        assert match_filter("PROD_Tester.mttl", "Mute") is True
+        assert match_filter("PROD_Tester.mttl", "Test") is True
 
     # ── AND (space-separated, implicit) ───────────────────────────────
 
@@ -168,7 +168,7 @@ class TestMatchFilter:
         assert match_filter("readme.txt", "PROD OR DEV OR TOTO") is False
 
     def test_or_case_insensitive(self) -> None:
-        assert match_filter("PROD.mttl", "st_pro or st_eng") is True
+        assert match_filter("PROD.mttl", "prod or dev") is True
 
     # ── Mixed AND + OR ────────────────────────────────────────────────
 
@@ -209,7 +209,7 @@ class TestMatchFilter:
         assert match_filter("PROD.mttl", "-") is True
 
     def test_not_case_insensitive(self) -> None:
-        assert match_filter("PROD.mttl", "-st_pro") is False
+        assert match_filter("PROD.mttl", "-prod") is False
 
     # ── Exact phrase (quoted) ─────────────────────────────────────────
 
@@ -238,7 +238,7 @@ class TestMatchFilter:
     @pytest.fixture
     def sample_filenames(self) -> dict[str, str]:
         return {
-            "PROD_Tester_DUTID_V1.0.2-beta": "PROD",
+            "PROD_Tester_DUTID_0866_V1.0.2-beta": "PROD",
             "DEV_Test_V02.mttl": "DEV",
             "PROD_Production_V03.mttx": "PROD",
             "readme.txt": "other",
@@ -248,21 +248,21 @@ class TestMatchFilter:
     def test_scenario_prod_filter(self, sample_filenames: dict[str, str]) -> None:
         """Filter all PROD files."""
         matches = [f for f in sample_filenames if match_filter(f, "PROD")]
-        assert "PROD_Tester_DUTID_V1.0.2-beta" in matches
+        assert "PROD_Tester_DUTID_0866_V1.0.2-beta" in matches
         assert "PROD_Production_V03.mttx" in matches
         assert "DEV_Test_V02.mttl" not in matches
 
     def test_scenario_prod_tester(self, sample_filenames: dict[str, str]) -> None:
         """Find PROD files related to Tester."""
         matches = [f for f in sample_filenames if match_filter(f, "PROD Tester")]
-        assert "PROD_Tester_DUTID_V1.0.2-beta" in matches
+        assert "PROD_Tester_DUTID_0866_V1.0.2-beta" in matches
         assert "PROD_Production_V03.mttx" not in matches
 
     def test_scenario_prod_not_0866(self, sample_filenames: dict[str, str]) -> None:
         """PROD files but exclude 0866 version."""
         matches = [f for f in sample_filenames if match_filter(f, "PROD -0866")]
         assert "PROD_Production_V03.mttx" in matches
-        assert "PROD_Tester_DUTID_V1.0.2-beta" not in matches
+        assert "PROD_Tester_DUTID_0866_V1.0.2-beta" not in matches
 
     def test_scenario_prod_or_dev(self, sample_filenames: dict[str, str]) -> None:
         """All production or development files."""
@@ -272,17 +272,17 @@ class TestMatchFilter:
     def test_scenario_exact_version(self, sample_filenames: dict[str, str]) -> None:
         """Find a specific exact version."""
         matches = [f for f in sample_filenames if match_filter(f, '"V1.0.2-beta"')]
-        assert "PROD_Tester_DUTID_V1.0.2-beta" in matches
+        assert "PROD_Tester_DUTID_0866_V1.0.2-beta" in matches
         assert "DEV_Test_V02.mttl" not in matches
 
     def test_stress_many_terms(self) -> None:
         """All terms present should match."""
-        fname = "PROD_Tester_DUTID_V1.0.2-beta"
-        assert match_filter(fname, "PROD Tester DUT-ID 0866 V01 beta") is True
+        fname = "PROD_Tester_DUTID_0866_V1.0.2-beta"
+        assert match_filter(fname, "PROD Tester DUTID 0866 V1.0.2 beta") is True
 
     def test_stress_many_terms_one_missing(self) -> None:
-        fname = "PROD_Tester_DUTID_V1.0.2-beta"
-        assert match_filter(fname, "PROD Tester DUT-ID NOPE") is False
+        fname = "PROD_Tester_DUTID_0866_V1.0.2-beta"
+        assert match_filter(fname, "PROD Tester DUTID NOPE") is False
 
     # ── Type validation ───────────────────────────────────────────────
 

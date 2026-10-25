@@ -14,6 +14,10 @@ import logging
 # A scan slower than this (ms) also emits SLOW_SCAN as a WARNING.
 SLOW_SCAN_THRESHOLD_MS = 5000.0
 
+# Canonical format string for LOG_ROTATED; also used by the rotating
+# handler's direct-dispatch emitter (see core.telemetry.diagnostics).
+LOG_ROTATED_MSG = "LOG_ROTATED old_size_bytes=%d"
+
 # ---------------------------------------------------------------------------
 # Internal utilities
 # ---------------------------------------------------------------------------
@@ -61,8 +65,14 @@ def app_closed(logger: logging.Logger, *, uptime_s: float) -> None:
 
 
 def log_rotated(logger: logging.Logger, *, old_size_bytes: int) -> None:
-    """Emit LOG_ROTATED — the rotating file handler rolled the log over."""
-    logger.info("LOG_ROTATED old_size_bytes=%d", old_size_bytes)
+    """Emit LOG_ROTATED — the rotating file handler rolled the log over.
+
+    Do not call this from inside a handler callback: Python 3.13's
+    logger reentrancy guard drops records logged through
+    ``Logger.handle`` while that thread is already handling one.  Use
+    :func:`profiles.core.telemetry.diagnostics.emit_event_through_handlers`.
+    """
+    logger.info(LOG_ROTATED_MSG, old_size_bytes)
 
 
 def uncaught_exception(logger: logging.Logger, *, type_name: str, error: str) -> None:

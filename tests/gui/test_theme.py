@@ -6,6 +6,7 @@ when Tkinter is unavailable (headless CI, missing Tcl/Tk).
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 
 import pytest
@@ -244,6 +245,12 @@ class TestApplyTheme:
         assert style2 is not None
         assert style.lookup("FileList.Treeview", "fieldbackground") == LIGHT_THEME.surface
         assert style2.lookup("FileList.Treeview", "fieldbackground") == LIGHT_THEME.surface
+
+    def test_fallback_without_sv_ttk(self, root: tk.Tk, monkeypatch: pytest.MonkeyPatch) -> None:
+        """apply_theme survives sv_ttk absence (clam fallback path)."""
+        monkeypatch.setitem(sys.modules, "sv_ttk", None)  # import sv_ttk -> ImportError
+        style = apply_theme(root, DARK_THEME)
+        assert style is not None
 
     def test_apply_theme_with_tk_stub(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """apply_theme is callable twice with a minimal Tk stub (no real root)."""

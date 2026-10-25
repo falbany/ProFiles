@@ -21,7 +21,7 @@ import sys
 import types
 from pathlib import Path
 
-from profiles.core.telemetry.events import log_rotated, uncaught_exception
+from profiles.core.telemetry.events import LOG_ROTATED_MSG, uncaught_exception
 
 # log format
 LOG_FORMAT = "%(asctime)s - %(levelname)-4s - %(source)s: %(message)s"
@@ -42,6 +42,42 @@ class SourceFilter(logging.Filter):
         """Add the source field to every log record."""
         record.source = self.source
         return True
+
+
+def emit_event_through_handlers(
+    logger: logging.Logger, level: int, msg: str, *args: object
+) -> None:
+    """Emit a record through *logger*'s handlers without Logger.handle.
+
+    Python 3.13 introduced a thread-local reentrancy guard that makes
+    ``Logger.handle`` silently drop any record logged while the thread
+    is already inside a handler callback — the exact situation of
+    :meth:`TelemetryRotatingFileHandler.doRollover`, which emits
+    LOG_ROTATED from within ``emit()``.  This helper replicates the
+    standard gating (logger disabled state, ``logging.disable()``,
+    effective level) and the handler walk (handler level check,
+    propagation) using public APIs only, so in-handler telemetry keeps
+    working on every supported Python version.
+
+    Args:
+        logger: The logger whose handlers receive the record.
+        level: Numeric severity of the event (e.g. ``logging.INFO``).
+        msg: Message format string.
+        args: Format arguments merged into *msg*.
+    """
+    if logger.disabled or logger.manager.disable >= level:
+        return
+    if level < logger.getEffectiveLevel():
+        return
+    record = logger.makeRecord(logger.name, level, __file__, 0, msg, args, None)
+    current: logging.Logger | None = logger
+    while current is not None:
+        for handler in current.handlers:
+            if record.levelno >= handler.level:
+                handler.handle(record)
+        if not current.propagate:
+            return
+        current = current.parent
 
 
 class TelemetryRotatingFileHandler(logging.handlers.RotatingFileHandler):
@@ -77,7 +113,7 @@ class TelemetryRotatingFileHandler(logging.handlers.RotatingFileHandler):
         original_max = self.maxBytes
         self.maxBytes = 0
         try:
-            log_rotated(self.event_logger, old_size_bytes=old_size)
+            emit_event_through_handlers(self.event_logger, logging.INFO, LOG_ROTATED_MSG, old_size)
         finally:
             self.maxBytes = original_max
 

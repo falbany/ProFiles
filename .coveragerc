@@ -4,6 +4,9 @@ branch = True
 omit = 
     */tests/*
     */__main__.py
+    # Deprecated Tkinter frontend: tests are skipped (tests/gui/conftest.py)
+    # pending deletion in phase 2 — exclude it from the coverage gate too.
+    */profiles/gui/*
 
 [report]
 exclude_lines = 

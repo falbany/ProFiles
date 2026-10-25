@@ -197,6 +197,11 @@ addopts = [
     "--cov-report=html",
     "--cov-fail-under=85",
 ]
+markers = [
+    # Opt a test out of pytest-qt's sys.excepthook capture (used by tests that
+    # exercise install_crash_hook, which route exceptions through the hook).
+    "qt_no_exception_capture: disable pytest-qt exception capture for this test",
+]
 
 [dependency-groups]
 dev = [

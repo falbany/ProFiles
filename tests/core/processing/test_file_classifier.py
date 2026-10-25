@@ -214,9 +214,7 @@ class TestGetFileInfoDynamic:
         from profiles.config import ColumnConfiguration
 
         columns = {
-            "File": ColumnConfiguration(
-                name="File", width=200, match=r"ST_([A-Z]+)_", priority=100
-            ),
+            "File": ColumnConfiguration(name="File", width=200, match=r"^(PRO)", priority=100),
         }
 
         result = get_file_info_dynamic(
