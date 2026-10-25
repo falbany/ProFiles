@@ -88,13 +88,14 @@ jobs:
       # AppImage packaging tooling needs to execute.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2
       # The deb (system) backend requires briefcase to run under the
-      # system python3 — pin the sync interpreter to it.
+      # system python3 — pin the sync interpreter to it. Briefcase 0.4.x
+      # takes the output format as a positional argument.
       - run: uv sync --python /usr/bin/python3 --locked
-      - run: uv run briefcase package linux -p deb --no-input
+      - run: uv run briefcase package linux deb --no-input
       # No `briefcase upgrade linuxdeploy`: on a fresh runner linuxdeploy
       # is not yet a managed install, so `upgrade` exits 200. The package
       # step downloads the linuxdeploy it needs on demand.
-      - run: uv run briefcase package linux -p appimage --no-input
+      - run: uv run briefcase package linux appimage --no-input
       - uses: actions/upload-artifact@v4
         with:
           name: installer-linux
