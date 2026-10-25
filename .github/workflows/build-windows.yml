@@ -5,19 +5,33 @@ on:
     paths:
       - "pyproject.toml"
       - "src/**"
+      - "img/**"
       - ".github/workflows/build-windows.yml"
   workflow_dispatch:
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
       - run: uv sync
-      - run: uv run briefcase build windows
+      # Exercise the same packaging command as release.yml so MSI/WiX
+      # breakage is caught on PRs, not at tag time.
+      - run: uv run briefcase package windows -p msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ProFiles-windows-msi
+          path: dist/**/*.msi
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: ProFiles-windows-bundle
           path: windows/ProFiles/
+          if-no-files-found: error
           retention-days: 7

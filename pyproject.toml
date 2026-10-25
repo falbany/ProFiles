@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "profiles-app"
-version = "2026.8.0"
+version = "0.9.0"
 description = "ProFiles - A modern GUI launcher for production test programs"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,7 +22,7 @@ authors = [
     {name = "Florent ALBANY", email = "florent.albany@gmail.com"},
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Environment :: X11 Applications",
     "Intended Audience :: Manufacturing",
     "Natural Language :: French",
@@ -85,7 +85,7 @@ include = ["profiles", "profiles.*"]
 [tool.briefcase]
 project_name = "ProFiles"
 bundle = "com.github.falbany"
-version = "2026.8.0"
+version = "0.9.0"
 url = "https://github.com/falbany/profiles"
 license = "MIT"
 author = "Florent ALBANY"

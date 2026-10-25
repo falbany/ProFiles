@@ -7,70 +7,113 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - name: Verify tag matches [project] and [tool.briefcase] versions
+      - uses: actions/checkout@v5
+      - name: Verify tag is SemVer and matches [project] and [tool.briefcase] versions
         env:
           TAG_VERSION: ${{ github.ref_name }}
         run: |
-          uv run python - <<'PY'
+          python3 - <<'PY'
           import os
           import pathlib
+          import re
+          import sys
           import tomllib
+
+          tag = os.environ["TAG_VERSION"]
+          if not re.fullmatch(r"v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", tag):
+              sys.exit(f"Tag {tag!r} is not SemVer (expected vMAJOR.MINOR.PATCH[...])")
 
           data = tomllib.loads(
               pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
           )
           project = data["project"]["version"]
           briefcase = data["tool"]["briefcase"]["version"]
-          tag = os.environ["TAG_VERSION"].lstrip("v")
-          assert tag == project == briefcase, (
-              f"Version mismatch: tag={tag!r} project={project!r} "
+          version = tag.removeprefix("v")
+          assert version == project == briefcase, (
+              f"Version mismatch: tag={version!r} project={project!r} "
               f"briefcase={briefcase!r}"
           )
-          print(f"Version guard OK: {tag}")
+          print(f"Version guard OK: {version}")
           PY
 
   windows:
     needs: guard
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run briefcase package windows -p msi
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: dist/**/*.msi
+          name: installer-windows
+          path: dist/**/*.msi
+          if-no-files-found: error
+          retention-days: 7
 
   macos:
     needs: guard
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run briefcase package macos -p dmg
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: dist/**/*.dmg
+          name: installer-macos
+          path: dist/**/*.dmg
+          if-no-files-found: error
+          retention-days: 7
 
   linux:
     needs: guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      # ubuntu-24.04 runners ship without libfuse2, which the linuxdeploy /
+      # AppImage packaging tooling needs to execute.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2
       - run: uv sync
       - run: uv run briefcase upgrade linuxdeploy
       - run: uv run briefcase package linux -p deb
       - run: uv run briefcase package linux -p appimage
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: installer-linux
+          path: |
             dist/**/*.deb
             dist/**/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          find . -maxdepth 1 -type f ! -name checksums.txt -exec sha256sum {} + > checksums.txt
+          cat checksums.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          # Tags with a pre-release suffix (e.g. v1.0.0-rc.1) publish as
+          # pre-releases; plain vX.Y.Z tags publish as full releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}

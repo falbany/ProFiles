@@ -361,4 +361,4 @@ npm run build        # tsc + vite build — outputs dist/ and refreshes the PWA 
 
 - **Author**: [Florent ALBANY](https://github.com/falbany)
 - **License**: [MIT](./LICENCE)
-- **Version**: 2026.8.0
+- **Version**: 0.9.0

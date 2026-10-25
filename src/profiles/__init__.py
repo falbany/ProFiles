@@ -20,11 +20,16 @@ def _resolve_version() -> str:
     ``importlib.metadata`` for installed packages, then fall back to parsing
     ``pyproject.toml`` for editable installs or development environments.
     """
-    # Primary: use importlib.metadata for installed packages
+    # Primary: use importlib.metadata for installed packages. The PEP 621
+    # distribution name is "profiles-app"; "profiles" covers legacy
+    # setuptools installs.
     try:
         from importlib.metadata import PackageNotFoundError, version
 
-        return version("profiles")
+        try:
+            return version("profiles-app")
+        except PackageNotFoundError:
+            return version("profiles")
     except PackageNotFoundError:
         # Package not installed via pip, fall back to pyproject.toml
         pass
