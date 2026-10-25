@@ -95,6 +95,13 @@ author_email = "florent.albany@gmail.com"
 [tool.briefcase.app.profiles]
 formal_name = "ProFiles"
 description = "A modern GUI launcher for production test programs"
+# Required by the Debian (deb/system) backend for the package control file.
+long_description = """ProFiles is a modern GUI launcher for production test programs.
+
+It scans configured directories for test program files, lets operators
+browse, filter and launch them with a double-click, and supports
+per-machine configuration, launch hooks, telemetry, and a modern
+web-based (React) interface packaged as a native desktop app."""
 icon = "img/profiles"
 sources = ["src/profiles"]
 # Runtime dependencies installed into the Briefcase bundle. Must mirror
