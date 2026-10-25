@@ -1,9 +1,9 @@
 """Tkinter-backend lifecycle tests for ``profiles.app`` — deprecated.
 
 These tests pin the ``gui_backend="tk"`` surface of the app (window
-creation, Tcl/Tk error handling, ``--tkinter`` CLI routing). They live
-under ``tests/gui`` so the directory-wide deprecation skip applies; they
-are deleted together with the Tkinter frontend in phase 2.
+creation, Tcl/Tk error handling, ``--tkinter`` CLI routing). They sit at
+the mirrored path of ``src/profiles/app.py`` and carry their own module
+skip; delete them together with the Tkinter frontend in phase 2.
 """
 
 from __future__ import annotations
@@ -14,6 +14,13 @@ from unittest.mock import patch
 import pytest
 
 from profiles.app import ProFileApp, main
+
+pytestmark = pytest.mark.skip(
+    reason=(
+        "Tkinter GUI is deprecated — web frontend is the default. "
+        "Skipped in preparation for removal (phase 2 deletes src/profiles/gui)."
+    )
+)
 
 # ── ProFileApp.run (tk GUI mode) ─────────────────────────────────────────
 

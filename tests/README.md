@@ -49,37 +49,30 @@ pytest --cov=profiles --cov-report=html
 pytest --cov=profiles.config -v
 ```
 
-Coverage target: **90%+** statement coverage across all modules.
+Coverage target: **85%** enforced by `--cov-fail-under` (aim for 90%+ per module); the deprecated `profiles/gui/` package is omitted (see `.coveragerc`).
+
 ## Test File Structure
-Test files mirror the `src/profiles/` tree 1:1 — each source module has a matching `test_<module>.py` at the mirrored path.
+Test files mirror the `src/profiles/` tree 1:1 — each source module has a matching `test_<module>.py` at the mirrored path, and supplementary files for the same module are named `test_<module>_<topic>.py`. Every test directory is a package (`__init__.py`), mirroring `src/profiles`.
+
+The authoritative layout — full tree, supplements, documented cross-cutting exceptions (`tests/characterization/`, `tests/packaging/`, `tests/server/test_barcode_integration.py`, `test_public_api.py`), known coverage gaps, and the deprecated-Tkinter skip — is maintained in **[AGENTS.md](AGENTS.md) → Test File Organization**.
+
+Highlights:
 
 | File | Source Module | Focus Areas |
 |---|---|---|
-| tests/test_app.py | profiles.app | ProFileApp, main(), init_default_config, ShortcutsDialog |
-| tests/app/test_lazy_tkinter.py | profiles.app | Lazy tkinter imports: web/headless run without Tk, --tkinter deprecation banner, clean error without Tk |
-| tests/core/test_actions.py | profiles.core.actions | launch_selected_file, open_config_file, write_starter_config, clear_file, ActionResult |
-| tests/core/config/test_models.py | profiles.core.config.models | AppConfig, MachineConfiguration, HookSpec dataclasses |
-| tests/core/config/test_service.py | profiles.core.config.service | find_configuration_by_hostname, auto_select_directory, merge_config_overrides |
-| tests/core/config/test_loader.py | profiles.core.config.loader | load_config, propose_config_creation, default column behavior |
-| tests/core/config/test_reader.py | profiles.core.config.reader | ConfigReader.load, ConfigReader properties, hook reading |
-| tests/core/config/io/test_ini_primitives.py | profiles.core.config.io.ini_primitives | parse_bool, find_config_file |
-| tests/core/config/io/test_writer.py | profiles.core.config.io.writer | save_config_bool, save_config_str |
-| tests/core/environment/test_system.py | profiles.core.environment.system | SystemInfo, collect_system_info, apply_source_to_logger |
-| tests/core/environment/test_execution.py | profiles.core.environment.execution | parse_hook_entries, run_hooks_for_file, _substitute_tokens |
-| tests/core/processing/test_scanner.py | profiles.core.processing.scanner | scan_and_process, ScannedFile, ScannedFileDynamic, is_simple_extension |
-| tests/core/processing/test_file_classifier.py | profiles.core.processing.file_classifier | get_file_info, extract_version, directory_exists, ensure_trailing_separator |
-| tests/core/processing/test_column_extractor.py | profiles.core.processing.column_extractor | ColumnRule, ColumnExtractor |
-| tests/core/telemetry/test_diagnostics.py | profiles.core.telemetry.diagnostics | LoggerFactory, SourceFilter, configure_logger, get_logger |
-| tests/gui/test_main_window.py | profiles.gui.main_window | MainWindow, _hex_luminance, _restart_application, context menu, key bindings |
-| tests/gui/test_ui.py | profiles.gui.ui | MainWindowUI, build, progress bar |
-| tests/gui/test_styles.py | profiles.gui.styles | configure_styles, ToolTip, current_theme |
-| tests/gui/test_theme.py | profiles.gui.theme | Md3Theme, DARK_THEME, LIGHT_THEME, apply_theme, contrast ratio |
-| tests/gui/test_search_bar.py | profiles.gui.search_bar | SearchBar, widget construction, bindings |
-| tests/gui/test_status_bar.py | profiles.gui.status_bar | StatusBar, callbacks, theme label |
-| tests/utils/test_file_utils.py | profiles.utils.file_utils | scan_directory, _matches_extension, launch_file, open_file_explorer, hash_file |
-| tests/utils/test_network.py | profiles.utils.network | get_hostname, get_username, get_local_ip |
-| tests/utils/test_search_parser.py | profiles.utils.search_parser | tokenize, split_or_groups, match_filter |
-| conftest.py | shared infrastructure | os.startfile polyfill, requires_tkinter marker |
+| tests/test_app.py | profiles.app | ProFileApp, main(), init_default_config |
+| tests/test_app_*.py | profiles.app | supplements: backend selection, launch resolution, log path, no-tkinter run, deprecated tk lifecycle |
+| tests/test_config.py | profiles.config | shim re-exports (ColumnConfiguration, …) |
+| tests/core/… | profiles.core.* | actions, config (models/reader/schema/service/loader/matcher/validator/template/inheritance/yaml_io), environment (system/execution/matcher/render/interactions/message_dialog/workflow), processing (scanner/file_classifier/file_metadata/column_extractor), telemetry (diagnostics/events/metrics) |
+| tests/desktop/test_lifecycle.py | profiles.desktop.lifecycle | port discovery, background server lifecycle |
+| tests/gui/** | profiles.gui.* | **skipped** — deprecated Tkinter frontend (see `tests/gui/conftest.py`) |
+| tests/launch/test_{context,creation,resolution}.py | profiles.launch.* | launch context detection, shortcut creation, resolution |
+| tests/packaging/ | (cross-cutting) | entry-point stub, packaging dependency rules, ProFiles.pyw stub |
+| tests/server/test_app.py | profiles.server.app | FastAPI factory, client connection telemetry |
+| tests/server/routes/test_*.py | profiles.server.routes.* | actions/config/fs/logs/scan/system/workflow endpoints |
+| tests/utils/test_*.py | profiles.utils.* | file_utils, network, search_parser, shortcut |
+| tests/web/test_build{,_hook}.py | profiles.web.* | web build CLI and Briefcase build hook |
+| conftest.py | shared infrastructure | os.startfile polyfill |
 
 ## Writing Tests
 ### Conventions
@@ -131,7 +124,7 @@ def test_launch_macos(mocker):
 ```
 
 ### Fixtures Reference
-tests/conftest.py provides shared infrastructure auto-inherited by all subdirs: it polyfills `os.startfile` on non-Windows so launch tests can mock it, and registers the `requires_tkinter` pytest marker. Note: the named fixture functions `sample_profile_conf`, `sample_files`, `config_with_profile` are currently unused — slated for cleanup. Use the built-in `tmp_path` fixture for temporary file setups.
+tests/conftest.py provides shared infrastructure auto-inherited by all subdirs: it polyfills `os.startfile` on non-Windows so launch tests can mock it, and provides the `sample_config_path` / `empty_config_path` fixtures. `tests/gui/conftest.py` applies the Tkinter-deprecation skip to everything under `tests/gui/`. Use the built-in `tmp_path` fixture for temporary file setups.
 
 ### CI/CD Integration
 ```yaml
