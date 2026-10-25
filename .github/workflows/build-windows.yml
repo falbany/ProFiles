@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --locked
+      - run: uv sync --python 3.13 --locked
       # Exercise the same packaging command as release.yml so MSI/WiX
       # breakage is caught on PRs, not at tag time.
       - run: uv run briefcase package windows -p msi

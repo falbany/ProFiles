@@ -18,6 +18,7 @@ dependencies = [
     "ruamel.yaml>=0.18.0",
 ]
 license = "MIT"
+license-files = ["LICENCE"]
 authors = [
     {name = "Florent ALBANY", email = "florent.albany@gmail.com"},
 ]

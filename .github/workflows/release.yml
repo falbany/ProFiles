@@ -48,7 +48,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --locked
+      # Pin the sync interpreter: briefcase embeds the running Python's
+      # major.minor into the bundle, and 3.15 (the newest interpreter
+      # satisfying requires-python) has no wheels yet for some binary
+      # dependencies (e.g. uvloop on macOS).
+      - run: uv sync --python 3.13 --locked
       - run: uv run briefcase package windows -p msi
       - uses: actions/upload-artifact@v4
         with:
@@ -63,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --locked
+      - run: uv sync --python 3.13 --locked
       - run: uv run briefcase package macos -p dmg
       - uses: actions/upload-artifact@v4
         with:
@@ -81,9 +85,11 @@ jobs:
       # ubuntu-24.04 runners ship without libfuse2, which the linuxdeploy /
       # AppImage packaging tooling needs to execute.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2
-      - run: uv sync --locked
-      - run: uv run briefcase upgrade linuxdeploy
+      - run: uv sync --python 3.13 --locked
       - run: uv run briefcase package linux -p deb
+      # No `briefcase upgrade linuxdeploy`: on a fresh runner linuxdeploy
+      # is not yet a managed install, so `upgrade` exits 200. The package
+      # step downloads the linuxdeploy it needs on demand.
       - run: uv run briefcase package linux -p appimage
       - uses: actions/upload-artifact@v4
         with:
