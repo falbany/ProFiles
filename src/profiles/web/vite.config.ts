@@ -2,9 +2,23 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
+import fs from "node:fs";
 import path from "node:path";
 
+// The app version lives only in [project].version of the repo-root
+// pyproject.toml; it is injected at build time as __APP_VERSION__ so the
+// UI fallback (HeaderBar) never duplicates the string.
+const pyproject = fs.readFileSync(
+  path.resolve(__dirname, "../../../pyproject.toml"),
+  "utf-8",
+);
+const appVersion =
+  /^version\s*=\s*"([^"]+)"/m.exec(pyproject)?.[1] ?? "0.0.0-dev";
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     react(),
     tailwindcss(),

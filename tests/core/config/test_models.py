@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from profiles import __version__
 from profiles.config import (
     AppConfig,
     MachineConfiguration,
@@ -16,7 +17,7 @@ class TestAppConfig:
 
     def test_default_values(self) -> None:
         config = AppConfig()
-        assert config.release == "0.9.0"
+        assert config.release == __version__
         assert config.title == ""
         assert config.gui_auto_launch is True
         assert config.close_after_execute is False

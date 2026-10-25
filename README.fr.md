@@ -362,4 +362,3 @@ npm run build        # tsc + vite build — génère dist/ et rafraîchit le pre
 
 - **Auteur** : [Florent ALBANY](https://github.com/falbany)
 - **Licence** : [MIT](./LICENCE)
-- **Version** : 0.9.0

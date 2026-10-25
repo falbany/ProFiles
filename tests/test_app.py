@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 import tkinter as tk
+import tomllib
 from pathlib import Path
 from tkinter import ttk
 
@@ -35,11 +36,18 @@ needs_tk = pytest.mark.skipif(
 # ── Package metadata (__init__.py) ──────────────────────────────────────────
 
 
+def _canonical_version() -> str:
+    """Return [project].version — the single source of truth."""
+    root = Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    return pyproject["project"]["version"]
+
+
 class TestPackageMetadata:
     """profiles.__init__ exports version, author, license."""
 
     def test_version(self) -> None:
-        assert profiles.__version__ == "0.9.0"
+        assert profiles.__version__ == _canonical_version()
 
     def test_author(self) -> None:
         assert profiles.__author__ == "Florent ALBANY"

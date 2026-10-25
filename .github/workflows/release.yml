@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Verify tag is SemVer and matches [project] and [tool.briefcase] versions
+      - name: Verify tag is SemVer and matches [project].version
         env:
           TAG_VERSION: ${{ github.ref_name }}
         run: |
@@ -35,11 +35,9 @@ jobs:
               pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
           )
           project = data["project"]["version"]
-          briefcase = data["tool"]["briefcase"]["version"]
           version = tag.removeprefix("v")
-          assert version == project == briefcase, (
-              f"Version mismatch: tag={version!r} project={project!r} "
-              f"briefcase={briefcase!r}"
+          assert version == project, (
+              f"Version mismatch: tag={version!r} pyproject={project!r}"
           )
           print(f"Version guard OK: {version}")
           PY
@@ -50,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync
+      - run: uv sync --locked
       - run: uv run briefcase package windows -p msi
       - uses: actions/upload-artifact@v4
         with:
@@ -65,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync
+      - run: uv sync --locked
       - run: uv run briefcase package macos -p dmg
       - uses: actions/upload-artifact@v4
         with:
@@ -83,7 +81,7 @@ jobs:
       # ubuntu-24.04 runners ship without libfuse2, which the linuxdeploy /
       # AppImage packaging tooling needs to execute.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2
-      - run: uv sync
+      - run: uv sync --locked
       - run: uv run briefcase upgrade linuxdeploy
       - run: uv run briefcase package linux -p deb
       - run: uv run briefcase package linux -p appimage
