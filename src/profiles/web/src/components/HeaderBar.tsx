@@ -1,4 +1,5 @@
 import { ArrowRight, Folder, FolderOpen, Home, Terminal } from "lucide-react";
+import { version as appVersion } from "../../package.json";
 import { EditableCombobox } from "./EditableCombobox";
 import Tooltip from "./Tooltip";
 
@@ -50,7 +51,7 @@ export function HeaderBar({
               )}
             </div>
             <p className="text-[11px] font-medium text-ink-muted tracking-wide mt-0.5">
-              Crafted by <span className="text-ink font-semibold">Florent ALBANY</span> • <span className="font-mono text-indigo-400">v{release || "2026.8.0"}</span>
+              Crafted by <span className="text-ink font-semibold">Florent ALBANY</span> • <span className="font-mono text-indigo-400">v{release || appVersion}</span>
             </p>
           </div>
         </div>
