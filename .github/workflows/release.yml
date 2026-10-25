@@ -89,9 +89,10 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2
       # The deb (system) backend requires briefcase to run under the
       # system python3 — pin the sync interpreter to it. Briefcase 0.4.x
-      # takes the output format as a positional argument.
+      # grammar: `linux <output-format>` for appimage/flatpak/system;
+      # `-p deb` selects the packaging format within the system backend.
       - run: uv sync --python /usr/bin/python3 --locked
-      - run: uv run briefcase package linux deb --no-input
+      - run: uv run briefcase package linux system -p deb --no-input
       # No `briefcase upgrade linuxdeploy`: on a fresh runner linuxdeploy
       # is not yet a managed install, so `upgrade` exits 200. The package
       # step downloads the linuxdeploy it needs on demand.
