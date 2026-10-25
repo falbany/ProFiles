@@ -190,7 +190,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
         aria-modal="true"
         aria-labelledby="log-viewer-title"
         onKeyDown={handleDialogKeyDown}
-        className="flex h-[min(84dvh,760px)] w-[clamp(560px,85vw,1500px)] min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl sm:rounded-2xl"
+        className="flex h-[min(84dvh,760px)] w-[clamp(560px,85vw,1500px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Header */}

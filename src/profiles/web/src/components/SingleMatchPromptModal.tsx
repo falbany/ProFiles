@@ -42,7 +42,7 @@ export function SingleMatchPromptModal({
       onClick={onDismiss}
     >
       <div
-        className="w-full max-w-sm rounded-xl border border-line bg-surface p-5 shadow-2xl flex flex-col gap-4"
+        className="w-full max-w-sm rounded-xl border border-frame-line glass-panel p-5 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line pb-3">

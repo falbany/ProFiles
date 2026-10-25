@@ -166,7 +166,7 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg rounded-2xl border border-line bg-surface p-6 shadow-2xl flex flex-col"
+        className="relative w-full max-w-lg rounded-2xl border border-frame-line glass-panel p-6 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">

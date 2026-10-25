@@ -242,7 +242,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       {/* Modal content */}
       <div
         ref={dialogRef}
-        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-line bg-surface shadow-2xl flex flex-col"
+        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
       >
         {/* Header */}
         <div className="flex-shrink-0 border-b border-line px-6 py-4">

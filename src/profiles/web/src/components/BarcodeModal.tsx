@@ -144,7 +144,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
     >
       <div
         ref={modalRef}
-        className="w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-2xl"
+        className="w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

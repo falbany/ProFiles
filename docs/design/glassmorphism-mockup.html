@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-mode="after">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProFiles — Glassmorphism Proposal</title>
+<style>
+  /* ============ Base (mirrors src/profiles/web/src/index.css tokens) ============ */
+  :root, [data-theme="dark"] {
+    --app-bg: #020617;
+    --app-surface: #0f172a;
+    --app-elevated: #1e293b;
+    --app-hover: #334155;
+    --app-border: #334155;
+    --app-frame-border: rgb(148 163 184 / 0.3);
+    --app-text-primary: #f8fafc;
+    --app-text-secondary: #cbd5e1;
+    --app-text-muted: #94a3b8;
+    --app-text-faint: #94a3b8;
+    --app-glass: rgb(15 23 42 / 0.6);
+    --app-glass-strong: rgb(2 6 23 / 0.9);
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    --app-bg: #f8fafc;
+    --app-surface: #ffffff;
+    --app-elevated: #f1f5f9;
+    --app-hover: #e2e8f0;
+    --app-border: #cbd5e1;
+    --app-frame-border: rgb(15 23 42 / 0.16);
+    --app-text-primary: #0f172a;
+    --app-text-secondary: #334155;
+    --app-text-muted: #475569;
+    --app-text-faint: #475569;
+    --app-glass: rgb(255 255 255 / 0.7);
+    --app-glass-strong: rgb(248 250 252 / 0.95);
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--app-text-primary);
+    background-color: var(--app-bg);
+  }
+  button { font: inherit; cursor: pointer; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* ============ Demo controls (not part of the app) ============ */
+  .demo-controls {
+    position: fixed; bottom: 14px; right: 14px; z-index: 999;
+    display: flex; gap: 8px;
+  }
+  .demo-controls button {
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass-strong);
+    color: var(--app-text-primary);
+    border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 600;
+    backdrop-filter: blur(12px);
+  }
+
+  /* ======================================================================
+     IMPROVEMENT 1 — Vibrant aurora backdrop (the layer glass blurs)
+     Fixed mesh-gradient blobs in brand indigo/purple + a soft color wash.
+     Currently the app background is a flat #020617 / #f8fafc, so the
+     existing 0.6-alpha glass has nothing to refract. This gives every
+     frosted panel real depth, like an Apple wallpaper behind Vision/UI.
+     ====================================================================== */
+  .aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  [data-mode="before"] .aurora { display: none; }
+  .aurora::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--app-bg);
+  }
+  .aurora .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; }
+  [data-theme="dark"] .aurora .blob { opacity: .5; }
+  [data-theme="light"] .aurora .blob { opacity: .38; }
+  .aurora .b1 { width: 55vw; height: 55vw; top: -22vw; left: -12vw;
+    background: radial-gradient(circle at 30% 30%, #6366f1, #4338ca 60%, transparent 75%); }
+  .aurora .b2 { width: 45vw; height: 45vw; top: 8vh; right: -16vw;
+    background: radial-gradient(circle at 60% 40%, #a855f7, #7e22ce 60%, transparent 75%); }
+  .aurora .b3 { width: 40vw; height: 40vw; bottom: -18vw; left: 28vw;
+    background: radial-gradient(circle at 50% 50%, #22d3ee, #0e7490 60%, transparent 78%); }
+  [data-theme="dark"] .aurora::after {
+    /* keep dark mode deep enough for 4.5:1 text contrast */
+    content: ""; position: absolute; inset: 0; background: rgb(2 6 23 / 0.45);
+  }
+
+  /* ======================================================================
+     IMPROVEMENT 2 — True frosted chrome (header + search bar)
+     macOS-style material: saturate(180%) blur(20px), translucent tint,
+     hairline border that catches light on the top edge.
+     Current header is bg-app/90 + blur-xl — nearly opaque, no saturation.
+     ====================================================================== */
+  .glass-chrome {
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+  [data-mode="before"] .glass-chrome {
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .hairline { position: relative; }
+  .hairline::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 1px; pointer-events: none;
+  }
+  .hairline-b::after { bottom: 0; }
+  [data-theme="dark"] .hairline-b::after { background: linear-gradient(90deg, transparent, rgb(148 163 184 / 0.35), transparent); }
+  [data-theme="light"] .hairline-b::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.9), transparent); }
+
+  header.app {
+    position: relative; z-index: 30;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 8px 20px; font-size: 12px;
+    border-bottom: 1px solid var(--app-frame-border);
+  }
+  .brand-badge {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 12px;
+    background: linear-gradient(135deg, rgb(99 102 241 / .35), rgb(168 85 247 / .35));
+    border: 1px solid rgb(129 140 248 / .45);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), 0 4px 14px rgb(79 70 229 / .25);
+    color: #a5b4fc;
+  }
+  [data-theme="light"] .brand-badge { color: #4338ca; }
+  .brand-badge .dot {
+    position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px;
+    border-radius: 50%; background: #10b981; border: 2px solid var(--app-bg);
+  }
+  .pill {
+    font-size: 11px; font-weight: 500; color: #a5b4fc;
+    background: rgb(99 102 241 / .12); border: 1px solid rgb(99 102 241 / .25);
+    padding: 2px 8px; border-radius: 6px;
+  }
+  [data-theme="light"] .pill { color: #4338ca; }
+  .sub { font-size: 11px; color: var(--app-text-muted); margin-top: 2px; }
+  .dir-label { display: flex; align-items: center; gap: 6px; color: var(--app-text-secondary); font-weight: 500; white-space: nowrap; }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px; border-radius: 8px; font-size: 12px; color: var(--app-text-secondary);
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .07);
+    transition: all .15s ease;
+  }
+  .icon-btn:hover { border-color: rgb(99 102 241 / .7); color: var(--app-text-primary); }
+  .combo {
+    flex: 1; min-width: 0; display: flex; align-items: center;
+    border-radius: 10px; padding: 6px 10px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--app-text-secondary);
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .07);
+  }
+  .combo .chev { margin-left: auto; opacity: .6; }
+  svg { width: 14px; height: 14px; flex: none; }
+
+  /* search row */
+  .search-row {
+    position: relative; z-index: 20;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 12px 16px; font-size: 12px;
+    border-bottom: 1px solid var(--app-frame-border);
+  }
+  .search-field { position: relative; flex: 1 1 260px; min-width: 0; }
+  .search-field .lens { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--app-text-secondary); }
+  .search-input {
+    width: 100%; border-radius: 10px; padding: 8px 12px 8px 36px; font-size: 12px;
+    color: var(--app-text-primary); border: 1px solid var(--app-frame-border);
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .08);
+    outline: none;
+  }
+  .search-input::placeholder { color: var(--app-text-faint); }
+  .search-input:focus { border-color: rgb(129 140 248 / .8); box-shadow: 0 0 0 3px rgb(99 102 241 / .25), inset 0 1px 0 rgb(255 255 255 / .08); }
+  .ext-chip {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--app-text-muted);
+  }
+  .ext-chip .combo { width: 176px; }
+  .check { display: flex; align-items: center; gap: 6px; color: var(--app-text-secondary); user-select: none; }
+
+  /* ======================================================================
+     IMPROVEMENT 3 — Floating glass table card
+     The file list sits on a rounded translucent card with a 1px inner
+     highlight (light catches the top edge), layered shadow, and frosted
+     column header — instead of edge-to-edge flat slate fills.
+     ====================================================================== */
+  .shell { position: relative; z-index: 10; display: flex; flex-direction: column; height: 100vh; }
+  .table-card {
+    flex: 1; margin: 14px 16px; min-height: 0;
+    display: flex; flex-direction: column;
+    border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%);
+    box-shadow: 0 24px 60px -12px rgb(2 6 23 / .5), inset 0 1px 0 rgb(255 255 255 / .09);
+  }
+  [data-mode="before"] .table-card {
+    margin: 0; border-radius: 0; border-left: 0; border-right: 0;
+    background: var(--app-bg);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    box-shadow: none;
+  }
+  .table-head {
+    display: grid; grid-template-columns: 2.2fr 1fr 1.6fr 1fr;
+    gap: 8px; padding: 8px 16px; font-size: 11px; font-weight: 600; color: var(--app-text-muted);
+    border-bottom: 1px solid var(--app-frame-border);
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  .row {
+    display: grid; grid-template-columns: 2.2fr 1fr 1.6fr 1fr; gap: 8px;
+    padding: 9px 16px; font-size: 12px; color: var(--app-text-secondary);
+    border-bottom: 1px solid rgb(100 116 139 / .14);
+    border-left: 4px solid transparent;
+    transition: background .12s ease;
+  }
+  .row .mono { font-size: 11px; }
+  .row.selected {
+    background: rgb(99 102 241 / .22); border-left-color: #6366f1; color: var(--app-text-primary);
+  }
+  .row:hover { background: rgb(100 116 139 / .12); }
+  .row.selected:hover { background: rgb(99 102 241 / .26); }
+  [data-theme="light"] .row.selected { background: rgb(99 102 241 / .14); }
+  .size-cell, .date-cell { font-variant-numeric: tabular-nums; }
+  .path-cell { opacity: .75; }
+
+  /* ======================================================================
+     IMPROVEMENT 4 — "Liquid" primary action button
+     Execute becomes a translucent emerald capsule: gradient fill, specular
+     top highlight, inner light border, colored glow shadow. Apple-style
+     depth instead of the current flat solid #059669.
+     ====================================================================== */
+  .action-bar {
+    position: relative; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; font-size: 12px;
+    border-top: 1px solid var(--app-frame-border);
+  }
+  .btn-liquid {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 22px; border-radius: 12px; font-weight: 700; font-size: 12px; color: #fff;
+    border: 1px solid rgb(110 231 183 / .55);
+    background: linear-gradient(180deg, rgb(52 211 153 / .92), rgb(5 150 105 / .92));
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / .35),
+      0 8px 24px -6px rgb(16 185 129 / .55);
+    text-shadow: 0 1px 1px rgb(6 78 59 / .5);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  [data-mode="before"] .btn-liquid {
+    border: none; background: #059669; box-shadow: none; text-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .btn-liquid:hover { filter: brightness(1.06); transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), 0 12px 30px -6px rgb(16 185 129 / .7); }
+  .btn-liquid kbd {
+    border-radius: 5px; padding: 1px 6px; font-size: 10px;
+    background: rgb(6 78 59 / .5); color: #d1fae5;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .12);
+  }
+
+  footer.status {
+    position: relative; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px; font-size: 11px; color: var(--app-text-muted);
+    border-top: 1px solid var(--app-frame-border);
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px; padding: 3px 10px; color: var(--app-text-secondary);
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .07);
+  }
+  .status-pill .live { width: 6px; height: 6px; border-radius: 50%; background: #34d399; box-shadow: 0 0 6px #34d399; }
+
+  /* ======================================================================
+     IMPROVEMENT 5 — Frosted floating layers (modal + toast)
+     Dialogs and toasts become real "sheets": heavy blur (30px+), more
+     translucency, 20px radius, long soft shadow, hairline lit border.
+     ====================================================================== */
+  .modal-demo {
+    position: fixed; z-index: 60; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: min(420px, 86vw);
+    border-radius: 20px; padding: 20px 22px;
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass-strong);
+    -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%);
+    box-shadow: 0 32px 80px -12px rgb(2 6 23 / .65), inset 0 1px 0 rgb(255 255 255 / .12);
+  }
+  [data-mode="before"] .modal-demo {
+    border-radius: 12px;
+    background: var(--app-surface);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / .3);
+  }
+  .modal-demo h3 { margin: 0 0 6px; font-size: 14px; }
+  .modal-demo p { margin: 0 0 16px; font-size: 12px; line-height: 1.5; color: var(--app-text-secondary); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-ghost {
+    border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 600; color: var(--app-text-secondary);
+    border: 1px solid var(--app-frame-border); background: transparent;
+  }
+  .btn-ghost:hover { color: var(--app-text-primary); border-color: rgb(99 102 241 / .6); }
+  .scrim {
+    position: fixed; inset: 0; z-index: 50; background: rgb(2 6 23 / .35);
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  }
+  [data-mode="before"] .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  [data-theme="light"] .scrim { background: rgb(15 23 42 / .18); }
+
+  .toast {
+    position: fixed; z-index: 70; left: 50%; bottom: 58px; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 10px;
+    border-radius: 14px; padding: 10px 16px; font-size: 12px; font-weight: 600;
+    color: var(--app-text-primary);
+    border: 1px solid var(--app-frame-border);
+    background: var(--app-glass-strong);
+    -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
+    box-shadow: 0 20px 50px -10px rgb(2 6 23 / .6), inset 0 1px 0 rgb(255 255 255 / .12);
+  }
+  [data-mode="before"] .toast {
+    border-radius: 8px; background: var(--app-surface);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / .3);
+  }
+  .toast .tick { color: #34d399; display: inline-flex; }
+
+  .before-note {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 90;
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: #fbbf24; background: rgb(251 191 36 / .12); border: 1px solid rgb(251 191 36 / .4);
+    padding: 4px 12px; border-radius: 999px;
+    display: none;
+  }
+  [data-mode="before"] .before-note { display: block; }
+</style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  </div>
+
+  <div class="before-note">Before — current flat design</div>
+
+  <div class="shell">
+    <header class="app glass-chrome hairline hairline-b">
+      <div class="brand-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        <span class="dot"></span>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <strong style="font-size:14px;letter-spacing:-.01em;">ProFiles</strong>
+          <span style="color:var(--app-text-faint);">/</span>
+          <span class="pill">MTTL Scanner</span>
+        </div>
+        <div class="sub">Crafted by <strong style="color:var(--app-text-primary);">Florent ALBANY</strong> • <span class="mono" style="color:#818cf8;">v0.9.0</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+        <span class="dir-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#818cf8;"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+          Directory:
+        </span>
+        <div class="combo">/Users/falbany/Documents/Code/GitHub/ProFiles<span class="chev">▾</span></div>
+        <button class="icon-btn" aria-label="Open active directory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+        <button class="icon-btn" aria-label="Parent directory"><span class="mono" style="font-weight:700;">&lt;</span></button>
+        <button class="icon-btn" aria-label="Browse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="m14 13-3.5 3.5L8 14l-3 3"/><circle cx="15" cy="12" r="1"/></svg></button>
+        <button class="icon-btn" aria-label="Terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
+        <button class="icon-btn" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></button>
+      </div>
+    </header>
+
+    <div class="search-row glass-chrome">
+      <div class="search-field">
+        <span class="lens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <input class="search-input" placeholder='Filter — e.g. ".mttl prod -temp  OR  &quot;release 2&quot;"' />
+      </div>
+      <span class="ext-chip">Ext: <span class="combo">.mttl<span class="chev">▾</span></span></span>
+      <label class="check"><input type="checkbox" checked /> Recursive</label>
+    </div>
+
+    <div class="table-card" role="table" aria-label="Scanned files">
+      <div class="table-head" role="row">
+        <span>Name</span><span>Size</span><span>Last Modified</span><span>Matches</span>
+      </div>
+      <div class="row selected" role="row">
+        <span class="mono" style="color:var(--app-text-primary);">deploy_profile_v21.mttl</span>
+        <span class="size-cell">18.4 KB</span>
+        <span class="date-cell">2026-10-24 17:32</span>
+        <span class="path-cell mono">/profiles/release</span>
+      </div>
+      <div class="row" role="row">
+        <span class="mono">scan_baseline_prod.mttl</span>
+        <span class="size-cell">9.1 KB</span>
+        <span class="date-cell">2026-10-23 09:14</span>
+        <span class="path-cell mono">/profiles/prod</span>
+      </div>
+      <div class="row" role="row">
+        <span class="mono">env_matrix_staging.mttl</span>
+        <span class="size-cell">6.7 KB</span>
+        <span class="date-cell">2026-10-22 21:05</span>
+        <span class="path-cell mono">/profiles/staging</span>
+      </div>
+      <div class="row" role="row">
+        <span class="mono">profile_importer.mttl</span>
+        <span class="size-cell">12.2 KB</span>
+        <span class="date-cell">2026-10-21 11:48</span>
+        <span class="path-cell mono">/profiles/tools</span>
+      </div>
+      <div class="row" role="row">
+        <span class="mono">legacy_migration_map.mttl</span>
+        <span class="size-cell">31.9 KB</span>
+        <span class="date-cell">2026-10-19 15:20</span>
+        <span class="path-cell mono">/profiles/archive</span>
+      </div>
+      <div class="row" role="row">
+        <span class="mono">nightly_diff_report.mttl</span>
+        <span class="size-cell">4.3 KB</span>
+        <span class="date-cell">2026-10-18 03:02</span>
+        <span class="path-cell mono">/profiles/reports</span>
+      </div>
+    </div>
+
+    <div class="action-bar glass-chrome">
+      <span style="color:var(--app-text-muted);">247 files</span>
+      <button class="btn-liquid">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21"/></svg>
+        Execute <kbd>↵</kbd>
+      </button>
+    </div>
+
+    <footer class="status glass-chrome">
+      <span>👤 falbany@MBP-de-Florent</span>
+      <span class="status-pill"><span class="live"></span> Ready · 32 ms scan</span>
+      <span>🌙 Dark · EN</span>
+    </footer>
+  </div>
+
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="modal-demo" role="dialog" aria-label="File properties">
+    <h3>File Properties</h3>
+    <p><span class="mono">deploy_profile_v21.mttl</span> — 18.4 KB, modified 2026-10-24 17:32. SHA-256 verified against the release manifest.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost">Reveal in Finder</button>
+      <button class="btn-liquid" style="padding:7px 16px;">Launch</button>
+    </div>
+  </div>
+  <div class="toast" role="status"><span class="tick">✓</span> Launched: deploy_profile_v21.mttl</div>
+
+  <div class="demo-controls">
+    <button onclick="document.documentElement.dataset.mode = document.documentElement.dataset.mode === 'before' ? 'after' : 'before'; this.textContent = document.documentElement.dataset.mode === 'before' ? 'Show AFTER (glass)' : 'Show BEFORE (current)';">Show BEFORE (current)</button>
+    <button onclick="const h=document.documentElement; h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark'; this.textContent = h.dataset.theme === 'dark' ? '☀️ Light' : '🌙 Dark';">🌙 Dark</button>
+  </div>
+</body>
+</html>

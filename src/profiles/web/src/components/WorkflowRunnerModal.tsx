@@ -194,7 +194,7 @@ export function WorkflowRunnerModal({
       aria-labelledby="workflow-runner-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
     >
-      <div className="flex h-[80vh] w-full max-w-4xl flex-col rounded-xl border border-line bg-surface shadow-2xl overflow-hidden">
+      <div className="flex h-[80vh] w-full max-w-4xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5 bg-surface-strong/30 shrink-0">
           <div className="flex items-center gap-2.5">

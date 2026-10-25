@@ -408,7 +408,7 @@ export function ContextMenu({
           aria-modal="true"
           aria-labelledby="args-modal-title"
         >
-          <div className="w-96 rounded-xl border border-line bg-surface p-4 shadow-2xl">
+          <div className="w-96 rounded-xl border border-frame-line glass-panel p-4">
             <h3 id="args-modal-title" className="mb-2 text-sm font-semibold text-ink">Launch with Arguments</h3>
             <p className="mb-3 text-xs text-ink-muted truncate">{file.filename}</p>
             <input

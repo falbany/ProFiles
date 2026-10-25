@@ -48,9 +48,9 @@ export function ActionBar({
           role="status"
           aria-live={isError ? "assertive" : "polite"}
           aria-atomic="true"
-          className={`absolute left-1/2 top-1/2 z-50 max-w-[min(80vw,640px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border px-4 py-2 text-xs font-medium shadow-xl backdrop-blur-md ${
+          className={`absolute left-1/2 top-1/2 z-50 max-w-[min(80vw,640px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border px-4 py-2 text-xs font-medium glass-panel-strong ${
             isError
-              ? "pointer-events-auto flex max-w-[min(70vw,560px)] items-center gap-2.5 border-rose-500/30 bg-surface-strong text-left text-ink"
+              ? "pointer-events-auto flex max-w-[min(70vw,560px)] items-center gap-2.5 border-rose-500/30 text-left text-ink"
               : "pointer-events-none max-w-[min(70vw,560px)] text-center text-ink"
           }`}
         >
@@ -87,11 +87,11 @@ export function ActionBar({
       <button
         onClick={onExecute}
         disabled={!hasSelection || scanning}
-        className="flex shrink-0 items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 font-semibold text-white shadow hover:bg-emerald-500 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+        className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-300/50 bg-gradient-to-b from-emerald-400/90 to-emerald-600/90 px-5 py-2 font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_8px_24px_-6px_rgb(16_185_129/0.55)] transition-[filter,box-shadow,transform] hover:-translate-y-px hover:brightness-110 hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_12px_30px_-6px_rgb(16_185_129/0.7)] disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:brightness-100 disabled:hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_8px_24px_-6px_rgb(16_185_129/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
       >
         <Play className="h-3.5 w-3.5 fill-current" />
         <span>Execute</span>
-        <kbd className="rounded bg-emerald-800/60 px-1.5 py-0.5 text-[10px] text-emerald-200">↵</kbd>
+        <kbd className="rounded bg-emerald-800/60 px-1.5 py-0.5 text-[10px] text-emerald-200 shadow-[inset_0_1px_0_rgb(255_255_255/0.12)]">↵</kbd>
       </button>
     </div>
   );

@@ -147,7 +147,7 @@ export function LoadConfigModal({
         aria-modal="true"
         aria-labelledby="load-config-title"
         onKeyDown={handleDialogKeyDown}
-        className="flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-2xl sm:rounded-2xl"
+        className="flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
