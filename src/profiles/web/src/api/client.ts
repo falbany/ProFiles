@@ -83,6 +83,22 @@ export async function loadConfigContent(filename: string, content: string): Prom
   return res.json();
 }
 
+/** Re-read the active configuration file from disk (Reload button). */
+export async function reloadConfig(): Promise<AppConfigData> {
+  const res = await fetch("/api/config/reload", { method: "POST" });
+  if (!res.ok) {
+    let detail = "Failed to reload configuration";
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep the generic message
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 export async function createConfigFile(directory: string): Promise<AppConfigData> {
   const res = await fetch("/api/config/create", {
     method: "POST",

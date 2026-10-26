@@ -14,6 +14,7 @@ import {
   selectDirectory,
   browseDirectory,
   loadConfigContent,
+  reloadConfig,
 } from "./api/client";
 import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import {
@@ -276,61 +277,63 @@ export default function App() {
     }
   };
 
-  const loadConfig = async (forceUpdate: boolean = false) => {
-    try {
-      const cfg = await fetchConfig();
-      setConfig(cfg);
-      
-      // Force update all config values, or only set if empty
-      if (forceUpdate || !activeDirectory) {
-        setActiveDirectory(cfg.active_directory || "");
-      }
-      if (forceUpdate || !activeExtension) {
-        setActiveExtension(cfg.extensions.length > 0 ? cfg.extensions[0] : "");
-      }
-      if (cfg.recursive_search !== undefined) {
-        setRecursive(cfg.recursive_search);
-      }
-      if (forceUpdate || !filterText) {
-        setFilterText(cfg.filters.length > 0 ? cfg.filters[0] : "");
-      }
-      return cfg;
-    } catch (err: any) {
-      showToast(`Failed to load configuration: ${err.message}`, "error");
-      return null;
-    }
-  };
-
   const handleReloadConfig = async () => {
     if (reloading) return;
     setReloading(true);
     showToast("Reloading configuration...");
-    
+
     const scanGeneration = beginScan();
-    
+
     try {
       // 1. Fetch fresh system info (in case hostname/IP changed)
       const sys = await fetchSystemInfo();
       setSystemInfo(sys);
-      
-      // 2. Fetch and force-update configuration
-      const cfg = await loadConfig(true); // forceUpdate = true
-      
-      if (cfg) {
+
+      // 2. Ask the server to re-parse the attached config file from disk
+      //    (GET /api/config only returns the in-memory snapshot).
+      const cfg = await reloadConfig();
+      setConfig(cfg);
+
+      // Theme from the freshly loaded config, like handleConfigLoaded does.
+      setTheme(resolveSessionTheme(cfg.theme));
+
+      // 3. Apply the FRESH values from the response — not the stale
+      //    closure state captured before the reload.
+      const targetDirectory = cfg.active_directory || activeDirectory;
+      const nextExtension = cfg.extensions.includes(activeExtension)
+        ? activeExtension
+        : (cfg.extensions[0] ?? "");
+      const nextFilter = cfg.filters.includes(filterText) ? filterText : (cfg.filters[0] ?? "");
+      if (targetDirectory) {
+        setActiveDirectory(targetDirectory);
+      }
+      setActiveExtension(nextExtension);
+      setFilterText(nextFilter);
+      setRecursive(cfg.recursive_search);
+
+      if (cfg.reloaded === false) {
+        showToast(
+          `Config file not found: ${cfg.config_path || "(unknown path)"} — kept current configuration.`,
+          "error",
+        );
+      } else {
         showToast("Configuration reloaded.");
-        // 3. Run fresh scan with new generation ID
+      }
+
+      // 4. Run fresh scan with the reloaded values
+      if (targetDirectory) {
         await runScan(scanGeneration, {
-          directory: activeDirectory,
-          extension: activeExtension,
-          filter_text: filterText,
-          recursive,
+          directory: targetDirectory,
+          extension: nextExtension,
+          filter_text: nextFilter,
+          recursive: cfg.recursive_search,
         });
       }
     } catch (err: any) {
       showToast(`Failed to reload configuration: ${err.message}`, "error");
     } finally {
       setReloading(false);
-      // 4. Finish scan if it's still the current generation
+      // Finish scan if it's still the current generation
       finishScan(scanGeneration);
     }
   };

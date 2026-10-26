@@ -21,6 +21,8 @@ export interface AppConfigData {
   active_directory: string;
   config_path: string;
   config_exists: boolean;
+  /** POST /api/config/reload only: False when the config file vanished from disk. */
+  reloaded?: boolean;
   column_headers: string[];
   column_names: string[];
   row_colors: [string, string][];

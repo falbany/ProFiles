@@ -198,6 +198,41 @@ async def create_config_endpoint(payload: CreateConfigRequest, request: Request)
     return _config_response(state)
 
 
+@router.post("/reload")
+async def reload_config_endpoint(request: Request) -> dict:
+    """Re-read the active configuration file from disk.
+
+    The active path is resolved exactly like launch time
+    (``ServerState.active_config_path``), so Reload picks up edits made
+    to the attached ``.profiles`` file without restarting the server.
+    """
+    state: ServerState = request.app.state.server_state
+    config_path = state.active_config_path()
+
+    if not config_path.exists():
+        # Degrade gracefully: keep the in-memory configuration and let the
+        # client explain the situation instead of silently wiping state.
+        response = _config_response(state)
+        response["reloaded"] = False
+        return response
+
+    try:
+        loaded = ConfigReader.from_content(
+            config_path.read_text(encoding="utf-8"),
+            display_name=config_path.name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    loaded.config_path = config_path
+    state.config = loaded
+    state.config_path = config_path
+    state.active_directory = _choose_active_directory(config_path, loaded)
+    response = _config_response(state)
+    response["reloaded"] = True
+    return response
+
+
 @router.post("/select-directory")
 async def select_directory(payload: SelectDirectoryRequest, request: Request) -> dict:
     """Update active directory."""
