@@ -3,6 +3,7 @@ import {
   computeHash,
   executeScan,
   fetchConfig,
+  fetchNotifications,
   fetchScanResults,
   fetchSystemInfo,
   launchFile,
@@ -16,7 +17,7 @@ import {
   loadConfigContent,
   reloadConfig,
 } from "./api/client";
-import type { AppConfigData, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
+import type { AppConfigData, ExternalEvent, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import {
   nextDragState,
   pickConfigFile,
@@ -50,6 +51,8 @@ import { matchFilter } from "./utils/searchSyntax";
 const PREFILTER_DEBOUNCE_MS = 120;
 /** Debounce for the deferred server auto-rescan after the last filter keystroke. */
 const AUTO_RESCAN_DEBOUNCE_MS = 800;
+/** Poll interval for server-side UI events (config handoff toasts). */
+const NOTIFICATION_POLL_MS = 4000;
 
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -404,6 +407,44 @@ export default function App() {
   dropHandlerRef.current = (file: File) => {
     void handleDroppedConfig(file);
   };
+
+  // Config handoff notifications (issue #4): when a second ProFiles launch
+  // double-clicks a .profiles file, the running instance applies it
+  // server-side and buffers an event. A light poll surfaces the event as a
+  // toast and re-fetches the config + rescans when the event says one was
+  // applied. Refs keep the interval callback reading the latest handlers.
+  const lastEventIdRef = useRef(0);
+  const externalConfigApplyRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    externalConfigApplyRef.current = async () => {
+      const cfg = await fetchConfig();
+      await handleConfigLoaded(cfg);
+    };
+  });
+  useEffect(() => {
+    const poll = async () => {
+      let events: ExternalEvent[] = [];
+      try {
+        const res = await fetchNotifications(lastEventIdRef.current);
+        events = res.events;
+      } catch {
+        return; // server unreachable — retry silently on the next tick
+      }
+      for (const evt of events) {
+        lastEventIdRef.current = Math.max(lastEventIdRef.current, evt.id);
+        if (evt.config_applied) {
+          try {
+            await externalConfigApplyRef.current();
+          } catch {
+            // Re-applying is best-effort; the toast still explains what happened.
+          }
+        }
+        showToast(evt.message);
+      }
+    };
+    const id = setInterval(() => void poll(), NOTIFICATION_POLL_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const hasFiles = (e: DragEvent) =>

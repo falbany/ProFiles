@@ -1,6 +1,7 @@
 import type {
   AppConfigData,
   BrowseResult,
+  ExternalEvent,
   FileMetadata,
   LogLevel,
   LogResponse,
@@ -8,6 +9,13 @@ import type {
   SystemInfo,
   WorkflowSessionState,
 } from "./types";
+
+/** Fetch UI events recorded after *afterId* (config handoff notifications). */
+export async function fetchNotifications(afterId: number): Promise<{ events: ExternalEvent[] }> {
+  const res = await fetch(`/api/notifications?after=${afterId}`);
+  if (!res.ok) throw new Error("Failed to fetch notifications");
+  return res.json();
+}
 
 export async function openLogFile(): Promise<{ status: string; message: string }> {
   const res = await fetch("/api/actions/open-log", {

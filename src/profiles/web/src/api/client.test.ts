@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reloadConfig } from "./client";
+import { fetchNotifications, reloadConfig } from "./client";
 
 const SAMPLE_CONFIG = {
   title: "Fresh From Disk",
@@ -57,5 +57,35 @@ describe("reloadConfig", () => {
 
     await expect(reloadConfig()).rejects.toThrow("Invalid dropped configuration");
     expect(fetch).toHaveBeenCalledWith("/api/config/reload", { method: "POST" });
+  });
+});
+
+describe("fetchNotifications", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("GETs /api/notifications with the after cursor and returns the events", async () => {
+    const events = [
+      { id: 7, kind: "config_handoff", message: "Configuration applied", config_applied: true },
+    ];
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ events }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await fetchNotifications(6);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/notifications?after=6");
+    expect(res.events).toEqual(events);
+  });
+
+  it("throws on HTTP failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 500 })),
+    );
+
+    await expect(fetchNotifications(0)).rejects.toThrow("Failed to fetch notifications");
   });
 });
