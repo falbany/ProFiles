@@ -424,7 +424,7 @@ export function FileListTable({
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-auto bg-transparent text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-[-2px]"
+      className="flex-1 overflow-auto bg-app text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-[-2px]"
       data-testid="file-list"
       data-loaded-count={loadedCount}
       aria-busy={scanning}
