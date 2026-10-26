@@ -353,3 +353,99 @@ class TestMultiPathScanDisplay:
         labels = [e.label for e in entries]
         for p in ("/prod1", "/prod2", "/dev1", "/dev2"):
             assert p in labels
+
+
+class TestChooseActiveDirectory:
+    """Shared launch-time directory resolution (issue #5).
+
+    Loading a configuration at runtime must resolve the same active
+    directory a launch with that configuration would.
+    """
+
+    def test_existing_search_dir_wins(self, tmp_path: Path) -> None:
+        """search_dir takes priority over any machine-config scan dir."""
+        search_dir = tmp_path / "search"
+        search_dir.mkdir()
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        config = AppConfig(
+            search_dir=str(search_dir),
+            configurations=[
+                MachineConfiguration(name="m", scan=(str(scan_dir),)),
+            ],
+        )
+
+        result = config_service.choose_active_directory(config, "any-host")
+
+        assert result == search_dir
+
+    def test_hostname_matched_scan_dir(self, tmp_path: Path) -> None:
+        """Without search_dir, the hostname-matched config's scan dir wins."""
+        scan_dir = tmp_path / "prod-scan"
+        scan_dir.mkdir()
+        config = AppConfig(
+            configurations=[
+                MachineConfiguration(
+                    name="prod",
+                    match=MatchCriteria(hostname=["prod-*"]),
+                    scan=(str(scan_dir),),
+                ),
+            ],
+        )
+
+        result = config_service.choose_active_directory(config, "prod-01")
+
+        assert result == scan_dir
+
+    def test_no_hostname_match_falls_back_to_first_config(self, tmp_path: Path) -> None:
+        """No hostname match resolves like launch: first config's scan dir."""
+        scan_dir = tmp_path / "only-scan"
+        scan_dir.mkdir()
+        config = AppConfig(
+            configurations=[
+                MachineConfiguration(
+                    name="only",
+                    match=MatchCriteria(hostname=["other-host"]),
+                    scan=(str(scan_dir),),
+                ),
+            ],
+        )
+
+        result = config_service.choose_active_directory(config, "this-host")
+
+        assert result == scan_dir
+
+    def test_skips_nonexistent_candidates_in_order(self, tmp_path: Path) -> None:
+        """Non-existing scan dirs are skipped; the first existing one wins."""
+        dead = tmp_path / "unmounted"
+        alive = tmp_path / "mounted"
+        alive.mkdir()
+        config = AppConfig(
+            configurations=[
+                MachineConfiguration(name="m", scan=(str(dead), str(alive))),
+            ],
+        )
+
+        result = config_service.choose_active_directory(config, "host")
+
+        assert result == alive
+
+    def test_nothing_exists_returns_none(self, tmp_path: Path) -> None:
+        """No candidate exists on disk — caller picks the final fallback."""
+        config = AppConfig(
+            search_dir=str(tmp_path / "nope"),
+            configurations=[
+                MachineConfiguration(name="m", scan=(str(tmp_path / "also-nope"),)),
+            ],
+        )
+
+        assert config_service.choose_active_directory(config, "host") is None
+
+    def test_matches_launch_resolution(self, tmp_path: Path) -> None:
+        """Consistency contract: same result as desktop launch selection."""
+        search_dir = tmp_path / "project-a"
+        search_dir.mkdir()
+        config = AppConfig(search_dir=str(search_dir))
+
+        # Desktop launch: search_dir when it exists (lifecycle.py).
+        assert config_service.choose_active_directory(config, "host") == Path(search_dir)

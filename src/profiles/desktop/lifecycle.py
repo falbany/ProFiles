@@ -6,7 +6,6 @@ import contextlib
 import socket
 import threading
 import time
-from pathlib import Path
 
 import uvicorn
 
@@ -58,24 +57,12 @@ class BackgroundServer:
         self.host = host
         self.port = port if port != 0 else find_available_port(8088)
 
-        active_dir = None
-        if config.search_dir and Path(config.search_dir).exists():
-            active_dir = Path(config.search_dir)
-        else:
-            from profiles.core.config import service as config_service
-            from profiles.utils.network import get_hostname
+        from profiles.core.config import service as config_service
+        from profiles.utils.network import get_hostname
 
-            selected = config_service.auto_select_directory(config, get_hostname())
-            if selected and Path(selected).exists():
-                active_dir = Path(selected)
-            else:
-                for m in config.configurations:
-                    for s in m.scan:
-                        if Path(s).exists():
-                            active_dir = Path(s)
-                            break
-                    if active_dir:
-                        break
+        # Shared with the server's config load/drop endpoints so a runtime
+        # load resolves the same directory a launch with this file would.
+        active_dir = config_service.choose_active_directory(config, get_hostname())
 
         self.state = ServerState(
             config=config,

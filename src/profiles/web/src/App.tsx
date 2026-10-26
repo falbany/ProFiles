@@ -298,12 +298,13 @@ export default function App() {
       setTheme(resolveSessionTheme(cfg.theme));
 
       // 3. Apply the FRESH values from the response — not the stale
-      //    closure state captured before the reload.
+      //    closure state captured before the reload. The server re-derives
+      //    active_directory from the reloaded config (launch resolution),
+      //    and the first merged extension/filter match what a launch
+      //    with this config would apply.
       const targetDirectory = cfg.active_directory || activeDirectory;
-      const nextExtension = cfg.extensions.includes(activeExtension)
-        ? activeExtension
-        : (cfg.extensions[0] ?? "");
-      const nextFilter = cfg.filters.includes(filterText) ? filterText : (cfg.filters[0] ?? "");
+      const nextExtension = cfg.extensions[0] ?? "";
+      const nextFilter = cfg.filters[0] ?? "";
       if (targetDirectory) {
         setActiveDirectory(targetDirectory);
       }
@@ -345,11 +346,14 @@ export default function App() {
     // must NOT persist it (no localStorage write — that would leak the
     // trial into the next session).
     setTheme(resolveSessionTheme(cfg.theme));
+    // Loading a config must behave like launching with it: the server
+    // re-derived active_directory from the NEW config (the stale directory
+    // is never sent back), and the first merged extension/filter is what a
+    // launch would apply — values kept from the previous configuration
+    // would belong to the old directory's machine config.
     const targetDirectory = cfg.active_directory || activeDirectory || (cfg.directories[0] ?? "");
-    const nextExtension = cfg.extensions.includes(activeExtension)
-      ? activeExtension
-      : (cfg.extensions[0] ?? "");
-    const nextFilter = cfg.filters.includes(filterText) ? filterText : (cfg.filters[0] ?? "");
+    const nextExtension = cfg.extensions[0] ?? "";
+    const nextFilter = cfg.filters[0] ?? "";
     if (targetDirectory) {
       setActiveDirectory(targetDirectory);
     }

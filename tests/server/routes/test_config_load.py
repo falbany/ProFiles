@@ -50,7 +50,7 @@ class TestLoadContentEndpoint:
     """POST /api/config/load-content — session-only trial from dropped files."""
 
     @pytest.mark.anyio
-    async def test_valid_content_swaps_config_only(
+    async def test_valid_content_swaps_config_and_rederives_directory(
         self, config_state: ServerState, tmp_path: Path
     ) -> None:
         # Baseline a real resolved path (mirrors the GET test): the shared
@@ -58,21 +58,73 @@ class TestLoadContentEndpoint:
         # is only meaningful from a set value.
         config_state.config_path = tmp_path / ".profiles"
         path_before = config_state.config_path
-        active_before = config_state.active_directory
+        stale_dir = tmp_path / "stale-dir"
+        stale_dir.mkdir()
+        config_state.active_directory = stale_dir
+        fresh_dir = tmp_path / "fresh-dir"
+        fresh_dir.mkdir()
+        content = (
+            "version: 1\n"
+            "configs:\n"
+            "  machine:\n"
+            "    match:\n"
+            "      hostname: ['*']\n"
+            "    scan: ['" + str(fresh_dir) + "']\n"
+        )
         app = create_app(config_state)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/config/load-content",
-                json={"filename": "my.profiles", "content": VALID_DROP},
+                json={"filename": "my.profiles", "content": content},
             )
 
         assert response.status_code == 200
         body = response.json()
         assert body["session_trial"] is True
-        assert body["title"] == "Dropped"
-        # Session-only: resolution state must be untouched.
+        # Session-only: the attached config path stays untouched so restart
+        # resolution is unaffected…
         assert config_state.config_path == path_before
-        assert config_state.active_directory == active_before
+        # …but the active directory IS re-derived from the dropped config,
+        # exactly like a launch with it (issue #5). Keeping the stale
+        # directory would merge the new config against the wrong directory.
+        assert config_state.active_directory == fresh_dir
+        assert body["active_directory"] == str(fresh_dir)
+
+    @pytest.mark.anyio
+    async def test_drop_merges_extensions_for_new_directory(
+        self, config_state: ServerState, tmp_path: Path
+    ) -> None:
+        """Extensions/filters are merged for the NEW directory, not the old."""
+        stale_dir = tmp_path / "stale-dir"
+        stale_dir.mkdir()
+        config_state.active_directory = stale_dir
+        fresh_dir = tmp_path / "fresh-dir"
+        fresh_dir.mkdir()
+        content = (
+            "version: 1\n"
+            "defaults:\n"
+            "  extensions: ['.global']\n"
+            "configs:\n"
+            "  machine:\n"
+            "    match:\n"
+            "      hostname: ['*']\n"
+            "    scan: ['" + str(fresh_dir) + "']\n"
+            "    extensions: ['.new']\n"
+        )
+        app = create_app(config_state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/config/load-content",
+                json={"filename": "my.profiles", "content": content},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        # The per-directory override of the freshly derived directory wins —
+        # against the stale directory the merge would have matched no
+        # machine config and returned only the global default.
+        assert body["extensions"][0] == ".new"
+        assert ".global" in body["extensions"]
 
     @pytest.mark.anyio
     async def test_invalid_content_returns_400_and_keeps_config(
@@ -231,6 +283,63 @@ async def test_load_g5_falls_back_to_file_folder(config_state: ServerState, tmp_
 
     assert response.status_code == 200
     assert response.json()["active_directory"] == str(config_dir)
+
+
+@pytest.mark.anyio
+async def test_load_resolves_search_dir_like_launch(
+    config_state: ServerState, tmp_path: Path
+) -> None:
+    """Issue #5 defect B: loading must resolve the directory like a launch.
+
+    A config whose ``search_dir`` exists must activate that directory — not
+    the folder that happens to contain the ``.profiles`` file.
+    """
+    config_dir = tmp_path / "config-home"
+    config_dir.mkdir()
+    search_dir = tmp_path / "project-a"
+    search_dir.mkdir()
+    config_path = config_dir / "my.profiles"
+    config_path.write_text(
+        "version: 1\ndefaults:\n  search_dir: '" + str(search_dir) + "'\n",
+        encoding="utf-8",
+    )
+
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/load", json={"config_path": str(config_path)})
+
+    assert response.status_code == 200
+    assert response.json()["active_directory"] == str(search_dir)
+
+
+@pytest.mark.anyio
+async def test_load_prefers_scan_dirs_over_config_file_folder(
+    config_state: ServerState, tmp_path: Path
+) -> None:
+    """Issue #5 defect B: existing scan dirs beat the config file's folder."""
+    config_dir = tmp_path / "config-home"
+    config_dir.mkdir()
+    scan_dir = tmp_path / "machine-scan"
+    scan_dir.mkdir()
+    config_path = config_dir / "my.profiles"
+    config_path.write_text(
+        "version: 1\n"
+        "configs:\n"
+        "  machine:\n"
+        "    match:\n"
+        "      hostname: ['no-such-host']\n"
+        "    scan: ['" + str(scan_dir) + "']\n",
+        encoding="utf-8",
+    )
+
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/load", json={"config_path": str(config_path)})
+
+    assert response.status_code == 200
+    # Even without a hostname match, the (fallback) machine config's scan
+    # dir is preferred over the folder containing the .profiles file.
+    assert response.json()["active_directory"] == str(scan_dir)
 
 
 @pytest.mark.anyio
