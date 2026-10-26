@@ -260,19 +260,36 @@ class ProFileApp:
             self._run_gui()
 
     def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "0.0.0.0") -> None:
-        """Run only the FastAPI background server without opening PyWebView."""
+        """Run only the FastAPI background server without opening PyWebView.
+
+        A busy port is never fatal: the config is handed off to a running
+        ProFiles instance when one owns the port, otherwise the server
+        retries on the next free port. Nothing is killed automatically.
+        """
         import time
 
-        from profiles.desktop.lifecycle import BackgroundServer, ServerStartError
+        from profiles.desktop.lifecycle import (
+            BackgroundServer,
+            ServerStartError,
+            find_available_port,
+        )
         from profiles.utils.network import get_local_ip
 
         assert self._config is not None
         server = BackgroundServer(config=self._config, host=host, port=port)
         try:
             server.start()
-        except ServerStartError as exc:
-            print(f"ERROR: {exc}", file=sys.stderr)
-            raise SystemExit(1) from exc
+        except ServerStartError:
+            if self._handoff_to_running_instance(port):
+                return
+            fallback_port = find_available_port(port)
+            if fallback_port != port:
+                self._announce_fallback_port(port, fallback_port)
+            server = BackgroundServer(config=self._config, host=host, port=fallback_port)
+            try:
+                server.start()
+            except ServerStartError as exc:
+                self._report_server_start_failure(fallback_port, exc)
 
         # Display both local and network URLs
         local_ip = get_local_ip()
@@ -289,21 +306,86 @@ class ProFileApp:
             server.stop()
 
     def _run_web_gui(self, port: int = _DEFAULT_PORT, host: str = "127.0.0.1") -> None:
-        """Launch web backend via PyWebView desktop shell."""
+        """Launch web backend via PyWebView desktop shell.
+
+        A busy port is never fatal (issue #4): when a running ProFiles
+        instance owns the port the config is forwarded to it and this
+        launch exits 0; otherwise the server retries on the next free
+        port. The manual "free the port" hint only appears when even the
+        fallback port cannot be bound — nothing is killed automatically.
+        """
         from profiles.desktop.launcher import launch_desktop_window
         from profiles.desktop.lifecycle import ServerStartError
 
         assert self._config is not None
         try:
             launch_desktop_window(self._config, port=port, host=host)
+            return
+        except ServerStartError:
+            pass  # busy port — try handoff or a free port below
+
+        if self._handoff_to_running_instance(port):
+            return
+
+        from profiles.desktop.lifecycle import find_available_port
+
+        fallback_port = find_available_port(port)
+        if fallback_port != port:
+            self._announce_fallback_port(port, fallback_port)
+        try:
+            launch_desktop_window(self._config, port=fallback_port, host=host)
         except ServerStartError as exc:
-            print(f"ERROR: {exc}", file=sys.stderr)
+            self._report_server_start_failure(fallback_port, exc)
+
+    def _handoff_to_running_instance(self, port: int) -> bool:
+        """Forward the resolved config to a ProFiles instance on *port*.
+
+        The port owner is identified through the instance manifest and a
+        secret-token handshake, so foreign processes are never trusted
+        (and never touched). Returns True when the running instance
+        applied the configuration — the caller should then exit 0.
+
+        Exits:
+            Never raises; a failed forward is reported and returns False
+            so the caller falls back to a free port.
+        """
+        from profiles.desktop.handoff import forward_config_to_running_instance
+
+        config_path = self._config_path
+        if config_path is None:
+            return False
+        result = forward_config_to_running_instance(port, config_path)
+        if result.status == "handed_off":
             print(
-                "Another process is already using this port. Stop it with:\n"
-                f"    {_stop_port_owner_command(port)}",
+                f"Configuration '{Path(config_path).name}' was applied to the "
+                f"ProFiles instance already running on port {port}."
+            )
+            return True
+        if result.status == "handoff_failed" and result.detail:
+            print(
+                f"Config handoff failed ({result.detail}) — starting a separate instance instead.",
                 file=sys.stderr,
             )
-            raise SystemExit(1) from exc
+        return False
+
+    @staticmethod
+    def _announce_fallback_port(busy_port: int, fallback_port: int) -> None:
+        """Tell the user which free port the new instance will use."""
+        print(f"Port {busy_port} is busy — starting ProFiles on free port {fallback_port} instead.")
+
+    def _report_server_start_failure(self, port: int, exc: Exception) -> None:
+        """Report an unresolvable server start failure, then exit 1.
+
+        The kill hint is documentation for manual intervention only;
+        no code path ever stops the port owner automatically.
+        """
+        print(f"ERROR: {exc}", file=sys.stderr)
+        print(
+            "Another process is already using this port. Stop it with:\n"
+            f"    {_stop_port_owner_command(port)}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from exc
 
     def _run_gui(self) -> None:
         """Create and run the GUI.

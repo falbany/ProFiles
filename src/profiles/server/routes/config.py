@@ -107,19 +107,17 @@ def _choose_active_directory(cfg: AppConfig, config_path: Path | None) -> Path:
     return Path.cwd()
 
 
-@router.get("")
-async def get_config(request: Request) -> dict:
-    """Return active application configuration and available directories."""
-    state: ServerState = request.app.state.server_state
-    return _config_response(state)
+def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
+    """Validate, load, and apply a config file from disk; return the response.
 
+    Shared by the in-app load endpoint and the cross-instance handoff
+    (issue #4) so both apply a launch-equivalent state: config swap,
+    ``config_path`` recorded, and the active directory re-derived exactly
+    like a launch with this file.
 
-@router.post("/load")
-async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> dict:
-    """Load and apply a configuration file from disk."""
-    state: ServerState = request.app.state.server_state
-    config_path = Path(payload.config_path).expanduser().resolve()
-
+    Raises:
+        HTTPException: 400 when the path is missing or not a config file.
+    """
     if not config_path.exists():
         raise HTTPException(status_code=400, detail=f"Config file does not exist: {config_path}")
     if not _is_config_path(config_path):
@@ -133,6 +131,21 @@ async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> 
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     return _config_response(state)
+
+
+@router.get("")
+async def get_config(request: Request) -> dict:
+    """Return active application configuration and available directories."""
+    state: ServerState = request.app.state.server_state
+    return _config_response(state)
+
+
+@router.post("/load")
+async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> dict:
+    """Load and apply a configuration file from disk."""
+    state: ServerState = request.app.state.server_state
+    config_path = Path(payload.config_path).expanduser().resolve()
+    return _apply_config_from_disk(state, config_path)
 
 
 _ACCEPTED_DROP_SUFFIXES = (

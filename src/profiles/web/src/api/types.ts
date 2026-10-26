@@ -144,3 +144,12 @@ export interface FileMetadata {
   sha256: string;
   attributes: FileMetadataAttributes;
 }
+
+/** UI event recorded server-side by an external actor (e.g. config handoff). */
+export interface ExternalEvent {
+  id: number;
+  kind: string;
+  message: string;
+  /** True when the server swapped its configuration — the UI must re-fetch and rescan. */
+  config_applied: boolean;
+}

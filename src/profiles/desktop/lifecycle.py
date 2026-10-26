@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import contextlib
+import os
+import secrets
 import socket
 import threading
 import time
@@ -10,6 +12,12 @@ import time
 import uvicorn
 
 from profiles.core.config.models import AppConfig
+from profiles.desktop.instance import (
+    InstanceManifest,
+    prune_stale_manifests,
+    remove_manifest,
+    write_manifest,
+)
 from profiles.server.app import create_app
 from profiles.server.state import ServerState
 
@@ -56,6 +64,10 @@ class BackgroundServer:
         self.config = config
         self.host = host
         self.port = port if port != 0 else find_available_port(8088)
+        # Secret shared with the instance manifest: a second launch uses
+        # it to confirm this process owns the port before a config handoff.
+        self._instance_token = secrets.token_urlsafe(24)
+        self._manifest_published = False
 
         from profiles.core.config import service as config_service
         from profiles.utils.network import get_hostname
@@ -67,6 +79,7 @@ class BackgroundServer:
         self.state = ServerState(
             config=config,
             active_directory=active_dir,
+            instance_token=self._instance_token,
         )
         self._app = create_app(self.state)
         self._server: uvicorn.Server | None = None
@@ -135,12 +148,33 @@ class BackgroundServer:
                 msg = f"ProFiles server failed to start on {self.host}:{self.port}: {error}"
                 raise ServerStartError(msg)
             if self.is_running and self._server is not None and self._server.started:
+                self._publish_instance_manifest()
                 return
             time.sleep(0.05)
 
         self.stop()
         msg = f"ProFiles server did not start within {timeout}s on {self.host}:{self.port}"
         raise ServerStartError(msg)
+
+    def _publish_instance_manifest(self) -> None:
+        """Advertise this instance in the temp dir for config handoff.
+
+        Published only once the server is confirmed serving, so a
+        manifest never points at a port nobody listens on.
+        """
+        from profiles import __version__
+
+        prune_stale_manifests()
+        write_manifest(
+            InstanceManifest(
+                pid=os.getpid(),
+                port=self.port,
+                host=self.host,
+                version=__version__,
+                token=self._instance_token,
+            )
+        )
+        self._manifest_published = True
 
     def _run_server(self) -> None:
         """Run uvicorn on the pre-bound socket, recording startup failures.
@@ -174,6 +208,9 @@ class BackgroundServer:
 
         Safe to call before :meth:`start` or more than once.
         """
+        if self._manifest_published:
+            self._manifest_published = False
+            remove_manifest(self.port)
         if self._server is not None:
             self._server.should_exit = True
         if self._thread and self._thread.is_alive():

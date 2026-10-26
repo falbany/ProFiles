@@ -17,6 +17,7 @@ import pytest
 import profiles
 from profiles.app import ProFileApp, init_default_config, main
 from profiles.core.telemetry.diagnostics import default_log_path
+from profiles.desktop.handoff import HandoffResult
 from profiles.desktop.lifecycle import ServerStartError
 
 # ── Package metadata (__init__.py) ──────────────────────────────────────────
@@ -267,15 +268,21 @@ class TestRun:
         mock_run_headless.assert_called_once()
 
     def test_web_gui_startup_failure_exits_cleanly(self, mocker, capsys) -> None:  # type: ignore[no-untyped-def]
-        """A port collision exits 1 with an actionable message, no traceback."""
+        """An unresolvable collision exits 1 with an actionable message, no traceback.
+
+        Even the fallback port could not be bound — the kill hint is
+        documentation for manual intervention, nothing is ever killed.
+        """
         mocker.patch("profiles.app.configure_logger")
         mock_config = mocker.MagicMock()
         mock_config.verbose = "INFO"
         mocker.patch("profiles.app.load_config", return_value=mock_config)
         mocker.patch(
             "profiles.desktop.launcher.launch_desktop_window",
-            side_effect=ServerStartError("ProFiles server failed to start on 127.0.0.1:8088: 3"),
+            side_effect=ServerStartError("ProFiles server failed to start: boom"),
         )
+        mocker.patch("profiles.desktop.handoff.forward_config_to_running_instance")
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8099)
 
         app = ProFileApp()
         app._config = mock_config
@@ -284,10 +291,158 @@ class TestRun:
 
         assert excinfo.value.code == 1
         err = capsys.readouterr().err
-        assert "failed to start on 127.0.0.1:8088" in err
         # The fix must be copy-pasteable, not a vague "stop the other instance"
-        assert "kill $(lsof -ti:8088 -sTCP:LISTEN)" in err
+        assert "kill $(lsof -ti:8099 -sTCP:LISTEN)" in err
         assert "another process is already using this port" in err.lower()
+
+
+class TestWebGuiBusyPortResolution:
+    """_run_web_gui never dies on a busy port: handoff first, free port second.
+
+    Issue #4: double-clicking a .profiles while ProFiles runs must end
+    with that config usable — either applied to the running instance
+    (exit 0) or opened on the next free port.
+    """
+
+    def _app(self, tmp_path: Path, mocker) -> ProFileApp:  # type: ignore[no-untyped-def]
+        config_path = tmp_path / ".profiles"
+        config_path.write_text("defaults:\n  title: T\n", encoding="utf-8")
+        app = ProFileApp(config_path=config_path)
+        app._config = mocker.MagicMock()
+        return app
+
+    def test_handoff_success_applies_config_and_exits_zero(self, mocker, tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+        mock_launch = mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=ServerStartError("busy"),
+        )
+        mock_forward = mocker.patch(
+            "profiles.desktop.handoff.forward_config_to_running_instance",
+            return_value=HandoffResult(status="handed_off"),
+        )
+
+        app = self._app(tmp_path, mocker)
+        app._run_web_gui(port=8088)  # must NOT raise
+
+        mock_launch.assert_called_once()  # no second window was opened
+        mock_forward.assert_called_once_with(8088, app._config_path)
+        out = capsys.readouterr().out
+        assert "applied to the ProFiles instance already running on port 8088" in out
+
+    def test_foreign_owner_restarts_on_fallback_port(self, mocker, tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+        mock_launch = mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=[ServerStartError("busy"), None],
+        )
+        mocker.patch(
+            "profiles.desktop.handoff.forward_config_to_running_instance",
+            return_value=HandoffResult(status="owner_not_profiles", detail="handshake"),
+        )
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8123)
+
+        app = self._app(tmp_path, mocker)
+        app._run_web_gui(port=8088)
+
+        assert mock_launch.call_count == 2
+        assert mock_launch.call_args.kwargs["port"] == 8123
+        out = capsys.readouterr().out
+        assert "Port 8088 is busy" in out
+        assert "free port 8123" in out
+
+    def test_handoff_http_failure_still_falls_back_to_free_port(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """A confirmed ProFiles owner that rejects the forward must not
+        kill the launch — fall through to the free-port case."""
+        mock_launch = mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=[ServerStartError("busy"), None],
+        )
+        mocker.patch(
+            "profiles.desktop.handoff.forward_config_to_running_instance",
+            return_value=HandoffResult(status="handoff_failed", detail="rejected"),
+        )
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8124)
+
+        app = self._app(tmp_path, mocker)
+        app._run_web_gui(port=8088)
+
+        assert mock_launch.call_count == 2
+        assert mock_launch.call_args.kwargs["port"] == 8124
+
+    def test_no_resolved_config_skips_handoff(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        mock_launch = mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=[ServerStartError("busy"), None],
+        )
+        mock_forward = mocker.patch("profiles.desktop.handoff.forward_config_to_running_instance")
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8125)
+
+        app = ProFileApp()  # config_path is None: nothing to forward
+        app._config = mocker.MagicMock()
+        app._run_web_gui(port=8088)
+
+        mock_forward.assert_not_called()
+        assert mock_launch.call_args.kwargs["port"] == 8125
+
+    def test_nothing_is_ever_killed_automatically(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """The kill hint exists only in the final error path; the busy-port
+        resolution itself must not terminate any process."""
+        mock_kill_command = mocker.patch("profiles.app._stop_port_owner_command")
+        mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=[ServerStartError("busy"), None],
+        )
+        mocker.patch(
+            "profiles.desktop.handoff.forward_config_to_running_instance",
+            return_value=HandoffResult(status="owner_not_profiles"),
+        )
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8126)
+
+        app = self._app(tmp_path, mocker)
+        app._run_web_gui(port=8088)
+
+        mock_kill_command.assert_not_called()
+
+
+class TestServerOnlyBusyPortResolution:
+    """_run_server_only mirrors the web GUI: handoff, then a free port."""
+
+    def test_foreign_owner_restarts_on_fallback_port(self, mocker, tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+        mock_server_cls = mocker.patch("profiles.desktop.lifecycle.BackgroundServer")
+        mock_server_cls.return_value.is_running = False
+        mock_server_cls.return_value.start.side_effect = [
+            ServerStartError("busy"),
+            None,
+        ]
+        mocker.patch(
+            "profiles.desktop.handoff.forward_config_to_running_instance",
+            return_value=HandoffResult(status="owner_not_profiles"),
+        )
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8127)
+
+        app = ProFileApp(config_path=tmp_path / ".profiles")
+        app._config = mocker.MagicMock()
+        app._run_server_only(port=8088)
+
+        assert mock_server_cls.call_count == 2
+        assert mock_server_cls.call_args.kwargs["port"] == 8127
+        out = capsys.readouterr().out
+        assert "free port 8127" in out
+
+    def test_handoff_success_exits_without_second_server(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        mock_server_cls = mocker.patch("profiles.desktop.lifecycle.BackgroundServer")
+        mock_server_cls.return_value.is_running = False
+        mock_server_cls.return_value.start.side_effect = ServerStartError("busy")
+        mock_forward = mocker.patch(
+            "profiles.desktop.handoff.forward_config_to_running_instance",
+            return_value=HandoffResult(status="handed_off"),
+        )
+
+        app = ProFileApp(config_path=tmp_path / ".profiles")
+        app._config = mocker.MagicMock()
+        app._run_server_only(port=8088)
+
+        mock_forward.assert_called_once()
+        assert mock_server_cls.call_count == 1
 
 
 class TestStopPortOwnerCommand:

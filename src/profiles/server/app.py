@@ -12,6 +12,7 @@ from profiles.core.telemetry import events
 from profiles.server.routes.actions import router as actions_router
 from profiles.server.routes.config import router as config_router
 from profiles.server.routes.fs import router as fs_router
+from profiles.server.routes.instance import router as instance_router
 from profiles.server.routes.logs import router as logs_router
 from profiles.server.routes.scan import router as scan_router
 from profiles.server.routes.system import router as system_router
@@ -60,6 +61,7 @@ def create_app(state: ServerState, static_dir: Path | None = None) -> FastAPI:
         return await call_next(request)
 
     app.include_router(system_router)
+    app.include_router(instance_router)
     app.include_router(config_router)
     app.include_router(fs_router)
     app.include_router(scan_router)
