@@ -42,6 +42,12 @@
   --chip-fuchsia-bg: rgb(192 38 211 / 0.25);
   --chip-fuchsia-border: rgb(232 121 249 / 0.5);
   --chip-fuchsia-text: #f5d0fe; /* fuchsia-200 */
+  --chip-sky-bg: rgb(14 165 233 / 0.25);
+  --chip-sky-border: rgb(56 189 248 / 0.5);
+  --chip-sky-text: #bae6fd; /* sky-200 */
+  --chip-amber-bg: rgb(245 158 11 / 0.25);
+  --chip-amber-border: rgb(251 191 36 / 0.5);
+  --chip-amber-text: #fde68a; /* amber-200 */
 }
 
 [data-theme="light"] {
@@ -54,6 +60,12 @@
   --chip-fuchsia-bg: #fae8ff; /* fuchsia-100 */
   --chip-fuchsia-border: #f0abfc; /* fuchsia-300 */
   --chip-fuchsia-text: #86198f; /* fuchsia-800 */
+  --chip-sky-bg: #e0f2fe; /* sky-100 */
+  --chip-sky-border: #7dd3fc; /* sky-300 */
+  --chip-sky-text: #0369a1; /* sky-700 */
+  --chip-amber-bg: #fef3c7; /* amber-100 */
+  --chip-amber-border: #fcd34d; /* amber-300 */
+  --chip-amber-text: #92400e; /* amber-800 */
 }
 
 [data-theme="light"] {
@@ -98,6 +110,12 @@
   --color-chip-fuchsia-bg: var(--chip-fuchsia-bg);
   --color-chip-fuchsia-border: var(--chip-fuchsia-border);
   --color-chip-fuchsia-text: var(--chip-fuchsia-text);
+  --color-chip-sky-bg: var(--chip-sky-bg);
+  --color-chip-sky-border: var(--chip-sky-border);
+  --color-chip-sky-text: var(--chip-sky-text);
+  --color-chip-amber-bg: var(--chip-amber-bg);
+  --color-chip-amber-border: var(--chip-amber-border);
+  --color-chip-amber-text: var(--chip-amber-text);
 }
 
 body {

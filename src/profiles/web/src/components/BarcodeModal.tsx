@@ -212,14 +212,14 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   {md5 && !pairs.some(p => p.key === "md5") && (
                     <button
                       onClick={addMd5}
-                      className="flex items-center gap-1 rounded bg-purple-600/20 px-2 py-0.5 text-[10px] font-bold text-purple-400 border border-purple-500/30 hover:bg-purple-600/30"
+                      className="flex items-center gap-1 rounded bg-chip-purple-bg px-2 py-0.5 text-[10px] font-bold text-chip-purple-text border border-chip-purple-border hover:brightness-95"
                     >
                       <Hash className="h-3 w-3" /> Inc. MD5
                     </button>
                   )}
                   <button
                     onClick={addPair}
-                    className="flex items-center gap-1 rounded bg-indigo-600/20 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600/30"
+                    className="flex items-center gap-1 rounded bg-chip-indigo-bg px-2 py-0.5 text-[10px] font-bold text-chip-indigo-text border border-chip-indigo-border hover:brightness-95"
                   >
                     <Plus className="h-3 w-3" /> Add Field
                   </button>
@@ -260,7 +260,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
 
             <div className="pt-2 border-t border-line">
               <label className="text-[10px] font-medium text-ink-muted uppercase tracking-wider block mb-1.5">Raw Preview</label>
-              <div className="rounded bg-black/20 p-2 font-mono text-[10px] text-indigo-300/80 break-all border border-line/50">
+              <div className="rounded bg-elevated p-2 font-mono text-[10px] text-ink-secondary break-all border border-line">
                 {rawContent || <span className="italic text-ink-muted/50">empty</span>}
               </div>
             </div>

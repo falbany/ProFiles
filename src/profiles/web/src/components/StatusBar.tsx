@@ -41,11 +41,7 @@ export function StatusBar({
   return (
     <footer className="flex items-center justify-between border-t border-line bg-app px-4 py-2 text-[11px] text-ink-muted">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5">
-          <User className="h-3 w-3 text-ink-faint" />
-          <span>{systemInfo?.username || "operator"}</span>
-        </div>
-        {/* Hostname / IP links — moved here from the header. */}
+        {/* Identity pill — hostname / IP links plus the session user. */}
         {systemInfo && (
           <div className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-ink-secondary">
             <Activity className="h-3 w-3 text-emerald-400" />
@@ -68,6 +64,11 @@ export function StatusBar({
             >
               {systemInfo.ip}
             </a>
+            <span className="text-ink-faint">|</span>
+            <span className="flex items-center gap-1" title="Session user">
+              <User className="h-3 w-3 text-ink-faint" />
+              <span>{systemInfo.username || "operator"}</span>
+            </span>
           </div>
         )}
       </div>

@@ -157,12 +157,12 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   const actionButtonClass = (actionId: string) => {
     const styles: Record<string, string> = {
-      reveal: "bg-sky-600/20 text-sky-300 hover:bg-sky-600/30 border-sky-500/30 focus-visible:ring-sky-400/60",
+      reveal: "bg-chip-sky-bg text-chip-sky-text hover:brightness-95 border-chip-sky-border focus-visible:ring-sky-400/60",
       launch: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500/30 font-semibold focus-visible:ring-emerald-400",
-      folder: "bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 border-amber-500/30 focus-visible:ring-amber-400/60",
+      folder: "bg-chip-amber-bg text-chip-amber-text hover:brightness-95 border-chip-amber-border focus-visible:ring-amber-400/60",
     };
     return `inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs ${
-      styles[actionId] ?? "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border-indigo-500/30"
+      styles[actionId] ?? "bg-chip-indigo-bg text-chip-indigo-text hover:brightness-95 border-chip-indigo-border"
     } disabled:opacity-40 disabled:cursor-not-allowed`;
   };
 
@@ -231,7 +231,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="properties-modal-title"
@@ -268,7 +268,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                   void copyToClipboard(buildPropertiesSummary(metadata), "all");
                 }}
                 disabled={!metadata || loading || error !== null}
-                className="ml-2 flex items-center gap-1 rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 disabled:opacity-50"
+                className="ml-2 flex items-center gap-1 rounded-md bg-chip-indigo-bg p-1.5 text-chip-indigo-text hover:brightness-95 border border-chip-indigo-border disabled:opacity-50"
                 title="Copy all properties to clipboard"
                 aria-label="Copy all properties"
               >
@@ -280,7 +280,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
               </button>
               <button
                 onClick={() => setShowQrModal(true)}
-                className="rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30"
+                className="rounded-md bg-chip-indigo-bg p-1.5 text-chip-indigo-text hover:brightness-95 border border-chip-indigo-border"
                 title="Generate Barcode/QR Code"
               >
                 <QrCode className="h-4 w-4" />
