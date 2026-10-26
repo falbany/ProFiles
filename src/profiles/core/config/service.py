@@ -172,6 +172,41 @@ def auto_select_directory(config: AppConfig, hostname: str) -> str:
     return config.search_dir
 
 
+def choose_active_directory(config: AppConfig, hostname: str) -> Path | None:
+    """Return the directory a launch with *config* would activate.
+
+    Single source of truth shared by desktop launch resolution and the
+    server's config load/drop endpoints, so loading a configuration at
+    runtime behaves exactly like launching with it.
+
+    Priority:
+    1. ``config.search_dir`` when it exists on disk;
+    2. the hostname-matched machine configuration's first existing scan
+       dir (:func:`select_active_configuration` falls back to the first
+       configuration when nothing matches, like at launch);
+    3. the first existing scan dir of any configuration.
+
+    Returns ``None`` when no candidate exists on disk — callers decide the
+    final fallback (keep the current directory, the config file's folder,
+    ``Path.cwd()``, …).
+    """
+    candidates: list[str] = []
+    if config.search_dir:
+        candidates.append(config.search_dir)
+    active_cfg = select_active_configuration(config, hostname, "", "")
+    if active_cfg:
+        candidates.extend(active_cfg.scan)
+    for cfg in config.configurations:
+        candidates.extend(cfg.scan)
+
+    for candidate in candidates:
+        if candidate:
+            path = Path(candidate).expanduser()
+            if path.exists():
+                return path
+    return None
+
+
 def get_unique_directories(config: AppConfig) -> list[str]:
     """Return the list of unique directories from all combined configurations.
 
@@ -269,6 +304,7 @@ def get_directory_combobox_values(config: AppConfig) -> list[DirectoryEntry]:
 __all__ = [
     "DirectoryEntry",
     "auto_select_directory",
+    "choose_active_directory",
     "find_active_config",
     "find_config_by_name",
     "find_configuration_by_hostname",

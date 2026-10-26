@@ -87,28 +87,23 @@ def _config_response(state: ServerState) -> dict:
     }
 
 
-def _choose_active_directory(config_path: Path, cfg: AppConfig) -> Path:
+def _choose_active_directory(cfg: AppConfig, config_path: Path | None) -> Path:
+    """Re-derive the active directory exactly like a launch with *cfg*.
+
+    Uses the shared launch-time selection (``search_dir`` → hostname-matched
+    machine config → first existing scan dir). ``config_path.parent`` — the
+    folder containing the ``.profiles`` file — is only a last resort for
+    configs whose scan dirs exist nowhere, ahead of ``Path.cwd()``. For
+    dropped (path-less) configs, pass ``config_path=None``.
+    """
     from profiles.core.config import service as config_service
     from profiles.utils.network import get_hostname
 
-    hostname = get_hostname()
-    active = (
-        config_service.find_configuration_by_hostname(cfg, hostname) if cfg.configurations else None
-    )
-    if active and active.scan:
-        for scan_dir in active.scan:
-            candidate = Path(scan_dir)
-            if candidate.exists():
-                return candidate
-
-    if config_path.parent.exists() and config_path.parent.is_dir():
+    selected = config_service.choose_active_directory(cfg, get_hostname())
+    if selected is not None:
+        return selected
+    if config_path is not None and config_path.parent.exists() and config_path.parent.is_dir():
         return config_path.parent
-
-    fallback_dirs = config_service.get_unique_directories(cfg)
-    for directory in fallback_dirs:
-        candidate = Path(directory)
-        if candidate.exists():
-            return candidate
     return Path.cwd()
 
 
@@ -136,7 +131,7 @@ async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> 
     loaded = ConfigReader(config_path).load()
     state.config = loaded
     state.config_path = config_path
-    state.active_directory = _choose_active_directory(config_path, loaded)
+    state.active_directory = _choose_active_directory(loaded, config_path)
     return _config_response(state)
 
 
@@ -154,8 +149,12 @@ async def load_content_endpoint(payload: LoadContentRequest, request: Request) -
     """Apply a dropped configuration file as a session-only trial.
 
     The content is parsed in memory and swaps the live configuration.
-    Nothing is written to disk, and ``config_path``/``active_directory``
-    stay untouched, so restart resolution is unaffected.
+    Nothing is written to disk and ``config_path`` stays untouched, so
+    restart resolution is unaffected. ``active_directory`` IS re-derived
+    from the new config exactly like a launch (search_dir → hostname
+    match → first existing scan dir), because the extension/filter merge
+    pipeline is keyed on that directory — keeping the previous one would
+    evaluate the new config against a stale directory.
     """
     state: ServerState = request.app.state.server_state
     if not payload.filename.lower().endswith(_ACCEPTED_DROP_SUFFIXES):
@@ -170,6 +169,7 @@ async def load_content_endpoint(payload: LoadContentRequest, request: Request) -
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     state.config = loaded
+    state.active_directory = _choose_active_directory(loaded, None)
     response = _config_response(state)
     response["session_trial"] = True
     return response
@@ -194,7 +194,7 @@ async def create_config_endpoint(payload: CreateConfigRequest, request: Request)
     loaded = ConfigReader(target_config).load()
     state.config = loaded
     state.config_path = target_config
-    state.active_directory = _choose_active_directory(target_config, loaded)
+    state.active_directory = _choose_active_directory(loaded, target_config)
     return _config_response(state)
 
 
@@ -227,7 +227,7 @@ async def reload_config_endpoint(request: Request) -> dict:
     loaded.config_path = config_path
     state.config = loaded
     state.config_path = config_path
-    state.active_directory = _choose_active_directory(config_path, loaded)
+    state.active_directory = _choose_active_directory(loaded, config_path)
     response = _config_response(state)
     response["reloaded"] = True
     return response
