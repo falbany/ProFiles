@@ -23,15 +23,11 @@ jobs:
       # Exercise the same packaging command as release.yml so MSI/WiX
       # breakage is caught on PRs, not at tag time.
       - run: uv run briefcase package windows -p msi --no-input
+      # The MSI is the only artifact: release.yml ships installers only,
+      # and briefcase never produces an unpacked bundle under windows/.
       - uses: actions/upload-artifact@v4
         with:
           name: ProFiles-windows-msi
           path: dist/**/*.msi
-          if-no-files-found: error
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ProFiles-windows-bundle
-          path: windows/ProFiles/
           if-no-files-found: error
           retention-days: 7
