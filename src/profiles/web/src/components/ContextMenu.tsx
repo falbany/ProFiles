@@ -177,7 +177,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Launch ${file.filename}`}
         >
-          <Play className="h-3.5 w-3.5 fill-current text-emerald-400" />
+          <Play className="h-3.5 w-3.5 fill-current text-status-success-text" />
           <span>Launch</span>
         </button>
         <button
@@ -186,7 +186,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Launch ${file.filename} with arguments`}
         >
-          <Play className="h-3.5 w-3.5 text-indigo-400" />
+          <Play className="h-3.5 w-3.5 text-chip-indigo-text" />
           <span>Launch with arguments...</span>
         </button>
 
@@ -199,7 +199,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Reveal ${file.filename} in file manager`}
         >
-          <Eye className="h-3.5 w-3.5 text-sky-400" />
+          <Eye className="h-3.5 w-3.5 text-chip-sky-text" />
           <span>Reveal in File Manager</span>
         </button>
         <button
@@ -208,7 +208,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Open folder containing ${file.filename}`}
         >
-          <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+          <FolderOpen className="h-3.5 w-3.5 text-chip-amber-text" />
           <span>Open Folder</span>
         </button>
         <button
@@ -217,7 +217,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Open terminal in directory containing ${file.filename}`}
         >
-          <Terminal className="h-3.5 w-3.5 text-emerald-400" />
+          <Terminal className="h-3.5 w-3.5 text-status-success-text" />
           <span>Open Terminal in Directory</span>
         </button>
         <button
@@ -243,7 +243,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={'Scan to Directory'}
         >
-          <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
+          <FolderOpen className="h-3.5 w-3.5 text-chip-indigo-text" />
           <span>Scan to Directory</span>
         </button>
         <button
@@ -258,7 +258,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Filter view to folder ${file.filename} is in`}
         >
-          <FileCode className="h-3.5 w-3.5 text-indigo-400" />
+          <FileCode className="h-3.5 w-3.5 text-chip-indigo-text" />
           <span>Filter to Folder</span>
         </button>
         <button
@@ -271,7 +271,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Filter view by extension ${getExt(file.filename)}`}
         >
-          <FileCode className="h-3.5 w-3.5 text-indigo-400" />
+          <FileCode className="h-3.5 w-3.5 text-chip-indigo-text" />
           <span>Filter by Extension</span>
         </button>
 
@@ -347,7 +347,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Compute MD5 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text" />
           <span>Compute MD5 Hash</span>
         </button>
         <button
@@ -356,7 +356,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Compute SHA256 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text" />
           <span>Compute SHA256 Hash</span>
         </button>
         <button
@@ -365,7 +365,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Verify MD5 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text" />
           <span>Verify MD5 Hash</span>
         </button>
         <button
@@ -374,7 +374,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Verify SHA256 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text" />
           <span>Verify SHA256 Hash</span>
         </button>
 
@@ -387,7 +387,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`View properties of ${file.filename}`}
         >
-          <Eye className="h-3.5 w-3.5 text-sky-400" />
+          <Eye className="h-3.5 w-3.5 text-chip-sky-text" />
           <span>Properties</span>
         </button>
         <button
@@ -396,7 +396,7 @@ export function ContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
           aria-label={`Remove ${file.filename} from list`}
         >
-          <Trash2 className="h-3.5 w-3.5 text-red-400" />
+          <Trash2 className="h-3.5 w-3.5 text-status-danger-text" />
           <span>Delete</span>
         </button>
       </div>

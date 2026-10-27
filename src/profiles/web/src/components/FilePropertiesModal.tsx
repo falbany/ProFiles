@@ -187,7 +187,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
         aria-label={`Copy ${label}`}
       >
         {copiedField === fieldId ? (
-          <Check className="h-3.5 w-3.5 text-emerald-400" />
+          <Check className="h-3.5 w-3.5 text-status-success-text" />
         ) : (
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
         )}
@@ -212,12 +212,12 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       className="group mb-3 flex w-full items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-left hover:bg-surface"
       title="Click to copy full path"
     >
-      <Folder className="text-amber-400 h-4 w-4 flex-shrink-0" />
+      <Folder className="text-chip-amber-text h-4 w-4 flex-shrink-0" />
       <span className="text-ink min-w-0 flex-1 truncate font-mono text-xs">
         {compactPath(metadata!.path)}
       </span>
       {copiedField === "path" ? (
-        <Check className="text-emerald-400 h-3.5 w-3.5" />
+        <Check className="text-status-success-text h-3.5 w-3.5" />
       ) : (
         <Copy className="text-ink-muted h-3.5 w-3.5" />
       )}
@@ -273,7 +273,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 aria-label="Copy all properties"
               >
                 {copiedField === "all" ? (
-                  <Check className="h-4 w-4 text-emerald-400" />
+                  <Check className="h-4 w-4 text-status-success-text" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
@@ -308,8 +308,8 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4 text-center">
-              <p className="text-xs text-red-400">{error}</p>
+            <div className="rounded-lg border border-status-danger-border bg-status-danger-bg p-4 text-center">
+              <p className="text-xs text-status-danger-text">{error}</p>
             </div>
           )}
 
@@ -354,7 +354,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* Hashes */}
                 {renderCard(
                   "Hashes",
-                  <Hash className="text-purple-400 h-3.5 w-3.5" />,
+                  <Hash className="text-chip-purple-text h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("MD5", metadata.md5, "md5", true, truncateMiddle(metadata.md5, 10, 6))}
                     {renderPropertyRow("SHA256", metadata.sha256, "sha256", true, truncateMiddle(metadata.sha256, 10, 6))}
@@ -364,7 +364,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* Timestamps */}
                 {renderCard(
                   "Timestamps",
-                  <Calendar className="text-sky-400 h-3.5 w-3.5" />,
+                  <Calendar className="text-chip-sky-text h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("Created", metadata.created, "created", true)}
                     {renderPropertyRow("Modified", metadata.modified, "modified", true)}
@@ -374,7 +374,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* Identity */}
                 {renderCard(
                   "Identity",
-                  <File className="text-indigo-400 h-3.5 w-3.5" />,
+                  <File className="text-chip-indigo-text h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("Type", metadata.type, "type")}
                     {metadata.attributes.stem && renderPropertyRow("Stem", metadata.attributes.stem, "attrStem")}
@@ -390,11 +390,11 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* System */}
                 {renderCard(
                   "System",
-                  <File className="text-emerald-400 h-3.5 w-3.5" />,
+                  <File className="text-status-success-text h-3.5 w-3.5" />,
                   <div>
                     <div className="mb-1 flex min-h-[24px] flex-wrap items-center gap-1.5">
                       {metadata.attributes.is_readonly && (
-                        <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-600/20 px-2 py-0.5 text-xs text-rose-300">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-status-danger-border bg-status-danger-bg px-2 py-0.5 text-xs text-status-danger-text">
                           <Lock className="h-3 w-3" /> Read-only
                         </span>
                       )}

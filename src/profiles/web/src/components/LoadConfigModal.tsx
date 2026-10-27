@@ -152,8 +152,8 @@ export function LoadConfigModal({
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
-              <FileCog className="h-5 w-5 text-indigo-400" />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-chip-indigo-bg">
+              <FileCog className="h-5 w-5 text-chip-indigo-text" />
             </span>
             <div className="min-w-0">
               <h2 id="load-config-title" className="text-sm font-semibold text-ink">
@@ -176,7 +176,7 @@ export function LoadConfigModal({
         </div>
 
         {isCreateMode && (
-          <div className="border-b border-line bg-indigo-600/5 px-4 py-3 text-xs text-ink-secondary">
+          <div className="border-b border-line bg-chip-indigo-bg/20 px-4 py-3 text-xs text-ink-secondary">
             No configuration file was found. Create one here?
           </div>
         )}
@@ -234,12 +234,12 @@ export function LoadConfigModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 sm:px-3 sm:py-3" aria-busy={loading}>
           {loading ? (
             <div className="flex h-full items-center justify-center gap-2.5 text-sm text-ink-muted">
-              <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-chip-indigo-text" />
               <span role="status">Loading configuration files…</span>
             </div>
           ) : error ? (
             <div role="alert" className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
-              <p className="text-sm text-rose-400">{error}</p>
+              <p className="text-sm text-status-danger-text">{error}</p>
               <button
                 type="button"
                 onClick={() => browse(pathInput || browseData?.current_path || "")}
@@ -260,7 +260,7 @@ export function LoadConfigModal({
                         className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-xs text-ink-secondary hover:bg-elevated"
                       >
                         <span className="flex items-center gap-2">
-                          <Folder className="h-3.5 w-3.5 text-indigo-400" />
+                          <Folder className="h-3.5 w-3.5 text-chip-indigo-text" />
                           {item.name}
                         </span>
                       </button>
@@ -276,15 +276,15 @@ export function LoadConfigModal({
                       onClick={() => setSelectedConfig(item.path)}
                       aria-pressed={isSelected}
                       className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-                        isSelected ? "bg-indigo-600/20 text-indigo-200" : "text-ink-secondary hover:bg-elevated hover:text-ink"
+                        isSelected ? "bg-chip-indigo-bg text-chip-indigo-text" : "text-ink-secondary hover:bg-elevated hover:text-ink"
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-2.5">
-                        <FileText className="h-5 w-5 shrink-0 text-amber-400" />
+                        <FileText className="h-5 w-5 shrink-0 text-chip-amber-text" />
                         <span className="truncate">{item.name}</span>
                       </span>
-                      {item.is_config && <FileCog className="h-4 w-4 shrink-0 text-indigo-400" />}
-                      {isSelected && <Check className="h-4 w-4 shrink-0 text-indigo-400" />}
+                      {item.is_config && <FileCog className="h-4 w-4 shrink-0 text-chip-indigo-text" />}
+                      {isSelected && <Check className="h-4 w-4 shrink-0 text-chip-indigo-text" />}
                     </button>
                   </li>
                 );

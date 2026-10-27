@@ -49,13 +49,13 @@ export function ScanStatusStrip({ directory }: ScanStatusStripProps) {
       data-testid="scan-status-strip"
       className="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-muted"
     >
-      <Loader2 className="h-3 w-3 shrink-0 animate-spin text-indigo-400 motion-reduce:animate-none" aria-hidden="true" />
+      <Loader2 className="h-3 w-3 shrink-0 animate-spin text-chip-indigo-text motion-reduce:animate-none" aria-hidden="true" />
       <span className="min-w-0 truncate">
         Scanning
         {directory && (
           <>
             {" "}
-            <span className="font-mono text-indigo-300/80" title={directory}>
+            <span className="font-mono text-ink-secondary" title={directory}>
               {cut ? "…/" : ""}
               {label}
             </span>

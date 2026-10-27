@@ -48,9 +48,9 @@ export function SingleMatchPromptModal({
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink text-sm">
             {file.has_hook ? (
-              <Workflow className="h-4 w-4 text-purple-400" />
+              <Workflow className="h-4 w-4 text-chip-purple-text" />
             ) : (
-              <Play className="h-4 w-4 text-emerald-400" />
+              <Play className="h-4 w-4 text-status-success-text" />
             )}
             <span>1 File Matched</span>
           </div>
@@ -64,12 +64,12 @@ export function SingleMatchPromptModal({
         </div>
 
         <div className="flex items-start gap-3 rounded-lg border border-line bg-elevated/50 p-3">
-          <FileText className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
+          <FileText className="h-5 w-5 text-chip-indigo-text shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
             <h4 className="text-xs font-semibold text-ink truncate">{file.filename}</h4>
             <p className="text-[11px] text-ink-muted truncate mt-0.5">{file.rel_path || file.path}</p>
             {file.has_hook && (
-              <span className="inline-block mt-1 text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 font-medium">
+              <span className="inline-block mt-1 text-[10px] text-chip-purple-text bg-chip-purple-bg px-1.5 py-0.5 rounded border border-chip-purple-border/50 font-medium">
                 Workflow Hook Configured
               </span>
             )}

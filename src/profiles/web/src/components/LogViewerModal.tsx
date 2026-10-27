@@ -32,11 +32,11 @@ const LEVEL_FILTERS: Array<{ value: LogLevel | null; label: string }> = [
 
 /** Level → icon + text colour. Accessible pairs on the dark surface. */
 const LEVEL_STYLE: Record<LogEntry["level"], { icon: typeof Info; className: string }> = {
-  DEBUG: { icon: Bug, className: "text-sky-400" },
-  INFO: { icon: Info, className: "text-emerald-400" },
-  WARNING: { icon: AlertTriangle, className: "text-amber-400" },
-  ERROR: { icon: XCircle, className: "text-rose-400" },
-  CRITICAL: { icon: XCircle, className: "text-rose-300" },
+  DEBUG: { icon: Bug, className: "text-chip-sky-text" },
+  INFO: { icon: Info, className: "text-status-success-text" },
+  WARNING: { icon: AlertTriangle, className: "text-status-warning-text" },
+  ERROR: { icon: XCircle, className: "text-status-danger-text" },
+  CRITICAL: { icon: XCircle, className: "text-status-danger-text" },
   UNKNOWN: { icon: FileText, className: "text-ink-faint" },
 };
 
@@ -196,8 +196,8 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
-              <FileText className="h-5 w-5 text-indigo-400" aria-hidden="true" />
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-chip-indigo-bg">
+              <FileText className="h-5 w-5 text-chip-indigo-text" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <h2 id="log-viewer-title" className="text-base font-semibold text-ink">
@@ -235,7 +235,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
               title={live ? "Pause live tail" : "Resume live tail"}
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 live
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  ? "border-status-success-border bg-status-success-bg text-status-success-text"
                   : "border-line bg-elevated text-ink-muted hover:text-ink"
               }`}
             >
@@ -309,7 +309,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
           </div>
 
           {error && (
-            <p role="alert" className="px-3 py-6 text-center text-xs text-rose-400">
+            <p role="alert" className="px-3 py-6 text-center text-xs text-status-danger-text">
               {error}
             </p>
           )}
@@ -329,7 +329,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                 <li
                   key={`${index}-${entry.raw}`}
                   className={`group flex items-start gap-2 rounded px-2 py-1 ${
-                    isError ? "bg-rose-500/5" : "hover:bg-elevated/50"
+                    isError ? "bg-status-danger-bg/40" : "hover:bg-elevated/50"
                   }`}
                 >
                   <span className={style.className}>
@@ -391,7 +391,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                       }`}
                     >
                       {option.label}
-                      <span className={active ? "text-indigo-200" : "text-ink-faint"}>
+                      <span className={active ? "text-chip-indigo-text" : "text-ink-faint"}>
                         {count}
                       </span>
                     </button>
@@ -406,7 +406,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                 title="Scroll to the newest entry"
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                   followTail
-                    ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
+                    ? "border-chip-indigo-border bg-chip-indigo-bg text-chip-indigo-text"
                     : "border-line bg-elevated text-ink-muted hover:text-ink"
                 }`}
               >

@@ -171,7 +171,7 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
       >
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink">
-            <Camera className="h-5 w-5 text-indigo-400" />
+            <Camera className="h-5 w-5 text-chip-indigo-text" />
             <span>Scan with Camera</span>
           </div>
           <button
@@ -185,10 +185,10 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
 
         {error ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="rounded-full bg-red-500/10 p-3 text-red-400 mb-3">
+            <div className="rounded-full bg-status-danger-bg p-3 text-status-danger-text mb-3">
               <AlertCircle className="h-6 w-6" />
             </div>
-            <p className="text-xs text-red-400 max-w-xs">{error}</p>
+            <p className="text-xs text-status-danger-text max-w-xs">{error}</p>
             <button
               onClick={onClose}
               className="mt-6 rounded-md bg-elevated px-4 py-2 text-xs font-medium text-ink hover:bg-surface border border-line"
@@ -198,7 +198,7 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
           </div>
         ) : !isSupported ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="rounded-full bg-amber-500/10 p-3 text-amber-400 mb-3">
+            <div className="rounded-full bg-status-warning-bg p-3 text-status-warning-text mb-3">
               <AlertCircle className="h-6 w-6" />
             </div>
             <h4 className="text-sm font-medium text-ink">Barcode Detector API Unavailable</h4>

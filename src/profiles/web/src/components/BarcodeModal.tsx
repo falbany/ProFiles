@@ -159,7 +159,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
           </div>
         ) : error ? (
-          <div className="rounded-md bg-red-500/10 p-4 text-center text-xs text-red-400">
+          <div className="rounded-md border border-status-danger-border bg-status-danger-bg p-4 text-center text-xs text-status-danger-text">
             {error}
           </div>
         ) : (
@@ -191,7 +191,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   onClick={copyText}
                   className="flex-1 flex items-center justify-center gap-2 rounded-md border border-line bg-elevated px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface"
                 >
-                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? <Check className="h-3.5 w-3.5 text-status-success-text" /> : <Copy className="h-3.5 w-3.5" />}
                   Copy Content
                 </button>
                 <button
@@ -245,7 +245,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                     />
                     <button
                       onClick={() => removePair(index)}
-                      className="p-1 text-ink-muted hover:text-red-400 transition-colors"
+                      className="p-1 text-ink-muted hover:text-status-danger-text transition-colors"
                       aria-label="Remove field"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

@@ -34,7 +34,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
       <div className="w-[450px] max-w-full rounded-2xl border border-frame-line glass-panel p-5">
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink">
-            <Keyboard className="h-5 w-5 text-indigo-400" />
+            <Keyboard className="h-5 w-5 text-chip-indigo-text" />
             <span>Keyboard Shortcuts</span>
           </div>
           <button
@@ -52,7 +52,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
               className="flex items-center justify-between rounded-lg bg-elevated/50 px-3 py-2"
             >
               <span className="text-ink-secondary">{desc}</span>
-              <kbd className="rounded bg-app px-2 py-0.5 font-mono text-[11px] font-semibold text-indigo-300 border border-line">
+              <kbd className="rounded bg-app px-2 py-0.5 font-mono text-[11px] font-semibold text-chip-indigo-text border border-line">
                 {key}
               </kbd>
             </div>

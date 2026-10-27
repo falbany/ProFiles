@@ -44,7 +44,7 @@ export function StatusBar({
         {/* Identity pill — hostname / IP links plus the session user. */}
         {systemInfo && (
           <div className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-ink-secondary">
-            <Activity className="h-3 w-3 text-emerald-400" />
+            <Activity className="h-3 w-3 text-status-success-text" />
             <a
               href={`http://${systemInfo.hostname}:${window.location.port}`}
               target="_blank"
@@ -178,9 +178,9 @@ export function StatusBar({
         <button
           onClick={onToggleTheme}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-muted hover:bg-elevated hover:text-amber-300"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-muted hover:bg-elevated hover:text-status-warning-text"
         >
-          {theme === "dark" ? <Sun className="h-3 w-3 text-amber-400" /> : <Moon className="h-3 w-3 text-indigo-400" />}
+          {theme === "dark" ? <Sun className="h-3 w-3 text-status-warning-text" /> : <Moon className="h-3 w-3 text-chip-indigo-text" />}
           <span>{theme === "dark" ? "Light" : "Dark"}</span>
         </button>
       </div>

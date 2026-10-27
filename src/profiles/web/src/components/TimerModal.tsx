@@ -54,7 +54,7 @@ export function TimerModal({
         {/* Header */}
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink">
-            <Timer className="h-5 w-5 text-indigo-400" />
+            <Timer className="h-5 w-5 text-chip-indigo-text" />
             <span>Auto-Rescan Timer</span>
           </div>
           <button
@@ -68,7 +68,7 @@ export function TimerModal({
         {/* Current status */}
         <div className="mb-4 rounded-lg bg-elevated/50 px-3 py-2 text-xs">
           {isActive ? (
-            <div className="flex items-center gap-2 text-emerald-400">
+            <div className="flex items-center gap-2 text-status-success-text">
               <PlayCircle className="h-4 w-4 animate-pulse" />
               <span>Auto-rescan every {currentInterval}s</span>
             </div>
@@ -88,7 +88,7 @@ export function TimerModal({
               <button
                 key={preset.seconds}
                 onClick={() => handlePreset(preset.seconds)}
-                className="rounded-lg border border-line bg-elevated/50 px-3 py-1.5 text-left font-medium text-ink-secondary hover:border-indigo-500 hover:bg-indigo-600/10 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="rounded-lg border border-line bg-elevated/50 px-3 py-1.5 text-left font-medium text-ink-secondary hover:border-chip-indigo-border hover:bg-chip-indigo-bg/40 hover:text-chip-indigo-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 {preset.label}
               </button>
@@ -123,7 +123,7 @@ export function TimerModal({
         {isActive && (
           <button
             onClick={handleStop}
-            className="mb-4 w-full rounded-lg border border-line bg-elevated/50 px-3 py-2 text-xs font-medium text-amber-300 hover:border-amber-500 hover:bg-amber-600/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            className="mb-4 w-full rounded-lg border border-line bg-elevated/50 px-3 py-2 text-xs font-medium text-status-warning-text hover:border-status-warning-border hover:bg-status-warning-bg/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
           >
             Stop Auto-Rescan
           </button>

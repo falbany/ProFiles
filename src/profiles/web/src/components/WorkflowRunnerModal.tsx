@@ -66,7 +66,7 @@ function renderMarkdown(text: string) {
       }
       if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
         return (
-          <code key={pIdx} className="rounded bg-elevated px-1 py-0.5 font-mono text-indigo-300">
+          <code key={pIdx} className="rounded bg-elevated px-1 py-0.5 font-mono text-chip-indigo-text">
             {part.slice(1, -1)}
           </code>
         );
@@ -198,7 +198,7 @@ export function WorkflowRunnerModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5 bg-surface-strong/30 shrink-0">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-chip-indigo-bg text-chip-indigo-text">
               <Webhook className="h-4 w-4" />
             </span>
             <div>
@@ -237,22 +237,22 @@ export function WorkflowRunnerModal({
                     onClick={() => setSelectedStepIndex(idx)}
                     className={`flex items-start text-left gap-2.5 rounded-lg border px-3 py-2.5 transition-colors cursor-pointer w-full ${
                       isInspected
-                        ? "border-indigo-500/60 bg-indigo-500/15 shadow-xs ring-1 ring-indigo-500/30"
+                        ? "border-chip-indigo-border bg-chip-indigo-bg shadow-xs ring-1 ring-chip-indigo-border/40"
                         : "border-line/60 bg-surface/60 hover:bg-elevated/80"
                     }`}
                   >
                     <div className="mt-0.5 shrink-0">
                       {st.status === "running" && (
-                        <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+                        <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />
                       )}
                       {st.status === "completed" && (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        <CheckCircle2 className="h-4 w-4 text-status-success-text" />
                       )}
                       {st.status === "skipped" && (
-                        <FastForward className="h-4 w-4 text-amber-400" />
+                        <FastForward className="h-4 w-4 text-status-warning-text" />
                       )}
                       {st.status === "failed" && (
-                        <AlertCircle className="h-4 w-4 text-red-400" />
+                        <AlertCircle className="h-4 w-4 text-status-danger-text" />
                       )}
                       {st.status === "pending" && (
                         <div className="h-4 w-4 rounded-full border border-line-strong flex items-center justify-center text-[10px] text-ink-faint font-mono">
@@ -262,7 +262,7 @@ export function WorkflowRunnerModal({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px] font-bold uppercase text-indigo-400">
+                        <span className="font-mono text-[11px] font-bold uppercase text-chip-indigo-text">
                           {st.action}
                         </span>
                         <span className="text-[10px] font-mono text-ink-faint">#{st.index}</span>
@@ -286,7 +286,7 @@ export function WorkflowRunnerModal({
           <div className="flex-1 flex flex-col bg-app overflow-y-auto p-6 justify-between">
             <div className="space-y-6">
               {error && (
-                <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+                <div className="flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-text">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -296,7 +296,7 @@ export function WorkflowRunnerModal({
               <div className="rounded-xl border border-line bg-surface p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-line pb-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-indigo-500/10 px-2 py-0.5 font-mono text-xs font-semibold uppercase text-indigo-300">
+                    <span className="rounded bg-chip-indigo-bg px-2 py-0.5 font-mono text-xs font-semibold uppercase text-chip-indigo-text">
                       {activeStep?.action || session?.status}
                     </span>
                     <span className="text-xs text-ink-muted">
@@ -306,13 +306,13 @@ export function WorkflowRunnerModal({
                       <button
                         type="button"
                         onClick={() => setSelectedStepIndex(null)}
-                        className="text-[11px] text-indigo-400 hover:underline ml-2"
+                        className="text-[11px] text-chip-indigo-text hover:underline ml-2"
                       >
                         (Return to active step)
                       </button>
                     )}
                   </div>
-                  {loading && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                  {loading && <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />}
                 </div>
 
                 {/* Content Body / Rendered Markdown */}
@@ -329,8 +329,8 @@ export function WorkflowRunnerModal({
 
                   {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_ask" && session.ask_prompt && (
                     <div className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-amber-400">Confirmation Prompt:</p>
-                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-medium text-ink">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-status-warning-text">Confirmation Prompt:</p>
+                      <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-4 text-sm font-medium text-ink">
                         {session.ask_prompt}
                       </div>
                     </div>
@@ -340,14 +340,14 @@ export function WorkflowRunnerModal({
                   {isFinished && selectedStepIndex === null && (
                     <div className={`rounded-xl border p-8 text-center space-y-4 ${
                       session?.status === "completed"
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                        : "border-red-500/30 bg-red-500/10 text-red-300"
+                        ? "border-status-success-border bg-status-success-bg text-status-success-text"
+                        : "border-status-danger-border bg-status-danger-bg text-status-danger-text"
                     }`}>
                       <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface/50 mx-auto">
                         {session?.status === "completed" ? (
-                          <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                          <CheckCircle2 className="h-6 w-6 text-status-success-text" />
                         ) : (
-                          <AlertCircle className="h-6 w-6 text-red-400" />
+                          <AlertCircle className="h-6 w-6 text-status-danger-text" />
                         )}
                       </div>
                       <div className="space-y-1">
@@ -382,7 +382,7 @@ export function WorkflowRunnerModal({
                       </div>
                       
                       {activeStep?.ask && (
-                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+                        <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-text">
                           <span className="font-semibold">Workflow Guard:</span> {activeStep.ask}
                         </div>
                       )}
@@ -428,7 +428,7 @@ export function WorkflowRunnerModal({
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("no")}
-                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10"
+                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-status-danger-text hover:bg-status-danger-bg"
                     >
                       Abort Launch
                     </button>
@@ -436,7 +436,7 @@ export function WorkflowRunnerModal({
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("skip")}
-                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/10"
+                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-status-warning-text hover:bg-status-warning-bg"
                     >
                       Skip Step
                     </button>
