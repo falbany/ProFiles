@@ -138,7 +138,7 @@ export function LoadConfigModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
+      animate-overlay-in className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
     >
       <div
@@ -147,7 +147,7 @@ export function LoadConfigModal({
         aria-modal="true"
         aria-labelledby="load-config-title"
         onKeyDown={handleDialogKeyDown}
-        className="flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
+        animate-modal-in className="flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">

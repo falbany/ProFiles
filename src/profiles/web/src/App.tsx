@@ -1326,9 +1326,9 @@ export default function App() {
   }, [theme]);
 
   return (
-    <div className="flex h-dvh flex-col bg-elevated/30 p-1 font-sans text-ink transition-colors sm:p-1.5">
+    <div className="flex h-dvh flex-col bg-elevated/30 p-1 font-sans text-ink transition-colors duration-200 sm:p-1.5">
       {/* Rounded app frame — thin modern border around the whole app. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-frame-line bg-app shadow-[0_2px_6px_rgb(0_0_0/0.35)] sm:rounded-xl">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-frame-line bg-app shadow-[0_2px_6px_rgb(0_0_0/0.35)] transition-colors duration-200 sm:rounded-xl">
       <HeaderBar
         title={config?.title || ""}
         release={config?.release || ""}

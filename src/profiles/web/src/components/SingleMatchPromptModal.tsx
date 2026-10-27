@@ -38,11 +38,11 @@ export function SingleMatchPromptModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      animate-overlay-in className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={onDismiss}
     >
       <div
-        className="w-full max-w-sm rounded-xl border border-frame-line glass-panel p-5 flex flex-col gap-4"
+        animate-modal-in className="w-full max-w-sm rounded-xl border border-frame-line glass-panel p-5 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line pb-3">

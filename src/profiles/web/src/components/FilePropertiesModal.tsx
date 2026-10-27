@@ -231,7 +231,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+      animate-overlay-in className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="properties-modal-title"
@@ -242,7 +242,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       {/* Modal content */}
       <div
         ref={dialogRef}
-        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
+        animate-modal-in className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
       >
         {/* Header */}
         <div className="flex-shrink-0 border-b border-line px-6 py-4">

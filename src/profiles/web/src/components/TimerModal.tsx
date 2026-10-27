@@ -49,8 +49,8 @@ export function TimerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-[420px] max-w-full rounded-2xl border border-frame-line glass-panel p-5">
+    <div animate-overlay-in className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div animate-modal-in className="w-[420px] max-w-full rounded-2xl border border-frame-line glass-panel p-5">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink">

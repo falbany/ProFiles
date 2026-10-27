@@ -39,7 +39,7 @@ export function StatusBar({
   activeConfigName,
 }: StatusBarProps) {
   return (
-    <footer className="flex items-center justify-between border-t border-line bg-app px-4 py-2 text-[11px] text-ink-muted">
+    <footer className="flex items-center justify-between border-t border-line bg-app px-4 py-2 text-[11px] text-ink-muted transition-colors duration-200">
       <div className="flex items-center gap-4">
         {/* Identity pill — hostname / IP links plus the session user. */}
         {systemInfo && (

@@ -208,6 +208,54 @@ body {
   }
 }
 
+/* Quiet overlay entrances. The toast keyframe keeps the -translate-x/y-1/2
+   centering transform, which an animation on `transform` would otherwise
+   override mid-flight. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 6px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@layer utilities {
+  .animate-modal-in {
+    animation: modal-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .animate-overlay-in {
+    animation: overlay-in 150ms ease-out;
+  }
+
+  .animate-toast-in {
+    animation: toast-in 120ms ease-out;
+  }
+}
+
 /* Themed scrollbars */
 * {
   scrollbar-color: var(--app-border) transparent;

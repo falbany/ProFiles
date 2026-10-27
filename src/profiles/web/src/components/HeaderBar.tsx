@@ -28,7 +28,7 @@ export function HeaderBar({
   onOpenTerminal,
 }: HeaderBarProps) {
   return (
-    <header className="relative z-30 flex flex-wrap items-center gap-3 border-b border-line bg-app/90 px-5 py-2 text-xs backdrop-blur-xl shadow-xs transition-all">
+    <header className="relative z-30 flex flex-wrap items-center gap-3 border-b border-line bg-app/90 px-5 py-2 text-xs backdrop-blur-xl shadow-xs transition-all duration-200">
       <div className="flex shrink-0 items-center gap-3">
         <div className="flex items-center gap-3.5">
           <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-chip-indigo-bg to-chip-purple-bg text-chip-indigo-text border border-chip-indigo-border shadow-xs">
