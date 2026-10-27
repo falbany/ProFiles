@@ -162,7 +162,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       launch: "border-emerald-500/30 bg-emerald-600 font-semibold text-white hover:bg-emerald-500",
       folder: "bg-chip-amber-bg text-chip-amber-text border-chip-amber-border",
     };
-    return `btn-chip rounded-md border px-3 py-2 text-xs ${
+    return `btn btn-chip rounded-md border px-3 py-2 text-xs ${
       styles[actionId] ?? "bg-chip-indigo-bg text-chip-indigo-text border-chip-indigo-border"
     }`;
   };
@@ -436,7 +436,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-line px-6 py-3">
           <div className="flex justify-between items-center gap-2">
-            <p className="text-xs text-ink-muted truncate">
+            <p className="min-w-0 text-xs text-ink-muted truncate">
               {actionMessage ?? "Click the copy icon next to any field to copy its value"}
             </p>
             <div className="flex items-center gap-2 whitespace-nowrap">
