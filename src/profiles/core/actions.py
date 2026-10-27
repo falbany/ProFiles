@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -296,6 +297,59 @@ def write_starter_config(
     return ActionResult(
         status=ActionStatus.SUCCESS,
         message=f"Starter configuration written:\n{target}",
+        path=target,
+    )
+
+
+def save_csv_export(
+    content: str,
+    filename: str,
+    *,
+    logger: logging.Logger | None = None,
+) -> ActionResult:
+    """Write CSV export content to the user's Downloads directory.
+
+    Browser downloads do not work inside the desktop webview, so the
+    server persists the file instead.  The suggested name is reduced to
+    a bare file name (no directories, no hidden files) and forced to a
+    ``.csv`` suffix; an unusable name falls back to a timestamped one.
+    The target directory is ``~/Downloads`` when it exists, otherwise
+    the home directory.
+
+    Args:
+        content: Full CSV text to write.
+        filename: Suggested file name; sanitized before use.
+        logger: Optional logger used to record the write.
+
+    Returns:
+        ``ActionResult`` describing the outcome, with the written path.
+    """
+    bare_name = Path(filename).name.strip()
+    if not bare_name or bare_name.startswith("."):
+        bare_name = f"profiles-export-{datetime.now():%Y%m%d-%H%M%S}.csv"
+    if not bare_name.lower().endswith(".csv"):
+        bare_name += ".csv"
+
+    downloads_dir = Path.home() / "Downloads"
+    target_dir = downloads_dir if downloads_dir.is_dir() else Path.home()
+    target = target_dir / bare_name
+
+    try:
+        target.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        if logger is not None:
+            logger.error("CSV export failed for %s: %s", target, exc)
+        return ActionResult(
+            status=ActionStatus.FAILED,
+            message=f"Could not write CSV export:\n{target} ({exc})",
+            path=target,
+        )
+
+    if logger is not None:
+        logger.info("CSV export written: %s", target)
+    return ActionResult(
+        status=ActionStatus.SUCCESS,
+        message=f"CSV exported to {target}",
         path=target,
     )
 

@@ -71,9 +71,9 @@ function ScrollableStickyHeader({ items, columnTemplate, resizePointerRef, resiz
             {sortable ? (
               item.active ? (
                 item.direction === "asc" ? (
-                  <ArrowUp className="ml-auto h-3 w-3 shrink-0 text-indigo-400" />
+                  <ArrowUp className="ml-auto h-3 w-3 shrink-0 text-chip-indigo-text" />
                 ) : (
-                  <ArrowDown className="ml-auto h-3 w-3 shrink-0 text-indigo-400" />
+                  <ArrowDown className="ml-auto h-3 w-3 shrink-0 text-chip-indigo-text" />
                 )
               ) : (
                 <ArrowUpDown className="ml-auto h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-40 hover:opacity-40" />
@@ -391,7 +391,7 @@ export function FileListTable({
   const getRowStyle = (filename: string, isSelected: boolean): { className: string; style: React.CSSProperties } => {
     if (isSelected) {
       return {
-        className: "bg-indigo-600/25 border-l-4 border-indigo-500 text-ink",
+        className: "bg-chip-indigo-bg border-l-4 border-chip-indigo-border text-ink",
         style: {},
       };
     }
@@ -418,13 +418,13 @@ export function FileListTable({
 
   /** Shared styling for the empty-state action buttons (row-button idiom). */
   const emptyActionButtonClass =
-    "rounded-md border border-line bg-elevated px-3 py-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors";
+    "btn btn-secondary px-3 py-1.5";
 
   return (
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-auto bg-app text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-[-2px]"
+      className="flex-1 overflow-auto bg-app text-xs transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-[-2px]"
       data-testid="file-list"
       data-loaded-count={loadedCount}
       aria-busy={scanning}
@@ -495,7 +495,7 @@ export function FileListTable({
           <div role="gridcell" aria-colspan={resolvedKeys.length + 1} className="p-8 text-center text-ink-faint">
             {scanning ? (
               <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin text-indigo-400 motion-reduce:animate-none" />
+                <Loader2 className="h-5 w-5 animate-spin text-chip-indigo-text motion-reduce:animate-none" />
                 <span>Scanning files...</span>
               </div>
             ) : !activeDirectory.trim() && onOpenConfig ? (
@@ -574,7 +574,7 @@ export function FileListTable({
         <div className="relative" style={{ height: spacerHeight }} role="rowgroup">
           {loadingMore && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2" aria-hidden="true">
-              <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />
             </div>
           )}
           {/* The virtualized window, shifted into position by the transform. */}
@@ -605,7 +605,7 @@ export function FileListTable({
                       <span
                         title={file.hook_pattern ? `Launch workflow: ${file.hook_pattern}` : "Launch workflow configured"}
                         aria-label="Workflow hook attached"
-                        className="inline-flex items-center text-amber-500/80 hover:text-amber-400"
+                        className="inline-flex items-center text-status-warning-text hover:brightness-95"
                       >
                         <Webhook className="h-3 w-3 shrink-0" />
                       </span>

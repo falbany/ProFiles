@@ -139,17 +139,17 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      className="animate-overlay-in fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
         ref={modalRef}
-        className="w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
+        className="animate-modal-in w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-ink">QR Code Settings</h3>
-          <button onClick={onClose} className="rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink">
+          <button onClick={onClose} className="focus-ring rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -159,7 +159,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
           </div>
         ) : error ? (
-          <div className="rounded-md bg-red-500/10 p-4 text-center text-xs text-red-400">
+          <div className="rounded-md border border-status-danger-border bg-status-danger-bg p-4 text-center text-xs text-status-danger-text">
             {error}
           </div>
         ) : (
@@ -177,7 +177,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
                     <button 
                       onClick={copyImage}
-                      className="rounded-md bg-white/90 p-2 text-slate-900 shadow-sm hover:bg-white flex items-center gap-2 text-xs font-medium"
+                      className="focus-ring flex items-center gap-2 rounded-md bg-white/90 p-2 text-xs font-medium text-slate-900 shadow-sm hover:bg-white"
                     >
                       {copiedImage ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                       {copiedImage ? "Copied" : "Copy Image"}
@@ -189,15 +189,15 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
               <div className="flex w-full gap-2">
                 <button
                   onClick={copyText}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-md border border-line bg-elevated px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface"
+                  className="btn btn-secondary flex-1 px-3 py-1.5"
                 >
-                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? <Check className="h-3.5 w-3.5 text-status-success-text" /> : <Copy className="h-3.5 w-3.5" />}
                   Copy Content
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={!barcodeImage}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                  className="btn btn-primary flex-1 px-3 py-1.5"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Save Image
@@ -212,14 +212,14 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   {md5 && !pairs.some(p => p.key === "md5") && (
                     <button
                       onClick={addMd5}
-                      className="flex items-center gap-1 rounded bg-purple-600/20 px-2 py-0.5 text-[10px] font-bold text-purple-400 border border-purple-500/30 hover:bg-purple-600/30"
+                      className="btn-chip flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold text-chip-purple-text border border-chip-purple-border"
                     >
                       <Hash className="h-3 w-3" /> Inc. MD5
                     </button>
                   )}
                   <button
                     onClick={addPair}
-                    className="flex items-center gap-1 rounded bg-indigo-600/20 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600/30"
+                    className="btn-chip flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold text-chip-indigo-text border border-chip-indigo-border"
                   >
                     <Plus className="h-3 w-3" /> Add Field
                   </button>
@@ -245,7 +245,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                     />
                     <button
                       onClick={() => removePair(index)}
-                      className="p-1 text-ink-muted hover:text-red-400 transition-colors"
+                      className="p-1 text-ink-muted hover:text-status-danger-text transition-colors"
                       aria-label="Remove field"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -260,7 +260,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
 
             <div className="pt-2 border-t border-line">
               <label className="text-[10px] font-medium text-ink-muted uppercase tracking-wider block mb-1.5">Raw Preview</label>
-              <div className="rounded bg-black/20 p-2 font-mono text-[10px] text-indigo-300/80 break-all border border-line/50">
+              <div className="rounded bg-elevated p-2 font-mono text-[10px] text-ink-secondary break-all border border-line">
                 {rawContent || <span className="italic text-ink-muted/50">empty</span>}
               </div>
             </div>

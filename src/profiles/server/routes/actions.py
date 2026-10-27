@@ -263,3 +263,23 @@ async def generate_barcode(payload: BarcodeRequest):
         "image": f"data:image/png;base64,{png_b64}",
         "content": qr_content,
     }
+
+
+class ExportCsvRequest(BaseModel):
+    content: str
+    filename: str = ""
+
+
+@router.post("/export-csv")
+async def export_csv(payload: ExportCsvRequest) -> dict:
+    """Save CSV export content to the user's Downloads directory.
+
+    The desktop webview cannot perform browser downloads, so the server
+    persists the file and reports the path back to the UI.
+    """
+    res = actions.save_csv_export(payload.content, payload.filename)
+    return {
+        "status": str(res.status.value),
+        "message": res.message,
+        "path": str(res.path) if res.path else None,
+    }

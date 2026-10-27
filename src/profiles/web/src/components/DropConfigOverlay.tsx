@@ -17,7 +17,7 @@ export function DropConfigOverlay({ visible, onFileSelected }: DropConfigOverlay
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/65 backdrop-blur-sm"
+      className="animate-overlay-in fixed inset-0 z-40 flex items-center justify-center bg-black/65 backdrop-blur-sm"
       onClick={() => inputRef.current?.click()}
       data-testid="drop-config-overlay"
     >
@@ -32,9 +32,9 @@ export function DropConfigOverlay({ visible, onFileSelected }: DropConfigOverlay
           e.target.value = "";
         }}
       />
-      <div className="rounded-xl border-2 border-dashed border-indigo-400/70 bg-surface px-8 py-6 text-center shadow-2xl">
-        <span className="mx-auto mb-3 grid h-9 w-9 place-items-center rounded-lg bg-indigo-500/10">
-          <FileCog className="h-5 w-5 text-indigo-400" />
+      <div className="rounded-xl border-2 border-dashed border-chip-indigo-border bg-surface px-8 py-6 text-center shadow-2xl">
+        <span className="mx-auto mb-3 grid h-9 w-9 place-items-center rounded-lg bg-chip-indigo-bg">
+          <FileCog className="h-5 w-5 text-chip-indigo-text" />
         </span>
         <p className="text-sm font-semibold text-ink">Drop configuration file</p>
         <p className="mt-1 text-xs text-ink-muted">

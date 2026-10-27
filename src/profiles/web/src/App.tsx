@@ -16,6 +16,7 @@ import {
   browseDirectory,
   loadConfigContent,
   reloadConfig,
+  exportCsvToDisk,
 } from "./api/client";
 import type { AppConfigData, ExternalEvent, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import {
@@ -953,23 +954,17 @@ export default function App() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (files.length === 0) {
       showToast("No files to export.");
       return;
     }
     try {
       const csvContent = exportToCsv(files, config?.column_names || [], config ?? undefined, filterText);
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `profiles-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-")}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast(`Exported ${files.length} files to CSV.`);
+      const filename = `profiles-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-")}.csv`;
+      // Saved server-side: browser blob downloads navigate to raw CSV inside the desktop webview.
+      const result = await exportCsvToDisk(csvContent, filename);
+      showToast(result.message);
     } catch (err: any) {
       showToast(`Export failed: ${err.message}`, "error");
     }
@@ -1331,9 +1326,9 @@ export default function App() {
   }, [theme]);
 
   return (
-    <div className="flex h-dvh flex-col bg-elevated/30 p-1 font-sans text-ink transition-colors sm:p-1.5">
+    <div className="flex h-dvh flex-col bg-elevated/30 p-1 font-sans text-ink transition-colors duration-200 sm:p-1.5">
       {/* Rounded app frame — thin modern border around the whole app. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-frame-line bg-app shadow-[0_2px_6px_rgb(0_0_0/0.35)] sm:rounded-xl">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-frame-line bg-app shadow-[0_2px_6px_rgb(0_0_0/0.35)] transition-colors duration-200 sm:rounded-xl">
       <HeaderBar
         title={config?.title || ""}
         release={config?.release || ""}

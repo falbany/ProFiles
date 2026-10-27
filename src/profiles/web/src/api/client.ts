@@ -274,6 +274,17 @@ export async function fetchFileMetadata(filePath: string, signal?: AbortSignal):
   return res.json();
 }
 
+/** Save CSV content to disk via the server (browser downloads don't work in the desktop webview). */
+export async function exportCsvToDisk(content: string, filename: string): Promise<{ status: string; message: string; path?: string | null }> {
+  const res = await fetch("/api/actions/export-csv", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, filename }),
+  });
+  if (!res.ok) throw new Error("Failed to export CSV");
+  return res.json();
+}
+
 export async function startWorkflowSession(params: {
   directory: string;
   filename: string;

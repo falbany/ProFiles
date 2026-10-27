@@ -20,8 +20,8 @@ export function InitErrorPanel({ message, onRetry, retrying = false }: InitError
   return (
     <div className="flex flex-1 items-center justify-center p-8" role="alert" data-testid="init-error-panel">
       <div className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 text-center shadow-xl">
-        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/10">
-          <CircleAlert className="h-5 w-5 text-rose-400/80" />
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-status-danger-border bg-status-danger-bg">
+          <CircleAlert className="h-5 w-5 text-status-danger-text/80" />
         </div>
         <h3 className="text-sm font-semibold text-ink">Couldn't load the app</h3>
         <p className="mt-1 break-words text-xs text-ink-secondary">{message}</p>
@@ -29,7 +29,7 @@ export function InitErrorPanel({ message, onRetry, retrying = false }: InitError
           type="button"
           onClick={onRetry}
           disabled={retrying}
-          className="mx-auto mt-4 flex items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+          className="btn btn-primary mx-auto mt-4 px-3.5 py-1.5 font-semibold shadow-sm"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${retrying ? "animate-spin motion-reduce:animate-none" : ""}`} />
           <span>{retrying ? "Retrying..." : "Retry"}</span>

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchNotifications, reloadConfig } from "./client";
+import { exportCsvToDisk, fetchNotifications, reloadConfig } from "./client";
 
 const SAMPLE_CONFIG = {
   title: "Fresh From Disk",
@@ -87,5 +87,40 @@ describe("fetchNotifications", () => {
     );
 
     await expect(fetchNotifications(0)).rejects.toThrow("Failed to fetch notifications");
+  });
+});
+
+describe("exportCsvToDisk", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("POSTs the CSV content to /api/actions/export-csv and returns the saved path", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ status: "success", message: "CSV exported to /tmp/out.csv", path: "/tmp/out.csv" }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await exportCsvToDisk("name,version\n", "profiles-export-x.csv");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/actions/export-csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "name,version\n", filename: "profiles-export-x.csv" }),
+    });
+    expect(res.status).toBe("success");
+    expect(res.path).toBe("/tmp/out.csv");
+  });
+
+  it("throws on HTTP failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 500 })),
+    );
+
+    await expect(exportCsvToDisk("a,b\n", "out.csv")).rejects.toThrow("Failed to export CSV");
   });
 });

@@ -1,3 +1,4 @@
+import Tooltip from "./Tooltip";
 import { useEffect, useRef, useState } from "react";
 import { X, File, Folder, Calendar, Hash, Copy, Check, QrCode, Eye, Play, FolderOpen, Lock, EyeOff, Link2 } from "lucide-react";
 import type { FileMetadata, ScannedFileItem } from "../api/types";
@@ -157,13 +158,13 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   const actionButtonClass = (actionId: string) => {
     const styles: Record<string, string> = {
-      reveal: "bg-sky-600/20 text-sky-300 hover:bg-sky-600/30 border-sky-500/30 focus-visible:ring-sky-400/60",
-      launch: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500/30 font-semibold focus-visible:ring-emerald-400",
-      folder: "bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 border-amber-500/30 focus-visible:ring-amber-400/60",
+      reveal: "bg-chip-sky-bg text-chip-sky-text border-chip-sky-border",
+      launch: "border-emerald-500/30 bg-emerald-600 font-semibold text-white hover:bg-emerald-500",
+      folder: "bg-chip-amber-bg text-chip-amber-text border-chip-amber-border",
     };
-    return `inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs ${
-      styles[actionId] ?? "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border-indigo-500/30"
-    } disabled:opacity-40 disabled:cursor-not-allowed`;
+    return `btn btn-chip rounded-md border px-3 py-2 text-xs ${
+      styles[actionId] ?? "bg-chip-indigo-bg text-chip-indigo-text border-chip-indigo-border"
+    }`;
   };
 
   const renderPropertyRow = (
@@ -180,18 +181,20 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           {displayValue ?? value}
         </span>
       </div>
+      <Tooltip text="Copy to clipboard" block={false}>
       <button
         onClick={() => copyToClipboard(value, fieldId)}
         className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-elevated"
-        title="Copy to clipboard"
+
         aria-label={`Copy ${label}`}
       >
         {copiedField === fieldId ? (
-          <Check className="h-3.5 w-3.5 text-emerald-400" />
+          <Check className="h-3.5 w-3.5 text-status-success-text" />
         ) : (
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
         )}
       </button>
+      </Tooltip>
     </div>
   );
 
@@ -207,21 +210,23 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   /** Full-width clickable path bar; copies the complete path on click. */
   const renderPathBar = () => (
+    <Tooltip text="Click to copy full path">
     <button
       onClick={() => void copyToClipboard(metadata!.path, "path")}
       className="group mb-3 flex w-full items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-left hover:bg-surface"
-      title="Click to copy full path"
+
     >
-      <Folder className="text-amber-400 h-4 w-4 flex-shrink-0" />
+      <Folder className="text-chip-amber-text h-4 w-4 flex-shrink-0" />
       <span className="text-ink min-w-0 flex-1 truncate font-mono text-xs">
         {compactPath(metadata!.path)}
       </span>
       {copiedField === "path" ? (
-        <Check className="text-emerald-400 h-3.5 w-3.5" />
+        <Check className="text-status-success-text h-3.5 w-3.5" />
       ) : (
         <Copy className="text-ink-muted h-3.5 w-3.5" />
       )}
     </button>
+    </Tooltip>
   );
 
   if (!isOpen || !file) return null;
@@ -231,7 +236,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="properties-modal-title"
@@ -242,7 +247,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       {/* Modal content */}
       <div
         ref={dialogRef}
-        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
+        className="animate-modal-in relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
       >
         {/* Header */}
         <div className="flex-shrink-0 border-b border-line px-6 py-4">
@@ -262,33 +267,37 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                   {file.filename}
                 </p>
               </div>
+              <Tooltip text="Copy all properties to clipboard" block={false}>
               <button
                 onClick={() => {
                   if (!metadata) return;
                   void copyToClipboard(buildPropertiesSummary(metadata), "all");
                 }}
                 disabled={!metadata || loading || error !== null}
-                className="ml-2 flex items-center gap-1 rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 disabled:opacity-50"
-                title="Copy all properties to clipboard"
+                className="btn-chip ml-2 flex items-center gap-1 rounded-md border border-chip-indigo-border bg-chip-indigo-bg p-1.5 text-chip-indigo-text"
+
                 aria-label="Copy all properties"
               >
                 {copiedField === "all" ? (
-                  <Check className="h-4 w-4 text-emerald-400" />
+                  <Check className="h-4 w-4 text-status-success-text" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
               </button>
+              </Tooltip>
+              <Tooltip text="Generate Barcode/QR Code" block={false}>
               <button
                 onClick={() => setShowQrModal(true)}
-                className="rounded-md bg-indigo-600/20 p-1.5 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30"
-                title="Generate Barcode/QR Code"
+                className="btn-chip rounded-md border border-chip-indigo-border bg-chip-indigo-bg p-1.5 text-chip-indigo-text"
+
               >
                 <QrCode className="h-4 w-4" />
               </button>
+              </Tooltip>
             </div>
             <button
               onClick={onClose}
-              className="rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink flex-shrink-0"
+              className="focus-ring rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink flex-shrink-0"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -308,8 +317,8 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4 text-center">
-              <p className="text-xs text-red-400">{error}</p>
+            <div className="rounded-lg border border-status-danger-border bg-status-danger-bg p-4 text-center">
+              <p className="text-xs text-status-danger-text">{error}</p>
             </div>
           )}
 
@@ -354,7 +363,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* Hashes */}
                 {renderCard(
                   "Hashes",
-                  <Hash className="text-purple-400 h-3.5 w-3.5" />,
+                  <Hash className="text-chip-purple-text h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("MD5", metadata.md5, "md5", true, truncateMiddle(metadata.md5, 10, 6))}
                     {renderPropertyRow("SHA256", metadata.sha256, "sha256", true, truncateMiddle(metadata.sha256, 10, 6))}
@@ -364,7 +373,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* Timestamps */}
                 {renderCard(
                   "Timestamps",
-                  <Calendar className="text-sky-400 h-3.5 w-3.5" />,
+                  <Calendar className="text-chip-sky-text h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("Created", metadata.created, "created", true)}
                     {renderPropertyRow("Modified", metadata.modified, "modified", true)}
@@ -374,7 +383,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* Identity */}
                 {renderCard(
                   "Identity",
-                  <File className="text-indigo-400 h-3.5 w-3.5" />,
+                  <File className="text-chip-indigo-text h-3.5 w-3.5" />,
                   <div className="space-y-0.5">
                     {renderPropertyRow("Type", metadata.type, "type")}
                     {metadata.attributes.stem && renderPropertyRow("Stem", metadata.attributes.stem, "attrStem")}
@@ -390,11 +399,11 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 {/* System */}
                 {renderCard(
                   "System",
-                  <File className="text-emerald-400 h-3.5 w-3.5" />,
+                  <File className="text-status-success-text h-3.5 w-3.5" />,
                   <div>
                     <div className="mb-1 flex min-h-[24px] flex-wrap items-center gap-1.5">
                       {metadata.attributes.is_readonly && (
-                        <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-600/20 px-2 py-0.5 text-xs text-rose-300">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-status-danger-border bg-status-danger-bg px-2 py-0.5 text-xs text-status-danger-text">
                           <Lock className="h-3 w-3" /> Read-only
                         </span>
                       )}
@@ -427,37 +436,43 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
         {/* Footer */}
         <div className="flex-shrink-0 border-t border-line px-6 py-3">
           <div className="flex justify-between items-center gap-2">
-            <p className="text-xs text-ink-muted truncate">
+            <p className="min-w-0 text-xs text-ink-muted truncate">
               {actionMessage ?? "Click the copy icon next to any field to copy its value"}
             </p>
             <div className="flex items-center gap-2 whitespace-nowrap">
+              <Tooltip text="Show file in Explorer" block={false}>
               <button
                 onClick={() => void runFileAction("reveal", "Revealed in Explorer", () => revealFile(activeFile.path))}
                 disabled={actionBusy !== null}
                 className={actionButtonClass("reveal")}
-                title="Show file in Explorer"
+
               >
                 <Eye className="h-3.5 w-3.5" /> Reveal
               </button>
+              </Tooltip>
+              <Tooltip text="Launch file with default association" block={false}>
               <button
                 onClick={() => void runFileAction("launch", "Launched", () => launchFile({ directory, filename: activeFile.filename }))}
                 disabled={actionBusy !== null}
                 className={actionButtonClass("launch")}
-                title="Launch file with default association"
+
               >
                 <Play className="h-3.5 w-3.5" /> Launch
               </button>
+              </Tooltip>
+              <Tooltip text="Open containing folder" block={false}>
               <button
                 onClick={() => void runFileAction("folder", "Opened folder", () => openFolder(activeFile.path))}
                 disabled={actionBusy !== null}
                 className={actionButtonClass("folder")}
-                title="Open containing folder"
+
               >
                 <FolderOpen className="h-3.5 w-3.5" /> Open Folder
               </button>
+              </Tooltip>
               <button
                 onClick={onClose}
-                className="rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
+                className="btn btn-primary px-4 py-2"
               >
                 Close
               </button>

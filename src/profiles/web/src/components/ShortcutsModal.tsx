@@ -30,16 +30,16 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-[450px] max-w-full rounded-2xl border border-frame-line glass-panel p-5">
+    <div className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="animate-modal-in w-[450px] max-w-full rounded-2xl border border-frame-line glass-panel p-5">
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink">
-            <Keyboard className="h-5 w-5 text-indigo-400" />
+            <Keyboard className="h-5 w-5 text-chip-indigo-text" />
             <span>Keyboard Shortcuts</span>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
+            className="focus-ring rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -52,7 +52,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
               className="flex items-center justify-between rounded-lg bg-elevated/50 px-3 py-2"
             >
               <span className="text-ink-secondary">{desc}</span>
-              <kbd className="rounded bg-app px-2 py-0.5 font-mono text-[11px] font-semibold text-indigo-300 border border-line">
+              <kbd className="rounded bg-app px-2 py-0.5 font-mono text-[11px] font-semibold text-chip-indigo-text border border-line">
                 {key}
               </kbd>
             </div>
@@ -62,7 +62,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
         <div className="mt-5 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+            className="btn btn-primary rounded-lg px-4 py-2 font-semibold"
           >
             Close
           </button>

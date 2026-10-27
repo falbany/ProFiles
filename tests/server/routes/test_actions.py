@@ -160,3 +160,54 @@ async def test_delete_endpoint_removes_file(test_state: ServerState, tmp_path: P
     assert response.status_code == 200
     assert response.json()["status"] == "success"
     assert not target.exists()
+
+
+@pytest.mark.anyio
+async def test_export_csv_saves_content_and_reports_path(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """The export endpoint delegates to core and reports the written path."""
+    expected = ActionResult(
+        status=ActionStatus.SUCCESS,
+        message=f"CSV exported to {tmp_path / 'out.csv'}",
+        path=tmp_path / "out.csv",
+    )
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.save_csv_export", return_value=expected
+    ) as save_mock:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/actions/export-csv",
+                json={"content": "name,version\n", "filename": "profiles-export-x.csv"},
+            )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "success",
+        "message": f"CSV exported to {tmp_path / 'out.csv'}",
+        "path": str(tmp_path / "out.csv"),
+    }
+    assert save_mock.call_args.args == ("name,version\n", "profiles-export-x.csv")
+
+
+@pytest.mark.anyio
+async def test_export_csv_reports_failure_without_raising(test_state: ServerState) -> None:
+    """A core-level failure is surfaced as a failed status, not an HTTP error."""
+    expected = ActionResult(
+        status=ActionStatus.FAILED,
+        message="Could not write CSV export:\n/x/out.csv (Permission denied)",
+        path=Path("/x/out.csv"),
+    )
+    app = create_app(test_state)
+
+    with patch("profiles.server.routes.actions.actions.save_csv_export", return_value=expected):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/actions/export-csv",
+                json={"content": "a,b\n", "filename": "out.csv"},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"

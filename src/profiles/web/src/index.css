@@ -42,6 +42,21 @@
   --chip-fuchsia-bg: rgb(192 38 211 / 0.25);
   --chip-fuchsia-border: rgb(232 121 249 / 0.5);
   --chip-fuchsia-text: #f5d0fe; /* fuchsia-200 */
+  --chip-sky-bg: rgb(14 165 233 / 0.25);
+  --chip-sky-border: rgb(56 189 248 / 0.5);
+  --chip-sky-text: #bae6fd; /* sky-200 */
+  --chip-amber-bg: rgb(245 158 11 / 0.25);
+  --chip-amber-border: rgb(251 191 36 / 0.5);
+  --chip-amber-text: #fde68a; /* amber-200 */
+  --status-success-bg: rgb(16 185 129 / 0.25);
+  --status-success-border: rgb(52 211 153 / 0.5);
+  --status-success-text: #a7f3d0; /* emerald-200 */
+  --status-warning-bg: rgb(245 158 11 / 0.25);
+  --status-warning-border: rgb(251 191 36 / 0.5);
+  --status-warning-text: #fde68a; /* amber-200 */
+  --status-danger-bg: rgb(244 63 94 / 0.25);
+  --status-danger-border: rgb(251 113 133 / 0.5);
+  --status-danger-text: #fecdd3; /* rose-200 */
 }
 
 [data-theme="light"] {
@@ -54,6 +69,21 @@
   --chip-fuchsia-bg: #fae8ff; /* fuchsia-100 */
   --chip-fuchsia-border: #f0abfc; /* fuchsia-300 */
   --chip-fuchsia-text: #86198f; /* fuchsia-800 */
+  --chip-sky-bg: #e0f2fe; /* sky-100 */
+  --chip-sky-border: #7dd3fc; /* sky-300 */
+  --chip-sky-text: #0369a1; /* sky-700 */
+  --chip-amber-bg: #fef3c7; /* amber-100 */
+  --chip-amber-border: #fcd34d; /* amber-300 */
+  --chip-amber-text: #92400e; /* amber-800 */
+  --status-success-bg: #d1fae5; /* emerald-100 */
+  --status-success-border: #6ee7b7; /* emerald-300 */
+  --status-success-text: #065f46; /* emerald-800 */
+  --status-warning-bg: #fef3c7; /* amber-100 */
+  --status-warning-border: #fcd34d; /* amber-300 */
+  --status-warning-text: #92400e; /* amber-800 */
+  --status-danger-bg: #ffe4e6; /* rose-100 */
+  --status-danger-border: #fda4af; /* rose-300 */
+  --status-danger-text: #9f1239; /* rose-800 */
 }
 
 [data-theme="light"] {
@@ -98,6 +128,21 @@
   --color-chip-fuchsia-bg: var(--chip-fuchsia-bg);
   --color-chip-fuchsia-border: var(--chip-fuchsia-border);
   --color-chip-fuchsia-text: var(--chip-fuchsia-text);
+  --color-chip-sky-bg: var(--chip-sky-bg);
+  --color-chip-sky-border: var(--chip-sky-border);
+  --color-chip-sky-text: var(--chip-sky-text);
+  --color-chip-amber-bg: var(--chip-amber-bg);
+  --color-chip-amber-border: var(--chip-amber-border);
+  --color-chip-amber-text: var(--chip-amber-text);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-success-text: var(--status-success-text);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-border: var(--status-danger-border);
+  --color-status-danger-text: var(--status-danger-text);
 }
 
 body {
@@ -127,6 +172,28 @@ body {
     backdrop-filter: blur(28px) saturate(180%);
     box-shadow: var(--app-panel-shadow), inset 0 1px 0 var(--app-glass-highlight);
   }
+
+  /* Shared button idioms — shape/state here, size and color at the call site. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply border-transparent bg-indigo-600 text-white hover:bg-indigo-500;
+  }
+
+  .btn-secondary {
+    @apply border-line bg-elevated text-ink-secondary hover:border-indigo-500 hover:text-ink;
+  }
+
+  .btn-chip {
+    @apply hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Standard keyboard focus indicator for non-button interactive elements. */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70;
+  }
 }
 
 /* Reduce motion for users who prefer minimal animation */
@@ -138,6 +205,54 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Quiet overlay entrances. The toast keyframe keeps the -translate-x/y-1/2
+   centering transform, which an animation on `transform` would otherwise
+   override mid-flight. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: -50% calc(-50% + 6px);
+  }
+  to {
+    opacity: 1;
+    translate: -50% -50%;
+  }
+}
+
+@layer utilities {
+  .animate-modal-in {
+    animation: modal-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .animate-overlay-in {
+    animation: overlay-in 150ms ease-out;
+  }
+
+  .animate-toast-in {
+    animation: toast-in 120ms ease-out;
   }
 }
 

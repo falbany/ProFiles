@@ -1,3 +1,4 @@
+import Tooltip from "./Tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   AlertTriangle,
@@ -32,11 +33,11 @@ const LEVEL_FILTERS: Array<{ value: LogLevel | null; label: string }> = [
 
 /** Level → icon + text colour. Accessible pairs on the dark surface. */
 const LEVEL_STYLE: Record<LogEntry["level"], { icon: typeof Info; className: string }> = {
-  DEBUG: { icon: Bug, className: "text-sky-400" },
-  INFO: { icon: Info, className: "text-emerald-400" },
-  WARNING: { icon: AlertTriangle, className: "text-amber-400" },
-  ERROR: { icon: XCircle, className: "text-rose-400" },
-  CRITICAL: { icon: XCircle, className: "text-rose-300" },
+  DEBUG: { icon: Bug, className: "text-chip-sky-text" },
+  INFO: { icon: Info, className: "text-status-success-text" },
+  WARNING: { icon: AlertTriangle, className: "text-status-warning-text" },
+  ERROR: { icon: XCircle, className: "text-status-danger-text" },
+  CRITICAL: { icon: XCircle, className: "text-status-danger-text" },
   UNKNOWN: { icon: FileText, className: "text-ink-faint" },
 };
 
@@ -181,7 +182,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
     >
       <div
@@ -190,14 +191,14 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
         aria-modal="true"
         aria-labelledby="log-viewer-title"
         onKeyDown={handleDialogKeyDown}
-        className="flex h-[min(84dvh,760px)] w-[clamp(560px,85vw,1500px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
+        className="animate-modal-in flex h-[min(84dvh,760px)] w-[clamp(560px,85vw,1500px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
-              <FileText className="h-5 w-5 text-indigo-400" aria-hidden="true" />
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-chip-indigo-bg">
+              <FileText className="h-5 w-5 text-chip-indigo-text" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <h2 id="log-viewer-title" className="text-base font-semibold text-ink">
@@ -228,14 +229,14 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            <Tooltip text={live ? "Pause live tail" : "Resume live tail"} block={false}>
             <button
               type="button"
               onClick={() => setLive((value) => !value)}
               aria-pressed={live}
-              title={live ? "Pause live tail" : "Resume live tail"}
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 live
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  ? "border-status-success-border bg-status-success-bg text-status-success-text"
                   : "border-line bg-elevated text-ink-muted hover:text-ink"
               }`}
             >
@@ -245,48 +246,57 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
               />
               {live ? "Live" : "Paused"}
             </button>
+            </Tooltip>
 
+            <Tooltip text="Refresh now" block={false}>
             <button
               type="button"
               onClick={() => void load()}
               disabled={loading}
-              title="Refresh now"
+
               className="rounded-lg border border-line bg-elevated p-2 text-ink-muted hover:text-ink disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
             </button>
+            </Tooltip>
 
+            <Tooltip text="Copy visible lines" block={false}>
             <button
               type="button"
               onClick={() => void handleCopy()}
               disabled={entries.length === 0}
-              title="Copy visible lines"
+
               className="rounded-lg border border-line bg-elevated p-2 text-ink-muted hover:text-ink disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <Copy className="h-4 w-4" aria-hidden="true" />
             </button>
+            </Tooltip>
 
+            <Tooltip text="Open log file in the default application" block={false}>
             <button
               type="button"
               onClick={() => {
                 onOpenExternally?.();
                 onClose();
               }}
-              title="Open log file in the default application"
+
               className="rounded-lg border border-line bg-elevated p-2 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <ExternalLink className="h-4 w-4" aria-hidden="true" />
             </button>
+            </Tooltip>
 
+            <Tooltip text="Close" block={false}>
             <button
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              title="Close"
+
               className="rounded-lg p-2 text-ink-muted hover:bg-hover-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -309,7 +319,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
           </div>
 
           {error && (
-            <p role="alert" className="px-3 py-6 text-center text-xs text-rose-400">
+            <p role="alert" className="px-3 py-6 text-center text-xs text-status-danger-text">
               {error}
             </p>
           )}
@@ -329,7 +339,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                 <li
                   key={`${index}-${entry.raw}`}
                   className={`group flex items-start gap-2 rounded px-2 py-1 ${
-                    isError ? "bg-rose-500/5" : "hover:bg-elevated/50"
+                    isError ? "bg-status-danger-bg/40" : "hover:bg-elevated/50"
                   }`}
                 >
                   <span className={style.className}>
@@ -391,7 +401,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                       }`}
                     >
                       {option.label}
-                      <span className={active ? "text-indigo-200" : "text-ink-faint"}>
+                      <span className={active ? "text-chip-indigo-text" : "text-ink-faint"}>
                         {count}
                       </span>
                     </button>
@@ -399,20 +409,22 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
                 })}
               </div>
 
+              <Tooltip text="Scroll to the newest entry" block={false}>
               <button
                 type="button"
                 onClick={() => setFollowTail(true)}
                 aria-pressed={followTail}
-                title="Scroll to the newest entry"
+
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                   followTail
-                    ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-300"
+                    ? "border-chip-indigo-border bg-chip-indigo-bg text-chip-indigo-text"
                     : "border-line bg-elevated text-ink-muted hover:text-ink"
                 }`}
               >
                 <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">Follow tail</span>
               </button>
+              </Tooltip>
             </div>
 
             <span className="hidden items-center gap-1.5 lg:flex">

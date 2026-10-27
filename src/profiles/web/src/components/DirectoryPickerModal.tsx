@@ -1,3 +1,4 @@
+import Tooltip from "./Tooltip";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Check, ChevronRight, Folder, FolderOpen, Home, Loader2, X } from "lucide-react";
@@ -108,7 +109,7 @@ export function DirectoryPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
     >
       <div
@@ -117,13 +118,13 @@ export function DirectoryPickerModal({
         aria-modal="true"
         aria-labelledby="directory-picker-title"
         onKeyDown={handleDialogKeyDown}
-        className="flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
+        className="animate-modal-in flex h-[min(84dvh,760px)] max-h-[calc(100dvh-1.5rem)] w-[min(94vw,960px)] min-h-0 flex-col overflow-hidden rounded-xl border border-frame-line glass-panel sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-500/10">
-              <FolderOpen className="h-5 w-5 text-indigo-400" />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-chip-indigo-bg">
+              <FolderOpen className="h-5 w-5 text-chip-indigo-text" />
             </span>
             <div className="min-w-0">
               <h2 id="directory-picker-title" className="text-sm font-semibold text-ink">
@@ -134,15 +135,17 @@ export function DirectoryPickerModal({
               </p>
             </div>
           </div>
+          <Tooltip text="Close" block={false}>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close directory picker"
-            title="Close"
+
             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <X className="h-4 w-4" />
           </button>
+          </Tooltip>
         </div>
 
         <div className="border-b border-line px-4 py-3 sm:px-5">
@@ -172,25 +175,29 @@ export function DirectoryPickerModal({
           >
             Go
           </button>
+          <Tooltip text="Home directory" block={false}>
           <button
             type="button"
             onClick={() => browse("")}
             aria-label="Home directory"
-            title="Home directory"
+
             className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Home className="h-4 w-4" />
           </button>
+          </Tooltip>
           {browseData?.parent_path && (
+            <Tooltip text="Parent directory" block={false}>
             <button
               type="button"
               onClick={() => browse(browseData.parent_path!)}
               aria-label="Parent directory"
-              title="Parent directory"
+
               className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <ChevronRight className="h-4 w-4 rotate-180" />
             </button>
+            </Tooltip>
           )}
           </div>
         </div>
@@ -198,12 +205,12 @@ export function DirectoryPickerModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 sm:px-3 sm:py-3" aria-busy={loading}>
           {loading ? (
             <div className="flex h-full items-center justify-center gap-2.5 text-sm text-ink-muted">
-              <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-chip-indigo-text" />
               <span role="status">Loading directories…</span>
             </div>
           ) : error ? (
             <div role="alert" className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
-              <p className="text-sm text-rose-400">{error}</p>
+              <p className="text-sm text-status-danger-text">{error}</p>
               <button
                 type="button"
                 onClick={() => browse(pathInput || browseData?.current_path || "")}
@@ -228,15 +235,15 @@ export function DirectoryPickerModal({
                       }}
                       className={`flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
                         selectedDir === item.path
-                          ? "bg-indigo-600/20 text-indigo-200"
+                          ? "bg-chip-indigo-bg text-chip-indigo-text"
                           : "text-ink-secondary hover:bg-elevated hover:text-ink"
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-2.5">
-                        <Folder className="h-5 w-5 shrink-0 text-indigo-400" />
+                        <Folder className="h-5 w-5 shrink-0 text-chip-indigo-text" />
                         <span className="truncate">{item.name}</span>
                       </span>
-                      {selectedDir === item.path && <Check className="h-4 w-4 shrink-0 text-indigo-400" />}
+                      {selectedDir === item.path && <Check className="h-4 w-4 shrink-0 text-chip-indigo-text" />}
                     </button>
                   </li>
                 ))}
@@ -271,7 +278,7 @@ export function DirectoryPickerModal({
               type="button"
               onClick={handleConfirm}
               disabled={!pathInput.trim()}
-              className="flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-primary min-h-10 rounded-lg px-4 text-sm font-semibold"
             >
               <FolderOpen className="h-4 w-4" />
               Select folder

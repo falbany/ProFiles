@@ -163,7 +163,7 @@ export function ContextMenu({
             items.at(-1)?.focus();
           }
         }}
-        className="fixed z-50 max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
+        className="animate-modal-in fixed z-50 max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
         style={menuCoordinates ?? { left: x, top: y, visibility: "hidden" }}
       >
         <div className="border-b border-line px-3 py-2 font-medium text-ink-muted truncate">
@@ -174,19 +174,19 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => { onLaunch(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Launch ${file.filename}`}
         >
-          <Play className="h-3.5 w-3.5 fill-current text-emerald-400" />
+          <Play className="h-3.5 w-3.5 fill-current text-status-success-text group-hover:text-white" />
           <span>Launch</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { setShowArgsModal(true); }}
-          className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Launch ${file.filename} with arguments`}
         >
-          <Play className="h-3.5 w-3.5 text-indigo-400" />
+          <Play className="h-3.5 w-3.5 text-chip-indigo-text group-hover:text-white" />
           <span>Launch with arguments...</span>
         </button>
 
@@ -196,37 +196,37 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => { onReveal(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Reveal ${file.filename} in file manager`}
         >
-          <Eye className="h-3.5 w-3.5 text-sky-400" />
+          <Eye className="h-3.5 w-3.5 text-chip-sky-text group-hover:text-white" />
           <span>Reveal in File Manager</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onOpenFolder(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Open folder containing ${file.filename}`}
         >
-          <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+          <FolderOpen className="h-3.5 w-3.5 text-chip-amber-text group-hover:text-white" />
           <span>Open Folder</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onOpenTerminal(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Open terminal in directory containing ${file.filename}`}
         >
-          <Terminal className="h-3.5 w-3.5 text-emerald-400" />
+          <Terminal className="h-3.5 w-3.5 text-status-success-text group-hover:text-white" />
           <span>Open Terminal in Directory</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onGenerateBarcode(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={'Generate QR Code'}
         >
-          <QrCode className="h-3.5 w-3.5 text-fuchsia-400" />
+          <QrCode className="h-3.5 w-3.5 text-chip-fuchsia-text group-hover:text-white" />
           <span>Generate QR Code</span>
         </button>
 
@@ -240,10 +240,10 @@ export function ContextMenu({
             onScanDirectory(dir);
             onClose();
           }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={'Scan to Directory'}
         >
-          <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
+          <FolderOpen className="h-3.5 w-3.5 text-chip-indigo-text group-hover:text-white" />
           <span>Scan to Directory</span>
         </button>
         <button
@@ -255,10 +255,10 @@ export function ContextMenu({
             }
             onClose();
           }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Filter view to folder ${file.filename} is in`}
         >
-          <FileCode className="h-3.5 w-3.5 text-indigo-400" />
+          <FileCode className="h-3.5 w-3.5 text-chip-indigo-text group-hover:text-white" />
           <span>Filter to Folder</span>
         </button>
         <button
@@ -268,10 +268,10 @@ export function ContextMenu({
             if (ext) onFilterExtension(ext);
             onClose();
           }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Filter view by extension ${getExt(file.filename)}`}
         >
-          <FileCode className="h-3.5 w-3.5 text-indigo-400" />
+          <FileCode className="h-3.5 w-3.5 text-chip-indigo-text group-hover:text-white" />
           <span>Filter by Extension</span>
         </button>
 
@@ -281,37 +281,37 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => { onCopyPath(file, false); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Copy full path of ${file.filename}`}
         >
-          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted group-hover:text-white" />
           <span className="truncate">Copy Full Path</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onCopyPath(file, true); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Copy path of ${file.filename} with forward slashes`}
         >
-          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted group-hover:text-white" />
           <span className="truncate">Copy Path (Forward Slashes)</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onCopyFilename(file, false); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Copy filename of ${file.filename}`}
         >
-          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted group-hover:text-white" />
           <span className="truncate">Copy Filename</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onCopyFilename(file, true); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Copy filename of ${file.filename} without extension`}
         >
-          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted group-hover:text-white" />
           <span className="truncate">Copy Filename (no ext)</span>
         </button>
         <button
@@ -322,19 +322,19 @@ export function ContextMenu({
             onClose();
             showToast?.('Copy Directory');
           }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={'Copy Directory'}
         >
-          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted group-hover:text-white" />
           <span className="truncate">Copy Directory</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onCopyUri(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Copy URI of ${file.filename}`}
         >
-          <Copy className="h-3.5 w-3.5 text-ink-muted" />
+          <Copy className="h-3.5 w-3.5 text-ink-muted group-hover:text-white" />
           <span className="truncate">Copy URI</span>
         </button>
 
@@ -344,37 +344,37 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => { onComputeHash(file, "md5"); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Compute MD5 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text group-hover:text-white" />
           <span>Compute MD5 Hash</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onComputeHash(file, "sha256"); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Compute SHA256 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text group-hover:text-white" />
           <span>Compute SHA256 Hash</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onVerifyHash(file, "md5"); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Verify MD5 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text group-hover:text-white" />
           <span>Verify MD5 Hash</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onVerifyHash(file, "sha256"); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Verify SHA256 hash of ${file.filename}`}
         >
-          <Hash className="h-3.5 w-3.5 text-purple-400" />
+          <Hash className="h-3.5 w-3.5 text-chip-purple-text group-hover:text-white" />
           <span>Verify SHA256 Hash</span>
         </button>
 
@@ -384,19 +384,19 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => { onProperties(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`View properties of ${file.filename}`}
         >
-          <Eye className="h-3.5 w-3.5 text-sky-400" />
+          <Eye className="h-3.5 w-3.5 text-chip-sky-text group-hover:text-white" />
           <span>Properties</span>
         </button>
         <button
           role="menuitem"
           onClick={() => { onClearFile(file); onClose(); }}
-          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform"
+          className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Remove ${file.filename} from list`}
         >
-          <Trash2 className="h-3.5 w-3.5 text-red-400" />
+          <Trash2 className="h-3.5 w-3.5 text-status-danger-text group-hover:text-white" />
           <span>Delete</span>
         </button>
       </div>
@@ -404,11 +404,11 @@ export function ContextMenu({
       {/* Launch with Args Modal */}
       {showArgsModal && (
         <dialog
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 rounded-xl"
+          className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 rounded-xl"
           aria-modal="true"
           aria-labelledby="args-modal-title"
         >
-          <div className="w-96 rounded-xl border border-frame-line glass-panel p-4">
+          <div className="animate-modal-in w-96 rounded-xl border border-frame-line glass-panel p-4">
             <h3 id="args-modal-title" className="mb-2 text-sm font-semibold text-ink">Launch with Arguments</h3>
             <p className="mb-3 text-xs text-ink-muted truncate">{file.filename}</p>
             <input
@@ -434,7 +434,7 @@ export function ContextMenu({
               </button>
               <button
                 onClick={handleArgsSubmit}
-                className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="btn btn-primary px-3 py-1.5"
                 aria-label={`Launch ${file.filename} with arguments`}
               >
                 Launch

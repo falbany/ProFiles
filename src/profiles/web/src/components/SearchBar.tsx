@@ -8,19 +8,19 @@ const OPERATOR_HELP = (
   <span className="flex flex-col gap-1 whitespace-nowrap text-left">
     <span className="font-semibold">Supported operators</span>
     <span>
-      <code className="font-mono text-indigo-300">a b</code> — AND (both terms)
+      <code className="font-mono text-chip-indigo-text">a b</code> — AND (both terms)
     </span>
     <span>
-      <code className="font-mono text-indigo-300">a OR b</code> — either term
+      <code className="font-mono text-chip-indigo-text">a OR b</code> — either term
     </span>
     <span>
-      <code className="font-mono text-indigo-300">-a</code> — NOT (exclude)
+      <code className="font-mono text-chip-indigo-text">-a</code> — NOT (exclude)
     </span>
     <span>
-      <code className="font-mono text-indigo-300">+a</code> — force include
+      <code className="font-mono text-chip-indigo-text">+a</code> — force include
     </span>
     <span>
-      <code className="font-mono text-indigo-300">"a b"</code> — exact phrase
+      <code className="font-mono text-chip-indigo-text">"a b"</code> — exact phrase
     </span>
   </span>
 );
@@ -114,7 +114,7 @@ export function SearchBar({
             type="checkbox"
             checked={recursive}
             onChange={(e) => onRecursiveChange(e.target.checked)}
-            className="rounded border-line text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-app"
+            className="rounded border-line text-chip-indigo-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-app"
           />
           <span>Recursive</span>
         </label>
@@ -124,7 +124,7 @@ export function SearchBar({
         <button
           onClick={onScan}
           disabled={scanning}
-          className="flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+          className="btn btn-primary shrink-0 px-3.5 py-1.5 font-semibold shadow-sm"
         >
           {scanning ? (
             <RefreshCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
@@ -142,7 +142,7 @@ export function SearchBar({
           onClick={onTimerClick}
           aria-label="Configure timer / auto-rescan"
           className={`flex shrink-0 items-center justify-center rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors ${
-            autoRescanActive ? "border-indigo-500 bg-indigo-600/20 text-indigo-400" : "border-line bg-elevated"
+            autoRescanActive ? "border-chip-indigo-border bg-chip-indigo-bg text-chip-indigo-text" : "border-line bg-elevated"
           }`}
         >
           <Timer className={`h-3.5 w-3.5 ${autoRescanActive ? "animate-pulse" : ""}`} />
@@ -156,7 +156,7 @@ export function SearchBar({
           onClick={onBarcodeToggle}
           aria-label={barcodeMode ? "Disable barcode mode" : "Enable barcode mode"}
           className={`flex shrink-0 items-center justify-center rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors ${
-            barcodeMode ? "border-indigo-500 bg-indigo-600/20 text-indigo-400" : "border-line bg-elevated"
+            barcodeMode ? "border-chip-indigo-border bg-chip-indigo-bg text-chip-indigo-text" : "border-line bg-elevated"
           }`}
         >
           <QrCode className={`h-3.5 w-3.5 ${barcodeMode ? "animate-pulse" : ""}`} />
@@ -170,7 +170,7 @@ export function SearchBar({
             type="button"
             onClick={onCameraBarcodeClick}
             aria-label="Scan barcode with camera"
-            className="rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+            className="btn btn-secondary shrink-0 p-1.5"
           >
             <Camera className="h-3.5 w-3.5" />
           </button>
