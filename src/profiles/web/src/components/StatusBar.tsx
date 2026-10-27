@@ -1,3 +1,4 @@
+import Tooltip from "./Tooltip";
 import { Activity, Download, FileCog, FileText, Globe, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
@@ -81,58 +82,67 @@ export function StatusBar({
         <span className="text-ink-faint">|</span>
 
         {/* Shortcuts Button */}
+        <Tooltip text="Keyboard shortcuts (?)" block={false}>
         <button
           onClick={onShowShortcuts}
-          title="Keyboard shortcuts (?)"
+
           className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
         >
           <Keyboard className="h-3 w-3" />
           <span>Shortcuts</span>
         </button>
+        </Tooltip>
 
         {/* Log Viewer Button */}
+        <Tooltip text="Open the application log viewer" block={false}>
         <button
           onClick={onOpenLog}
-          title="Open the application log viewer"
+
           className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
         >
           <FileText className="h-3 w-3" />
           <span>Logs</span>
         </button>
+        </Tooltip>
 
         <span className="text-ink-faint">|</span>
 
         {/* Reload Config Button */}
         {onReloadConfig && (
+          <Tooltip text="Reload configuration from disk" block={false}>
           <button
             onClick={onReloadConfig}
-            title="Reload configuration from disk"
+
             className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
           >
             <RefreshCw className="h-3 w-3" />
             <span>Reload</span>
           </button>
+          </Tooltip>
         )}
 
         {/* Export CSV Button (advanced feature relocated from the action bar) */}
         {onExport && (
+          <Tooltip text="Export the current results as CSV" block={false}>
           <button
             onClick={onExport}
             disabled={exportDisabled}
-            title="Export the current results as CSV"
+
             className="focus-ring flex items-center gap-1 rounded text-ink-muted hover:text-ink disabled:opacity-40 disabled:hover:text-ink-muted"
           >
             <Download className="h-3 w-3" />
             <span>Export CSV</span>
           </button>
+          </Tooltip>
         )}
 
         {/* Language Switcher */}
         {onLanguageChange && (
           <div className="flex items-center overflow-hidden rounded border border-line text-[10px]">
+            <Tooltip text="English" block={false}>
             <button
               onClick={() => onLanguageChange("en")}
-              title="English"
+
               className={`flex items-center gap-1 px-1.5 py-0.5 transition-colors ${
                 language === "en" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink focus-ring"
               }`}
@@ -140,49 +150,56 @@ export function StatusBar({
               <Globe className="h-3 w-3" />
               <span>EN</span>
             </button>
+            </Tooltip>
+            <Tooltip text="Français" block={false}>
             <button
               onClick={() => onLanguageChange("fr")}
-              title="Français"
+
               className={`flex items-center gap-1 px-1.5 py-0.5 transition-colors ${
                 language === "fr" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink focus-ring"
               }`}
             >
               <span>FR</span>
             </button>
+            </Tooltip>
           </div>
         )}
 
         {/* Load Config Button */}
         {onLoadConfig && (
+          <Tooltip text={activeConfigName ? `Load a different .profiles file (active: ${activeConfigName})` : "Load a .profiles file"} block={false}>
           <button
             onClick={onLoadConfig}
-            title={activeConfigName ? `Load a different .profiles file (active: ${activeConfigName})` : "Load a .profiles file"}
             className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
           >
             <FileCog className="h-3 w-3" />
             <span>Load config…</span>
           </button>
+          </Tooltip>
         )}
 
         {/* Config Button */}
+        <Tooltip text="Open configuration file" block={false}>
         <button
           onClick={onOpenConfig}
-          title="Open configuration file"
+
           className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
         >
           <Settings className="h-3 w-3" />
           <span>Config</span>
         </button>
+        </Tooltip>
 
         {/* Theme Toggle Button */}
+        <Tooltip text={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} block={false}>
         <button
           onClick={onToggleTheme}
-          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           className="focus-ring flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-muted hover:bg-elevated hover:text-status-warning-text"
         >
           {theme === "dark" ? <Sun className="h-3 w-3 text-status-warning-text" /> : <Moon className="h-3 w-3 text-chip-indigo-text" />}
           <span>{theme === "dark" ? "Light" : "Dark"}</span>
         </button>
+        </Tooltip>
       </div>
     </footer>
   );

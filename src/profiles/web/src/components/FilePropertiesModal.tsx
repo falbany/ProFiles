@@ -1,3 +1,4 @@
+import Tooltip from "./Tooltip";
 import { useEffect, useRef, useState } from "react";
 import { X, File, Folder, Calendar, Hash, Copy, Check, QrCode, Eye, Play, FolderOpen, Lock, EyeOff, Link2 } from "lucide-react";
 import type { FileMetadata, ScannedFileItem } from "../api/types";
@@ -180,10 +181,11 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           {displayValue ?? value}
         </span>
       </div>
+      <Tooltip text="Copy to clipboard" block={false}>
       <button
         onClick={() => copyToClipboard(value, fieldId)}
         className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-elevated"
-        title="Copy to clipboard"
+
         aria-label={`Copy ${label}`}
       >
         {copiedField === fieldId ? (
@@ -192,6 +194,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
           <Copy className="h-3.5 w-3.5 text-ink-muted" />
         )}
       </button>
+      </Tooltip>
     </div>
   );
 
@@ -207,10 +210,11 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   /** Full-width clickable path bar; copies the complete path on click. */
   const renderPathBar = () => (
+    <Tooltip text="Click to copy full path" block={false}>
     <button
       onClick={() => void copyToClipboard(metadata!.path, "path")}
       className="group mb-3 flex w-full items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-left hover:bg-surface"
-      title="Click to copy full path"
+
     >
       <Folder className="text-chip-amber-text h-4 w-4 flex-shrink-0" />
       <span className="text-ink min-w-0 flex-1 truncate font-mono text-xs">
@@ -222,6 +226,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
         <Copy className="text-ink-muted h-3.5 w-3.5" />
       )}
     </button>
+    </Tooltip>
   );
 
   if (!isOpen || !file) return null;
@@ -262,6 +267,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                   {file.filename}
                 </p>
               </div>
+              <Tooltip text="Copy all properties to clipboard" block={false}>
               <button
                 onClick={() => {
                   if (!metadata) return;
@@ -269,7 +275,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                 }}
                 disabled={!metadata || loading || error !== null}
                 className="btn-chip ml-2 flex items-center gap-1 rounded-md border border-chip-indigo-border bg-chip-indigo-bg p-1.5 text-chip-indigo-text"
-                title="Copy all properties to clipboard"
+
                 aria-label="Copy all properties"
               >
                 {copiedField === "all" ? (
@@ -278,13 +284,16 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                   <Copy className="h-4 w-4" />
                 )}
               </button>
+              </Tooltip>
+              <Tooltip text="Generate Barcode/QR Code" block={false}>
               <button
                 onClick={() => setShowQrModal(true)}
                 className="btn-chip rounded-md border border-chip-indigo-border bg-chip-indigo-bg p-1.5 text-chip-indigo-text"
-                title="Generate Barcode/QR Code"
+
               >
                 <QrCode className="h-4 w-4" />
               </button>
+              </Tooltip>
             </div>
             <button
               onClick={onClose}
@@ -431,30 +440,36 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
               {actionMessage ?? "Click the copy icon next to any field to copy its value"}
             </p>
             <div className="flex items-center gap-2 whitespace-nowrap">
+              <Tooltip text="Show file in Explorer" block={false}>
               <button
                 onClick={() => void runFileAction("reveal", "Revealed in Explorer", () => revealFile(activeFile.path))}
                 disabled={actionBusy !== null}
                 className={actionButtonClass("reveal")}
-                title="Show file in Explorer"
+
               >
                 <Eye className="h-3.5 w-3.5" /> Reveal
               </button>
+              </Tooltip>
+              <Tooltip text="Launch file with default association" block={false}>
               <button
                 onClick={() => void runFileAction("launch", "Launched", () => launchFile({ directory, filename: activeFile.filename }))}
                 disabled={actionBusy !== null}
                 className={actionButtonClass("launch")}
-                title="Launch file with default association"
+
               >
                 <Play className="h-3.5 w-3.5" /> Launch
               </button>
+              </Tooltip>
+              <Tooltip text="Open containing folder" block={false}>
               <button
                 onClick={() => void runFileAction("folder", "Opened folder", () => openFolder(activeFile.path))}
                 disabled={actionBusy !== null}
                 className={actionButtonClass("folder")}
-                title="Open containing folder"
+
               >
                 <FolderOpen className="h-3.5 w-3.5" /> Open Folder
               </button>
+              </Tooltip>
               <button
                 onClick={onClose}
                 className="btn btn-primary px-4 py-2"

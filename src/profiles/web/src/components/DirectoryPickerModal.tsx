@@ -1,3 +1,4 @@
+import Tooltip from "./Tooltip";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Check, ChevronRight, Folder, FolderOpen, Home, Loader2, X } from "lucide-react";
@@ -134,15 +135,17 @@ export function DirectoryPickerModal({
               </p>
             </div>
           </div>
+          <Tooltip text="Close" block={false}>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close directory picker"
-            title="Close"
+
             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <X className="h-4 w-4" />
           </button>
+          </Tooltip>
         </div>
 
         <div className="border-b border-line px-4 py-3 sm:px-5">
@@ -172,25 +175,29 @@ export function DirectoryPickerModal({
           >
             Go
           </button>
+          <Tooltip text="Home directory" block={false}>
           <button
             type="button"
             onClick={() => browse("")}
             aria-label="Home directory"
-            title="Home directory"
+
             className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Home className="h-4 w-4" />
           </button>
+          </Tooltip>
           {browseData?.parent_path && (
+            <Tooltip text="Parent directory" block={false}>
             <button
               type="button"
               onClick={() => browse(browseData.parent_path!)}
               aria-label="Parent directory"
-              title="Parent directory"
+
               className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <ChevronRight className="h-4 w-4 rotate-180" />
             </button>
+            </Tooltip>
           )}
           </div>
         </div>
