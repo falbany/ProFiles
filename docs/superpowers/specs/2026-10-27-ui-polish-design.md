@@ -102,7 +102,8 @@ spinner `border-indigo-600 border-t-transparent`, ContextMenu's solid
   `disabled:opacity-40 disabled:cursor-not-allowed` + the focus-ring styles
   below. Padding/size stay per-instance (footer buttons and tiny chips differ).
 - `.btn-primary` — `bg-indigo-600 text-white border-transparent hover:bg-indigo-500`.
-  Replaces the footer Close, BarcodeModal Save Image, and similar.
+  Replaces the footer Close, BarcodeModal Save Image, the ErrorBoundary retry
+  button, and similar.
 - `.btn-secondary` — `bg-elevated text-ink-secondary border-line
   hover:border-indigo-500 hover:text-ink`. Replaces the idiom currently
   re-spelled in `FileListTable.tsx:421`, `LoadConfigModal`, `DirectoryPickerModal`, etc.
@@ -133,7 +134,10 @@ Semantic mappings: success checks → `status-success`; warnings →
 `status-warning`; errors/error boxes → `status-danger`; log levels in
 `LogViewerModal` → INFO `status-success`, WARNING `status-warning`,
 ERROR/CRITICAL `status-danger`, DEBUG `ink-muted`; tinted action chips →
-existing chip tokens.
+existing chip tokens. Settled cases: translucent selection tints
+(`bg-indigo-600/20 text-indigo-200` in LoadConfigModal/DirectoryPickerModal,
+`bg-indigo-500/15` in WorkflowRunnerModal) → chip-indigo tokens; the camera
+reticle stays hard-coded (it sits over a theme-independent video feed).
 
 ### 4. Focus-visible completion (proposal 4)
 
@@ -161,7 +165,10 @@ Keyframes in `index.css`, exposed as utility classes:
 Theme cross-fade: `transition-colors` (~200 ms) on the main chrome containers
 (App root, HeaderBar, ActionBar, StatusBar/footer, table card, modal panels)
 so a theme toggle cross-fades instead of snapping. `backdrop-filter` isn't
-transitionable — acceptable; background/border/text colors are.
+transitionable — acceptable; background/border/text colors are. (ContextMenu
+anchors via left/top, so the transform-based entrance is safe; fallback if
+transform-animated `backdrop-filter` panels flicker in WKWebView: degrade the
+entrance to opacity-only, still within the "quiet" bar.)
 
 Easing/timeings are starting points; "quiet" is the acceptance bar: notice
 them only when they're gone. The global reduced-motion clamp covers a11y.
@@ -189,16 +196,26 @@ DOM. The builder enumerates the interactive subset.
 5. `refactor(web): unify tooltips on glass Tooltip` — interactive-title sweep.
 
 Each commit: `npm run build` + `npm test` green, `dist/` committed with the
-change. Full Python suite is untouched but run once at the end as sanity. One
-PR from the branch when the sequence lands.
+change; `.btn` class adoption rides the file touches of commits 2–3. Full
+Python suite is untouched but run once at the end as sanity. One PR from the
+branch when the sequence lands.
 
-## Manual Verification Checklist (per commit, both themes)
+## Verification Ownership (decided 2026-10-27)
+
+Per commit, the implementer runs the automated gates only: `npm run build`,
+`npm test`, `dist/` committed. No per-commit visual pass — these are mechanical
+class swaps.
+
+Visual gates happen **once, at the end of the sequence, performed by the human
+partner** (both-themes checklist below, including the pywebview desktop
+window). The implementer supplies a per-commit "what changed visually"
+summary and the checklist, and opens the PR only after that sign-off.
 
 - Open every modal; tab through it — focus always visible.
 - Toggle theme repeatedly — cross-fade, no layout shift, nothing unreadable.
 - Trigger toast (info + error), open context menu, hover keyboard-focus a
   migrated tooltip.
-- Run `pywebview` desktop window once at the end; repeat the checklist there.
+- Run the `pywebview` desktop window once; repeat the checklist there.
 
 ## What's Left to the Builder
 
