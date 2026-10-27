@@ -210,7 +210,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   /** Full-width clickable path bar; copies the complete path on click. */
   const renderPathBar = () => (
-    <Tooltip text="Click to copy full path" block={false}>
+    <Tooltip text="Click to copy full path">
     <button
       onClick={() => void copyToClipboard(metadata!.path, "path")}
       className="group mb-3 flex w-full items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-left hover:bg-surface"
@@ -236,7 +236,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   return (
     <div
-      animate-overlay-in className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="properties-modal-title"
@@ -247,7 +247,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
       {/* Modal content */}
       <div
         ref={dialogRef}
-        animate-modal-in className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
+        className="animate-modal-in relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl border border-frame-line glass-panel flex flex-col"
       >
         {/* Header */}
         <div className="flex-shrink-0 border-b border-line px-6 py-4">

@@ -144,7 +144,7 @@ export function StatusBar({
               onClick={() => onLanguageChange("en")}
 
               className={`flex items-center gap-1 px-1.5 py-0.5 transition-colors ${
-                language === "en" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink focus-ring"
+                language === "en" ? "bg-indigo-600 text-white focus-ring" : "text-ink-muted hover:text-ink focus-ring"
               }`}
             >
               <Globe className="h-3 w-3" />
@@ -156,7 +156,7 @@ export function StatusBar({
               onClick={() => onLanguageChange("fr")}
 
               className={`flex items-center gap-1 px-1.5 py-0.5 transition-colors ${
-                language === "fr" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink focus-ring"
+                language === "fr" ? "bg-indigo-600 text-white focus-ring" : "text-ink-muted hover:text-ink focus-ring"
               }`}
             >
               <span>FR</span>

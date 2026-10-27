@@ -139,12 +139,12 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
 
   return (
     <div
-      animate-overlay-in className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      className="animate-overlay-in fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
         ref={modalRef}
-        animate-modal-in className="w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
+        className="animate-modal-in w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
