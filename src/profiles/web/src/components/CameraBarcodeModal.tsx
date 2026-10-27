@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, X, AlertCircle } from "lucide-react";
 
+import { decodeBarcodeImage } from "../api/client";
+import {
+  DECODE_FORMATS,
+  captureVideoFrame,
+  startBarcodePoller,
+} from "../utils/barcodeDecoder";
+
 interface CameraBarcodeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,11 +24,16 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const pollerStopRef = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isSupported, setIsSupported] = useState<boolean>(true);
+  const [isServerFallback, setIsServerFallback] = useState<boolean>(false);
 
   // Stop video stream and cleanup
   const stopStream = () => {
+    if (pollerStopRef.current) {
+      pollerStopRef.current();
+      pollerStopRef.current = null;
+    }
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -46,10 +58,10 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
 
     async function startCamera() {
       setError(null);
+      setIsServerFallback(false);
 
       // Check for secure context first (browsers block mediaDevices on insecure origins)
       if (typeof window !== "undefined" && !window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-        setIsSupported(false);
         setError("Camera access requires HTTPS or localhost. If connecting across a local network IP (e.g. 192.168.x.x), modern browsers disable camera access for insecure HTTP.");
         return;
       }
@@ -61,7 +73,6 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
         (navigator as any).mozGetUserMedia?.bind(navigator);
 
       if (!getMedia) {
-        setIsSupported(false);
         setError(
           !window.isSecureContext
             ? "Camera access is blocked because the page is not served over a secure origin (HTTPS or localhost/127.0.0.1)."
@@ -86,8 +97,13 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
           await videoRef.current.play();
         }
 
-        // Start scanning frames
-        scanFrames();
+        // Start scanning frames: natively when BarcodeDetector exists,
+        // otherwise via the server decode route.
+        if ("BarcodeDetector" in window) {
+          scanFrames();
+        } else {
+          startServerScanning();
+        }
       } catch (err: any) {
         if (!active) return;
         console.error("Camera access error:", err);
@@ -107,12 +123,28 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
     };
   }, [isOpen]);
 
-  const scanFrames = () => {
-    if (!("BarcodeDetector" in window)) {
-      setIsSupported(false);
-      return;
-    }
+  const startServerScanning = () => {
+    setIsServerFallback(true);
+    pollerStopRef.current = startBarcodePoller(
+      {
+        capture: () => (videoRef.current ? captureVideoFrame(videoRef.current) : null),
+        decode: (imageBase64) =>
+          decodeBarcodeImage({ imageBase64, formats: [...DECODE_FORMATS] }),
+      },
+      {
+        onDetected: (content) => {
+          stopStream();
+          onDetected(content);
+        },
+        onError: (message) => {
+          stopStream();
+          setError(message);
+        },
+      },
+    );
+  };
 
+  const scanFrames = () => {
     const formats = [
       "qr_code",
       "code_128",
@@ -196,22 +228,6 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
               Close
             </button>
           </div>
-        ) : !isSupported ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="rounded-full bg-status-warning-bg p-3 text-status-warning-text mb-3">
-              <AlertCircle className="h-6 w-6" />
-            </div>
-            <h4 className="text-sm font-medium text-ink">Barcode Detector API Unavailable</h4>
-            <p className="mt-1 text-xs text-ink-muted max-w-sm">
-              Your browser does not natively support the Barcode Detection API. Consider using Chrome, Edge, Safari 17+, or Chrome for Android.
-            </p>
-            <button
-              onClick={onClose}
-              className="btn btn-secondary mt-6 px-4 py-2"
-            >
-              Close
-            </button>
-          </div>
         ) : (
           <div className="flex flex-col items-center">
             <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black border border-line flex items-center justify-center">
@@ -234,7 +250,9 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
             </div>
 
             <p className="mt-4 text-center text-xs text-ink-muted">
-              Hold a QR code or barcode steady in front of your camera to auto-scan.
+              {isServerFallback
+                ? "Hold a QR code or barcode steady in front of your camera — frames are decoded by the local ProFiles server (no native Barcode Detector in this browser)."
+                : "Hold a QR code or barcode steady in front of your camera to auto-scan."}
             </p>
           </div>
         )}
