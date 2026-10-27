@@ -48,6 +48,15 @@
   --chip-amber-bg: rgb(245 158 11 / 0.25);
   --chip-amber-border: rgb(251 191 36 / 0.5);
   --chip-amber-text: #fde68a; /* amber-200 */
+  --status-success-bg: rgb(16 185 129 / 0.25);
+  --status-success-border: rgb(52 211 153 / 0.5);
+  --status-success-text: #a7f3d0; /* emerald-200 */
+  --status-warning-bg: rgb(245 158 11 / 0.25);
+  --status-warning-border: rgb(251 191 36 / 0.5);
+  --status-warning-text: #fde68a; /* amber-200 */
+  --status-danger-bg: rgb(244 63 94 / 0.25);
+  --status-danger-border: rgb(251 113 133 / 0.5);
+  --status-danger-text: #fecdd3; /* rose-200 */
 }
 
 [data-theme="light"] {
@@ -66,6 +75,15 @@
   --chip-amber-bg: #fef3c7; /* amber-100 */
   --chip-amber-border: #fcd34d; /* amber-300 */
   --chip-amber-text: #92400e; /* amber-800 */
+  --status-success-bg: #d1fae5; /* emerald-100 */
+  --status-success-border: #6ee7b7; /* emerald-300 */
+  --status-success-text: #065f46; /* emerald-800 */
+  --status-warning-bg: #fef3c7; /* amber-100 */
+  --status-warning-border: #fcd34d; /* amber-300 */
+  --status-warning-text: #92400e; /* amber-800 */
+  --status-danger-bg: #ffe4e6; /* rose-100 */
+  --status-danger-border: #fda4af; /* rose-300 */
+  --status-danger-text: #9f1239; /* rose-800 */
 }
 
 [data-theme="light"] {
@@ -116,6 +134,15 @@
   --color-chip-amber-bg: var(--chip-amber-bg);
   --color-chip-amber-border: var(--chip-amber-border);
   --color-chip-amber-text: var(--chip-amber-text);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-success-text: var(--status-success-text);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-border: var(--status-danger-border);
+  --color-status-danger-text: var(--status-danger-text);
 }
 
 body {
@@ -144,6 +171,28 @@ body {
     -webkit-backdrop-filter: blur(28px) saturate(180%);
     backdrop-filter: blur(28px) saturate(180%);
     box-shadow: var(--app-panel-shadow), inset 0 1px 0 var(--app-glass-highlight);
+  }
+
+  /* Shared button idioms — shape/state here, size and color at the call site. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply border-transparent bg-indigo-600 text-white hover:bg-indigo-500;
+  }
+
+  .btn-secondary {
+    @apply border-line bg-elevated text-ink-secondary hover:border-indigo-500 hover:text-ink;
+  }
+
+  .btn-chip {
+    @apply hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Standard keyboard focus indicator for non-button interactive elements. */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70;
   }
 }
 
