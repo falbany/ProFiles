@@ -1,4 +1,5 @@
 import { cloneElement, useCallback, useEffect, useId, useRef, useState, type ReactElement } from "react";
+import { createPortal } from "react-dom";
 
 type Placement = "top" | "bottom" | "left" | "right";
 
@@ -16,18 +17,6 @@ type TooltipProps = {
 const VIEWPORT_MARGIN = 8;
 /** Gap between the trigger and the bubble. */
 const OFFSET = 8;
-
-/**
- * Anchor the bubble against the trigger. The final shift is applied through an
- * inline transform (see `Tooltip`) so it can be nudged clear of the window edges
- * without fighting Tailwind's translate utilities.
- */
-const PLACEMENT_CLASS: Record<Placement, string> = {
-  top: "bottom-full left-1/2 mb-2",
-  bottom: "top-full left-1/2 mt-2",
-  left: "right-full top-1/2 mr-2",
-  right: "left-full top-1/2 ml-2",
-};
 
 /** Opposite side used when the preferred one has no room in the window. */
 const FLIPPED: Record<Placement, Placement> = {
@@ -104,8 +93,17 @@ const Tooltip: React.FC<TooltipProps> = ({
   const [visible, setVisible] = useState(false);
   const [side, setSide] = useState<Placement>(placement);
   const [nudge, setNudge] = useState({ x: 0, y: 0 });
+  /** Viewport position of the resolved bubble box (see `measure`). */
+  const [bubblePos, setBubblePos] = useState({ left: -9999, top: -9999 });
 
-  /** Measure the bubble and resolve side + offset so it always stays on screen. */
+  /**
+   * Anchor the bubble in viewport coordinates. The bubble renders through a
+   * portal with `position: fixed`, so an `overflow-hidden` ancestor (modal
+   * panel, scroll container) can never clip it — the same freedom native
+   * titles have. The final shift is applied through an inline transform so
+   * it can nudge clear of the window edges without fighting Tailwind's
+   * translate utilities.
+   */
   const measure = useCallback(() => {
     const wrapper = wrapperRef.current;
     const bubble = bubbleRef.current;
@@ -122,8 +120,21 @@ const Tooltip: React.FC<TooltipProps> = ({
         ? FLIPPED[placement]
         : placement;
 
+    const nudgeFor = computeNudge(resolved, rect, size);
     setSide(resolved);
-    setNudge(computeNudge(resolved, rect, size));
+    setNudge(nudgeFor);
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    if (resolved === "top") {
+      setBubblePos({ left: centerX, top: rect.top - OFFSET - size.h });
+    } else if (resolved === "bottom") {
+      setBubblePos({ left: centerX, top: rect.bottom + OFFSET });
+    } else if (resolved === "left") {
+      setBubblePos({ left: rect.left - OFFSET - size.w, top: centerY });
+    } else {
+      setBubblePos({ left: rect.right + OFFSET, top: centerY });
+    }
   }, [placement]);
 
   // Hide whenever the layout scrolls or resizes so an anchor that has moved
@@ -165,28 +176,33 @@ const Tooltip: React.FC<TooltipProps> = ({
       onBlur={hide}
     >
       {cloneElement(children, triggerProps)}
-      <span
-        ref={bubbleRef}
-        id={tooltipId}
-        role="tooltip"
-        className={`pointer-events-none invisible absolute z-50 w-max max-w-[calc(100vw-16px)] rounded-md border border-line bg-elevated px-2 py-1 text-left text-[11px] leading-relaxed text-ink shadow-lg ${PLACEMENT_CLASS[side]} ${
-          visible ? "visible opacity-100" : "opacity-0"
-        }`}
-        style={{
-          transform:
-            side === "top" || side === "bottom"
-              ? `translateX(calc(-50% + ${nudge.x}px))`
-              : `translateY(${nudge.y}px)`,
-        }}
-      >
-        {text}
+      {createPortal(
         <span
-          className={`absolute h-2 w-2 rotate-45 border-line bg-elevated ${ARROW_CLASS[side]} ${ARROW_BORDERS[side]}`}
-          style={
-            side === "top" || side === "bottom" ? { left: `calc(50% - ${nudge.x}px)` } : undefined
-          }
-        />
-      </span>
+          ref={bubbleRef}
+          id={tooltipId}
+          role="tooltip"
+          className={`pointer-events-none invisible fixed z-[100] w-max max-w-[calc(100vw-16px)] rounded-md border border-line bg-elevated px-2 py-1 text-left text-[11px] leading-relaxed text-ink shadow-lg ${
+            visible ? "visible opacity-100" : "opacity-0"
+          }`}
+          style={{
+            left: bubblePos.left,
+            top: bubblePos.top,
+            transform:
+              side === "top" || side === "bottom"
+                ? `translateX(calc(-50% + ${nudge.x}px))`
+                : `translateY(calc(-50% + ${nudge.y}px))`,
+          }}
+        >
+          {text}
+          <span
+            className={`absolute h-2 w-2 rotate-45 border-line bg-elevated ${ARROW_CLASS[side]} ${ARROW_BORDERS[side]}`}
+            style={
+              side === "top" || side === "bottom" ? { left: `calc(50% - ${nudge.x}px)` } : undefined
+            }
+          />
+        </span>,
+        document.body,
+      )}
     </div>
   );
 };
