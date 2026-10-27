@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import logging
+from io import BytesIO
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from profiles.core import actions
@@ -213,8 +218,6 @@ async def generate_barcode(payload: BarcodeRequest):
 
     **Payload format (default):** ``dir=<parent>;filter=<filename>;scan=1``
     """
-    from io import BytesIO
-
     import qrcode
 
     if payload.content:
@@ -263,6 +266,88 @@ async def generate_barcode(payload: BarcodeRequest):
         "image": f"data:image/png;base64,{png_b64}",
         "content": qr_content,
     }
+
+
+class BarcodeDecodeRequest(BaseModel):
+    # Camera frames arrive as ~25-35 KB of base64 (400x400 JPEG); the cap is a
+    # generous abuse guard so oversized payloads fail fast instead of decoding.
+    image_base64: str = Field(max_length=2_000_000)
+    formats: list[str] | None = None
+
+
+def _decode_base64_image(image_base64: str) -> bytes:
+    """Decode a base64 image payload, tolerating an optional data-URL prefix."""
+    if image_base64.startswith("data:"):
+        _, _, image_base64 = image_base64.partition(",")
+    try:
+        return base64.b64decode(image_base64.strip(), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid base64 image payload: {exc}") from exc
+
+
+def _load_frame_image(image_bytes: bytes) -> Image.Image:
+    """Parse image bytes into an RGB PIL image for the decoder."""
+    try:
+        frame = Image.open(BytesIO(image_bytes))
+        frame.load()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Unsupported image payload: {exc}") from exc
+    return frame if frame.mode == "RGB" else frame.convert("RGB")
+
+
+def _resolve_decode_formats(zxingcpp: ModuleType, formats: list[str] | None) -> list[Any] | None:
+    """Map client format names (BarcodeDetector style) to zxing-cpp formats.
+
+    Unknown names are skipped; a request naming only unknown formats is
+    rejected so a client typo cannot silently broaden the scan to all formats.
+    """
+    if not formats:
+        return None
+    parsed = []
+    for name in formats:
+        try:
+            parsed.append(zxingcpp.barcode_format_from_str(name))
+        except ValueError:
+            logger.warning("Ignoring unknown barcode format requested: %s", name)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="No valid barcode formats in request")
+    return parsed
+
+
+@router.post("/barcode/decode")
+def decode_barcode(payload: BarcodeDecodeRequest) -> dict:
+    """Decode a barcode from a base64-encoded camera frame with zxing-cpp.
+
+    Fallback for webviews without the native BarcodeDetector API (desktop
+    WebView2 / WebKitGTK shells): the client POSTs downscaled JPEG frames of
+    its viewfinder at a modest rate; the server decodes them locally.
+
+    Returns ``{"decoded": null}`` when no barcode is visible in the frame.
+    """
+    try:
+        import zxingcpp
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Server-side barcode decoding is unavailable (zxing-cpp not installed)",
+        ) from exc
+
+    frame = _load_frame_image(_decode_base64_image(payload.image_base64))
+    formats = _resolve_decode_formats(zxingcpp, payload.formats)
+
+    try:
+        barcodes = (
+            zxingcpp.read_barcodes(frame, formats=formats)
+            if formats
+            else zxingcpp.read_barcodes(frame)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Barcode decoding failed: {exc}") from exc
+
+    if not barcodes:
+        return {"decoded": None}
+    barcode = barcodes[0]
+    return {"decoded": barcode.text, "format": str(barcode.format)}
 
 
 class ExportCsvRequest(BaseModel):

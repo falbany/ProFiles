@@ -15,6 +15,7 @@ dependencies = [
     "pywebview>=5.1.0",
     "sse-starlette>=2.1.0",
     "qrcode[pil]>=7.5.0",
+    "zxing-cpp>=2.2.0",
     "ruamel.yaml>=0.18.0",
 ]
 license = "MIT"
@@ -117,6 +118,7 @@ requires = [
     "pywebview>=5.1.0",
     "sse-starlette>=2.1.0",
     "qrcode[pil]>=7.5.0",
+    "zxing-cpp>=2.2.0",
     "ruamel.yaml>=0.18.0",
     "packaging/wheels/proxy_tools-0.1.0-py3-none-any.whl",
 ]
@@ -149,7 +151,7 @@ reports = false
 ignored-classes = ["profiles"]
 
 [tool.pylint.TYPECHECK]
-ignored-modules = ["profiles.utils.shortcut"]
+ignored-modules = ["profiles.utils.shortcut", "zxingcpp"]
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = "C0114,C0115,C0116,C0301,C0103,R0902,R0903,R0917,W0603,W0718,R0801,R1705,C0415,E0401,E0611"
