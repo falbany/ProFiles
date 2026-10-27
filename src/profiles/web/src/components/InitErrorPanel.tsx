@@ -29,7 +29,7 @@ export function InitErrorPanel({ message, onRetry, retrying = false }: InitError
           type="button"
           onClick={onRetry}
           disabled={retrying}
-          className="mx-auto mt-4 flex items-center gap-1.5 rounded-md bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+          className="btn btn-primary mx-auto mt-4 px-3.5 py-1.5 font-semibold shadow-sm"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${retrying ? "animate-spin motion-reduce:animate-none" : ""}`} />
           <span>{retrying ? "Retrying..." : "Retry"}</span>

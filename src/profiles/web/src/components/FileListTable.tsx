@@ -418,7 +418,7 @@ export function FileListTable({
 
   /** Shared styling for the empty-state action buttons (row-button idiom). */
   const emptyActionButtonClass =
-    "rounded-md border border-line bg-elevated px-3 py-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors";
+    "btn btn-secondary px-3 py-1.5";
 
   return (
     <div

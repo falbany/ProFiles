@@ -56,7 +56,7 @@ export function SingleMatchPromptModal({
           </div>
           <button
             onClick={onDismiss}
-            className="rounded p-1 text-ink-muted hover:bg-elevated hover:text-ink"
+            className="focus-ring rounded p-1 text-ink-muted hover:bg-elevated hover:text-ink"
             aria-label="Dismiss"
           >
             <X className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function SingleMatchPromptModal({
           <button
             type="button"
             onClick={onDismiss}
-            className="flex-1 rounded-md border border-line bg-elevated px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface"
+            className="btn btn-secondary flex-1 px-3 py-1.5"
           >
             Dismiss (Esc)
           </button>
@@ -92,7 +92,7 @@ export function SingleMatchPromptModal({
             ref={confirmButtonRef}
             type="button"
             onClick={onConfirm}
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 shadow-md"
+            className="btn btn-primary flex-1 px-3 py-1.5 shadow-md"
           >
             <Play className="h-3 w-3 fill-current" />
             Launch (Enter)

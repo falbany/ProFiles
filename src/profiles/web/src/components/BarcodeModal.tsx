@@ -149,7 +149,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-ink">QR Code Settings</h3>
-          <button onClick={onClose} className="rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink">
+          <button onClick={onClose} className="focus-ring rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -177,7 +177,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
                     <button 
                       onClick={copyImage}
-                      className="rounded-md bg-white/90 p-2 text-slate-900 shadow-sm hover:bg-white flex items-center gap-2 text-xs font-medium"
+                      className="focus-ring flex items-center gap-2 rounded-md bg-white/90 p-2 text-xs font-medium text-slate-900 shadow-sm hover:bg-white"
                     >
                       {copiedImage ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                       {copiedImage ? "Copied" : "Copy Image"}
@@ -189,7 +189,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
               <div className="flex w-full gap-2">
                 <button
                   onClick={copyText}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-md border border-line bg-elevated px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface"
+                  className="btn btn-secondary flex-1 px-3 py-1.5"
                 >
                   {copied ? <Check className="h-3.5 w-3.5 text-status-success-text" /> : <Copy className="h-3.5 w-3.5" />}
                   Copy Content
@@ -197,7 +197,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                 <button
                   onClick={handleSave}
                   disabled={!barcodeImage}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                  className="btn btn-primary flex-1 px-3 py-1.5"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Save Image
@@ -212,14 +212,14 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   {md5 && !pairs.some(p => p.key === "md5") && (
                     <button
                       onClick={addMd5}
-                      className="flex items-center gap-1 rounded bg-chip-purple-bg px-2 py-0.5 text-[10px] font-bold text-chip-purple-text border border-chip-purple-border hover:brightness-95"
+                      className="btn-chip flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold text-chip-purple-text border border-chip-purple-border"
                     >
                       <Hash className="h-3 w-3" /> Inc. MD5
                     </button>
                   )}
                   <button
                     onClick={addPair}
-                    className="flex items-center gap-1 rounded bg-chip-indigo-bg px-2 py-0.5 text-[10px] font-bold text-chip-indigo-text border border-chip-indigo-border hover:brightness-95"
+                    className="btn-chip flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold text-chip-indigo-text border border-chip-indigo-border"
                   >
                     <Plus className="h-3 w-3" /> Add Field
                   </button>

@@ -84,7 +84,7 @@ export function StatusBar({
         <button
           onClick={onShowShortcuts}
           title="Keyboard shortcuts (?)"
-          className="flex items-center gap-1 text-ink-muted hover:text-ink"
+          className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
         >
           <Keyboard className="h-3 w-3" />
           <span>Shortcuts</span>
@@ -94,7 +94,7 @@ export function StatusBar({
         <button
           onClick={onOpenLog}
           title="Open the application log viewer"
-          className="flex items-center gap-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
         >
           <FileText className="h-3 w-3" />
           <span>Logs</span>
@@ -107,7 +107,7 @@ export function StatusBar({
           <button
             onClick={onReloadConfig}
             title="Reload configuration from disk"
-            className="flex items-center gap-1 text-ink-muted hover:text-ink"
+            className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
           >
             <RefreshCw className="h-3 w-3" />
             <span>Reload</span>
@@ -120,7 +120,7 @@ export function StatusBar({
             onClick={onExport}
             disabled={exportDisabled}
             title="Export the current results as CSV"
-            className="flex items-center gap-1 rounded text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40 disabled:hover:text-ink-muted"
+            className="focus-ring flex items-center gap-1 rounded text-ink-muted hover:text-ink disabled:opacity-40 disabled:hover:text-ink-muted"
           >
             <Download className="h-3 w-3" />
             <span>Export CSV</span>
@@ -134,7 +134,7 @@ export function StatusBar({
               onClick={() => onLanguageChange("en")}
               title="English"
               className={`flex items-center gap-1 px-1.5 py-0.5 transition-colors ${
-                language === "en" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink"
+                language === "en" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink focus-ring"
               }`}
             >
               <Globe className="h-3 w-3" />
@@ -144,7 +144,7 @@ export function StatusBar({
               onClick={() => onLanguageChange("fr")}
               title="Français"
               className={`flex items-center gap-1 px-1.5 py-0.5 transition-colors ${
-                language === "fr" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink"
+                language === "fr" ? "bg-indigo-600 text-white" : "text-ink-muted hover:text-ink focus-ring"
               }`}
             >
               <span>FR</span>
@@ -157,7 +157,7 @@ export function StatusBar({
           <button
             onClick={onLoadConfig}
             title={activeConfigName ? `Load a different .profiles file (active: ${activeConfigName})` : "Load a .profiles file"}
-            className="flex items-center gap-1 text-ink-muted hover:text-ink"
+            className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
           >
             <FileCog className="h-3 w-3" />
             <span>Load config…</span>
@@ -168,7 +168,7 @@ export function StatusBar({
         <button
           onClick={onOpenConfig}
           title="Open configuration file"
-          className="flex items-center gap-1 text-ink-muted hover:text-ink"
+          className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
         >
           <Settings className="h-3 w-3" />
           <span>Config</span>
@@ -178,7 +178,7 @@ export function StatusBar({
         <button
           onClick={onToggleTheme}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-muted hover:bg-elevated hover:text-status-warning-text"
+          className="focus-ring flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-muted hover:bg-elevated hover:text-status-warning-text"
         >
           {theme === "dark" ? <Sun className="h-3 w-3 text-status-warning-text" /> : <Moon className="h-3 w-3 text-chip-indigo-text" />}
           <span>{theme === "dark" ? "Light" : "Dark"}</span>

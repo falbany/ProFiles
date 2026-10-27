@@ -176,7 +176,7 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink transition-colors"
+            className="focus-ring rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink transition-colors"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -191,7 +191,7 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
             <p className="text-xs text-status-danger-text max-w-xs">{error}</p>
             <button
               onClick={onClose}
-              className="mt-6 rounded-md bg-elevated px-4 py-2 text-xs font-medium text-ink hover:bg-surface border border-line"
+              className="btn btn-secondary mt-6 px-4 py-2"
             >
               Close
             </button>
@@ -207,7 +207,7 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
             </p>
             <button
               onClick={onClose}
-              className="mt-6 rounded-md bg-elevated px-4 py-2 text-xs font-medium text-ink hover:bg-surface border border-line"
+              className="btn btn-secondary mt-6 px-4 py-2"
             >
               Close
             </button>

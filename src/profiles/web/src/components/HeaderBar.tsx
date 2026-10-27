@@ -83,7 +83,7 @@ export function HeaderBar({
               type="button"
               onClick={onOpenActiveDirectory}
               aria-label="Open active directory"
-              className="flex shrink-0 items-center justify-center rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+              className="btn btn-secondary shrink-0 p-1.5"
             >
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
@@ -97,7 +97,7 @@ export function HeaderBar({
               type="button"
               onClick={onGoToParentDirectory}
               aria-label="Go to parent directory"
-              className="flex shrink-0 items-center justify-center rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+              className="btn btn-secondary shrink-0 p-1.5"
             >
               <span className="font-mono text-sm leading-none font-bold">&lt;</span>
             </button>
@@ -111,7 +111,7 @@ export function HeaderBar({
               type="button"
               onClick={onBrowseDirectory}
               aria-label="Browse directory"
-              className="flex shrink-0 items-center justify-center rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+              className="btn btn-secondary shrink-0 p-1.5"
             >
               <FolderOpen className="h-3.5 w-3.5" />
             </button>
@@ -125,7 +125,7 @@ export function HeaderBar({
               type="button"
               onClick={() => onOpenTerminal(activeDirectory)}
               aria-label="Open directory in terminal"
-              className="flex shrink-0 items-center justify-center rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+              className="btn btn-secondary shrink-0 p-1.5"
             >
               <Terminal className="h-3.5 w-3.5" />
             </button>
@@ -139,7 +139,7 @@ export function HeaderBar({
               type="button"
               onClick={onGoToHomeDirectory}
               aria-label="Go to home directory"
-              className="flex shrink-0 items-center justify-center rounded-md border border-line bg-elevated p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors"
+              className="btn btn-secondary shrink-0 p-1.5"
             >
               <Home className="h-3.5 w-3.5" />
             </button>

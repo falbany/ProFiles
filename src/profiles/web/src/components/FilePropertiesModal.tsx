@@ -157,13 +157,13 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   const actionButtonClass = (actionId: string) => {
     const styles: Record<string, string> = {
-      reveal: "bg-chip-sky-bg text-chip-sky-text hover:brightness-95 border-chip-sky-border focus-visible:ring-sky-400/60",
-      launch: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500/30 font-semibold focus-visible:ring-emerald-400",
-      folder: "bg-chip-amber-bg text-chip-amber-text hover:brightness-95 border-chip-amber-border focus-visible:ring-amber-400/60",
+      reveal: "bg-chip-sky-bg text-chip-sky-text border-chip-sky-border",
+      launch: "border-emerald-500/30 bg-emerald-600 font-semibold text-white hover:bg-emerald-500",
+      folder: "bg-chip-amber-bg text-chip-amber-text border-chip-amber-border",
     };
-    return `inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs ${
-      styles[actionId] ?? "bg-chip-indigo-bg text-chip-indigo-text hover:brightness-95 border-chip-indigo-border"
-    } disabled:opacity-40 disabled:cursor-not-allowed`;
+    return `btn-chip rounded-md border px-3 py-2 text-xs ${
+      styles[actionId] ?? "bg-chip-indigo-bg text-chip-indigo-text border-chip-indigo-border"
+    }`;
   };
 
   const renderPropertyRow = (
@@ -268,7 +268,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
                   void copyToClipboard(buildPropertiesSummary(metadata), "all");
                 }}
                 disabled={!metadata || loading || error !== null}
-                className="ml-2 flex items-center gap-1 rounded-md bg-chip-indigo-bg p-1.5 text-chip-indigo-text hover:brightness-95 border border-chip-indigo-border disabled:opacity-50"
+                className="btn-chip ml-2 flex items-center gap-1 rounded-md border border-chip-indigo-border bg-chip-indigo-bg p-1.5 text-chip-indigo-text"
                 title="Copy all properties to clipboard"
                 aria-label="Copy all properties"
               >
@@ -280,7 +280,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
               </button>
               <button
                 onClick={() => setShowQrModal(true)}
-                className="rounded-md bg-chip-indigo-bg p-1.5 text-chip-indigo-text hover:brightness-95 border border-chip-indigo-border"
+                className="btn-chip rounded-md border border-chip-indigo-border bg-chip-indigo-bg p-1.5 text-chip-indigo-text"
                 title="Generate Barcode/QR Code"
               >
                 <QrCode className="h-4 w-4" />
@@ -288,7 +288,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
             </div>
             <button
               onClick={onClose}
-              className="rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink flex-shrink-0"
+              className="focus-ring rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink flex-shrink-0"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -457,7 +457,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
               </button>
               <button
                 onClick={onClose}
-                className="rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500"
+                className="btn btn-primary px-4 py-2"
               >
                 Close
               </button>

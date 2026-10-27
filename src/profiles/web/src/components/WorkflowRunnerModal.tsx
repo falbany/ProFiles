@@ -362,7 +362,7 @@ export function WorkflowRunnerModal({
                         <button
                           type="button"
                           onClick={onClose}
-                          className="rounded-lg bg-indigo-600 px-8 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-all scale-105 active:scale-95"
+                          className="btn btn-primary px-8 py-2.5 font-bold shadow-lg"
                         >
                           Close Engine Runner
                         </button>
@@ -416,7 +416,7 @@ export function WorkflowRunnerModal({
                     type="button"
                     disabled={loading}
                     onClick={() => handleRespond("ack")}
-                    className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-none"
+                    className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                   >
                     Continue Workflow
                   </button>
@@ -428,7 +428,7 @@ export function WorkflowRunnerModal({
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("no")}
-                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-status-danger-text hover:bg-status-danger-bg"
+                      className="btn rounded-md border-line bg-surface px-4 py-2 text-status-danger-text hover:bg-status-danger-bg"
                     >
                       Abort Launch
                     </button>
@@ -436,7 +436,7 @@ export function WorkflowRunnerModal({
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("skip")}
-                      className="rounded-md border border-line bg-surface px-4 py-2 text-xs font-medium text-status-warning-text hover:bg-status-warning-bg"
+                      className="btn rounded-md border-line bg-surface px-4 py-2 text-status-warning-text hover:bg-status-warning-bg"
                     >
                       Skip Step
                     </button>
@@ -444,7 +444,7 @@ export function WorkflowRunnerModal({
                       type="button"
                       disabled={loading}
                       onClick={() => handleRespond("yes")}
-                      className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
+                      className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                     >
                       Execute Step
                     </button>
@@ -455,7 +455,7 @@ export function WorkflowRunnerModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-md bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
+                    className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                   >
                     Close Runner
                   </button>

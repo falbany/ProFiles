@@ -59,7 +59,7 @@ export function TimerModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
+            className="focus-ring rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -112,7 +112,7 @@ export function TimerModal({
             />
             <button
               type="submit"
-              className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="btn btn-primary rounded-lg px-3 py-1 font-semibold"
             >
               Set
             </button>
@@ -123,7 +123,7 @@ export function TimerModal({
         {isActive && (
           <button
             onClick={handleStop}
-            className="mb-4 w-full rounded-lg border border-line bg-elevated/50 px-3 py-2 text-xs font-medium text-status-warning-text hover:border-status-warning-border hover:bg-status-warning-bg/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            className="btn w-full rounded-lg border-line bg-elevated/50 px-3 py-2 text-status-warning-text hover:border-status-warning-border hover:bg-status-warning-bg/40"
           >
             Stop Auto-Rescan
           </button>

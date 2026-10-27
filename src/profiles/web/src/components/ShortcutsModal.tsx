@@ -39,7 +39,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
+            className="focus-ring rounded-lg p-1 text-ink-muted hover:bg-elevated hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -62,7 +62,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
         <div className="mt-5 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+            className="btn btn-primary rounded-lg px-4 py-2 font-semibold"
           >
             Close
           </button>
