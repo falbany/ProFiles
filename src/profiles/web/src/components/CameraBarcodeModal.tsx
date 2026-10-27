@@ -20,6 +20,9 @@ declare global {
   }
 }
 
+/** How long to wait for getUserMedia before showing an error. */
+const CAMERA_START_TIMEOUT_MS = 8000;
+
 export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcodeModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -82,8 +85,22 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
       }
 
       try {
-        const stream: MediaStream = await getMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        // Some embedded webviews park getUserMedia forever when camera capture
+        // is unavailable (e.g. macOS bare-Python runs without an app bundle);
+        // time out so the modal surfaces an error instead of a black frame.
+        let timeoutId: number | undefined;
+        const stream: MediaStream = await Promise.race([
+          getMedia({
+            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          }),
+          new Promise<never>((_, reject) => {
+            timeoutId = window.setTimeout(
+              () => reject(new DOMException("Camera did not start in time", "TimeoutError")),
+              CAMERA_START_TIMEOUT_MS,
+            );
+          }),
+        ]).finally(() => {
+          if (timeoutId !== undefined) window.clearTimeout(timeoutId);
         });
 
         if (!active) {
@@ -110,7 +127,9 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
         setError(
           err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
             ? "Camera permission denied. Please allow camera access in your browser settings."
-            : `Could not access camera: ${err.message || "Unknown error"}`
+            : err.name === "TimeoutError"
+              ? "The camera did not start in time. On macOS, camera capture needs the packaged desktop app — a bare Python process cannot access the camera. Alternatively, open ProFiles in Chrome, Edge or Safari."
+              : `Could not access camera: ${err.message || "Unknown error"}`
         );
       }
     }
