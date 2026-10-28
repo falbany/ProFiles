@@ -54,7 +54,7 @@ async def test_scan_and_get_results(test_state: ServerState) -> None:
 async def test_scan_results_contain_hook_metadata(test_state: ServerState) -> None:
     from profiles.core.config.models import WorkflowStep
 
-    test_state.config.launch_hooks = {"*.mttl": (WorkflowStep(action="run", content="echo hook"),)}
+    test_state.config.launch_hooks = {"*.mttl": (WorkflowStep(action="run", command="echo hook"),)}
     app = create_app(test_state)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post(

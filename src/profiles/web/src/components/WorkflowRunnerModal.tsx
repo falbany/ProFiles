@@ -267,11 +267,11 @@ export function WorkflowRunnerModal({
                         </span>
                         <span className="text-[10px] font-mono text-ink-faint">#{st.index}</span>
                       </div>
-                      <p className="truncate font-mono text-[11px] text-ink-secondary mt-0.5" title={st.content}>
-                        {st.content}
+                      <p className="truncate font-mono text-[11px] text-ink-secondary mt-0.5" title={st.command}>
+                        {st.command}
                       </p>
-                      {st.message && (
-                        <p className="mt-1 text-[10px] text-ink-faint italic">{st.message}</p>
+                      {st.note && (
+                        <p className="mt-1 text-[10px] text-ink-faint italic">{st.note}</p>
                       )}
                     </div>
                   </button>
@@ -327,8 +327,23 @@ export function WorkflowRunnerModal({
                     </div>
                   )}
 
+                  {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notice" && session.notice_message && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notice:</p>
+                      <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
+                        {renderMarkdown(session.notice_message)}
+                      </div>
+                      <p className="text-[11px] text-ink-faint">The command will run when you continue.</p>
+                    </div>
+                  )}
+
                   {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_ask" && session.ask_prompt && (
                     <div className="space-y-2">
+                      {session.ask_message && (
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
+                          {renderMarkdown(session.ask_message)}
+                        </div>
+                      )}
                       <p className="text-[11px] font-medium uppercase tracking-wider text-status-warning-text">Confirmation Prompt:</p>
                       <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-4 text-sm font-medium text-ink">
                         {session.ask_prompt}
@@ -371,25 +386,34 @@ export function WorkflowRunnerModal({
                   )}
 
                   {/* Priority 3: General content display for inspected or non-prompting current step */}
-                  {!(isFinished && selectedStepIndex === null) && 
-                   !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask")) && (
+                  {!(isFinished && selectedStepIndex === null) &&
+                   !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Step Content:</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
                         <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
-                          {activeStep?.content ? renderMarkdown(activeStep.content) : "Waiting..."}
+                          {activeStep?.command ? activeStep.command : "Waiting..."}
                         </div>
                       </div>
-                      
+
+                      {activeStep?.message && (
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Message:</p>
+                          <div className="rounded-lg border border-line bg-surface-strong p-4 text-xs text-ink leading-relaxed space-y-2">
+                            {renderMarkdown(activeStep.message)}
+                          </div>
+                        </div>
+                      )}
+
                       {activeStep?.ask && (
                         <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-text">
                           <span className="font-semibold">Workflow Guard:</span> {activeStep.ask}
                         </div>
                       )}
-                      
-                      {activeStep?.message && (
+
+                      {activeStep?.note && (
                         <div className="rounded-lg border border-line bg-surface-strong p-3 text-xs text-ink-muted italic">
-                          <span className="font-semibold text-ink-secondary not-italic uppercase text-[10px]">Log:</span> {activeStep.message}
+                          <span className="font-semibold text-ink-secondary not-italic uppercase text-[10px]">Log:</span> {activeStep.note}
                         </div>
                       )}
                     </div>
@@ -405,12 +429,25 @@ export function WorkflowRunnerModal({
                   ? "Action required to proceed:"
                   : session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
                   ? "Acknowledge message to proceed:"
+                  : session?.status === "waiting_notice" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
+                  ? "Continue to run the command:"
                   : isFinished
                   ? "Session terminated."
                   : "Step in progress..."}
               </div>
 
               <div className="flex items-center gap-2">
+                {session?.status === "waiting_notice" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleRespond("ack")}
+                    className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
+                  >
+                    Run Command
+                  </button>
+                )}
+
                 {session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <button
                     type="button"

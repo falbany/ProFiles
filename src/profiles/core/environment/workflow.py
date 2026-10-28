@@ -24,7 +24,7 @@ class WorkflowOutcome(Enum):
     ABORT = "abort"  # Workflow aborted by user or error
 
 
-AskCallback = Callable[[str], Literal["yes", "skip", "no"]]
+AskCallback = Callable[[str, str | None], Literal["yes", "skip", "no"]]
 NotifyCallback = Callable[[str, bool], None]
 
 FailMode = Literal["warn", "abort", "skip"]
@@ -46,6 +46,7 @@ def _emit_workflow_step(
 def _ask_step_input(
     ask_content: str,
     *,
+    pre_message: str | None,
     user_choice: Literal["yes", "skip", "no"] | None,
     ask_callback: AskCallback | None,
     headless: bool,
@@ -53,13 +54,14 @@ def _ask_step_input(
     """Resolve the user's choice for an ``ask`` guard.
 
     Priority: explicit *user_choice* (test helper) → *ask_callback* →
-    the 3-way dialog (or its headless prompt).
+    the 3-way dialog (or its headless prompt). *pre_message* is the
+    step's rendered ``message`` shown above the question when present.
     """
     if user_choice is not None:
         return user_choice
     if ask_callback is not None:
-        return ask_callback(ask_content)
-    return confirm_dialog_3way(ask_content, headless=headless)
+        return ask_callback(ask_content, pre_message)
+    return confirm_dialog_3way(ask_content, headless=headless, pre_message=pre_message)
 
 
 # pylint: disable-next=too-many-arguments
@@ -86,7 +88,10 @@ def run_workflow(
         file_path: File path being operated on (for variable substitution).
         headless: If True, run without GUI dialogues.
         ask_callback: Custom callback for 'ask' guards (useful for tests/mocking).
-        notify_callback: Custom callback for 'notify' steps.
+            Called with ``(ask_text, pre_message)`` where *pre_message* is the
+            step's rendered ``message`` (None when unset).
+        notify_callback: Custom callback for 'notify' steps and non-blocking
+            notices from command steps.
         user_choice: Optional override for 'ask' prompt choice (testing helper).
         timeout: Maximum seconds to wait for each blocking step. None = no limit.
             Overridden by a step's own ``timeout`` field when set.
@@ -120,15 +125,19 @@ def run_workflow(
 
         # Handle 'ask' confirmation guard if present
         if step.ask:
-            ask_content = _substitute_variables(
-                step.ask,
-                file_path,
-                action_content=step.content,
-                username=username,
-                hostname=hostname,
+            command_sub, message_sub = _resolve_step_texts(
+                step, file_path, username=username, hostname=hostname
             )
             choice = _ask_step_input(
-                ask_content,
+                _substitute_variables(
+                    step.ask,
+                    file_path,
+                    command=command_sub,
+                    message=message_sub,
+                    username=username,
+                    hostname=hostname,
+                ),
+                pre_message=message_sub if step.message else None,
                 user_choice=user_choice,
                 ask_callback=ask_callback,
                 headless=headless,
@@ -167,7 +176,9 @@ def run_workflow(
         # Resolve effective timeout: per-step overrides global
         effective_timeout = step.timeout if step.timeout is not None else timeout
 
-        # Execute the action for this step
+        # Execute the action for this step. When an ``ask`` guard already
+        # displayed the step's message in the composed dialog, do not show
+        # it again as a notice.
         outcome = _execute_step(
             step,
             file_path,
@@ -179,6 +190,7 @@ def run_workflow(
             hostname=hostname,
             failure_context=failure_context,
             logger=logger,
+            show_notice=not bool(step.ask and step.message),
         )
         if outcome is not None:
             return outcome
@@ -190,7 +202,7 @@ def _resolve_failure(
     on_failure: Literal["stop", "warn", "continue"],
     failmode: FailMode,
     *,
-    step_content: str | None = None,
+    step_command: str | None = None,
     failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
 ) -> WorkflowOutcome | None:
@@ -206,14 +218,14 @@ def _resolve_failure(
     """
     if on_failure == "stop":
         if logger is not None:
-            events.workflow_aborted(logger, reason=f"on_failure=stop: {step_content}")
-        if failure_context is not None and step_content is not None:
-            failure_context.append(f"Step failed (on_failure=stop): {step_content}")
+            events.workflow_aborted(logger, reason=f"on_failure=stop: {step_command}")
+        if failure_context is not None and step_command is not None:
+            failure_context.append(f"Step failed (on_failure=stop): {step_command}")
         return WorkflowOutcome.ABORT
     if on_failure == "warn":
         if logger is not None:
             events.workflow_step_failed(
-                logger, failmode="on_failure=warn", action=step_content or ""
+                logger, failmode="on_failure=warn", action=step_command or ""
             )
         return None
     if on_failure == "continue":
@@ -221,18 +233,31 @@ def _resolve_failure(
     # Unknown on_failure → fall back to global failmode
     if failmode == "abort":
         if logger is not None:
-            events.workflow_aborted(logger, reason=f"failmode=abort: {step_content}")
-        if failure_context is not None and step_content is not None:
-            failure_context.append(f"Step failed (failmode=abort): {step_content}")
+            events.workflow_aborted(logger, reason=f"failmode=abort: {step_command}")
+        if failure_context is not None and step_command is not None:
+            failure_context.append(f"Step failed (failmode=abort): {step_command}")
         return WorkflowOutcome.ABORT
     if failmode == "skip":
         if logger is not None:
-            events.workflow_step_failed(logger, failmode="failmode=skip", action=step_content or "")
+            events.workflow_step_failed(logger, failmode="failmode=skip", action=step_command or "")
         return WorkflowOutcome.SKIP_LAUNCH
     # failmode == "warn" (default)
     if logger is not None:
-        events.workflow_step_failed(logger, failmode="failmode=warn", action=step_content or "")
+        events.workflow_step_failed(logger, failmode="failmode=warn", action=step_command or "")
     return None
+
+
+def _show_step_notice(
+    message: str,
+    *,
+    notify_callback: NotifyCallback | None,
+    headless: bool,
+) -> None:
+    """Show a command step's ``message`` as a non-blocking notice."""
+    if notify_callback is not None:
+        notify_callback(message, False)
+    else:
+        show_notify_dialog(message, blocking=False, headless=headless)
 
 
 # Internal context fan-out: failmode/username/hostname/logger all step-scoped.
@@ -249,32 +274,58 @@ def _execute_step(
     hostname: str | None = None,
     failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
+    show_notice: bool = True,
 ) -> WorkflowOutcome | None:
-    """Execute a single step. Returns terminal WorkflowOutcome or None to continue."""
-    content = _substitute_variables(step.content, file_path, username=username, hostname=hostname)
+    """Execute a single step. Returns terminal WorkflowOutcome or None to continue.
+
+    Args:
+        step: The step to execute.
+        file_path: File path for token substitution.
+        headless: If True, run without GUI dialogues.
+        notify_callback: Custom callback for notify steps and notices.
+        timeout: Maximum seconds to wait for the command (None = no limit).
+        failmode: Global failure behavior when ``on_failure`` is unknown.
+        username: Operator username, substituted as ``{username}``.
+        hostname: Machine hostname, substituted as ``{hostname}``.
+        failure_context: Optional list appended with failure descriptions.
+        logger: Optional logger for workflow execution traces.
+        show_notice: Whether to surface the step's ``message`` as a
+            non-blocking notice before executing the command. Callers that
+            already displayed it (e.g. in the composed ask dialog or via a
+            web session) pass False to avoid showing it twice.
+    """
+    command, message = _resolve_step_texts(step, file_path, username=username, hostname=hostname)
 
     if step.action == "notify":
+        if step.command and logger is not None:
+            logger.debug(
+                "'command' is ignored on a 'notify' step: %s",
+                step.command,
+            )
         if notify_callback is not None:
-            notify_callback(content, step.wait)
+            notify_callback(message, step.wait)
         else:
-            show_notify_dialog(content, blocking=step.wait, headless=headless)
+            show_notify_dialog(message, blocking=step.wait, headless=headless)
             if logger is not None:
-                logger.debug("Displayed notify dialog (headless=%s): %s", headless, content)
+                logger.debug("Displayed notify dialog (headless=%s): %s", headless, message)
         return None
 
+    if show_notice and message:
+        _show_step_notice(message, notify_callback=notify_callback, headless=headless)
+
     if step.action == "replace":
-        _emit_workflow_step(logger, index=0, total=1, action="replace", result=content)
+        _emit_workflow_step(logger, index=0, total=1, action="replace", result=command)
         # Launch replace command instead of OS default file launch
-        success = _run_command(content, wait=step.wait, timeout=timeout, logger=logger)
+        success = _run_command(command, wait=step.wait, timeout=timeout, logger=logger)
         if logger is not None:
             logger.debug("Replace command success: %s", success)
         return WorkflowOutcome.SKIP_LAUNCH
 
     if step.action in ("run", "check"):
-        _emit_workflow_step(logger, index=0, total=1, action=step.action, result=content)
+        _emit_workflow_step(logger, index=0, total=1, action=step.action, result=command)
         # "run" honors the step's wait flag; "check" always blocks.
         success = _run_command(
-            content,
+            command,
             wait=step.wait if step.action == "run" else True,
             timeout=timeout,
             logger=logger,
@@ -283,31 +334,65 @@ def _execute_step(
             return _resolve_failure(
                 step.on_failure,
                 failmode,
-                step_content=content,
+                step_command=command,
                 failure_context=failure_context,
                 logger=logger,
             )
         return None
 
     if step.action == "run_after":
-        _emit_workflow_step(logger, index=0, total=1, action="run_after", result=content)
-        _run_command(content, wait=False, timeout=None, logger=logger)
+        _emit_workflow_step(logger, index=0, total=1, action="run_after", result=command)
+        _run_command(command, wait=False, timeout=None, logger=logger)
 
     return None
+
+
+def _replace_step_token(text: str, key: str, value: str) -> str:
+    """Replace both brace forms (``{{key}}`` and ``{key}``) of a single token."""
+    text = text.replace("{{" + key + "}}", value)
+    return text.replace("{" + key + "}", value)
+
+
+def _resolve_step_texts(
+    step: WorkflowStep,
+    file_path: Path | None,
+    *,
+    username: str | None = None,
+    hostname: str | None = None,
+) -> tuple[str, str]:
+    """Resolve a step's ``command`` and ``message`` with token substitution.
+
+    Standard tokens (``{{path}}``, ``{{username}}``, ...) are substituted
+    first; the ``{{command}}`` / ``{{message}}`` step tokens are then
+    cross-resolved in a single pass (mutual references are not recursive).
+    """
+    command = _substitute_variables(step.command, file_path, username=username, hostname=hostname)
+    message = _substitute_variables(step.message, file_path, username=username, hostname=hostname)
+    if command and message:
+        command = _replace_step_token(command, "message", message)
+        message = _replace_step_token(message, "command", command)
+    return command, message
 
 
 def _substitute_variables(
     template: str,
     file_path: Path | None,
     *,
-    action_content: str | None = None,
+    command: str | None = None,
+    message: str | None = None,
     username: str | None = None,
     hostname: str | None = None,
 ) -> str:
-    """Substitute variables in step content string (supporting both {{token}} and {token})."""
+    """Substitute variables in step text (supporting both {{token}} and {token}).
+
+    ``command`` / ``message`` carry the current step's already-substituted
+    command / message, referenced as ``{{command}}`` / ``{{message}}`` from
+    any step text (e.g. an ``ask`` prompt).
+    """
     res = template
     tokens = {
-        "content": action_content,
+        "command": command,
+        "message": message,
         "username": username,
         "hostname": hostname,
         "date": datetime.date.today().isoformat(),

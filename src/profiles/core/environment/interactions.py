@@ -50,8 +50,18 @@ def confirm_dialog(
     return response in ("y", "yes")
 
 
-def _headless_3way_choice(message: str, title: str) -> Literal["yes", "skip", "no"]:
+def _headless_3way_choice(
+    message: str,
+    title: str,
+    pre_message: str | None = None,
+) -> Literal["yes", "skip", "no"]:
     """Prompt the user via terminal input and map the answer to a 3-way choice."""
+    if pre_message:
+        from profiles.core.environment.render import render_text
+
+        rendered = render_text(pre_message, headless=True)
+        if isinstance(rendered, str) and rendered.strip():
+            print(rendered)
     response = input(f"{title}: {message} [y/s/N]: ").strip().lower()
     if response in ("y", "yes"):
         return "yes"
@@ -64,6 +74,7 @@ def confirm_dialog_3way(
     message: str,
     title: str = "Confirmation",
     headless: bool = False,
+    pre_message: str | None = None,
 ) -> Literal["yes", "skip", "no"]:
     """Show a yes/skip/no confirmation dialog.
 
@@ -71,12 +82,15 @@ def confirm_dialog_3way(
         message: The message/question to ask.
         title: Dialog title.
         headless: If True, uses console input instead of Tkinter.
+        pre_message: Optional Markdown message rendered ABOVE the question
+            text (a workflow step's ``message`` shown in the same dialog).
+            Ignored when empty/None.
 
     Returns:
         "yes", "skip", or "no".
     """
     if headless:
-        return _headless_3way_choice(message, title)
+        return _headless_3way_choice(message, title, pre_message)
 
     try:
         import tkinter as tk
@@ -102,6 +116,16 @@ def confirm_dialog_3way(
         dialog.title(title)
         dialog.protocol("WM_DELETE_WINDOW", on_no)
 
+        if pre_message:
+            from profiles.core.environment.message_dialog import render_into_text_widget
+
+            pre_text = tk.Text(
+                dialog, wrap="word", width=54, height=8, borderwidth=0, highlightthickness=0
+            )
+            render_into_text_widget(pre_text, pre_message)
+            pre_text.configure(state="disabled")
+            pre_text.pack(padx=20, pady=(15, 5))
+
         tk.Label(dialog, text=message, wraplength=400, justify="left").pack(padx=20, pady=10)
         btn_frame = tk.Frame(dialog)
         btn_frame.pack(padx=20, pady=10)
@@ -115,7 +139,7 @@ def confirm_dialog_3way(
         return result[0]
     except (ImportError, tk.TclError):
         # Fallback to headless if Tkinter unavailable or no display
-        return _headless_3way_choice(message, title)
+        return _headless_3way_choice(message, title, pre_message)
 
 
 __all__ = [

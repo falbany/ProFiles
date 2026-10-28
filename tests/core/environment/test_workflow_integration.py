@@ -13,8 +13,8 @@ def test_full_workflow_notify_then_replace(tmp_path: Path):
 
     config = AppConfig()
     config.launch_hooks["*.mttl"] = (
-        WorkflowStep(action="notify", content="Starting processing for {filename}"),
-        WorkflowStep(action="replace", content="echo replaced", wait=True),
+        WorkflowStep(action="notify", message="Starting processing for {filename}"),
+        WorkflowStep(action="replace", command="echo replaced", wait=True),
     )
 
     with patch("profiles.core.actions.run_workflow") as mock_run:
@@ -34,8 +34,8 @@ def test_workflow_glob_pattern_specificity(tmp_path: Path):
     file_path.write_text("content")
 
     config = AppConfig()
-    config.launch_hooks["*.mttl"] = (WorkflowStep(action="notify", content="Generic"),)
-    config.launch_hooks["special.mttl"] = (WorkflowStep(action="notify", content="Specific"),)
+    config.launch_hooks["*.mttl"] = (WorkflowStep(action="notify", message="Generic"),)
+    config.launch_hooks["special.mttl"] = (WorkflowStep(action="notify", message="Specific"),)
 
     with patch("profiles.core.actions.run_workflow") as mock_run:
         from profiles.core.environment.workflow import WorkflowOutcome
@@ -51,4 +51,4 @@ def test_workflow_glob_pattern_specificity(tmp_path: Path):
         # Verify specific step was selected
         executed_steps = mock_run.call_args[0][0]
         assert len(executed_steps) == 1
-        assert executed_steps[0].content == "Specific"
+        assert executed_steps[0].message == "Specific"

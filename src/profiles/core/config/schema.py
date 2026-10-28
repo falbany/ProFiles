@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
@@ -67,15 +67,26 @@ class HookEntry(BaseModel):
 
 
 class WorkflowStepSchema(BaseModel):
-    """A single workflow step (new step-based model)."""
+    """A single workflow step (step-based model).
+
+    ``command`` holds the shell command template executed by command-type
+    actions (``run`` / ``run_after`` / ``replace`` / ``check``);
+    ``message`` holds the Markdown-formatted text shown to the user
+    (required for ``notify``, optional elsewhere). Both keys are accepted
+    on every action. Unknown keys — including the removed ``content`` —
+    are rejected with a schema error.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     action: Literal["notify", "run", "run_after", "replace", "check"]
-    content: str
+    command: str = ""
+    message: str = ""
     ask: str | None = None
     wait: bool = True
     on_failure: Literal["stop", "warn", "continue"] = "stop"
     timeout: int | None = None
-    if_: str | None = None
+    if_: str | None = Field(default=None, alias="if")
 
 
 class HooksConfig(BaseModel):
@@ -91,6 +102,24 @@ class HooksConfig(BaseModel):
     @classmethod
     def _none_to_dict(cls, value: object) -> dict[str, list[WorkflowStepSchema]]:
         return value or {}
+
+    @model_validator(mode="after")
+    def _validate_step_required_fields(self) -> HooksConfig:
+        """Enforce per-action required keys, reporting the entry pattern."""
+        # pylint: disable-next=no-member  (pylint infers FieldInfo, not the dict)
+        for pattern, steps in self.entries.items():
+            for pos, step in enumerate(steps):
+                if step.action == "notify" and not step.message:
+                    raise ValueError(
+                        f"hooks entry '{pattern}' step {pos + 1}: "
+                        "a 'notify' step requires 'message'"
+                    )
+                if step.action != "notify" and not step.command:
+                    raise ValueError(
+                        f"hooks entry '{pattern}' step {pos + 1}: "
+                        f"a '{step.action}' step requires 'command'"
+                    )
+        return self
 
 
 class Defaults(BaseModel):

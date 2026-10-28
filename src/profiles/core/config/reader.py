@@ -205,21 +205,30 @@ class ConfigReader:
 
     def _apply_hooks(self, config: AppConfig, schema: AppConfigYaml) -> None:
         """Populate *config* from ``schema.hooks``."""
+        logger = logging.getLogger(__name__)
         config.launch_hook_failmode = schema.hooks.failmode
         config.launch_hook_timeout = schema.hooks.timeout
         for pattern, entries in schema.hooks.entries.items():
-            config.launch_hooks[pattern] = tuple(
-                WorkflowStep(
-                    action=entry.action,
-                    content=entry.content,
-                    ask=entry.ask,
-                    wait=entry.wait,
-                    on_failure=entry.on_failure,
-                    timeout=entry.timeout,
-                    if_=entry.if_,
+            steps: list[WorkflowStep] = []
+            for entry in entries:
+                if entry.action == "notify" and entry.command:
+                    logger.debug(
+                        "hooks entry '%s': 'command' is ignored on a 'notify' step",
+                        pattern,
+                    )
+                steps.append(
+                    WorkflowStep(
+                        action=entry.action,
+                        command=entry.command,
+                        message=entry.message,
+                        ask=entry.ask,
+                        wait=entry.wait,
+                        on_failure=entry.on_failure,
+                        timeout=entry.timeout,
+                        if_=entry.if_,
+                    )
                 )
-                for entry in entries
-            )
+            config.launch_hooks[pattern] = tuple(steps)
 
     def _build_configurations(self, schema: AppConfigYaml) -> list[MachineConfiguration]:
         """Resolve inheritance and build the resolved machine list."""

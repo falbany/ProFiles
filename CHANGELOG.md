@@ -5,6 +5,37 @@ All notable changes to ProFiles are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-10-28
+
+### Breaking changes
+
+- **Workflow hooks schema**: the overloaded `content:` step key is replaced
+  by two purpose-specific keys, valid on every step type — `command:`
+  (shell command template, required for `run`/`run_after`/`replace`/`check`)
+  and `message:` (Markdown message, required for `notify`, optional
+  elsewhere). There is **no legacy alias by design**: a `.profiles` file
+  still using `content:` fails schema validation with the generic
+  unknown-key error. See the "Migrating from `content:`" section in
+  `docs/hooks-guide.en.md` (also available in French).
+- The `{{content}}` token is removed; use `{{command}}` / `{{message}}`
+  (both brace forms accepted). These resolve to the current step's
+  command / message, usable in any step text including `ask:` prompts.
+- `WorkflowStep` programmatic construction now raises `ValueError` on the
+  same invalid combinations the schema rejects (`notify` without
+  `message`, command steps without `command`).
+
+### Added
+
+- A `run`/`check`/`replace`/`run_after` step can now talk to the user:
+  its `message:` is shown as a non-blocking notice (web UI notification;
+  headless: stdout), or rendered above the `ask:` question in the same
+  Yes/Skip/No dialog when both keys are present. Command execution,
+  return-code/timeout/`on_failure`/`wait`/`run_after` semantics are
+  unchanged.
+- YAML `if:` condition keys on workflow steps are now honored (the key
+  previously never reached the engine); the schema rejects unknown step
+  keys.
+
 ## [0.9.0] - 2026-10-25
 
 Release candidate for 1.0.0. First release under Semantic Versioning

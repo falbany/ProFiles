@@ -24,7 +24,12 @@ class WorkflowStep:
     Attributes:
         action: The type of action — one of ``"notify"``, ``"run"``,
             ``"run_after"``, ``"replace"``, ``"check"``.
-        content: Command template or text content (depending on action).
+        command: Shell command template (token-substituted at runtime).
+            Required for command-type actions (``run``, ``run_after``,
+            ``replace``, ``check``); ignored on ``notify``.
+        message: Markdown-formatted message shown to the user. Required
+            for ``notify``; optional on command-type actions (shown as a
+            notice, or above the ``ask`` question when combined).
         ask: Optional confirmation message. If present, user must confirm
             before the action executes.
         wait: Whether to block execution until this step completes.
@@ -36,15 +41,29 @@ class WorkflowStep:
         if_: Optional conditional. If present, the step is skipped when the
             condition evaluates to false. Syntax: ``env:VAR`` or
             ``env:VAR=value``. Default: None.
+
+    Raises:
+        ValueError: If a ``notify`` step has no ``message``, or a
+            command-type action (``run``/``run_after``/``replace``/``check``)
+            has no ``command``.
     """
 
     action: Literal["notify", "run", "run_after", "replace", "check"]
-    content: str
+    command: str = ""
+    message: str = ""
     ask: str | None = None
     wait: bool = True
     on_failure: Literal["stop", "warn", "continue"] = "stop"
     timeout: int | None = None
     if_: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate per-action required fields (mirrors config-load validation)."""
+        if self.action == "notify":
+            if not self.message:
+                raise ValueError("A 'notify' workflow step requires a 'message'.")
+        elif not self.command:
+            raise ValueError(f"A '{self.action}' workflow step requires a 'command'.")
 
     def evaluate_condition(self) -> bool:
         """Evaluate the ``if_`` conditional. Always True when ``if_`` is unset.
@@ -220,7 +239,8 @@ class AppConfig:
         skip_config_prompt: If True, skip config file creation prompt (for testing).
         launch_hooks: Per-extension launch workflow steps keyed by
             normalised extension (e.g. ``".mttx"``). Each step is a
-            :class:`WorkflowStep` (action, content, optional ask guard).
+            :class:`WorkflowStep` (action, command/message, optional ask
+            guard).
         launch_hook_failmode: Behavior when a hook fails (``"warn"``, ...).
         launch_hook_timeout: Hook timeout in seconds.
     """
