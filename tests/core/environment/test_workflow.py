@@ -615,3 +615,30 @@ class TestStepTokenSubstitution:
         mock_ask.assert_called_once_with(
             "Proceed?", headless=False, pre_message="Status: {message}"
         )
+
+
+class TestHeadlessAskComposition:
+    """Headless backend prints the message before the question prompt."""
+
+    def test_headless_ask_prints_message_then_prompt(self, capsys):
+        """pre_message renders (Markdown stripped) above the y/s/N prompt."""
+        with (
+            patch("profiles.core.environment.workflow._run_command", return_value=True),
+            patch("builtins.input", return_value="y") as mock_input,
+        ):
+            steps = [
+                WorkflowStep(
+                    action="run",
+                    command="echo hi",
+                    message="# Preparing\\n**Step 1** of 2.",
+                    ask="Proceed with {{stem}}?",
+                )
+            ]
+            run_workflow(steps, Path("/tmp/demo.txt"), headless=True)
+
+        out = capsys.readouterr().out
+        # Message first (Markdown stripped, escapes processed)…
+        assert out.index("Preparing") < out.index("Step 1")
+        assert "**" not in out
+        # …then the substituted question with the choice prompt.
+        assert "Proceed with demo? [y/s/N]:" in mock_input.call_args[0][0]
