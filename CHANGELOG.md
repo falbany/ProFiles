@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML `if:` condition keys on workflow steps are now honored (the key
   previously never reached the engine); the schema rejects unknown step
   keys.
+- **Command output capture** (#7): blocking command steps
+  (`run` with `wait: true`, `check`, `replace`) capture the combined
+  stdout + stderr (locale-decoded, tail-bounded to ~4 KB). A new
+  per-step `output: hide | show | fail_only` key controls display
+  (default `hide`), the `{{output}}` token makes the most recent
+  captured output referenceable from any later step text, and failing
+  steps now report `Step failed (rc=<code>)` plus a `Last output:`
+  block when configured to show it. Captured output is also logged as
+  a `COMMAND_OUTPUT` event in profiles.log (web log viewer) and
+  rendered in the web Workflow Runner below the completion banner.
+  Blocking children consequently no longer stream their output into
+  the ProFiles console (documented behavior change).
 
 ## [0.9.0] - 2026-10-25
 
