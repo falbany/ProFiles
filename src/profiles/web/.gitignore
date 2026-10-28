@@ -3,3 +3,6 @@ node_modules/
 # dist/ is COMMITTED on purpose: the built frontend ships with the package
 # so `pip install .` produces an app that serves a working UI out of the box.
 !dist/
+# Local mtime freshness flag written by web/build.py + build_hook.py after a
+# successful build; meaningless across clones (git doesn't keep mtimes).
+.web-build-marker
