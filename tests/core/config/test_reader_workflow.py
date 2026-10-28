@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 from profiles.core.config.models import AppConfig, WorkflowStep
 from profiles.core.config.reader import ConfigReader
+from profiles.core.config.schema import AppConfigYaml
 
 
 def test_apply_workflow_steps(tmp_path):
@@ -65,3 +66,22 @@ def test_notify_with_command_logs_debug(caplog):
     assert step.message == "hello"
     assert step.command == "ignored-cmd"
     assert any("'command' is ignored" in r.message for r in caplog.records)
+
+
+def test_output_key_passthrough():
+    """The ``output:`` key flows from schema into the runtime model."""
+    schema = AppConfigYaml.model_validate(
+        {
+            "hooks": {
+                "entries": {
+                    "*.mttl": [{"action": "check", "command": "probe.exe", "output": "fail_only"}]
+                }
+            }
+        }
+    )
+    config = AppConfig()
+    reader = ConfigReader(config_path="memory")
+    reader._apply_hooks(config, schema)
+
+    step = config.launch_hooks["*.mttl"][0]
+    assert step.output == "fail_only"

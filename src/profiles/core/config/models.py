@@ -16,6 +16,8 @@ from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.config.schema import MatchCriteriaSchema
 from profiles.utils.file_utils import DEFAULT_MAX_SEARCH_DEPTH
 
+WorkflowOutputMode = Literal["hide", "show", "fail_only"]
+
 
 @dataclass(frozen=True)
 class WorkflowStep:
@@ -41,6 +43,12 @@ class WorkflowStep:
         if_: Optional conditional. If present, the step is skipped when the
             condition evaluates to false. Syntax: ``env:VAR`` or
             ``env:VAR=value``. Default: None.
+        output: Command output display mode for blocking command steps —
+            one of ``"hide"`` (capture and discard), ``"show"`` (show the
+            captured output as a non-blocking notice), or ``"fail_only"``
+            (show it only when the step fails). Ignored on non-blocking
+            steps (``run_after``, ``run`` with ``wait=False``). Default:
+            "hide".
 
     Raises:
         ValueError: If a ``notify`` step has no ``message``, or a
@@ -56,6 +64,7 @@ class WorkflowStep:
     on_failure: Literal["stop", "warn", "continue"] = "stop"
     timeout: int | None = None
     if_: str | None = None
+    output: Literal["hide", "show", "fail_only"] = "hide"
 
     def __post_init__(self) -> None:
         """Validate per-action required fields (mirrors config-load validation)."""

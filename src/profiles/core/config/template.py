@@ -235,6 +235,9 @@ columns:
 #   wait        bool, default true — wait for command completion.
 #   on_failure  "stop" | "warn" | "continue" (default "stop").
 #   timeout     int, optional — per-step timeout in seconds (overrides hooks.timeout).
+#   output      "hide" | "show" | "fail_only" (default "hide") — capture the
+#               blocking command's output (last ~4 KB): "show" displays it
+#               as a notice after the step, "fail_only" only on failure.
 #   if          string, optional — conditional guard, e.g. "env:VAR" (var is set)
 #               or "env:VAR=value" (var equals value). Step is skipped if not met.
 #
@@ -253,6 +256,8 @@ columns:
 #   {{stem}}       file name without extension           {{command}}  step's resolved command
 #   {{username}}   operator username                     {{message}}  step's resolved message
 #   {{hostname}}   machine hostname                      {{date}}     today's date (ISO 8601)
+#   {{output}}     captured output of the previous blocking command
+#                  (combined stdout+stderr, last ~4 KB)
 #
 # failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
 # timeout: seconds for blocking steps.
@@ -267,11 +272,12 @@ hooks:
     #   - action: check
     #     command: "ping -n 1 fileserver01"
     #     message: "Checking **fileserver01** reachability..."
+    #     output: fail_only          # show the ping output only if the check fails
     #     on_failure: warn
     #     if: "env:SITE=FACTORY"
     #   - action: run
     #     command: "prepare.exe --file {{path}}"
-    #     message: "**Preparing** {{stem}}..."
+    #     message: "**Preparing** {{stem}} — probe output: {{output}}"
     #     ask: "Run preparation script for {{stem}}?"
     #     timeout: 15
     #     if: "env:RUN_HOOKS"

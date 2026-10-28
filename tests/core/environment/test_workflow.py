@@ -6,7 +6,20 @@ from unittest.mock import patch
 import pytest
 
 from profiles.core.config.models import WorkflowStep
-from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
+from profiles.core.environment.workflow import CommandResult, WorkflowOutcome, run_workflow
+
+_RESULT_OK = CommandResult(code=0, output="")
+_RESULT_FAIL = CommandResult(code=1, output="")
+
+
+def _record_run(captured):
+    """Runner double recording each executed command, succeeding."""
+
+    def run(command, wait=False, **kwargs):
+        captured.append(command)
+        return _RESULT_OK
+
+    return run
 
 
 def test_workflow_no_steps():
@@ -44,7 +57,9 @@ def test_workflow_skip_step_over():
 
 def test_timeout_aborts_on_run_failure():
     """A timed-out command on a ``run`` step with on_failure=stop → ABORT."""
-    with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
+    with patch(
+        "profiles.core.environment.workflow._run_command", return_value=_RESULT_FAIL
+    ) as mock_cmd:
         steps = [WorkflowStep(action="run", command="sleep 10", on_failure="stop")]
         outcome = run_workflow(steps, None, timeout=1)
         assert outcome == WorkflowOutcome.ABORT
@@ -57,7 +72,9 @@ def test_failmode_abort_triggers_via_unknown_on_failure():
 
     (Python does not enforce Literal at runtime, so we pass a sentinel value.)
     """
-    with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
+    with patch(
+        "profiles.core.environment.workflow._run_command", return_value=_RESULT_FAIL
+    ) as mock_cmd:
         steps = [WorkflowStep(action="run", command="false", on_failure="unknown_value")]
         outcome = run_workflow(steps, None, failmode="abort")
         assert outcome == WorkflowOutcome.ABORT
@@ -66,7 +83,7 @@ def test_failmode_abort_triggers_via_unknown_on_failure():
 
 def test_failmode_skip_triggers_via_unknown_on_failure():
     """An unknown on_failure value with failmode=skip → SKIP_LAUNCH."""
-    with patch("profiles.core.environment.workflow._run_command", return_value=False):
+    with patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_FAIL):
         steps = [WorkflowStep(action="run", command="false", on_failure="unknown_value")]
         outcome = run_workflow(steps, None, failmode="skip")
         assert outcome == WorkflowOutcome.SKIP_LAUNCH
@@ -74,7 +91,9 @@ def test_failmode_skip_triggers_via_unknown_on_failure():
 
 def test_failmode_warn_continues():
     """failmode=warn with on_failure=continue → CONTINUE."""
-    with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
+    with patch(
+        "profiles.core.environment.workflow._run_command", return_value=_RESULT_FAIL
+    ) as mock_cmd:
         steps = [WorkflowStep(action="run", command="false", on_failure="continue")]
         outcome = run_workflow(steps, None, failmode="warn")
         assert outcome == WorkflowOutcome.CONTINUE
@@ -91,7 +110,7 @@ def test_on_failure_warn_logs_continue():
     mock_logger.handlers[0].emit = lambda r: log_records.append(r)
     mock_logger.setLevel(logging.DEBUG)
 
-    with patch("profiles.core.environment.workflow._run_command", return_value=False):
+    with patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_FAIL):
         steps = [WorkflowStep(action="run", command="false", on_failure="warn")]
         outcome = run_workflow(steps, None, failmode="abort", logger=mock_logger)
         assert outcome == WorkflowOutcome.CONTINUE
@@ -104,7 +123,7 @@ def test_username_hostname_token_substitution():
 
     with patch(
         "profiles.core.environment.workflow._run_command",
-        side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+        side_effect=_record_run(captured),
     ):
         steps = [WorkflowStep(action="run", command="echo {username}@{hostname}")]
         run_workflow(steps, None, username="alice", hostname="box.local")
@@ -119,7 +138,7 @@ def test_date_token_substitution():
     captured = []
     with patch(
         "profiles.core.environment.workflow._run_command",
-        side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+        side_effect=_record_run(captured),
     ):
         steps = [WorkflowStep(action="run", command="echo {date}")]
         run_workflow(steps, None)
@@ -154,7 +173,7 @@ def test_username_in_ask_guard():
             "profiles.core.environment.workflow.confirm_dialog_3way",
             return_value="yes",
         ) as mock_ask,
-        patch("profiles.core.environment.workflow._run_command", return_value=True),
+        patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_OK),
     ):
         steps = [
             WorkflowStep(
@@ -171,7 +190,7 @@ def test_per_step_timeout_override():
     """A per-step timeout overrides the global timeout."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=True,
+        return_value=_RESULT_OK,
     ) as mock_cmd:
         steps = [
             WorkflowStep(action="run", command="echo hi", timeout=3),
@@ -192,7 +211,7 @@ def test_if_env_var_set_condition_met():
     try:
         with patch(
             "profiles.core.environment.workflow._run_command",
-            return_value=True,
+            return_value=_RESULT_OK,
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
@@ -214,7 +233,7 @@ def test_if_env_var_set_condition_not_met():
     try:
         with patch(
             "profiles.core.environment.workflow._run_command",
-            return_value=True,
+            return_value=_RESULT_OK,
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
@@ -237,7 +256,7 @@ def test_if_env_var_equals_condition_met():
     try:
         with patch(
             "profiles.core.environment.workflow._run_command",
-            return_value=True,
+            return_value=_RESULT_OK,
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
@@ -259,7 +278,7 @@ def test_if_env_var_equals_condition_not_met():
     try:
         with patch(
             "profiles.core.environment.workflow._run_command",
-            return_value=True,
+            return_value=_RESULT_OK,
         ) as mock_cmd:
             steps = [
                 WorkflowStep(
@@ -278,7 +297,7 @@ def test_failure_context_populated_on_abort():
     """failure_context is populated with step content when a hook aborts."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=False,
+        return_value=_RESULT_FAIL,
     ):
         steps = [
             WorkflowStep(
@@ -302,7 +321,7 @@ def test_per_step_timeout_with_check_action():
     """A per-step timeout applies to check actions too."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=True,
+        return_value=_RESULT_OK,
     ) as mock_cmd:
         steps = [
             WorkflowStep(action="check", command="verify.exe", timeout=7),
@@ -320,7 +339,7 @@ def test_global_timeout_used_when_no_per_step_timeout():
     """Global timeout is used when step has no per-step timeout."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=True,
+        return_value=_RESULT_OK,
     ) as mock_cmd:
         steps = [
             WorkflowStep(action="run", command="echo hi"),
@@ -338,7 +357,7 @@ def test_no_timeout_when_both_unset():
     """When neither global nor per-step timeout is set, timeout is None."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=True,
+        return_value=_RESULT_OK,
     ) as mock_cmd:
         steps = [
             WorkflowStep(action="run", command="echo hi"),
@@ -380,7 +399,7 @@ def test_if_condition_multiple_steps_skips_only_failed():
     try:
         with patch(
             "profiles.core.environment.workflow._run_command",
-            return_value=True,
+            return_value=_RESULT_OK,
         ) as mock_cmd:
             steps = [
                 WorkflowStep(action="run", command="echo first", if_="env:NOPE"),
@@ -397,7 +416,7 @@ def test_failure_context_populated_on_failmode_abort():
     """failure_context is populated when an unknown on_failure triggers failmode=abort."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=False,
+        return_value=_RESULT_FAIL,
     ):
         steps = [
             WorkflowStep(
@@ -422,7 +441,7 @@ def test_failure_context_empty_when_no_failure():
     """failure_context remains empty when all steps succeed."""
     with patch(
         "profiles.core.environment.workflow._run_command",
-        return_value=True,
+        return_value=_RESULT_OK,
     ):
         steps = [
             WorkflowStep(action="run", command="echo ok"),
@@ -453,7 +472,7 @@ class TestCommandMessageDispatch:
         captured = []
         with patch(
             "profiles.core.environment.workflow._run_command",
-            side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+            side_effect=_record_run(captured),
         ):
             steps = [WorkflowStep(action="run", command="echo {stem}", message="Running...")]
             run_workflow(steps, Path("/tmp/demo.txt"))
@@ -465,7 +484,7 @@ class TestCommandMessageDispatch:
         commands = []
         with patch(
             "profiles.core.environment.workflow._run_command",
-            side_effect=lambda cmd, **kw: commands.append(cmd) or True,
+            side_effect=_record_run(commands),
         ):
             steps = [WorkflowStep(action="run", command="echo hi", message="**Working** on it...")]
             run_workflow(steps, None, notify_callback=lambda msg, wait: notices.append((msg, wait)))
@@ -482,7 +501,7 @@ class TestCommandMessageDispatch:
             ) as mock_ask,
             patch(
                 "profiles.core.environment.workflow._run_command",
-                side_effect=lambda cmd, **kw: commands.append(cmd) or True,
+                side_effect=_record_run(commands),
             ),
         ):
             steps = [
@@ -510,7 +529,7 @@ class TestCommandMessageDispatch:
                 "profiles.core.environment.workflow.confirm_dialog_3way",
                 return_value="yes",
             ) as mock_ask,
-            patch("profiles.core.environment.workflow._run_command", return_value=True),
+            patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_OK),
         ):
             steps = [WorkflowStep(action="run", command="echo hi", ask="Continue?")]
             run_workflow(steps, None)
@@ -523,7 +542,7 @@ class TestCommandMessageDispatch:
         notices = []
         with patch(
             "profiles.core.environment.workflow._run_command",
-            return_value=True,
+            return_value=_RESULT_OK,
         ) as mock_cmd:
             step = WorkflowStep(action="run", command="echo hi", message="notice text")
             _execute_step(
@@ -552,7 +571,7 @@ class TestStepTokenSubstitution:
                 "profiles.core.environment.workflow.confirm_dialog_3way",
                 return_value="yes",
             ) as mock_ask,
-            patch("profiles.core.environment.workflow._run_command", return_value=True),
+            patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_OK),
         ):
             steps = [
                 WorkflowStep(
@@ -573,7 +592,7 @@ class TestStepTokenSubstitution:
         captured = []
         with patch(
             "profiles.core.environment.workflow._run_command",
-            side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+            side_effect=_record_run(captured),
         ):
             steps = [
                 WorkflowStep(
@@ -601,7 +620,7 @@ class TestStepTokenSubstitution:
                 "profiles.core.environment.workflow.confirm_dialog_3way",
                 return_value="yes",
             ) as mock_ask,
-            patch("profiles.core.environment.workflow._run_command", return_value=True),
+            patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_OK),
         ):
             steps = [
                 WorkflowStep(
@@ -623,7 +642,7 @@ class TestHeadlessAskComposition:
     def test_headless_ask_prints_message_then_prompt(self, capsys):
         """pre_message renders (Markdown stripped) above the y/s/N prompt."""
         with (
-            patch("profiles.core.environment.workflow._run_command", return_value=True),
+            patch("profiles.core.environment.workflow._run_command", return_value=_RESULT_OK),
             patch("builtins.input", return_value="y") as mock_input,
         ):
             steps = [

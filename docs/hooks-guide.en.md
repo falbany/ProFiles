@@ -24,12 +24,13 @@ Launch workflows constitute a powerful engine that executes a sequence of action
 5. [Token Substitution](#token-substitution)
 6. [Rich Notifications (Markdown)](#rich-notifications-markdown)
 7. [Error Handling and Failmode](#error-handling-and-failmode)
-8. [Timeout Behavior](#timeout-behavior)
-9. [Pattern Specificity (Pattern Matching)](#pattern-specificity-pattern-matching)
-10. [Complete Examples](#complete-examples)
-11. [Migrating from `content:`](#migrating-from-content)
-12. [Programming API](#programming-api)
-13. [Troubleshooting](#troubleshooting)
+8. [Command Output Capture](#command-output-capture)
+9. [Timeout Behavior](#timeout-behavior)
+10. [Pattern Specificity (Pattern Matching)](#pattern-specificity-pattern-matching)
+11. [Complete Examples](#complete-examples)
+12. [Migrating from `content:`](#migrating-from-content)
+13. [Programming API](#programming-api)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -288,6 +289,7 @@ The engine automatically substitutes **placeholders** at runtime.
 | `{{ext}}`      | Extension (with dot)       | `.mttl`                   |
 | `{{command}}`  | Step's resolved `command`  | Useful in `ask` prompts   |
 | `{{message}}`  | Step's resolved `message`  | Useful in `ask` prompts   |
+| `{{output}}`   | Captured output of the most recent completed blocking command step (empty string before any) | Probe result text |
 | `{{username}}` | Operator username          | `alice`                   |
 | `{{hostname}}` | Machine hostname           | `workstation-01`          |
 | `{{date}}`     | Today's date (ISO 8601)    | `2026-08-29`              |
@@ -422,6 +424,68 @@ entries:
       command: "slow_command.exe {{path}}"
       # If > 10s: timeout → failure → failmode applied
 ```
+
+---
+
+## Command Output Capture
+
+Blocking command steps (`run` with `wait: true`, `check`, `replace`) capture
+the **combined stdout + stderr** of the command (tail-bounded to ~4 KB;
+anything longer is cut with a leading `…` marker). The `output:` key
+controls what happens with it:
+
+| Value       | During execution                                | On failure                          |
+| ----------- | ----------------------------------------------- | ----------------------------------- |
+| `hide` (default) | Captured and discarded (not displayed)     | Exit code included in the failure notice, no output |
+| `show`      | Shown to the user as a non-blocking notice after the command completes | Same notice includes the output |
+| `fail_only` | Captured, discarded on success                  | Failure notice includes the output  |
+
+```yaml
+"*.mttl":
+  - action: check
+    command: "probe_env.exe --verify {{dir}}"
+    output: fail_only
+    on_failure: warn
+  - action: run
+    command: "prepare.exe --from {{dir}}"
+    message: "**Probe result:**\\n`{{output}}`" # captured output of the check
+```
+
+### The `{{output}}` token
+
+Any step after a blocking command step can reference the captured output
+of the **most recent completed command step** via the `{{output}}` token
+(single-brace `{output}` also works). Before any command step has run,
+it resolves to an empty string. It works in `message:`, `command:`,
+`ask:` — anywhere tokens are accepted — and is substituted before the
+text is shown. Wrap it in backticks in your Markdown for monospace
+rendering. Multi-line output renders naturally; truncated output starts
+with the `…` marker.
+
+### Failure notices
+
+Failing command steps always record their **exit code**, regardless of
+`output:`. Failure descriptions read:
+
+```
+Step failed (rc=2): env_check.exe --verify C:\Projects
+Last output:
+  ERROR: missing PROD license
+```
+
+The `Last output:` block is appended only when the failing step sets
+`output: show` or `fail_only`.
+
+### Behavior notes
+
+- `output:` applies **only to blocking command steps**. On `run_after`
+  (or `run` with `wait: false`) it is ignored and a debug message is
+  logged to the profiles log (the spawn is detached — nothing to capture).
+- Because blocking commands are now captured, their output **no longer
+  leaks into the ProFiles console**: child processes write to the capture
+  buffer instead of the console (headless mode still prints notices).
+- Output is decoded with the locale's preferred encoding; undecodable
+  bytes become the Unicode replacement character (�).
 
 ---
 
