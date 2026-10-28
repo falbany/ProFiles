@@ -232,3 +232,72 @@ async def test_composed_ask_carries_ask_message(tmp_path: Path) -> None:
                 json={"action": "yes"},
             )
         assert yes.json()["status"] == "completed"
+
+
+@pytest.fixture
+def capture_state(tmp_path: Path) -> ServerState:
+    """State whose workflow runs a real output-producing command."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Capture Bench",
+        search_dir=str(test_dir),
+        launch_hooks={"*.mttl": (WorkflowStep(action="run", command="echo captured-output"),)},
+    )
+    return ServerState(config=config, active_directory=test_dir)
+
+
+@pytest.mark.anyio
+async def test_run_step_exposes_captured_output(capture_state: ServerState) -> None:
+    """A blocking run step reports its captured output per step and session-wide."""
+    app = create_app(capture_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch("profiles.core.actions.launch_file", return_value=True):
+            resp = await client.post(
+                "/api/workflow/start",
+                json={
+                    "directory": str(capture_state.active_directory),
+                    "filename": "tool.mttl",
+                },
+            )
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert "captured-output" in data["steps"][0]["output"]
+        assert "captured-output" in data["last_output"]
+
+
+@pytest.mark.anyio
+async def test_failed_stop_step_reports_rc_and_output(tmp_path: Path) -> None:
+    """A failing ``stop`` step with output: show surfaces rc + output in final_message."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Failure Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(
+                    action="check",
+                    command="echo boom & exit 3",
+                    output="show",
+                    on_failure="stop",
+                ),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(test_dir), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        assert data["status"] == "failed"
+        assert data["steps"][0]["status"] == "failed"
+        assert "rc=3" in data["final_message"]
+        assert "Last output:" in data["final_message"]

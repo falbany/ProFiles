@@ -453,6 +453,35 @@ class TestRunnerLogging:
             _run_command("crash.exe", True, logger=mock_logger)
         assert any("COMMAND_FAILED" in str(r.msg % r.args) for r in records)
 
+    def test_blocking_logs_command_output(self):
+        mock_logger, records = _quiet_logger()
+        with patch("profiles.core.environment.workflow.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                ["x"], 0, stdout=b"line one\nline two\n", stderr=b""
+            )
+            _run_command("loud.exe", True, logger=mock_logger)
+        logged = [str(r.msg % r.args) for r in records if "COMMAND_OUTPUT" in str(r.msg % r.args)]
+        assert len(logged) == 1
+        assert logged[0].startswith("COMMAND_OUTPUT code=0")
+        assert 'output="line one\\nline two\\n"' in logged[0]
+
+    def test_failing_command_output_logged_at_warning(self):
+        mock_logger, records = _quiet_logger()
+        with patch("profiles.core.environment.workflow.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                ["x"], 3, stdout=b"", stderr=b"boom\n"
+            )
+            _run_command("failing.exe", True, logger=mock_logger)
+        logged = [r for r in records if "COMMAND_OUTPUT" in str(r.msg % r.args)]
+        assert len(logged) == 1
+        assert logged[0].levelno == logging.WARNING
+
+    def test_spawn_does_not_log_command_output(self):
+        mock_logger, records = _quiet_logger()
+        with patch("profiles.core.environment.workflow.subprocess.Popen"):
+            _run_command("spy.exe", False, logger=mock_logger)
+        assert not any("COMMAND_OUTPUT" in str(r.msg % r.args) for r in records)
+
 
 class TestUnknownRcFailure:
     """When no rc is known, the failure text keeps the plain form."""

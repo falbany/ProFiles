@@ -633,12 +633,19 @@ def _run_command(
             res = subprocess.run(
                 command, shell=True, check=False, timeout=timeout, capture_output=True
             )
-            if logger is not None:
-                events.command_exit(logger, code=res.returncode, command=command)
-            return CommandResult(
+            result = CommandResult(
                 code=res.returncode,
                 output=_bound_captured_output(res.stdout, res.stderr),
             )
+            if logger is not None:
+                events.command_exit(logger, code=res.returncode, command=command)
+                # Always routed through the dedicated logger so the output
+                # keeps the log grammar and reaches the web log viewer,
+                # regardless of the step's ``output:`` display mode.
+                events.command_output(
+                    logger, code=result.code, command=command, output=result.output
+                )
+            return result
         # Fire-and-forget spawn: Popen must outlive this call.
         # pylint: disable-next=consider-using-with
         subprocess.Popen(command, shell=True)

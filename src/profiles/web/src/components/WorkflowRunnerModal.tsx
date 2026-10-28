@@ -385,6 +385,18 @@ export function WorkflowRunnerModal({
                     </div>
                   )}
 
+                  {/* Command output of the last executed step, below the banner */}
+                  {isFinished && selectedStepIndex === null && session?.last_output && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                        Command Output:
+                      </p>
+                      <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
+                        {session.last_output}
+                      </pre>
+                    </div>
+                  )}
+
                   {/* Priority 3: General content display for inspected or non-prompting current step */}
                   {!(isFinished && selectedStepIndex === null) &&
                    !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
@@ -402,6 +414,15 @@ export function WorkflowRunnerModal({
                           <div className="rounded-lg border border-line bg-surface-strong p-4 text-xs text-ink leading-relaxed space-y-2">
                             {renderMarkdown(activeStep.message)}
                           </div>
+                        </div>
+                      )}
+
+                      {activeStep?.output && (
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Output:</p>
+                          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
+                            {activeStep.output}
+                          </pre>
                         </div>
                       )}
 

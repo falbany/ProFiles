@@ -484,6 +484,14 @@ The `Last output:` block is appended only when the failing step sets
 - Because blocking commands are now captured, their output **no longer
   leaks into the ProFiles console**: child processes write to the capture
   buffer instead of the console (headless mode still prints notices).
+- The captured output of every blocking command is also written to the
+  profiles log as a `COMMAND_OUTPUT` event (line breaks escaped, one
+  single-line entry per command), so it stays visible in the dedicated
+  logger and the **web log viewer** regardless of the `output:` display
+  mode. Successful commands log at INFO, failing ones at WARNING.
+- In the **web UI**, the runner modal renders the last captured output
+  below the completion banner, and each step's captured output in its
+  detail panel.
 - Output is decoded with the locale's preferred encoding; undecodable
   bytes become the Unicode replacement character (�).
 
