@@ -262,6 +262,20 @@ export async function generateBarcode(params: { filePath?: string; file_path?: s
   return res.json();
 }
 
+/** Decode a base64 camera frame server-side (fallback for webviews without BarcodeDetector). */
+export async function decodeBarcodeImage(params: { imageBase64: string; formats?: string[] }): Promise<{ decoded: string | null; format?: string }> {
+  const res = await fetch("/api/actions/barcode/decode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_base64: params.imageBase64, formats: params.formats }),
+  });
+  if (!res.ok) {
+    if (res.status === 503) throw new Error("Server-side barcode decoding is unavailable");
+    throw new Error(`Failed to decode frame (HTTP ${res.status})`);
+  }
+  return res.json();
+}
+
 /** Fetch metadata (size, hashes, timestamps, attributes) for a single file. */
 export async function fetchFileMetadata(filePath: string, signal?: AbortSignal): Promise<FileMetadata> {
   const res = await fetch("/api/actions/metadata", {

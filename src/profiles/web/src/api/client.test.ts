@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportCsvToDisk, fetchNotifications, reloadConfig } from "./client";
+import { decodeBarcodeImage, exportCsvToDisk, fetchNotifications, reloadConfig } from "./client";
 
 const SAMPLE_CONFIG = {
   title: "Fresh From Disk",
@@ -122,5 +122,48 @@ describe("exportCsvToDisk", () => {
     );
 
     await expect(exportCsvToDisk("a,b\n", "out.csv")).rejects.toThrow("Failed to export CSV");
+  });
+});
+
+describe("decodeBarcodeImage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("POSTs the base64 frame and formats to /api/actions/barcode/decode", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ decoded: "dir=/tmp;scan=1", format: "QR Code" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await decodeBarcodeImage({ imageBase64: "QUJD", formats: ["qr_code"] });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/actions/barcode/decode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_base64: "QUJD", formats: ["qr_code"] }),
+    });
+    expect(res.decoded).toBe("dir=/tmp;scan=1");
+    expect(res.format).toBe("QR Code");
+  });
+
+  it("surfaces the 503 detail as an explicit unavailable error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 503 })),
+    );
+
+    await expect(decodeBarcodeImage({ imageBase64: "QUJD" })).rejects.toThrow(
+      "Server-side barcode decoding is unavailable",
+    );
+  });
+
+  it("throws on other HTTP failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 400 })),
+    );
+
+    await expect(decodeBarcodeImage({ imageBase64: "QUJD" })).rejects.toThrow("HTTP 400");
   });
 });
