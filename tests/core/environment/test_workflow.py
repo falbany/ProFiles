@@ -20,7 +20,7 @@ def test_workflow_notify_step():
     def mock_notify(content: str, wait: bool):
         notifications.append((content, wait))
 
-    steps = [WorkflowStep(action="notify", content="Hello")]
+    steps = [WorkflowStep(action="notify", message="Hello")]
     outcome = run_workflow(steps, None, notify_callback=mock_notify)
     assert outcome == WorkflowOutcome.CONTINUE
     assert len(notifications) == 1
@@ -28,15 +28,15 @@ def test_workflow_notify_step():
 
 
 def test_workflow_replace_step(tmp_path: Path):
-    steps = [WorkflowStep(action="replace", content="echo test")]
+    steps = [WorkflowStep(action="replace", command="echo test")]
     outcome = run_workflow(steps, tmp_path / "test.txt")
     assert outcome == WorkflowOutcome.SKIP_LAUNCH
 
 
 def test_workflow_skip_step_over():
     steps = [
-        WorkflowStep(action="run", content="echo 1", ask="Skip?"),
-        WorkflowStep(action="run", content="echo 2"),
+        WorkflowStep(action="run", command="echo 1", ask="Skip?"),
+        WorkflowStep(action="run", command="echo 2"),
     ]
     outcome = run_workflow(steps, None, user_choice="skip")
     assert outcome == WorkflowOutcome.CONTINUE
@@ -45,7 +45,7 @@ def test_workflow_skip_step_over():
 def test_timeout_aborts_on_run_failure():
     """A timed-out command on a ``run`` step with on_failure=stop → ABORT."""
     with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
-        steps = [WorkflowStep(action="run", content="sleep 10", on_failure="stop")]
+        steps = [WorkflowStep(action="run", command="sleep 10", on_failure="stop")]
         outcome = run_workflow(steps, None, timeout=1)
         assert outcome == WorkflowOutcome.ABORT
         mock_cmd.assert_called_once()
@@ -58,7 +58,7 @@ def test_failmode_abort_triggers_via_unknown_on_failure():
     (Python does not enforce Literal at runtime, so we pass a sentinel value.)
     """
     with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
-        steps = [WorkflowStep(action="run", content="false", on_failure="unknown_value")]
+        steps = [WorkflowStep(action="run", command="false", on_failure="unknown_value")]
         outcome = run_workflow(steps, None, failmode="abort")
         assert outcome == WorkflowOutcome.ABORT
         mock_cmd.assert_called_once()
@@ -67,7 +67,7 @@ def test_failmode_abort_triggers_via_unknown_on_failure():
 def test_failmode_skip_triggers_via_unknown_on_failure():
     """An unknown on_failure value with failmode=skip → SKIP_LAUNCH."""
     with patch("profiles.core.environment.workflow._run_command", return_value=False):
-        steps = [WorkflowStep(action="run", content="false", on_failure="unknown_value")]
+        steps = [WorkflowStep(action="run", command="false", on_failure="unknown_value")]
         outcome = run_workflow(steps, None, failmode="skip")
         assert outcome == WorkflowOutcome.SKIP_LAUNCH
 
@@ -75,7 +75,7 @@ def test_failmode_skip_triggers_via_unknown_on_failure():
 def test_failmode_warn_continues():
     """failmode=warn with on_failure=continue → CONTINUE."""
     with patch("profiles.core.environment.workflow._run_command", return_value=False) as mock_cmd:
-        steps = [WorkflowStep(action="run", content="false", on_failure="continue")]
+        steps = [WorkflowStep(action="run", command="false", on_failure="continue")]
         outcome = run_workflow(steps, None, failmode="warn")
         assert outcome == WorkflowOutcome.CONTINUE
         mock_cmd.assert_called_once()
@@ -92,7 +92,7 @@ def test_on_failure_warn_logs_continue():
     mock_logger.setLevel(logging.DEBUG)
 
     with patch("profiles.core.environment.workflow._run_command", return_value=False):
-        steps = [WorkflowStep(action="run", content="false", on_failure="warn")]
+        steps = [WorkflowStep(action="run", command="false", on_failure="warn")]
         outcome = run_workflow(steps, None, failmode="abort", logger=mock_logger)
         assert outcome == WorkflowOutcome.CONTINUE
         assert any("on_failure=warn" in r.msg % r.args for r in log_records)
@@ -106,7 +106,7 @@ def test_username_hostname_token_substitution():
         "profiles.core.environment.workflow._run_command",
         side_effect=lambda cmd, **kw: captured.append(cmd) or True,
     ):
-        steps = [WorkflowStep(action="run", content="echo {username}@{hostname}")]
+        steps = [WorkflowStep(action="run", command="echo {username}@{hostname}")]
         run_workflow(steps, None, username="alice", hostname="box.local")
 
     assert "echo alice@box.local" in captured[0]
@@ -121,7 +121,7 @@ def test_date_token_substitution():
         "profiles.core.environment.workflow._run_command",
         side_effect=lambda cmd, **kw: captured.append(cmd) or True,
     ):
-        steps = [WorkflowStep(action="run", content="echo {date}")]
+        steps = [WorkflowStep(action="run", command="echo {date}")]
         run_workflow(steps, None)
 
     expected = dt.date.today().isoformat()
@@ -159,12 +159,12 @@ def test_username_in_ask_guard():
         steps = [
             WorkflowStep(
                 action="run",
-                content="echo hello",
+                command="echo hello",
                 ask="Run for {username}?",
             )
         ]
         run_workflow(steps, None, username="bob")
-        mock_ask.assert_called_once_with("Run for bob?", headless=False)
+        mock_ask.assert_called_once_with("Run for bob?", headless=False, pre_message=None)
 
 
 def test_per_step_timeout_override():
@@ -174,7 +174,7 @@ def test_per_step_timeout_override():
         return_value=True,
     ) as mock_cmd:
         steps = [
-            WorkflowStep(action="run", content="echo hi", timeout=3),
+            WorkflowStep(action="run", command="echo hi", timeout=3),
         ]
         run_workflow(steps, None, timeout=30)
         mock_cmd.assert_called_once_with(
@@ -197,7 +197,7 @@ def test_if_env_var_set_condition_met():
             steps = [
                 WorkflowStep(
                     action="run",
-                    content="echo deploy",
+                    command="echo deploy",
                     if_="env:DEPLOY_ENV",
                 ),
             ]
@@ -219,7 +219,7 @@ def test_if_env_var_set_condition_not_met():
             steps = [
                 WorkflowStep(
                     action="run",
-                    content="echo deploy",
+                    command="echo deploy",
                     if_="env:DEPLOY_ENV",
                 ),
             ]
@@ -242,7 +242,7 @@ def test_if_env_var_equals_condition_met():
             steps = [
                 WorkflowStep(
                     action="run",
-                    content="echo build",
+                    command="echo build",
                     if_="env:MODE=release",
                 ),
             ]
@@ -264,7 +264,7 @@ def test_if_env_var_equals_condition_not_met():
             steps = [
                 WorkflowStep(
                     action="run",
-                    content="echo build",
+                    command="echo build",
                     if_="env:MODE=release",
                 ),
             ]
@@ -283,7 +283,7 @@ def test_failure_context_populated_on_abort():
         steps = [
             WorkflowStep(
                 action="run",
-                content="echo failing-step",
+                command="echo failing-step",
                 on_failure="stop",
             ),
         ]
@@ -305,7 +305,7 @@ def test_per_step_timeout_with_check_action():
         return_value=True,
     ) as mock_cmd:
         steps = [
-            WorkflowStep(action="check", content="verify.exe", timeout=7),
+            WorkflowStep(action="check", command="verify.exe", timeout=7),
         ]
         run_workflow(steps, None, timeout=60)
         mock_cmd.assert_called_once_with(
@@ -323,7 +323,7 @@ def test_global_timeout_used_when_no_per_step_timeout():
         return_value=True,
     ) as mock_cmd:
         steps = [
-            WorkflowStep(action="run", content="echo hi"),
+            WorkflowStep(action="run", command="echo hi"),
         ]
         run_workflow(steps, None, timeout=45)
         mock_cmd.assert_called_once_with(
@@ -341,7 +341,7 @@ def test_no_timeout_when_both_unset():
         return_value=True,
     ) as mock_cmd:
         steps = [
-            WorkflowStep(action="run", content="echo hi"),
+            WorkflowStep(action="run", command="echo hi"),
         ]
         run_workflow(steps, None)
         mock_cmd.assert_called_once_with(
@@ -363,7 +363,7 @@ def test_if_condition_skips_run_after():
             steps = [
                 WorkflowStep(
                     action="run_after",
-                    content="logger.exe",
+                    command="logger.exe",
                     if_="env:SKIP_FLAG",
                 ),
             ]
@@ -383,8 +383,8 @@ def test_if_condition_multiple_steps_skips_only_failed():
             return_value=True,
         ) as mock_cmd:
             steps = [
-                WorkflowStep(action="run", content="echo first", if_="env:NOPE"),
-                WorkflowStep(action="run", content="echo second", if_="env:RUN_SECOND"),
+                WorkflowStep(action="run", command="echo first", if_="env:NOPE"),
+                WorkflowStep(action="run", command="echo second", if_="env:RUN_SECOND"),
             ]
             run_workflow(steps, None)
             assert mock_cmd.call_count == 1
@@ -402,7 +402,7 @@ def test_failure_context_populated_on_failmode_abort():
         steps = [
             WorkflowStep(
                 action="run",
-                content="echo bad-step",
+                command="echo bad-step",
                 on_failure="bogus",  # unknown -> falls back to failmode
             ),
         ]
@@ -425,9 +425,193 @@ def test_failure_context_empty_when_no_failure():
         return_value=True,
     ):
         steps = [
-            WorkflowStep(action="run", content="echo ok"),
+            WorkflowStep(action="run", command="echo ok"),
         ]
         failure_context: list[str] = []
         outcome = run_workflow(steps, None, failure_context=failure_context)
         assert outcome == WorkflowOutcome.CONTINUE
         assert failure_context == []
+
+
+class TestCommandMessageDispatch:
+    """Engine dispatch on the dedicated command/message step keys."""
+
+    def test_notify_renders_message_via_callback(self):
+        """notify passes the substituted message to notify_callback."""
+        notifications = []
+
+        def mock_notify(content: str, wait: bool):
+            notifications.append((content, wait))
+
+        steps = [WorkflowStep(action="notify", message="Hello {username}")]
+        outcome = run_workflow(steps, None, notify_callback=mock_notify, username="alice")
+        assert outcome == WorkflowOutcome.CONTINUE
+        assert notifications == [("Hello alice", True)]
+
+    def test_run_executes_command(self):
+        """run executes the substituted command."""
+        captured = []
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+        ):
+            steps = [WorkflowStep(action="run", command="echo {stem}", message="Running...")]
+            run_workflow(steps, Path("/tmp/demo.txt"))
+        assert captured == ["echo demo"]
+
+    def test_run_with_message_and_no_ask_shows_nonblocking_notice(self):
+        """A run step with message and no ask shows a non-blocking notice."""
+        notices = []
+        commands = []
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, **kw: commands.append(cmd) or True,
+        ):
+            steps = [WorkflowStep(action="run", command="echo hi", message="**Working** on it...")]
+            run_workflow(steps, None, notify_callback=lambda msg, wait: notices.append((msg, wait)))
+        assert notices == [("**Working** on it...", False)]
+        assert commands == ["echo hi"]
+
+    def test_run_with_message_and_ask_composes_dialog(self):
+        """message+ask renders the message above the question in one dialog."""
+        commands = []
+        with (
+            patch(
+                "profiles.core.environment.workflow.confirm_dialog_3way",
+                return_value="yes",
+            ) as mock_ask,
+            patch(
+                "profiles.core.environment.workflow._run_command",
+                side_effect=lambda cmd, **kw: commands.append(cmd) or True,
+            ),
+        ):
+            steps = [
+                WorkflowStep(
+                    action="run",
+                    command="special_tool.exe {{path}}",
+                    message="# Advanced mode\\n**Special processing** for {{stem}}.",
+                    ask="Execute: {command}",
+                )
+            ]
+            run_workflow(steps, Path("/tmp/demo.txt"))
+
+        # The notice must NOT fire separately — the message rode in the dialog
+        mock_ask.assert_called_once_with(
+            "Execute: special_tool.exe /tmp/demo.txt",
+            headless=False,
+            pre_message="# Advanced mode\\n**Special processing** for demo.",
+        )
+        assert commands == ["special_tool.exe /tmp/demo.txt"]
+
+    def test_ask_only_step_passes_no_pre_message(self):
+        """An ask guard without a message preserves the prompt-only dialog."""
+        with (
+            patch(
+                "profiles.core.environment.workflow.confirm_dialog_3way",
+                return_value="yes",
+            ) as mock_ask,
+            patch("profiles.core.environment.workflow._run_command", return_value=True),
+        ):
+            steps = [WorkflowStep(action="run", command="echo hi", ask="Continue?")]
+            run_workflow(steps, None)
+        mock_ask.assert_called_once_with("Continue?", headless=False, pre_message=None)
+
+    def test_show_notice_false_suppresses_notice(self):
+        """show_notice=False (web session already displayed it) skips the notice."""
+        from profiles.core.environment.workflow import _execute_step
+
+        notices = []
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            return_value=True,
+        ) as mock_cmd:
+            step = WorkflowStep(action="run", command="echo hi", message="notice text")
+            _execute_step(
+                step,
+                None,
+                notify_callback=lambda msg, wait: notices.append(msg),
+                show_notice=False,
+            )
+            # Same step WITH the flag shows the notice
+            _execute_step(
+                step,
+                None,
+                notify_callback=lambda msg, wait: notices.append(msg),
+            )
+        assert notices == ["notice text"]
+        assert mock_cmd.call_count == 2
+
+
+class TestStepTokenSubstitution:
+    """{{command}} / {{message}} tokens; {{content}} is gone."""
+
+    def test_command_token_in_ask_both_brace_forms(self):
+        """{{command}} and {command} both resolve in ask prompts."""
+        with (
+            patch(
+                "profiles.core.environment.workflow.confirm_dialog_3way",
+                return_value="yes",
+            ) as mock_ask,
+            patch("profiles.core.environment.workflow._run_command", return_value=True),
+        ):
+            steps = [
+                WorkflowStep(
+                    action="run",
+                    command="tool.exe --run",
+                    ask="Double: {{command}} Single: {command}",
+                )
+            ]
+            run_workflow(steps, None)
+        mock_ask.assert_called_once_with(
+            "Double: tool.exe --run Single: tool.exe --run",
+            headless=False,
+            pre_message=None,
+        )
+
+    def test_message_token_cross_substitution(self):
+        """A command may reference the step message via {message}."""
+        captured = []
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, **kw: captured.append(cmd) or True,
+        ):
+            steps = [
+                WorkflowStep(
+                    action="run",
+                    command="log.exe --text {message}",
+                    message="all systems go",
+                )
+            ]
+            run_workflow(steps, None, notify_callback=lambda *a: None)
+        assert captured == ["log.exe --text all systems go"]
+
+    def test_content_token_no_longer_substitutes(self):
+        """{{content}} is not a token anymore — the literal string survives."""
+        from profiles.core.environment.workflow import _substitute_variables
+
+        res = _substitute_variables("Execute: {{content}}", None)
+        assert res == "Execute: {{content}}"
+        res2 = _substitute_variables("Execute: {content}", None)
+        assert res2 == "Execute: {content}"
+
+    def test_message_self_reference_stays_literal(self):
+        """A {message} reference inside the message itself is not recursive."""
+        with (
+            patch(
+                "profiles.core.environment.workflow.confirm_dialog_3way",
+                return_value="yes",
+            ) as mock_ask,
+            patch("profiles.core.environment.workflow._run_command", return_value=True),
+        ):
+            steps = [
+                WorkflowStep(
+                    action="run",
+                    command="echo hi",
+                    message="Status: {message}",
+                    ask="Proceed?",
+                )
+            ]
+            run_workflow(steps, None)
+        mock_ask.assert_called_once_with(
+            "Proceed?", headless=False, pre_message="Status: {message}"
+        )

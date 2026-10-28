@@ -225,7 +225,11 @@ columns:
 # Steps within an entry are YAML objects with:
 #   action      "notify" | "run" | "run_after" | "replace" | "check"
 #               (required) — see ACTIONS below.
-#   content     the command template or notification message (tokens supported).
+#   command     shell command template (required for run/run_after/replace/
+#               check; ignored on notify). Tokens supported.
+#   message     Markdown message shown to the user (required for notify;
+#               optional on command steps — shown as a notice, or above
+#               the ask question when combined with ask).
 #   ask         string, optional — a yes/skip/no confirmation message.
 #               (Yes -> run step; Skip -> proceed to NEXT step; No -> ABORT).
 #   wait        bool, default true — wait for command completion.
@@ -244,11 +248,11 @@ columns:
 #   check       Execute a command and check return code.
 #
 # TOKENS (substituted at runtime; the {{token}} and single-brace forms both work):
-#   {{path}}       absolute file path                    {{dir}}   parent directory
-#   {{filename}}   file name (with extension)            {{ext}}   extension (e.g. ".mttl")
-#   {{stem}}       file name without extension           {{content}} step content (useful in 'ask')
-#   {{username}}   operator username                     {{hostname}}  machine hostname
-#   {{date}}       today's date (ISO 8601)
+#   {{path}}       absolute file path                    {{dir}}      parent directory
+#   {{filename}}   file name (with extension)            {{ext}}      extension (e.g. ".mttl")
+#   {{stem}}       file name without extension           {{command}}  step's resolved command
+#   {{username}}   operator username                     {{message}}  step's resolved message
+#   {{hostname}}   machine hostname                      {{date}}     today's date (ISO 8601)
 #
 # failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
 # timeout: seconds for blocking steps.
@@ -259,27 +263,29 @@ hooks:
   entries:
     # "*.mttl":
     #   - action: notify
-    #     content: "# Launching {{filename}}\\n**Preparing environment...**"
+    #     message: "# Launching {{filename}}\\n**Preparing environment...**"
     #   - action: check
-    #     content: "ping -n 1 fileserver01"
+    #     command: "ping -n 1 fileserver01"
+    #     message: "Checking **fileserver01** reachability..."
     #     on_failure: warn
     #     if: "env:SITE=FACTORY"
     #   - action: run
-    #     content: "prepare.exe --file {{path}}"
+    #     command: "prepare.exe --file {{path}}"
+    #     message: "**Preparing** {{stem}}..."
     #     ask: "Run preparation script for {{stem}}?"
     #     timeout: 15
     #     if: "env:RUN_HOOKS"
     #   - action: replace
-    #     content: "special_launcher.exe {{path}}"
+    #     command: "special_launcher.exe {{path}}"
     #     ask: "Use the special launcher instead of the OS default?"
     #     on_failure: stop
     # ".pdf":
     #   - action: run_after
-    #     content: "logger.exe --opened {{filename}} --user {{username}} --date {{date}}"
+    #     command: "logger.exe --opened {{filename}} --user {{username}} --date {{date}}"
     #     wait: false
     # "report_?.docx":
     #   - action: run
-    #     content: "archiver.exe --out {{dir}}/{{stem}}_{{date}}.zip {{path}}"
+    #     command: "archiver.exe --out {{dir}}/{{stem}}_{{date}}.zip {{path}}"
     #     ask: "Archive {{filename}} before opening?"
 
 # ============================================================================

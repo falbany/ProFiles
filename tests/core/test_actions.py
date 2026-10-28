@@ -281,7 +281,7 @@ class TestLaunchHooksIntegration:
 
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
-            ".mttl": (WorkflowStep(action="notify", content="Proceed?", ask="Proceed?"),)
+            ".mttl": (WorkflowStep(action="notify", message="Proceed?", ask="Proceed?"),)
         }
 
         target = tmp_path / "test.mttl"
@@ -297,7 +297,9 @@ class TestLaunchHooksIntegration:
 
         assert result.status is ActionStatus.SUCCESS
         assert "Launched" in result.message
-        mock_confirm_dialog.assert_called_once_with("Proceed?", headless=False)
+        mock_confirm_dialog.assert_called_once_with(
+            "Proceed?", headless=False, pre_message="Proceed?"
+        )
         mock_notify.assert_called_once_with("Proceed?", blocking=True, headless=False)
         mock_launch_file.assert_called_once_with(target)
 
@@ -311,7 +313,7 @@ class TestLaunchHooksIntegration:
 
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
-            ".mttl": (WorkflowStep(action="notify", content="Proceed?", ask="Proceed?"),)
+            ".mttl": (WorkflowStep(action="notify", message="Proceed?", ask="Proceed?"),)
         }
 
         target = tmp_path / "test.mttl"
@@ -327,7 +329,9 @@ class TestLaunchHooksIntegration:
 
         assert result.status is ActionStatus.FAILED
         assert "aborted by a launch hook" in result.message
-        mock_confirm_dialog.assert_called_once_with("Proceed?", headless=False)
+        mock_confirm_dialog.assert_called_once_with(
+            "Proceed?", headless=False, pre_message="Proceed?"
+        )
         mock_notify.assert_not_called()  # Aborted before notify step
         mock_launch_file.assert_not_called()
 
@@ -341,8 +345,8 @@ class TestLaunchHooksIntegration:
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
             ".mttl": (
-                WorkflowStep(action="run", content="hook1.sh", on_failure="stop"),
-                WorkflowStep(action="run", content="hook2.sh", on_failure="stop"),
+                WorkflowStep(action="run", command="hook1.sh", on_failure="stop"),
+                WorkflowStep(action="run", command="hook2.sh", on_failure="stop"),
             )
         }
 
@@ -375,8 +379,8 @@ class TestLaunchHooksIntegration:
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
             ".mttl": (
-                WorkflowStep(action="run", content="hook1.sh", on_failure="stop"),
-                WorkflowStep(action="run", content="hook2.sh", on_failure="stop"),
+                WorkflowStep(action="run", command="hook1.sh", on_failure="stop"),
+                WorkflowStep(action="run", command="hook2.sh", on_failure="stop"),
             )
         }
 
@@ -409,8 +413,8 @@ class TestLaunchHooksIntegration:
         config = _make_config_for_actions(tmp_path)
         config.launch_hooks = {
             ".mttl": (
-                WorkflowStep(action="run", content="optional.sh", on_failure="continue"),
-                WorkflowStep(action="run", content="required.sh", on_failure="stop"),
+                WorkflowStep(action="run", command="optional.sh", on_failure="continue"),
+                WorkflowStep(action="run", command="required.sh", on_failure="stop"),
             )
         }
         # Even with failmode=abort, optional failure should not abort pipeline
@@ -676,7 +680,7 @@ class TestLaunchSelectedFileIntegration:
         target.write_text("")
 
         config = AppConfig()
-        config.launch_hooks = {"*.mttx": (WorkflowStep(action="run", content="false"),)}
+        config.launch_hooks = {"*.mttx": (WorkflowStep(action="run", command="false"),)}
 
         result = launch_selected_file(
             directory=str(tmp_path),
@@ -703,7 +707,7 @@ class TestLaunchSelectedFileIntegration:
         target.write_text("")
 
         config = AppConfig()
-        config.launch_hooks = {"*.mttx": (WorkflowStep(action="replace", content="true"),)}
+        config.launch_hooks = {"*.mttx": (WorkflowStep(action="replace", command="true"),)}
 
         result = launch_selected_file(
             directory=str(tmp_path),
@@ -730,7 +734,7 @@ class TestLaunchSelectedFileIntegration:
         target.write_text("")
 
         config = AppConfig()
-        config.launch_hooks = {"*.mttx": (WorkflowStep(action="notify", content="hi"),)}
+        config.launch_hooks = {"*.mttx": (WorkflowStep(action="notify", message="hi"),)}
 
         result = launch_selected_file(
             directory=str(tmp_path),

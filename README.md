@@ -294,24 +294,25 @@ hooks:
   entries:
     "*.mttl":
       - action: notify
-        content: "# Launching {{filename}}\\n**Preparing environment...**"
+        message: "# Launching {{filename}}\\n**Preparing environment...**"
       - action: run
-        content: "prepare_env.exe --file {{path}}"
+        command: "prepare_env.exe --file {{path}}"
+        message: "**Preparing** {{stem}}..."
         ask: "Run preparation script?"
         on_failure: stop
       - action: run_after
-        content: "logger.exe --opened {{filename}}"
+        command: "logger.exe --opened {{filename}}"
         wait: false
 
     "*.exe":
       - action: notify
-        content: "**Warning** : Executable launch\\nVerify file origin."
+        message: "**Warning** : Executable launch\\nVerify file origin."
       - action: run
-        content: "antivirus.exe --scan {{path}}"
+        command: "antivirus.exe --scan {{path}}"
         ask: "Scan with antivirus?"
         on_failure: warn
       - action: replace
-        content: "sandbox_launcher.exe {{path}}"
+        command: "sandbox_launcher.exe {{path}}"
         ask: "Execute in sandbox?"
         on_failure: stop
 ```

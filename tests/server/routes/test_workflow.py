@@ -25,8 +25,8 @@ def workflow_state(tmp_path: Path) -> ServerState:
         search_dir=str(test_dir),
         launch_hooks={
             "*.mttl": (
-                WorkflowStep(action="notify", content="Notice: Launching {{filename}}"),
-                WorkflowStep(action="run", content="echo prepare", ask="Execute prepare?"),
+                WorkflowStep(action="notify", message="Notice: Launching {{filename}}"),
+                WorkflowStep(action="run", command="echo prepare", ask="Execute prepare?"),
             )
         },
     )
@@ -103,8 +103,8 @@ async def test_workflow_run_after_is_non_blocking(workflow_state: ServerState) -
     # Update state with a run_after step
     workflow_state.config.launch_hooks = {
         "*.mttl": (
-            WorkflowStep(action="run_after", content="echo async"),
-            WorkflowStep(action="notify", content="After async notice"),
+            WorkflowStep(action="run_after", command="echo async"),
+            WorkflowStep(action="notify", message="After async notice"),
         )
     }
     app = create_app(workflow_state)
@@ -124,3 +124,111 @@ async def test_workflow_run_after_is_non_blocking(workflow_state: ServerState) -
         assert data["steps"][0]["status"] == "completed"
         # Second step (notify) should be running (current focus)
         assert data["steps"][1]["status"] == "running"
+
+
+@pytest.fixture
+def notice_state(tmp_path: Path) -> ServerState:
+    """State whose workflow exercises the message-only notice path."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Notice Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(
+                    action="run", command="echo prepare", message="**Preparing** {{stem}}..."
+                ),
+                WorkflowStep(action="run", command="echo launch"),
+            )
+        },
+    )
+    return ServerState(config=config, active_directory=test_dir)
+
+
+@pytest.mark.anyio
+async def test_step_records_expose_command_and_message(workflow_state: ServerState) -> None:
+    app = create_app(workflow_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(workflow_state.active_directory), "filename": "tool.mttl"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["steps"][0]["command"] == ""
+        assert data["steps"][0]["message"] == "Notice: Launching tool.mttl"
+        assert data["steps"][1]["command"] == "echo prepare"
+
+
+@pytest.mark.anyio
+async def test_command_step_message_pauses_as_notice(notice_state: ServerState) -> None:
+    """A message-only run step pauses the session until acknowledged."""
+    app = create_app(notice_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(notice_state.active_directory), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        assert data["status"] == "waiting_notice"
+        assert data["notice_message"] == "**Preparing** tool..."
+        assert data["steps"][0]["status"] == "running"
+
+        with patch("profiles.core.actions.launch_file", return_value=True):
+            ack = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "ack"},
+            )
+        final = ack.json()
+        assert final["status"] == "completed"
+        assert final["notice_message"] is None
+        assert final["steps"][0]["status"] == "completed"
+        assert final["steps"][1]["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_composed_ask_carries_ask_message(tmp_path: Path) -> None:
+    """An ask guard with a message returns both parts for composed display."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Composed Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(
+                    action="run",
+                    command="echo hi",
+                    message="# Advanced mode",
+                    ask="Execute: {command}?",
+                ),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(test_dir), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        assert data["status"] == "waiting_ask"
+        assert data["ask_message"] == "# Advanced mode"
+        # {command} token resolves in the ask prompt
+        assert data["ask_prompt"] == "Execute: echo hi?"
+
+        with (
+            patch("profiles.core.environment.workflow._execute_step", return_value=0),
+            patch("profiles.core.actions.launch_file", return_value=True),
+        ):
+            yes = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "yes"},
+            )
+        assert yes.json()["status"] == "completed"

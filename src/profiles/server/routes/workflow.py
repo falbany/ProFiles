@@ -23,11 +23,12 @@ router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 class StepRecord:
     index: int
     action: str
-    content: str
-    ask: str | None
-    wait: bool
-    status: Literal["pending", "running", "completed", "skipped", "failed"] = "pending"
+    command: str
     message: str = ""
+    ask: str | None = None
+    wait: bool = True
+    status: Literal["pending", "running", "completed", "skipped", "failed"] = "pending"
+    note: str = ""
 
 
 @dataclass
@@ -45,13 +46,17 @@ class WorkflowSession:
         "running",
         "waiting_ask",
         "waiting_notify",
+        "waiting_notice",
         "completed",
         "aborted",
         "failed",
     ] = "idle"
     ask_prompt: str | None = None
+    ask_message: str | None = None
     ask_answered: bool = False
     notify_message: str | None = None
+    notice_message: str | None = None
+    notice_acknowledged: bool = False
     skip_next: bool = False
     final_message: str = ""
     release: str = ""
@@ -77,11 +82,12 @@ def _format_step_record(r: StepRecord) -> dict:
     return {
         "index": r.index,
         "action": r.action,
-        "content": r.content,
+        "command": r.command,
+        "message": r.message,
         "ask": r.ask,
         "wait": r.wait,
         "status": r.status,
-        "message": r.message,
+        "note": r.note,
     }
 
 
@@ -97,29 +103,59 @@ def _advance_session(session: WorkflowSession) -> None:
 
         if session.skip_next:
             rec.status = "skipped"
-            rec.message = "Skipped by previous step"
+            rec.note = "Skipped by previous step"
             session.skip_next = False
             session.current_index += 1
             continue
 
         # If step has an ask prompt and we haven't asked yet:
+        # the dialog composes the step's Markdown message (if any) above
+        # the ask question, mirroring the native engine behavior.
         if step.ask and not session.ask_answered:
-            prompt_text = _substitute_variables(
+            command_sub, message_sub = workflow._resolve_step_texts(
+                step,
+                session.file_path,
+                username=username,
+                hostname=hostname,
+            )
+            ask_content = _substitute_variables(
                 step.ask,
                 session.file_path,
-                action_content=step.content,
+                command=command_sub,
+                message=message_sub,
                 username=username,
                 hostname=hostname,
             )
             session.status = "waiting_ask"
-            session.ask_prompt = prompt_text
+            session.ask_prompt = ask_content
+            session.ask_message = message_sub if step.message else None
+            rec.status = "running"
+            return
+
+        # Non-blocking notice for a command step's message (no ask guard):
+        # pause until the web UI acknowledges, then execute the command.
+        # Placed after the condition check so skipped steps stay silent.
+        if (
+            step.action != "notify"
+            and step.message
+            and not step.ask
+            and not session.notice_acknowledged
+        ):
+            _, message_sub = workflow._resolve_step_texts(
+                step,
+                session.file_path,
+                username=username,
+                hostname=hostname,
+            )
+            session.status = "waiting_notice"
+            session.notice_message = message_sub
             rec.status = "running"
             return
 
         # If step is notify and we haven't acknowledged yet:
         if step.action == "notify" and session.notify_message is None:
-            msg_text = _substitute_variables(
-                step.content,
+            _, msg_text = workflow._resolve_step_texts(
+                step,
                 session.file_path,
                 username=username,
                 hostname=hostname,
@@ -132,12 +168,14 @@ def _advance_session(session: WorkflowSession) -> None:
         # Execute normal or acknowledged step
         rec.status = "running"
         session.ask_prompt = None
+        session.ask_message = None
         session.ask_answered = False
         session.notify_message = None
+        session.notice_acknowledged = False
 
         if not step.evaluate_condition():
             rec.status = "skipped"
-            rec.message = "Condition not met"
+            rec.note = "Condition not met"
             session.current_index += 1
             continue
 
@@ -153,13 +191,14 @@ def _advance_session(session: WorkflowSession) -> None:
             headless=True,
             username=username,
             hostname=hostname,
+            show_notice=False,
         )
 
         if step.action == "replace":
             # replace returns WorkflowOutcome.SKIP_LAUNCH (not int), or None
             rec.status = "completed"
             session.status = "completed"
-            session.final_message = f"Launched replacement: {step.content}"
+            session.final_message = f"Launched replacement: {step.command}"
             return
 
         if step.action == "run_after":
@@ -175,7 +214,7 @@ def _advance_session(session: WorkflowSession) -> None:
                 session.status = "failed"
                 session.final_message = f"Step {i + 1} failed"
                 return
-            rec.message = "Warning: step returned error outcome"
+            rec.note = "Warning: step returned error outcome"
         else:
             rec.status = "completed"
 
@@ -216,8 +255,14 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
         StepRecord(
             index=idx + 1,
             action=s.action,
-            content=_substitute_variables(
-                s.content,
+            command=_substitute_variables(
+                s.command,
+                target_file,
+                username=username,
+                hostname=hostname,
+            ),
+            message=_substitute_variables(
+                s.message,
                 target_file,
                 username=username,
                 hostname=hostname,
@@ -225,7 +270,6 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
             ask=_substitute_variables(
                 s.ask,
                 target_file,
-                action_content=s.content,
                 username=username,
                 hostname=hostname,
             )
@@ -260,6 +304,8 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
         "status": session.status,
         "current_index": session.current_index,
         "ask_prompt": session.ask_prompt,
+        "ask_message": session.ask_message,
+        "notice_message": session.notice_message,
         "notify_message": session.notify_message,
         "final_message": session.final_message,
         "steps": [_format_step_record(r) for r in session.step_records],
@@ -279,6 +325,8 @@ async def get_workflow_session(session_id: str) -> dict:
         "status": session.status,
         "current_index": session.current_index,
         "ask_prompt": session.ask_prompt,
+        "ask_message": session.ask_message,
+        "notice_message": session.notice_message,
         "notify_message": session.notify_message,
         "final_message": session.final_message,
         "steps": [_format_step_record(r) for r in session.step_records],
@@ -291,7 +339,14 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.status == "waiting_notify":
+    if session.status == "waiting_notice":
+        if payload.action != "ack":
+            raise HTTPException(status_code=400, detail="Expected ack for notice")
+        session.notice_message = None
+        session.notice_acknowledged = True
+        _advance_session(session)
+
+    elif session.status == "waiting_notify":
         if payload.action != "ack":
             raise HTTPException(status_code=400, detail="Expected ack for notification")
         session.notify_message = None
@@ -303,7 +358,7 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
         if payload.action == "no":
             session.status = "aborted"
             session.step_records[session.current_index].status = "failed"
-            session.step_records[session.current_index].message = "Aborted by user"
+            session.step_records[session.current_index].note = "Aborted by user"
             session.final_message = "Workflow aborted by user."
             return {
                 "session_id": session_id,
@@ -313,7 +368,7 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
             }
         elif payload.action == "skip":
             session.step_records[session.current_index].status = "skipped"
-            session.step_records[session.current_index].message = "Skipped by user"
+            session.step_records[session.current_index].note = "Skipped by user"
             session.ask_prompt = None
             if session.current_index == len(session.steps) - 1:
                 session.status = "completed"
@@ -337,6 +392,8 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
         "status": session.status,
         "current_index": session.current_index,
         "ask_prompt": session.ask_prompt,
+        "ask_message": session.ask_message,
+        "notice_message": session.notice_message,
         "notify_message": session.notify_message,
         "final_message": session.final_message,
         "steps": [_format_step_record(r) for r in session.step_records],

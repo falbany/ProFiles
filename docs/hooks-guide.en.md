@@ -19,16 +19,17 @@ Launch workflows constitute a powerful engine that executes a sequence of action
 
 1. [YAML Syntax and Structure](#yaml-syntax-and-structure)
 2. [Available Actions](#available-actions)
-3. [Confirmation Guards (ask)](#confirmation-guards-ask)
-4. [Token Substitution](#token-substitution)
-5. [Rich Notifications (Markdown)](#rich-notifications-markdown)
-6. [Error Handling and Failmode](#error-handling-and-failmode)
-7. [Timeout Behavior](#timeout-behavior)
-8. [Pattern Specificity (Pattern Matching)](#pattern-specificity-pattern-matching)
-9. [Complete Examples](#complete-examples)
-10. [Migration from Legacy INI Format](#migration-from-legacy-ini-format)
-11. [Programming API](#programming-api)
-12. [Troubleshooting](#troubleshooting)
+3. [Message Display Rules](#message-display-rules)
+4. [Confirmation Guards (ask)](#confirmation-guards-ask)
+5. [Token Substitution](#token-substitution)
+6. [Rich Notifications (Markdown)](#rich-notifications-markdown)
+7. [Error Handling and Failmode](#error-handling-and-failmode)
+8. [Timeout Behavior](#timeout-behavior)
+9. [Pattern Specificity (Pattern Matching)](#pattern-specificity-pattern-matching)
+10. [Complete Examples](#complete-examples)
+11. [Migrating from `content:`](#migrating-from-content)
+12. [Programming API](#programming-api)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -36,7 +37,7 @@ Launch workflows constitute a powerful engine that executes a sequence of action
 
 Workflows use a step-based YAML structure. Each entry in `hooks.entries` is a **glob pattern** that matches filenames.
 
-### Basic Structure
+Every step carries two purpose-specific keys: **`command:`** — the shell command template — and **`message:`** — a Markdown message shown to the user. Both keys are accepted on every action; which one is required depends on the action.
 
 ```yaml
 hooks:
@@ -45,25 +46,30 @@ hooks:
   entries:
     "*.mttl": # Glob pattern (all .mttl files)
       - action: notify
-        content: "# Launching {{filename}}\\nPreparing environment..."
+        message: "# Launching {{filename}}\\nPreparing environment..."
       - action: run
-        content: "prepare_env.exe --file {{path}}"
+        command: "prepare_env.exe --file {{path}}"
+        message: "**Preparing** {{stem}}..."
         ask: "Run preparation script?"
         wait: true
         on_failure: stop
       - action: replace
-        content: "special_launcher.exe {{path}}"
+        command: "special_launcher.exe {{path}}"
         ask: "Use special launcher?"
         wait: true
         on_failure: warn
 
     "special.mttl": # More specific pattern (exact file)
       - action: notify
-        content: "**Special processing** for this file."
+        message: "**Special processing** for this file."
       - action: run_after
-        content: "logger.exe --special {{filename}}"
+        command: "logger.exe --special {{filename}}"
         wait: false
 ```
+
+> ⚠️ **Breaking change**: the old overloaded `content:` key is no longer
+> recognized — a config still using it fails schema validation. See
+> [Migrating from `content:`](#migrating-from-content).
 
 ### Glob Pattern Syntax
 
@@ -91,7 +97,7 @@ Displays a message to the user with partial Markdown support.
 
 ```yaml
 - action: notify
-  content: "# Title\\n**Important message**\\n*Note: This is italic*"
+  message: "# Title\\n**Important message**\\n*Note: This is italic*"
   wait: true # Blocks until user closes the dialog
 ```
 
@@ -109,7 +115,7 @@ Executes a shell command and waits for completion.
 
 ```yaml
 - action: run
-  content: "prepare_env.exe --file {{path}} --verbose"
+  command: "prepare_env.exe --file {{path}} --verbose"
   wait: true # Wait for completion (default)
   on_failure: stop # stop | warn | continue
   timeout: 15 # Optional: override global timeout (seconds)
@@ -129,7 +135,7 @@ Launches a command in the background and continues immediately.
 
 ```yaml
 - action: run_after
-  content: "logger.exe --opened {{filename}} --async"
+  command: "logger.exe --opened {{filename}} --async"
   wait: false # Always false for run_after
 ```
 
@@ -146,7 +152,7 @@ Executes a command **instead of** the default OS launch.
 
 ```yaml
 - action: replace
-  content: "special_launcher.exe {{path}} --custom-args"
+  command: "special_launcher.exe {{path}} --custom-args"
   ask: "Use special launcher?"
   wait: true
 ```
@@ -164,7 +170,7 @@ Executes a command and checks its return code.
 
 ```yaml
 - action: check
-  content: "env_check.exe --verify {{dir}}"
+  command: "env_check.exe --verify {{dir}}"
   wait: true
   on_failure: warn
   timeout: 10 # Optional: override global timeout (seconds)
@@ -180,13 +186,45 @@ Executes a command and checks its return code.
 
 ---
 
+## Message Display Rules
+
+Every step accepts an optional `message:` — this is what makes command steps
+able to *talk to the user* (previously only `notify` steps could display text).
+
+| Action       | `command:`                    | `message:`                                                    |
+| ------------ | ----------------------------- | ------------------------------------------------------------- |
+| `notify`     | Ignored (debug-logged)        | **Required.** Rendered with the Markdown subset below          |
+| `run`        | **Required.** Executed        | Optional — see rules below                                     |
+| `check`      | **Required.** Executed        | Optional — same as `run`                                       |
+| `replace`    | **Required.** Executed        | Optional — same as `run`                                       |
+| `run_after`  | **Required.** Spawned         | Optional — shown as a non-blocking notice when the step starts |
+
+For `run` / `check` / `replace` / `run_after` steps carrying a `message:`:
+
+- **With an `ask:` guard** — the Yes/Skip/No dialog displays the rendered
+  Markdown `message` first, **then the `ask` question below it**. Without a
+  `message:`, the dialog shows the question alone (unchanged).
+- **Without an `ask:` guard** — the message is shown as a **non-blocking
+  notice** (web UI notification; headless: printed to stdout) and the command
+  executes. This is the feature the old `content:` design could not express:
+  a `run` step that explains itself without a separate `notify` step.
+
+```yaml
+- action: run
+  command: "prepare_env.exe --file {{path}}"
+  message: "**Preparing** {{stem}} — this may take a few seconds."
+  # No ask: the message appears as a non-blocking notice while the command runs.
+```
+
+---
+
 ## Confirmation Guards (ask)
 
 Each step can be protected by a **Yes/Skip/No** confirmation prompt.
 
 ```yaml
 - action: run
-  content: "dangerous_operation.exe {{path}}"
+  command: "dangerous_operation.exe {{path}}"
   ask: "Are you sure you want to execute this dangerous operation?"
 ```
 
@@ -211,18 +249,18 @@ If user chooses **Skip** on the **last** step:
 entries:
   "*.mttl":
     - action: run
-      content: "prepare.exe {{path}}"
+      command: "prepare.exe {{path}}"
       ask: "Prepare the file?" # Yes/Skip/No
 
     - action: notify
-      content: "Environment prepared."
+      message: "Environment prepared."
 
     - action: run
-      content: "validate.exe {{path}}"
+      command: "validate.exe {{path}}"
       ask: "Validate before launch?" # Yes/Skip/No
 
     - action: replace
-      content: "special_launcher.exe {{path}}"
+      command: "special_launcher.exe {{path}}"
       ask: "Use special launcher?" # Yes/Skip/No
 ```
 
@@ -248,7 +286,8 @@ The engine automatically substitutes **placeholders** at runtime.
 | `{{filename}}` | Filename with extension    | `test.mttl`               |
 | `{{stem}}`     | Filename without extension | `test`                    |
 | `{{ext}}`      | Extension (with dot)       | `.mttl`                   |
-| `{{content}}`  | Current step's content     | Useful in `ask` prompts   |
+| `{{command}}`  | Step's resolved `command`  | Useful in `ask` prompts   |
+| `{{message}}`  | Step's resolved `message`  | Useful in `ask` prompts   |
 | `{{username}}` | Operator username          | `alice`                   |
 | `{{hostname}}` | Machine hostname           | `workstation-01`          |
 | `{{date}}`     | Today's date (ISO 8601)    | `2026-08-29`              |
@@ -259,26 +298,29 @@ The engine automatically substitutes **placeholders** at runtime.
 entries:
   "*.pdf":
     - action: notify
-      content: "# Opening {{filename}}\\nPath: {{path}}"
+      message: "# Opening {{filename}}\\nPath: {{path}}"
 
     - action: run
-      content: "tracker.exe --log {{filename}} --dir {{dir}}"
+      command: "tracker.exe --log {{filename}} --dir {{dir}}"
 
     - action: run_after
-      content: "backup.exe {{path}} --timestamp {{date}}"
+      command: "backup.exe {{path}} --timestamp {{date}}"
 ```
 
-### `{{content}}` Token — Specific Use Case
+### `{{command}}` / `{{message}}` Tokens — Current Step Values
 
-The `{{content}}` token is substituted with the current step's `content` string. Useful for confirmation prompts:
+The `{{command}}` and `{{message}}` tokens resolve to the current step's command and message. Useful in confirmation prompts:
 
 ```yaml
 - action: run
-  content: "special_tool.exe {{path}} --mode=advanced"
-  ask: "Execute: {{content}}"
+  command: "special_tool.exe {{path}} --mode=advanced"
+  message: |
+    # Advanced mode
+    This tool applies **special processing** to {{stem}}.
+  ask: "Execute: {{command}}"
 ```
 
-**Result**: The prompt will display "Execute: special_tool.exe test.mttl --mode=advanced"
+**Result**: The dialog shows the Markdown message first, then "Execute: special_tool.exe test.mttl --mode=advanced". Both the `{{token}}` and single-brace `{token}` forms are accepted.
 
 ---
 
@@ -301,7 +343,7 @@ The `notify` action supports a **subset of Markdown** for clear communication.
 
 ```yaml
 - action: notify
-  content: |
+  message: |
     # Launching {{filename}}
 
     **Status** : Preparing environment...
@@ -350,7 +392,7 @@ Each step can override the global `failmode`:
 
 ```yaml
 - action: run
-  content: "critical_setup.exe {{path}}"
+  command: "critical_setup.exe {{path}}"
   on_failure: abort # Overrides global failmode
 ```
 
@@ -377,7 +419,7 @@ hooks:
 entries:
   "*.mttl":
     - action: run
-      content: "slow_command.exe {{path}}"
+      command: "slow_command.exe {{path}}"
       # If > 10s: timeout → failure → failmode applied
 ```
 
@@ -405,10 +447,10 @@ hooks:
 entries:
   "*.mttl":
     - action: run
-      content: "quick_check.exe {{path}}"
+      command: "quick_check.exe {{path}}"
       timeout: 5 # Overrides global — 5 seconds for this step only
     - action: run
-      content: "slow_build.exe {{path}}"
+      command: "slow_build.exe {{path}}"
       # Uses global 30s timeout
 ```
 
@@ -439,10 +481,10 @@ The `if` field supports environment variable checks:
 entries:
   "*.mttl":
     - action: run
-      content: "deploy.exe --production {{path}}"
+      command: "deploy.exe --production {{path}}"
       if: "env:DEPLOY_ENV" # Executes only if DEPLOY_ENV is set
     - action: run
-      content: "staging_deploy.exe {{path}}"
+      command: "staging_deploy.exe {{path}}"
       if: "env:DEPLOY_ENV=prod" # Executes only if DEPLOY_ENV equals "prod"
 ```
 
@@ -471,15 +513,15 @@ hooks:
   entries:
     "*.mttl": # Low score — all .mttl
       - action: notify
-        content: "Generic .mttl processing"
+        message: "Generic .mttl processing"
 
     "special.mttl": # High score — exact file
       - action: notify
-        content: "SPECIAL processing for special.mttl"
+        message: "SPECIAL processing for special.mttl"
 
     "test?.mttl": # Medium score — test1.mttl, test2.mttl
       - action: notify
-        content: "Processing for test?.mttl"
+        message: "Processing for test?.mttl"
 ```
 
 **Results**:
@@ -505,21 +547,23 @@ hooks:
   entries:
     "*.mttl":
       - action: notify
-        content: "# Launching {{filename}}\\nPreparing environment..."
+        message: "# Launching {{filename}}\\nPreparing environment..."
 
       - action: run
-        content: "prepare_env.exe --file {{path}} --verbose"
+        command: "prepare_env.exe --file {{path}} --verbose"
+        message: "**Preparing** {{stem}}..."
         ask: "Run preparation?"
         wait: true
         on_failure: stop
 
       - action: run
-        content: "validate_env.exe --check {{dir}}"
+        command: "validate_env.exe --check {{dir}}"
         wait: true
         on_failure: warn
 
-      - action: notify
-        content: "**Environment ready**\\nLaunching..."
+      - action: run
+        command: "notify_user.exe --done {{filename}}"
+        message: "**Environment ready**\\nLaunching..."
 ```
 
 ### Example 2: Custom Launcher with Confirmation
@@ -531,17 +575,17 @@ hooks:
   entries:
     "*.exe":
       - action: notify
-        content: "# Executing executable\\n**Warning** : Verify file origin."
+        message: "# Executing executable\\n**Warning** : Verify file origin."
         wait: true
 
       - action: run
-        content: "antivirus.exe --scan {{path}}"
+        command: "antivirus.exe --scan {{path}}"
         ask: "Scan with antivirus?"
         wait: true
         on_failure: warn
 
       - action: replace
-        content: "sandbox_launcher.exe {{path}}"
+        command: "sandbox_launcher.exe {{path}}"
         ask: "Execute in sandbox?"
         wait: true
         on_failure: stop
@@ -556,11 +600,11 @@ hooks:
   entries:
     "*.pdf":
       - action: run_after
-        content: "audit_logger.exe --opened {{filename}} --user {{username}} --time {{date}}"
+        command: "audit_logger.exe --opened {{filename}} --user {{username}} --time {{date}}"
         wait: false
 
       - action: run_after
-        content: "backup.exe {{path}} --destination \\\\server\\backup"
+        command: "backup.exe {{path}} --destination \\\\server\\backup"
         wait: false
 ```
 
@@ -573,26 +617,82 @@ hooks:
   entries:
     "*.mttl":
       - action: run
-        content: "check_dependencies.exe {{dir}}"
+        command: "check_dependencies.exe {{dir}}"
         ask: "Check dependencies?"
         wait: true
         on_failure: abort
 
-      - action: notify
-        content: "**Dependencies verified**\\nContinue launch?"
+      - action: run
+        command: "verify_deps_viewer.exe {{dir}}"
+        message: "**Dependencies verified**"
+        if: "env:SHOW_DEP_STATUS"
 
       - action: run
-        content: "prepare_data.exe {{path}}"
+        command: "prepare_data.exe {{path}}"
         ask: "Prepare data?"
         wait: true
         on_failure: warn
 
       - action: run
-        content: "special_tool.exe {{path}} --mode=advanced"
-        ask: "Execute: {{content}}"
+        command: "special_tool.exe {{path}} --mode=advanced"
+        message: |
+          # Advanced mode
+          This tool applies **special processing** to {{stem}}.
+        ask: "Execute: {{command}}"
         wait: true
         on_failure: stop
 ```
+
+## Migrating from `content:`
+
+> ⚠️ **Breaking change** (no legacy alias, by design). Config files still
+> using `content:` inside a workflow step fail YAML schema validation with
+> the generic unknown-key error.
+
+| Old key                                           | New key                        |
+| ------------------------------------------------- | ------------------------------ |
+| `content:` on `notify`                            | `message:`                     |
+| `content:` on `run`/`check`/`replace`/`run_after` | `command:`                     |
+| `{{content}}` in `ask:`                           | `{{command}}` or `{{message}}` |
+
+### Before
+
+```yaml
+"*.mttl":
+  - action: notify
+    content: "# Launching {{filename}}\\nPreparing environment..."
+  - action: run
+    content: "prepare_env.exe --file {{path}}"
+    ask: "Run preparation script for {{stem}}?"
+```
+
+### After
+
+```yaml
+"*.mttl":
+  - action: notify
+    message: "# Launching {{filename}}\\nPreparing environment..."
+  - action: run
+    command: "prepare_env.exe --file {{path}}"
+    message: "**Preparing** {{stem}}..."
+    ask: "Run preparation script for {{stem}}?"
+```
+
+Note the second benefit: a `run` step can now carry its own `message:` — the
+separate `notify` step previously required to show text alongside a command
+is often no longer needed (see [Message Display Rules](#message-display-rules)).
+
+### Validation errors you may see
+
+- `content:` inside a step → `Extra inputs are not permitted` (unknown key).
+- `notify` without `message:` → `a 'notify' step requires 'message'`
+  (the error names the hooks entry pattern, e.g. `hooks entry '*.mttl'`).
+- `run` / `check` / `replace` / `run_after` without `command:` →
+  `a 'run' step requires 'command'` (same pattern-aware error).
+- `command:` on a `notify` step → **valid**, the key is ignored and a
+  debug-level line is logged.
+
+---
 
 ## Programming API
 
@@ -619,17 +719,18 @@ from profiles.core.config.models import WorkflowStep
 steps = [
     WorkflowStep(
         action="notify",
-        content="# Custom launch\\nFile: {{filename}}",
+        message="# Custom launch\\nFile: {{filename}}",
     ),
     WorkflowStep(
         action="run",
-        content="prepare.exe {{path}}",
+        command="prepare.exe {{path}}",
+        message="**Preparing** the file...",
         wait=True,
         on_failure="stop",
     ),
     WorkflowStep(
         action="replace",
-        content="custom_launcher.exe {{path}}",
+        command="custom_launcher.exe {{path}}",
         wait=True,
     ),
 ]
@@ -659,8 +760,14 @@ elif outcome == WorkflowOutcome.ABORT:
 ### Custom Callbacks
 
 ```python
-def custom_ask_handler(message: str) -> Literal["yes", "skip", "no"]:
-    """Custom confirmation prompt."""
+def custom_ask_handler(message: str, pre_message: str | None) -> Literal["yes", "skip", "no"]:
+    """Custom confirmation prompt.
+
+    ``pre_message`` carries the step's rendered Markdown ``message`` (None
+    when the step has none); display it above the question when present.
+    """
+    if pre_message:
+        print(pre_message)
     print(f"Question: {message}")
     response = input("[y/s/N]: ").strip().lower()
     if response in ("y", "yes"):

@@ -12,6 +12,30 @@ def _print_headless(content: str, title: str) -> None:
         print(f"[{title}] {rendered}")
 
 
+def render_into_text_widget(text_widget, content: str) -> None:
+    """Render Markdown *content* into a Tk ``Text`` widget.
+
+    Configures the standard style tags and inserts the rendered
+    :func:`render_text` segments. Shared by the notify dialog and the
+    3-way confirmation dialog's optional pre-message.
+    """
+    rendered_tree = render_text(content, headless=False)
+
+    text_widget.tag_configure("bold", font=("TkDefaultFont", 10, "bold"))
+    text_widget.tag_configure("italic", font=("TkDefaultFont", 10, "italic"))
+    text_widget.tag_configure("heading", font=("TkDefaultFont", 14, "bold"))
+    text_widget.tag_configure("code", font=("TkFixedFont", 10))
+
+    if isinstance(rendered_tree, list):
+        for seg in rendered_tree:
+            if seg.style == "normal":
+                text_widget.insert("end", seg.text)
+            else:
+                text_widget.insert("end", seg.text, (seg.style,))
+    else:
+        text_widget.insert("1.0", str(rendered_tree))
+
+
 def show_notify_dialog(
     content: str,
     title: str = "Message",
@@ -37,22 +61,7 @@ def show_notify_dialog(
         root.title(title)
 
         text_widget = tk.Text(root, wrap="word", width=60, height=15)
-        rendered_tree = render_text(content, headless=False)
-
-        if isinstance(rendered_tree, list):
-            # Simple rendering into Tk Text widget
-            text_widget.tag_configure("bold", font=("TkDefaultFont", 10, "bold"))
-            text_widget.tag_configure("italic", font=("TkDefaultFont", 10, "italic"))
-            text_widget.tag_configure("heading", font=("TkDefaultFont", 14, "bold"))
-            text_widget.tag_configure("code", font=("TkFixedFont", 10))
-
-            for seg in rendered_tree:
-                if seg.style == "normal":
-                    text_widget.insert(tk.END, seg.text)
-                else:
-                    text_widget.insert(tk.END, seg.text, (seg.style,))
-        else:
-            text_widget.insert("1.0", str(rendered_tree))
+        render_into_text_widget(text_widget, content)
 
         text_widget.pack(padx=10, pady=10)
 
@@ -67,4 +76,4 @@ def show_notify_dialog(
         _print_headless(content, title)
 
 
-__all__ = ["show_notify_dialog"]
+__all__ = ["render_into_text_widget", "show_notify_dialog"]
