@@ -19,6 +19,10 @@ from profiles.core.actions import (
     write_starter_config,
 )
 from profiles.core.config.models import MatchCriteria, WorkflowStep
+from profiles.core.environment.workflow import CommandResult
+
+_RESULT_OK = CommandResult(code=0, output="")
+_RESULT_FAIL = CommandResult(code=1, output="")
 
 
 def _make_config_for_actions(tmp_path: Path) -> AppConfig:
@@ -338,7 +342,7 @@ class TestLaunchHooksIntegration:
     def test_launch_with_sequential_hooks_all_succeed(self, mocker, tmp_path: Path) -> None:
         """A chain of successful required hooks allows normal file launch."""
         mock_run_command = mocker.patch(
-            "profiles.core.environment.workflow._run_command", return_value=True
+            "profiles.core.environment.workflow._run_command", return_value=_RESULT_OK
         )
         mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
 
@@ -372,7 +376,7 @@ class TestLaunchHooksIntegration:
         """A failure in a required hook aborts the launch pipeline."""
         mock_run_command = mocker.patch(
             "profiles.core.environment.workflow._run_command",
-            side_effect=[True, False],  # Success then failure
+            side_effect=[_RESULT_OK, _RESULT_FAIL],  # Success then failure
         )
         mock_launch_file = mocker.patch("profiles.core.actions.launch_file")  # Should not be called
 
@@ -406,7 +410,7 @@ class TestLaunchHooksIntegration:
         """A failure in an optional hook (on_failure=continue) allows the pipeline to proceed."""
         mock_run_command = mocker.patch(
             "profiles.core.environment.workflow._run_command",
-            side_effect=[False, True],  # Failure then success
+            side_effect=[_RESULT_FAIL, _RESULT_OK],  # Failure then success
         )
         mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
 

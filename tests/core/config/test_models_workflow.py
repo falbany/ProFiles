@@ -7,6 +7,13 @@ def test_workflow_step_defaults():
     assert step.wait is True
     assert step.on_failure == "stop"
     assert step.ask is None
+    assert step.output == "hide"
+
+
+def test_workflow_step_output_values():
+    """The output key accepts hide/show/fail_only."""
+    assert WorkflowStep(action="run", command="x", output="show").output == "show"
+    assert WorkflowStep(action="check", command="x", output="fail_only").output == "fail_only"
 
 
 def test_workflow_step_custom_values():

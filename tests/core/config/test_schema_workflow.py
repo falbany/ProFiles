@@ -140,3 +140,50 @@ class TestStepKeys:
             entries={"*.mttl": [WorkflowStepSchema(action="run", command="echo hi")]}
         )
         assert hooks.entries["*.mttl"][0].command == "echo hi"
+
+
+class TestOutputKey:
+    """The ``output:`` key controls command output display.
+
+    Valid values: ``hide`` (default), ``show``, ``fail_only``; anything else
+    is a schema validation error.
+    """
+
+    def test_output_defaults_to_hide(self) -> None:
+        schema = _parse_steps(
+            "hooks:\n  entries:\n    '*.mttl':\n      - action: run\n        command: 'echo hi'\n"
+        )
+        assert schema.hooks.entries["*.mttl"][0].output == "hide"
+
+    def test_output_accepts_show(self) -> None:
+        schema = _parse_steps(
+            "hooks:\n"
+            "  entries:\n"
+            "    '*.mttl':\n"
+            "      - action: check\n"
+            "        command: 'probe.exe'\n"
+            "        output: show\n"
+        )
+        assert schema.hooks.entries["*.mttl"][0].output == "show"
+
+    def test_output_accepts_fail_only(self) -> None:
+        schema = _parse_steps(
+            "hooks:\n"
+            "  entries:\n"
+            "    '*.mttl':\n"
+            "      - action: check\n"
+            "        command: 'probe.exe'\n"
+            "        output: fail_only\n"
+        )
+        assert schema.hooks.entries["*.mttl"][0].output == "fail_only"
+
+    def test_output_invalid_value_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="output"):
+            _parse_steps(
+                "hooks:\n"
+                "  entries:\n"
+                "    '*.mttl':\n"
+                "      - action: run\n"
+                "        command: 'echo hi'\n"
+                "        output: always\n"
+            )

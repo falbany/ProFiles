@@ -72,9 +72,11 @@ class WorkflowStepSchema(BaseModel):
     ``command`` holds the shell command template executed by command-type
     actions (``run`` / ``run_after`` / ``replace`` / ``check``);
     ``message`` holds the Markdown-formatted text shown to the user
-    (required for ``notify``, optional elsewhere). Both keys are accepted
-    on every action. Unknown keys — including the removed ``content`` —
-    are rejected with a schema error.
+    (required for ``notify``, optional elsewhere). ``output`` controls
+    whether a blocking command step's captured output is displayed
+    (``hide`` / ``show`` / ``fail_only``). Both keys are accepted on every
+    action. Unknown keys — including the removed ``content`` — are
+    rejected with a schema error.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -87,6 +89,7 @@ class WorkflowStepSchema(BaseModel):
     on_failure: Literal["stop", "warn", "continue"] = "stop"
     timeout: int | None = None
     if_: str | None = Field(default=None, alias="if")
+    output: Literal["hide", "show", "fail_only"] = "hide"
 
 
 class HooksConfig(BaseModel):

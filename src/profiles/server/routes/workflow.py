@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,10 @@ from profiles.utils.network import get_hostname, get_username
 
 router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 
+# Dedicated application logger: workflow execution traces and captured
+# command output land in profiles.log and the web log viewer.
+_LOGGER = logging.getLogger("profiles")
+
 
 @dataclass
 class StepRecord:
@@ -29,6 +34,7 @@ class StepRecord:
     wait: bool = True
     status: Literal["pending", "running", "completed", "skipped", "failed"] = "pending"
     note: str = ""
+    output: str = ""
 
 
 @dataclass
@@ -59,6 +65,7 @@ class WorkflowSession:
     notice_acknowledged: bool = False
     skip_next: bool = False
     final_message: str = ""
+    last_output: str = ""
     release: str = ""
     args: str = ""
 
@@ -88,7 +95,47 @@ def _format_step_record(r: StepRecord) -> dict:
         "wait": r.wait,
         "status": r.status,
         "note": r.note,
+        "output": r.output,
     }
+
+
+# The engine facade is internal to core; sessions reuse it deliberately.
+# pylint: disable=protected-access
+def _execute_step_with_capture(
+    step: WorkflowStep,
+    session: WorkflowSession,
+    *,
+    username: str,
+    hostname: str,
+) -> tuple[workflow.WorkflowOutcome | None, str, list[str]]:
+    """Execute *step* with logging and capture enabled.
+
+    The dedicated application logger keeps execution traces and captured
+    output in profiles.log (web log viewer).
+
+    Returns:
+        ``(outcome, captured_output, failure_context)`` where
+        *captured_output* is the blocking command's combined streams and
+        *failure_context* carries the rc/output failure description of a
+        terminal failure (empty otherwise).
+    """
+    state = workflow._WorkflowState()
+    failure_context: list[str] = []
+    ret = workflow._execute_step(
+        step,
+        session.file_path,
+        headless=True,
+        username=username,
+        hostname=hostname,
+        show_notice=False,
+        logger=_LOGGER,
+        state=state,
+        failure_context=failure_context,
+    )
+    return ret, state.last_output, failure_context
+
+
+# pylint: enable=protected-access
 
 
 def _advance_session(session: WorkflowSession) -> None:
@@ -185,14 +232,13 @@ def _advance_session(session: WorkflowSession) -> None:
             continue
 
         # Execute action (run, check, replace, run_after)
-        ret = workflow._execute_step(
-            step,
-            session.file_path,
-            headless=True,
-            username=username,
-            hostname=hostname,
-            show_notice=False,
+        ret, captured_output, failure_context = _execute_step_with_capture(
+            step, session, username=username, hostname=hostname
         )
+
+        if step.action in ("run", "check", "replace"):
+            rec.output = captured_output
+            session.last_output = captured_output
 
         if step.action == "replace":
             # replace returns WorkflowOutcome.SKIP_LAUNCH (not int), or None
@@ -212,7 +258,11 @@ def _advance_session(session: WorkflowSession) -> None:
             on_fail = step.on_failure or "warn"
             if on_fail in ("stop", "abort"):
                 session.status = "failed"
-                session.final_message = f"Step {i + 1} failed"
+                # failure_context carries the rc + captured-output
+                # description for steps configured to reveal them.
+                session.final_message = (
+                    failure_context[-1] if failure_context else f"Step {i + 1} failed"
+                )
                 return
             rec.note = "Warning: step returned error outcome"
         else:
@@ -308,6 +358,7 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
         "notice_message": session.notice_message,
         "notify_message": session.notify_message,
         "final_message": session.final_message,
+        "last_output": session.last_output,
         "steps": [_format_step_record(r) for r in session.step_records],
     }
 
@@ -329,6 +380,7 @@ async def get_workflow_session(session_id: str) -> dict:
         "notice_message": session.notice_message,
         "notify_message": session.notify_message,
         "final_message": session.final_message,
+        "last_output": session.last_output,
         "steps": [_format_step_record(r) for r in session.step_records],
     }
 
@@ -396,5 +448,6 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
         "notice_message": session.notice_message,
         "notify_message": session.notify_message,
         "final_message": session.final_message,
+        "last_output": session.last_output,
         "steps": [_format_step_record(r) for r in session.step_records],
     }

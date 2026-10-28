@@ -15,6 +15,7 @@ from profiles.core.telemetry.events import (
     app_started,
     command_exit,
     command_failed,
+    command_output,
     command_timeout,
     config_create_failed,
     config_created,
@@ -433,6 +434,48 @@ class TestCommandEvents:
         with caplog.at_level(logging.ERROR, logger=logger.name):
             command_failed(logger, error="killed", command="make test")
         assert "COMMAND_FAILED" in caplog.text
+
+    def test_output_success_logged_at_info(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_cmd_out_ok")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            command_output(logger, code=0, command="make test", output="done\n")
+        assert "COMMAND_OUTPUT code=0" in caplog.text
+        assert 'command="make test"' in caplog.text
+
+    def test_output_failure_logged_at_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_cmd_out_ko")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            command_output(logger, code=2, command="make test", output="boom\n")
+        record = next(r for r in caplog.records if "COMMAND_OUTPUT" in r.getMessage())
+        assert record.levelno == logging.WARNING
+
+    def test_output_escapes_newlines_to_stay_single_line(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        logger = logging.getLogger("test_cmd_out_esc")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            command_output(logger, code=0, command="probe", output="one\r\ntwo\nthree")
+        assert 'output="one\\ntwo\\nthree"' in caplog.text
+        # The rendered message itself contains no raw line break, so the
+        # on-disk grammar stays a single line per event.
+        assert all("\n" not in r.getMessage() for r in caplog.records)
+
+    def test_output_round_trips_through_log_viewer_grammar(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from profiles.core.telemetry.diagnostics import DATE_FORMAT, LOG_FORMAT, SourceFilter
+        from profiles.core.telemetry.log_viewer import parse_log_line
+
+        logger = logging.getLogger("test_cmd_out_grammar")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            command_output(logger, code=0, command="probe.exe", output="line 1\nline 2")
+        record = next(r for r in caplog.records if "COMMAND_OUTPUT" in r.getMessage())
+        SourceFilter(source="TESTHOST").filter(record)
+        line = logging.Formatter(fmt=LOG_FORMAT, datefmt=DATE_FORMAT).format(record)
+        entry = parse_log_line(line)
+        assert entry.level == "INFO"
+        assert entry.event == "COMMAND_OUTPUT"
+        assert 'output="line 1\\nline 2"' in entry.message
 
 
 # ---------------------------------------------------------------------------

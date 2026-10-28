@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import datetime
+import locale
 import logging
 import subprocess
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Literal
@@ -28,6 +30,40 @@ AskCallback = Callable[[str, str | None], Literal["yes", "skip", "no"]]
 NotifyCallback = Callable[[str, bool], None]
 
 FailMode = Literal["warn", "abort", "skip"]
+
+
+# Bound for the *combined* stdout+stderr text kept per blocking command step.
+# Diagnostics live at the end of output, so the tail is kept, not the head.
+_OUTPUT_CAPTURE_LIMIT = 4096
+_OUTPUT_TRUNCATION_MARKER = "…"
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    """Typed result of an internal command run.
+
+    Attributes:
+        code: Shell return code (0 = success). Detached spawns report 0;
+            timeouts and spawn errors report -1.
+        output: Combined stdout + stderr, decoded with the locale-preferred
+            encoding (``errors="replace"``) and tail-bounded to
+            ``_OUTPUT_CAPTURE_LIMIT`` characters. Empty for detached spawns.
+    """
+
+    code: int
+    output: str = ""
+
+    @property
+    def success(self) -> bool:
+        """Whether the command exited with code 0."""
+        return self.code == 0
+
+
+@dataclass
+class _WorkflowState:
+    """Mutable state threaded across the steps of one workflow run."""
+
+    last_output: str = ""
 
 
 def _emit_workflow_step(
@@ -64,8 +100,47 @@ def _ask_step_input(
     return confirm_dialog_3way(ask_content, headless=headless, pre_message=pre_message)
 
 
-# pylint: disable-next=too-many-arguments
+def _resolve_ask_choice(
+    step: WorkflowStep,
+    file_path: Path | None,
+    *,
+    username: str | None,
+    hostname: str | None,
+    last_output: str = "",
+    user_choice: Literal["yes", "skip", "no"] | None,
+    ask_callback: AskCallback | None,
+    headless: bool,
+) -> Literal["yes", "skip", "no"] | None:
+    """Resolve a step's ``ask`` guard choice; None when the step has no guard.
+
+    Priority mirrors :func:`_ask_step_input`: explicit *user_choice* →
+    *ask_callback* → 3-way dialog (or headless prompt). The step's
+    message/question are token-substituted first (including ``{{output}}``).
+    """
+    if not step.ask:
+        return None
+    command_sub, message_sub = _resolve_step_texts(
+        step, file_path, username=username, hostname=hostname, last_output=last_output
+    )
+    return _ask_step_input(
+        _substitute_variables(
+            step.ask,
+            file_path,
+            command=command_sub,
+            message=message_sub,
+            username=username,
+            hostname=hostname,
+            output=last_output,
+        ),
+        pre_message=message_sub if step.message else None,
+        user_choice=user_choice,
+        ask_callback=ask_callback,
+        headless=headless,
+    )
+
+
 # Public facade mirroring the workflow config surface; kwargs are additive.
+# pylint: disable-next=too-many-arguments
 def run_workflow(
     steps: list[WorkflowStep],
     file_path: Path | None,
@@ -101,6 +176,8 @@ def run_workflow(
         hostname: Machine hostname, substituted as `{hostname}`.
         failure_context: Optional mutable list appended with a human-readable
             failure description when the workflow aborts due to a step error.
+            Descriptions include the exit code, and the captured command
+            output when the failing step sets ``output: show``/``fail_only``.
         logger: Optional logger for workflow execution traces.
 
     Returns:
@@ -110,6 +187,7 @@ def run_workflow(
         return WorkflowOutcome.CONTINUE
 
     skip_next = False
+    state = _WorkflowState()
 
     for i, step in enumerate(steps):
         # If previous step was skipped via "skip", skip this step
@@ -124,25 +202,17 @@ def run_workflow(
         )
 
         # Handle 'ask' confirmation guard if present
-        if step.ask:
-            command_sub, message_sub = _resolve_step_texts(
-                step, file_path, username=username, hostname=hostname
-            )
-            choice = _ask_step_input(
-                _substitute_variables(
-                    step.ask,
-                    file_path,
-                    command=command_sub,
-                    message=message_sub,
-                    username=username,
-                    hostname=hostname,
-                ),
-                pre_message=message_sub if step.message else None,
-                user_choice=user_choice,
-                ask_callback=ask_callback,
-                headless=headless,
-            )
-
+        choice = _resolve_ask_choice(
+            step,
+            file_path,
+            username=username,
+            hostname=hostname,
+            last_output=state.last_output,
+            user_choice=user_choice,
+            ask_callback=ask_callback,
+            headless=headless,
+        )
+        if choice is not None:
             if choice == "no":
                 _emit_workflow_step(
                     logger, index=i + 1, total=len(steps), action=step.action, result="aborted"
@@ -191,6 +261,7 @@ def run_workflow(
             failure_context=failure_context,
             logger=logger,
             show_notice=not bool(step.ask and step.message),
+            state=state,
         )
         if outcome is not None:
             return outcome
@@ -198,6 +269,29 @@ def run_workflow(
     return WorkflowOutcome.CONTINUE
 
 
+def _failure_description(
+    step_command: str,
+    *,
+    rc: int | None = None,
+    captured_output: str | None = None,
+) -> str:
+    """Build the human-readable failure text for a failing command step.
+
+    The exit code is always included when known; the trailing ``Last
+    output:`` block is appended only when the caller passes captured
+    output (``output: show`` / ``fail_only`` steps).
+    """
+    if rc is not None:
+        text = f"Step failed (rc={rc}): {step_command}"
+    else:
+        text = f"Step failed: {step_command}"
+    if captured_output:
+        indented = "\n  ".join(captured_output.splitlines())
+        text = f"{text}\nLast output:\n  {indented}"
+    return text
+
+
+# pylint: disable-next=too-many-arguments
 def _resolve_failure(
     on_failure: Literal["stop", "warn", "continue"],
     failmode: FailMode,
@@ -205,6 +299,8 @@ def _resolve_failure(
     step_command: str | None = None,
     failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
+    rc: int | None = None,
+    captured_output: str | None = None,
 ) -> WorkflowOutcome | None:
     """Resolve a step failure: per-step ``on_failure`` then global ``failmode``.
 
@@ -215,12 +311,17 @@ def _resolve_failure(
         2. ``on_failure == "warn"`` → log warning, continue.
         3. ``on_failure == "continue"`` → silent, continue.
         4. Otherwise fall back to global ``failmode`` (``"warn"``/``"abort"``/``"skip"``).
+
+    When *rc* is known the failure descriptions include the exit code, and
+    *captured_output* (when given) is appended as a ``Last output:`` block.
     """
     if on_failure == "stop":
         if logger is not None:
             events.workflow_aborted(logger, reason=f"on_failure=stop: {step_command}")
         if failure_context is not None and step_command is not None:
-            failure_context.append(f"Step failed (on_failure=stop): {step_command}")
+            failure_context.append(
+                _failure_description(step_command, rc=rc, captured_output=captured_output)
+            )
         return WorkflowOutcome.ABORT
     if on_failure == "warn":
         if logger is not None:
@@ -235,7 +336,9 @@ def _resolve_failure(
         if logger is not None:
             events.workflow_aborted(logger, reason=f"failmode=abort: {step_command}")
         if failure_context is not None and step_command is not None:
-            failure_context.append(f"Step failed (failmode=abort): {step_command}")
+            failure_context.append(
+                _failure_description(step_command, rc=rc, captured_output=captured_output)
+            )
         return WorkflowOutcome.ABORT
     if failmode == "skip":
         if logger is not None:
@@ -260,8 +363,79 @@ def _show_step_notice(
         show_notify_dialog(message, blocking=False, headless=headless)
 
 
+def _show_captured_output(
+    captured_output: str,
+    *,
+    notify_callback: NotifyCallback | None,
+    headless: bool,
+) -> None:
+    """Show a blocking command's captured output as a non-blocking notice."""
+    if captured_output:
+        _show_step_notice(captured_output, notify_callback=notify_callback, headless=headless)
+
+
+def _warn_ignored_output(step: WorkflowStep, reason: str, logger: logging.Logger | None) -> None:
+    """Debug-log that ``output:`` is ignored on a non-blocking step."""
+    if step.output != "hide" and logger is not None:
+        logger.debug("'output' is ignored on a non-blocking step: %s", reason)
+
+
 # Internal context fan-out: failmode/username/hostname/logger all step-scoped.
 # pylint: disable=too-many-arguments
+def _run_action_command(
+    step: WorkflowStep,
+    command: str,
+    *,
+    blocking: bool,
+    timeout: int | None,
+    failmode: FailMode,
+    failure_context: list[str] | None,
+    notify_callback: NotifyCallback | None,
+    headless: bool,
+    logger: logging.Logger | None,
+    state: _WorkflowState | None,
+) -> WorkflowOutcome | None:
+    """Execute a ``run`` / ``check`` step command and resolve its aftermath.
+
+    Applies the capture rules: the combined output is always tracked in
+    *state*; ``output: show`` displays it on success, ``show``/``fail_only``
+    display a rc + output failure notice on failure. Failure resolution
+    delegates to :func:`_resolve_failure`.
+    """
+    if not blocking:
+        _warn_ignored_output(step, f"{step.action} (wait is false)", logger)
+    result = _run_command(
+        command,
+        wait=blocking,
+        timeout=timeout,
+        logger=logger,
+    )
+    if state is not None:
+        state.last_output = result.output
+    if result.success:
+        if step.output == "show":
+            _show_captured_output(result.output, notify_callback=notify_callback, headless=headless)
+        return None
+    # Failure: show captured output when the step asks for it (show /
+    # fail_only), regardless of how the failure resolves.
+    show_captured = step.output in ("show", "fail_only")
+    if show_captured:
+        _show_step_notice(
+            _failure_description(command, rc=result.code, captured_output=result.output),
+            notify_callback=notify_callback,
+            headless=headless,
+        )
+    return _resolve_failure(
+        step.on_failure,
+        failmode,
+        step_command=command,
+        failure_context=failure_context,
+        logger=logger,
+        rc=result.code,
+        captured_output=result.output if show_captured else None,
+    )
+
+
 def _execute_step(
     step: WorkflowStep,
     file_path: Path | None,
@@ -275,6 +449,7 @@ def _execute_step(
     failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
     show_notice: bool = True,
+    state: _WorkflowState | None = None,
 ) -> WorkflowOutcome | None:
     """Execute a single step. Returns terminal WorkflowOutcome or None to continue.
 
@@ -293,8 +468,13 @@ def _execute_step(
             non-blocking notice before executing the command. Callers that
             already displayed it (e.g. in the composed ask dialog or via a
             web session) pass False to avoid showing it twice.
+        state: Optional workflow state receiving the captured output of
+            blocking command steps (fed back as the ``{{output}}`` token).
     """
-    command, message = _resolve_step_texts(step, file_path, username=username, hostname=hostname)
+    last_output = state.last_output if state is not None else ""
+    command, message = _resolve_step_texts(
+        step, file_path, username=username, hostname=hostname, last_output=last_output
+    )
 
     if step.action == "notify":
         if step.command and logger is not None:
@@ -316,32 +496,35 @@ def _execute_step(
     if step.action == "replace":
         _emit_workflow_step(logger, index=0, total=1, action="replace", result=command)
         # Launch replace command instead of OS default file launch
-        success = _run_command(command, wait=step.wait, timeout=timeout, logger=logger)
+        result = _run_command(command, wait=step.wait, timeout=timeout, logger=logger)
+        if state is not None:
+            state.last_output = result.output
         if logger is not None:
-            logger.debug("Replace command success: %s", success)
+            logger.debug("Replace command success: %s", result.success)
+        if step.output == "show":
+            _show_captured_output(result.output, notify_callback=notify_callback, headless=headless)
         return WorkflowOutcome.SKIP_LAUNCH
 
     if step.action in ("run", "check"):
         _emit_workflow_step(logger, index=0, total=1, action=step.action, result=command)
         # "run" honors the step's wait flag; "check" always blocks.
-        success = _run_command(
+        blocking = step.wait if step.action == "run" else True
+        return _run_action_command(
+            step,
             command,
-            wait=step.wait if step.action == "run" else True,
+            blocking=blocking,
             timeout=timeout,
+            failmode=failmode,
+            failure_context=failure_context,
+            notify_callback=notify_callback,
+            headless=headless,
             logger=logger,
+            state=state,
         )
-        if not success:
-            return _resolve_failure(
-                step.on_failure,
-                failmode,
-                step_command=command,
-                failure_context=failure_context,
-                logger=logger,
-            )
-        return None
 
     if step.action == "run_after":
         _emit_workflow_step(logger, index=0, total=1, action="run_after", result=command)
+        _warn_ignored_output(step, "run_after (detached spawn)", logger)
         _run_command(command, wait=False, timeout=None, logger=logger)
 
     return None
@@ -359,15 +542,21 @@ def _resolve_step_texts(
     *,
     username: str | None = None,
     hostname: str | None = None,
+    last_output: str = "",
 ) -> tuple[str, str]:
     """Resolve a step's ``command`` and ``message`` with token substitution.
 
-    Standard tokens (``{{path}}``, ``{{username}}``, ...) are substituted
-    first; the ``{{command}}`` / ``{{message}}`` step tokens are then
-    cross-resolved in a single pass (mutual references are not recursive).
+    Standard tokens (``{{path}}``, ``{{username}}``, ``{{output}}``, ...)
+    are substituted first; the ``{{command}}`` / ``{{message}}`` step
+    tokens are then cross-resolved in a single pass (mutual references are
+    not recursive).
     """
-    command = _substitute_variables(step.command, file_path, username=username, hostname=hostname)
-    message = _substitute_variables(step.message, file_path, username=username, hostname=hostname)
+    command = _substitute_variables(
+        step.command, file_path, username=username, hostname=hostname, output=last_output
+    )
+    message = _substitute_variables(
+        step.message, file_path, username=username, hostname=hostname, output=last_output
+    )
     if command and message:
         command = _replace_step_token(command, "message", message)
         message = _replace_step_token(message, "command", command)
@@ -382,15 +571,18 @@ def _substitute_variables(
     message: str | None = None,
     username: str | None = None,
     hostname: str | None = None,
+    output: str = "",
 ) -> str:
     """Substitute variables in step text (supporting both {{token}} and {token}).
 
     ``command`` / ``message`` carry the current step's already-substituted
     command / message, referenced as ``{{command}}`` / ``{{message}}`` from
-    any step text (e.g. an ``ask`` prompt).
+    any step text (e.g. an ``ask`` prompt). ``output`` carries the captured
+    output of the most recent completed blocking command step, referenced
+    as ``{{output}}`` (empty string before any has run).
     """
     res = template
-    tokens = {
+    tokens: dict[str, str | None] = {
         "command": command,
         "message": message,
         "username": username,
@@ -401,6 +593,7 @@ def _substitute_variables(
         "dir": str(file_path.parent) if file_path else None,
         "stem": file_path.stem if file_path else None,
         "ext": file_path.suffix if file_path else None,
+        "output": output,
     }
 
     for key, val in tokens.items():
@@ -411,33 +604,64 @@ def _substitute_variables(
     return res
 
 
+def _decode_command_stream(stream: bytes | None) -> str:
+    """Decode a captured byte stream using the locale-preferred encoding."""
+    if not stream:
+        return ""
+    return stream.decode(locale.getpreferredencoding(False), errors="replace")
+
+
+def _bound_captured_output(stdout: bytes | None, stderr: bytes | None) -> str:
+    """Combine stdout+stderr into the tail-bounded captured-output text."""
+    text = _decode_command_stream(stdout) + _decode_command_stream(stderr)
+    if len(text) > _OUTPUT_CAPTURE_LIMIT:
+        return _OUTPUT_TRUNCATION_MARKER + text[-_OUTPUT_CAPTURE_LIMIT:]
+    return text
+
+
 def _run_command(
     command: str, wait: bool, *, timeout: int | None = None, logger: logging.Logger | None = None
-) -> bool:
-    """Run shell command."""
+) -> CommandResult:
+    """Run a shell command, capturing combined output for blocking runs.
+
+    Blocking runs (``wait=True``) return the exit code plus the combined
+    stdout+stderr, tail-bounded (``~4 KB``). Detached spawns (``wait=False``)
+    report code 0 with empty output — nothing to capture.
+    """
     try:
         if wait:
-            res = subprocess.run(command, shell=True, check=False, timeout=timeout)
+            res = subprocess.run(
+                command, shell=True, check=False, timeout=timeout, capture_output=True
+            )
+            result = CommandResult(
+                code=res.returncode,
+                output=_bound_captured_output(res.stdout, res.stderr),
+            )
             if logger is not None:
                 events.command_exit(logger, code=res.returncode, command=command)
-            return res.returncode == 0
-        else:
-            # Fire-and-forget spawn: Popen must outlive this call.
-            # pylint: disable-next=consider-using-with
-            subprocess.Popen(command, shell=True)
-            if logger is not None:
-                logger.debug("Command spawned in background")
-            return True
+                # Always routed through the dedicated logger so the output
+                # keeps the log grammar and reaches the web log viewer,
+                # regardless of the step's ``output:`` display mode.
+                events.command_output(
+                    logger, code=result.code, command=command, output=result.output
+                )
+            return result
+        # Fire-and-forget spawn: Popen must outlive this call.
+        # pylint: disable-next=consider-using-with
+        subprocess.Popen(command, shell=True)
+        if logger is not None:
+            logger.debug("Command spawned in background")
+        return CommandResult(code=0, output="")
     except subprocess.TimeoutExpired:
         if logger is not None:
             events.command_timeout(
                 logger, timeout_s=timeout if timeout is not None else 0, command=command
             )
-        return False
+        return CommandResult(code=-1, output="")
     except Exception as e:
         if logger is not None:
             events.command_failed(logger, error=str(e), command=command)
-        return False
+        return CommandResult(code=-1, output="")
 
 
-__all__ = ["WorkflowOutcome", "run_workflow", "FailMode"]
+__all__ = ["CommandResult", "WorkflowOutcome", "run_workflow", "FailMode"]

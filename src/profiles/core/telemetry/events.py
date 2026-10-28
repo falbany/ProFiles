@@ -324,6 +324,18 @@ def command_failed(logger: logging.Logger, *, error: str, command: str) -> None:
     logger.error('COMMAND_FAILED error="%s" command="%s"', error, command)
 
 
+def command_output(logger: logging.Logger, *, code: int, command: str, output: str) -> None:
+    """Emit COMMAND_OUTPUT — captured stdout+stderr of a blocking command.
+
+    Line breaks are escaped so the event stays a single, grammar-valid
+    log line that the web log viewer renders as one entry per command.
+    Logged at INFO when the command succeeded, WARNING otherwise.
+    """
+    escaped = output.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
+    level = logging.INFO if code == 0 else logging.WARNING
+    logger.log(level, 'COMMAND_OUTPUT code=%d command="%s" output="%s"', code, command, escaped)
+
+
 # ---------------------------------------------------------------------------
 # Context menu — right-click actions
 # ---------------------------------------------------------------------------

@@ -60,6 +60,8 @@ export interface WorkflowStepRecord {
   wait?: boolean;
   status: "pending" | "running" | "completed" | "skipped" | "failed";
   note?: string;
+  /** Captured stdout+stderr of a blocking command step, if any. */
+  output?: string;
 }
 
 export interface WorkflowSessionState {
@@ -81,6 +83,8 @@ export interface WorkflowSessionState {
   notify_message?: string | null;
   notice_message?: string | null;
   final_message?: string | null;
+  /** Output of the most recent completed blocking command step. */
+  last_output?: string | null;
   steps: WorkflowStepRecord[];
 }
 

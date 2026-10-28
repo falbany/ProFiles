@@ -35,6 +35,12 @@ class TestStarterTemplateWorkflowKeys:
         assert "{message}" in body
         assert "{content}" not in body
 
+    def test_output_capture_documented(self) -> None:
+        """The starter template documents the output key and {output} token."""
+        body = STARTER_CONFIG_TEMPLATE.format(cwd="/tmp")
+        assert "output:" in body
+        assert "{output}" in body
+
     def test_commented_examples_validate_against_schema(self) -> None:
         """Uncommenting the example entries yields schema-valid steps."""
         import re

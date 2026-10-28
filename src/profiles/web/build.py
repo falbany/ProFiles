@@ -4,12 +4,66 @@
 from __future__ import annotations
 
 import argparse
-import shutil
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 WEB_ROOT = Path(__file__).resolve().parent
+
+# Standard Node.js install locations per platform, used when the npm first
+# on PATH is unusable (e.g. a conda env installed under another user's
+# profile whose node cannot be executed by the current account).
+_NODE_FALLBACK_DIRS: dict[str, list[str]] = {
+    "win32": [r"C:\Program Files\nodejs", r"C:\Program Files (x86)\nodejs"],
+    "darwin": ["/opt/homebrew/bin", "/usr/local/bin"],
+    "linux": ["/usr/local/bin", "/usr/bin"],
+}
+
+
+def _npm_runs(env: dict[str, str]) -> bool:
+    """Check that the npm resolved from env's PATH actually executes.
+
+    A broken installation fails here rather than at build time, so it can
+    be detected before any work is done.
+    """
+    try:
+        result = subprocess.run(
+            "npm --version",
+            shell=True,
+            capture_output=True,
+            env=env,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _has_npm(directory: Path) -> bool:
+    """Check whether a directory contains an npm launcher."""
+    name = "npm.cmd" if sys.platform == "win32" else "npm"
+    return (directory / name).exists()
+
+
+def _build_env() -> dict[str, str] | None:
+    """Return an environment whose PATH provides a working npm.
+
+    Returns os.environ unchanged when the first npm on PATH works;
+    otherwise tries the platform's standard Node.js install locations,
+    prepending the first healthy one. Returns None when no usable npm
+    is found.
+    """
+    if _npm_runs(os.environ.copy()):
+        return os.environ.copy()
+    for directory in _NODE_FALLBACK_DIRS.get(sys.platform, []):
+        if _has_npm(Path(directory)):
+            env = os.environ.copy()
+            env["PATH"] = directory + os.pathsep + env.get("PATH", "")
+            if _npm_runs(env):
+                print(f"INFO: Using Node.js from {directory}")
+                return env
+    return None
 
 
 def _needs_rebuild(marker_file: Path) -> bool:
@@ -67,9 +121,11 @@ def main() -> int:
     dist_dir = WEB_ROOT / "dist"
     marker_file = dist_dir / ".web-build-marker"
 
-    # Check npm availability
-    if shutil.which("npm") is None:
-        print("ERROR: npm not found.", file=sys.stderr)
+    # Resolve a working npm (falls back to standard install locations
+    # when the one first on PATH is unusable)
+    env = _build_env()
+    if env is None:
+        print("ERROR: npm not found or not usable.", file=sys.stderr)
         print("   Please install Node.js: https://nodejs.org", file=sys.stderr)
         return 1
 
@@ -85,12 +141,12 @@ def main() -> int:
         if not (WEB_ROOT / "node_modules").is_dir():
             command = "npm ci"
             print(f"> {command}", flush=True)
-            subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True)
+            subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True, env=env)
 
         # Build
         command = "npm run build"
         print(f"> {command}", flush=True)
-        subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True)
+        subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True, env=env)
 
         marker_file.touch()
         print("SUCCESS: Build successful.")
