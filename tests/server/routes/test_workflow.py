@@ -301,3 +301,122 @@ async def test_failed_stop_step_reports_rc_and_output(tmp_path: Path) -> None:
         assert data["steps"][0]["status"] == "failed"
         assert "rc=3" in data["final_message"]
         assert "Last output:" in data["final_message"]
+
+
+@pytest.mark.anyio
+async def test_skip_on_ask_lets_next_step_ask(tmp_path: Path) -> None:
+    """Skip ignores only the answered step; the next step still asks its own guard."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Skip Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo prepare", ask="Prepare the file?"),
+                WorkflowStep(action="run", command="echo validate", ask="Validate before launch?"),
+                WorkflowStep(action="run", command="echo log"),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with (
+            patch("profiles.core.environment.workflow._execute_step", return_value=0),
+            patch("profiles.core.actions.launch_file", return_value=True),
+        ):
+            resp = await client.post(
+                "/api/workflow/start",
+                json={"directory": str(test_dir), "filename": "tool.mttl"},
+            )
+            data = resp.json()
+            assert data["status"] == "waiting_ask"
+            assert data["ask_prompt"] == "Prepare the file?"
+
+            skip = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "skip"},
+            )
+            skipped = skip.json()
+            # Only step 1 is skipped; step 2 pauses on its own ask guard.
+            assert skipped["steps"][0]["status"] == "skipped"
+            assert skipped["steps"][0]["note"] == "Skipped by user"
+            assert skipped["steps"][1]["status"] == "running"
+            assert skipped["steps"][1]["note"] != "Skipped by previous step"
+            assert skipped["status"] == "waiting_ask"
+            assert skipped["ask_prompt"] == "Validate before launch?"
+
+            # Step 2 executes on Yes; the workflow then completes via step 3.
+            yes = await client.post(
+                f"/api/workflow/{skipped['session_id']}/respond",
+                json={"action": "yes"},
+            )
+            final = yes.json()
+            assert final["steps"][1]["status"] == "completed"
+            assert final["steps"][2]["status"] == "completed"
+            assert final["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_output_token_resolves_in_ask_prompt(tmp_path: Path) -> None:
+    """An ask prompt sees the {{output}} captured by the previous command step."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Output Ask Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo probe-output-123"),
+                WorkflowStep(
+                    action="run", command="echo prepare", ask="Probe said {{output}} — run?"
+                ),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch("profiles.core.actions.launch_file", return_value=True):
+            resp = await client.post(
+                "/api/workflow/start",
+                json={"directory": str(test_dir), "filename": "tool.mttl"},
+            )
+        data = resp.json()
+        assert data["status"] == "waiting_ask"
+        assert "probe-output-123" in data["ask_prompt"]
+
+
+@pytest.mark.anyio
+async def test_output_token_resolves_in_notice_message(tmp_path: Path) -> None:
+    """A non-blocking notice message sees the {{output}} of the previous step."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Output Notice Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo probe-output-456"),
+                WorkflowStep(action="run", command="echo prepare", message="Result: {{output}}"),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch("profiles.core.actions.launch_file", return_value=True):
+            resp = await client.post(
+                "/api/workflow/start",
+                json={"directory": str(test_dir), "filename": "tool.mttl"},
+            )
+        data = resp.json()
+        assert data["status"] == "waiting_notice"
+        assert "probe-output-456" in data["notice_message"]

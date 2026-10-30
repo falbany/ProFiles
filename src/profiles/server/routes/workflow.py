@@ -63,7 +63,6 @@ class WorkflowSession:
     notify_message: str | None = None
     notice_message: str | None = None
     notice_acknowledged: bool = False
-    skip_next: bool = False
     final_message: str = ""
     last_output: str = ""
     release: str = ""
@@ -148,13 +147,6 @@ def _advance_session(session: WorkflowSession) -> None:
         step = session.steps[i]
         rec = session.step_records[i]
 
-        if session.skip_next:
-            rec.status = "skipped"
-            rec.note = "Skipped by previous step"
-            session.skip_next = False
-            session.current_index += 1
-            continue
-
         # If step has an ask prompt and we haven't asked yet:
         # the dialog composes the step's Markdown message (if any) above
         # the ask question, mirroring the native engine behavior.
@@ -164,6 +156,7 @@ def _advance_session(session: WorkflowSession) -> None:
                 session.file_path,
                 username=username,
                 hostname=hostname,
+                last_output=session.last_output,
             )
             ask_content = _substitute_variables(
                 step.ask,
@@ -172,6 +165,7 @@ def _advance_session(session: WorkflowSession) -> None:
                 message=message_sub,
                 username=username,
                 hostname=hostname,
+                output=session.last_output,
             )
             session.status = "waiting_ask"
             session.ask_prompt = ask_content
@@ -193,6 +187,7 @@ def _advance_session(session: WorkflowSession) -> None:
                 session.file_path,
                 username=username,
                 hostname=hostname,
+                last_output=session.last_output,
             )
             session.status = "waiting_notice"
             session.notice_message = message_sub
@@ -206,6 +201,7 @@ def _advance_session(session: WorkflowSession) -> None:
                 session.file_path,
                 username=username,
                 hostname=hostname,
+                last_output=session.last_output,
             )
             session.status = "waiting_notify"
             session.notify_message = msg_text
@@ -431,7 +427,6 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
                     "final_message": session.final_message,
                     "steps": [_format_step_record(r) for r in session.step_records],
                 }
-            session.skip_next = True
             session.current_index += 1
             _advance_session(session)
         elif payload.action == "yes":

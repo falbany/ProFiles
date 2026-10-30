@@ -47,12 +47,18 @@ def test_workflow_replace_step(tmp_path: Path):
 
 
 def test_workflow_skip_step_over():
+    """Skip ignores only the answered step; the next step still executes."""
+    captured: list[str] = []
     steps = [
         WorkflowStep(action="run", command="echo 1", ask="Skip?"),
         WorkflowStep(action="run", command="echo 2"),
     ]
-    outcome = run_workflow(steps, None, user_choice="skip")
+    with patch(
+        "profiles.core.environment.workflow._run_command", side_effect=_record_run(captured)
+    ):
+        outcome = run_workflow(steps, None, user_choice="skip")
     assert outcome == WorkflowOutcome.CONTINUE
+    assert captured == ["echo 2"]
 
 
 def test_timeout_aborts_on_run_failure():

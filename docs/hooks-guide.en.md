@@ -268,9 +268,11 @@ entries:
 **Scenarios**:
 
 - **Yes → Yes → Yes**: All steps executed, special launcher used
-- **Yes → Skip → Yes**: Step 2 skipped, special launcher used
-- **Skip** (first): Step 1 skipped, continues to next steps
+- **Yes → Skip → Yes**: Step 3 (validate) skipped by its guard, all other steps executed — special launcher used
+- **Skip** (first): Step 1 skipped by its guard, workflow continues to the next step
 - **No** (anywhere): Workflow aborted, file **not launched**
+
+> **Note**: **Skip** only affects the step whose guard was answered — the next step still runs (and asks its own guard, if any).
 
 ---
 

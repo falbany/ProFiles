@@ -186,17 +186,9 @@ def run_workflow(
     if not steps:
         return WorkflowOutcome.CONTINUE
 
-    skip_next = False
     state = _WorkflowState()
 
     for i, step in enumerate(steps):
-        # If previous step was skipped via "skip", skip this step
-        if skip_next:
-            if logger is not None:
-                logger.debug("Skipping step %d (action: %s)", i + 1, step.action)
-            skip_next = False
-            continue
-
         _emit_workflow_step(
             logger, index=i + 1, total=len(steps), action=step.action, result="start"
         )
@@ -226,10 +218,9 @@ def run_workflow(
                     action=step.action,
                     result="skipped-user",
                 )
-                # If skipping the last step, return SKIP_LAUNCH
+                # If skipping the last step, end without OS launch
                 if i == len(steps) - 1:
                     return WorkflowOutcome.SKIP_LAUNCH
-                skip_next = True
                 continue
 
         # Evaluate conditional guard
