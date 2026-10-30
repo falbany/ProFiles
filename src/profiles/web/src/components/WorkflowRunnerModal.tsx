@@ -187,6 +187,26 @@ export function WorkflowRunnerModal({
   const isFinished =
     session?.status === "completed" || session?.status === "aborted" || session?.status === "failed";
 
+  // Command box for the interactive (waiting_*) panels: the generic detail
+  // panel below is suppressed while the session waits on the current step,
+  // so the command must be surfaced here as well — after the human-readable
+  // message, per the message-first ordering.
+  const showInteractivePanels =
+    selectedStepIndex === null || selectedStepIndex === session?.current_index;
+  const interactiveCommandBox =
+    showInteractivePanels &&
+    activeStep?.command &&
+    (session?.status === "waiting_notify" ||
+      session?.status === "waiting_notice" ||
+      session?.status === "waiting_ask") ? (
+      <div className="space-y-2">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
+        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+          {activeStep.command}
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div
       role="dialog"
@@ -327,6 +347,7 @@ export function WorkflowRunnerModal({
                       <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
                         {renderMarkdown(session.notify_message)}
                       </div>
+                      {interactiveCommandBox}
                     </div>
                   )}
 
@@ -336,6 +357,7 @@ export function WorkflowRunnerModal({
                       <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
                         {renderMarkdown(session.notice_message)}
                       </div>
+                      {interactiveCommandBox}
                       <p className="text-[11px] text-ink-faint">The command will run when you continue.</p>
                     </div>
                   )}
@@ -351,6 +373,7 @@ export function WorkflowRunnerModal({
                       <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-4 text-sm font-medium text-ink">
                         {session.ask_prompt}
                       </div>
+                      {interactiveCommandBox}
                     </div>
                   )}
 
