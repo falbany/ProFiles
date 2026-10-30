@@ -81,7 +81,38 @@ async def test_reveal_selects_file_and_returns_action_result(
 
     assert response.status_code == 200
     assert response.json() == {"status": "success", "message": "Revealed", "path": str(target)}
-    reveal.assert_called_once_with(target.resolve())
+    reveal.assert_called_once_with(target)
+
+
+@pytest.mark.anyio
+async def test_reveal_keeps_symlink_form_of_user_path(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """User-supplied paths are not canonicalized through resolve().
+
+    On Windows resolve() rewrites mapped network drives (M:/...) to their
+    UNC target; the boundary must preserve the form the client sent.
+    Symlinks stand in for that transformation on every platform.
+    """
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    real_file = real_dir / "sample.txt"
+    real_file.write_text("sample")
+    link = tmp_path / "link"
+    link.symlink_to(real_dir, target_is_directory=True)
+    expected = ActionResult(status=ActionStatus.SUCCESS, message="Revealed", path=real_file)
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.reveal_in_file_manager", return_value=expected
+    ) as reveal:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/actions/reveal", json={"file_path": str(link / "sample.txt")}
+            )
+
+    assert response.status_code == 200
+    reveal.assert_called_once_with(link / "sample.txt")
 
 
 @pytest.mark.anyio
