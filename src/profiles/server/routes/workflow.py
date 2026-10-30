@@ -16,6 +16,7 @@ from profiles.core.config.models import WorkflowStep
 from profiles.core.environment import matcher, workflow
 from profiles.core.environment.workflow import _substitute_variables
 from profiles.utils.network import get_hostname, get_username
+from profiles.utils.path_utils import normalize_user_path
 
 router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 
@@ -288,7 +289,7 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
     if not config or not config.launch_hooks:
         raise HTTPException(status_code=400, detail="No launch workflows configured")
 
-    target_dir = Path(payload.directory).expanduser().resolve()
+    target_dir = normalize_user_path(payload.directory)
     target_file = target_dir / payload.filename
     if not target_file.exists():
         raise HTTPException(status_code=404, detail="File does not exist")

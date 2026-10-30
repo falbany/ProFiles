@@ -7,7 +7,6 @@ import binascii
 import hashlib
 import logging
 from io import BytesIO
-from pathlib import Path
 from types import ModuleType
 from typing import Any
 
@@ -21,6 +20,7 @@ from profiles.core.telemetry.diagnostics import default_log_path
 from profiles.server.state import ServerState
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
+from profiles.utils.path_utils import normalize_user_path
 
 logger = logging.getLogger("profiles.server.actions")
 
@@ -46,7 +46,7 @@ class LaunchWithArgsRequest(BaseModel):
 @router.post("/open-folder")
 async def open_folder(payload: PathRequest) -> dict:
     """Open folder in host file manager."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     target_dir = path if path.is_dir() else path.parent
     if not target_dir.exists():
         raise HTTPException(status_code=404, detail="Directory does not exist")
@@ -57,7 +57,7 @@ async def open_folder(payload: PathRequest) -> dict:
 @router.post("/open-terminal")
 async def open_terminal(payload: PathRequest) -> dict:
     """Open host terminal in file's directory."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     target_dir = path if path.is_dir() else path.parent
     if not target_dir.exists():
         raise HTTPException(status_code=404, detail="Directory does not exist")
@@ -71,7 +71,7 @@ async def open_terminal(payload: PathRequest) -> dict:
 @router.post("/launch-with-args")
 async def launch_with_args(payload: LaunchWithArgsRequest) -> dict:
     """Launch file with explicit arguments."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
     launched = actions.launch_file_with_args(path, payload.args)
@@ -137,7 +137,7 @@ async def launch_file(payload: LaunchRequest, request: Request) -> dict:
 @router.post("/reveal")
 async def reveal_file(payload: PathRequest) -> dict:
     """Reveal file in host file explorer."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     result = actions.reveal_in_file_manager(path)
     if result.status != actions.ActionStatus.SUCCESS:
         status_code = 404 if result.status == actions.ActionStatus.NOT_FOUND else 500
@@ -152,7 +152,7 @@ async def reveal_file(payload: PathRequest) -> dict:
 @router.post("/metadata")
 async def file_metadata(payload: PathRequest) -> dict:
     """Return basic metadata for a file."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
     try:
@@ -164,7 +164,7 @@ async def file_metadata(payload: PathRequest) -> dict:
 @router.post("/delete")
 async def delete_file(payload: PathRequest) -> dict:
     """Delete a file after the client has obtained user confirmation."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     result = actions.clear_file(path)
     if result.status != actions.ActionStatus.SUCCESS:
         status_code = 404 if result.status == actions.ActionStatus.NOT_FOUND else 400
@@ -179,7 +179,7 @@ async def delete_file(payload: PathRequest) -> dict:
 @router.post("/hash")
 async def compute_hash(payload: HashRequest) -> dict:
     """Compute cryptographic hash of file."""
-    path = Path(payload.file_path).expanduser().resolve()
+    path = normalize_user_path(payload.file_path)
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="File does not exist")
 
@@ -223,7 +223,7 @@ async def generate_barcode(payload: BarcodeRequest):
     if payload.content:
         qr_content = payload.content
     elif payload.file_path:
-        path = Path(payload.file_path).expanduser().resolve()
+        path = normalize_user_path(payload.file_path)
         if not path.exists():
             raise HTTPException(status_code=404, detail="File does not exist")
 

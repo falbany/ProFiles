@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 
 from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
+from profiles.utils.path_utils import normalize_user_path
 
 router = APIRouter(prefix="/api/fs", tags=["fs"])
 
@@ -35,7 +36,7 @@ async def browse_fs(
     path: str = Query(default=""), include_hidden: bool = Query(default=False)
 ) -> dict:
     """Browse filesystem directory entries."""
-    target_path = Path(path).expanduser().resolve() if path else Path.home()
+    target_path = normalize_user_path(path) if path else Path.home()
     if not target_path.exists() or not target_path.is_dir():
         raise HTTPException(status_code=400, detail="Path is not an accessible directory")
 

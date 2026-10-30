@@ -15,6 +15,9 @@ from profiles.utils.network import (
     get_system_info,
     get_username,
 )
+from profiles.utils.path_utils import (
+    normalize_user_path,
+)
 from profiles.utils.search_parser import (
     match_filter,
     tokenize,
@@ -37,6 +40,8 @@ __all__ = [
     # search_parser
     "tokenize",
     "match_filter",
+    # path_utils
+    "normalize_user_path",
     # shortcut
     "get_desktop_path",
     "create_shortcut",
