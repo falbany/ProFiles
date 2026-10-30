@@ -267,8 +267,11 @@ export function WorkflowRunnerModal({
                         </span>
                         <span className="text-[10px] font-mono text-ink-faint">#{st.index}</span>
                       </div>
-                      <p className="truncate font-mono text-[11px] text-ink-secondary mt-0.5" title={st.command}>
-                        {st.command}
+                      <p
+                        className="truncate font-mono text-[11px] text-ink-secondary mt-0.5"
+                        title={st.command}
+                      >
+                        {st.message ? st.message.split("\n")[0] : st.command}
                       </p>
                       {st.note && (
                         <p className="mt-1 text-[10px] text-ink-faint italic">{st.note}</p>
@@ -401,13 +404,6 @@ export function WorkflowRunnerModal({
                   {!(isFinished && selectedStepIndex === null) &&
                    !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
                     <div className="space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
-                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
-                          {activeStep?.command ? activeStep.command : "Waiting..."}
-                        </div>
-                      </div>
-
                       {activeStep?.message && (
                         <div className="space-y-2">
                           <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Message:</p>
@@ -416,6 +412,13 @@ export function WorkflowRunnerModal({
                           </div>
                         </div>
                       )}
+
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+                          {activeStep?.command ? activeStep.command : "Waiting..."}
+                        </div>
+                      </div>
 
                       {activeStep?.output && (
                         <div className="space-y-2">
