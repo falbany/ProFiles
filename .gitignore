@@ -306,3 +306,6 @@ $RECYCLE.BIN/
 
 # Legacy CWD-relative log output (now defaults to ~/.profiles/profiles.log)
 profiles.log
+
+# Local workflow-demo launch targets (my.profiles hooks bench)
+demo/

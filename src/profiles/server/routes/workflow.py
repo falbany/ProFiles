@@ -240,7 +240,14 @@ def _advance_session(session: WorkflowSession) -> None:
             # replace returns WorkflowOutcome.SKIP_LAUNCH (not int), or None
             rec.status = "completed"
             session.status = "completed"
-            session.final_message = f"Launched replacement: {step.command}"
+            command_sub, _ = workflow._resolve_step_texts(
+                step,
+                session.file_path,
+                username=username,
+                hostname=hostname,
+                last_output=session.last_output,
+            )
+            session.final_message = f"Launched replacement: {command_sub or step.command}"
             return
 
         if step.action == "run_after":

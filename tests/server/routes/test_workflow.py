@@ -420,3 +420,32 @@ async def test_output_token_resolves_in_notice_message(tmp_path: Path) -> None:
         data = resp.json()
         assert data["status"] == "waiting_notice"
         assert "probe-output-456" in data["notice_message"]
+
+
+@pytest.mark.anyio
+async def test_replace_final_message_is_token_substituted(tmp_path: Path) -> None:
+    """A replace step's final_message shows the resolved command, not the raw template."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Replace Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo probe-output-789"),
+                WorkflowStep(action="replace", command="echo 'Opening {{filename}}'"),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(test_dir), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert data["final_message"] == "Launched replacement: echo 'Opening tool.mttl'"
