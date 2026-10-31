@@ -52,6 +52,13 @@ class TestDefaults:
         assert d.theme == "auto"
         assert d.verbose == "INFO"
 
+    def test_unknown_key_raises(self) -> None:
+        # extra="forbid": a typo or a key that only exists in old docs
+        # (e.g. `columns:` under defaults) must fail loudly, not be ignored.
+        with pytest.raises(ValidationError) as exc_info:
+            Defaults(columns="File, Version")
+        assert "columns" in str(exc_info.value)
+
 
 class TestAppConfigYaml:
     def test_empty(self) -> None:

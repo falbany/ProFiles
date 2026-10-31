@@ -193,7 +193,7 @@ defaults:
 defaults:
   # Add aggressive exclusions
   search_exclude_dirs: [.git, __pycache__, bin, obj, tmp, Debug, Release, .vs]
-  search_exclude_files: [*backup*, *.tmp, ~$*, *.log]
+  search_exclude_files: ["*backup*", "*.tmp", "~$*", "*.log"]
 
   # Use non-recursive if possible
   recursive_search: false

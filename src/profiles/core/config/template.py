@@ -302,10 +302,11 @@ hooks:
 
 # ============================================================================
 # CONFIGS — named configurations. Each may `extends` another config.
-# The name is the dict key. `pc_hostname: All` acts as a catch-all — place
-# it LAST so it does not shadow specific hostnames.
+# The name is the dict key. Auto-selection is driven by the `match` object —
+# a config with `match.hostname: ["*"]` (or an empty match) acts as a
+# catch-all: place it LAST so it does not shadow specific hostnames.
 #
-# Keys (all optional, except pc_hostname if you want auto-selection):
+# Keys (all optional; add `match` if you want auto-selection):
 #   extends       name of another config to inherit from (lists are merged:
 #                 local items first, then inherited items not already present)
 #   match         auto-selection criteria object (see below)

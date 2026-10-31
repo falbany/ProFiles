@@ -100,7 +100,7 @@ defaults:
     - pattern: TMP
       color: "#BAC015"
   search_exclude_dirs: [.git, tmp, Obsolete, Debug, __pycache__, node_modules]
-  search_exclude_files: [*backup*, ~$*, *.tmp]
+  search_exclude_files: ["*backup*", "~$*", "*.tmp"]
   verbose: INFO
   scan_metrics: false
 ```
@@ -113,6 +113,8 @@ Both keys accept case-insensitive glob patterns with `*`, `?`, `[seq]` wildcards
 | --- | --- | --- | --- |
 | `search_exclude_dirs` | Directory basenames skipped during **recursive** scan | `.git` | `node_modules`, `Debug*`, `*tmp` |
 | `search_exclude_files` | File basenames skipped during scan (**recursive and non-recursive**) | `""` | `*backup*`, `~$*`, `*.tmp` |
+
+> **⚠️ Always quote globs in YAML** : an unquoted list item starting with `*` (e.g. `[*backup*, *.tmp]`) is parsed as a YAML **alias**, not a string — the file fails to load with `found undefined alias 'backup*'`. Write `["*backup*", "*.tmp"]` instead. The same rule applies to any value starting with `*`.
 
 **Per-configuration appending**: `search_exclude_files` in a `configs` section is appended to the `defaults.search_exclude_files` base list — both sets of patterns apply for that configuration. Directory exclusion (`search_exclude_dirs`) is global only.
 
@@ -188,7 +190,7 @@ configs:
         color: "#1565C0"
       - pattern: DEV
         color: "#757575"
-    search_exclude_files: [*draft*, *.bak]
+    search_exclude_files: ["*draft*", "*.bak"]
 ```
 
 ---
@@ -308,8 +310,6 @@ defaults:
   theme: dark
   search_dir: /path/to/production/root
   recursive_search: true
-  columns: File, Version, Classification, Date
-  column_widths: 500, 120, 150, 100
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
   filters: ["", PROD, DEV, DEV, TMP]
   row_colors:
@@ -322,6 +322,25 @@ defaults:
     - pattern: TEST
       color: "#FF6F00"
   search_exclude_dirs: [.git, tmp, Obsolete, Debug, Backup]
+
+# Dynamic columns — a TOP-LEVEL `columns:` mapping, NOT a `defaults:` key
+# (the defaults block ignores unknown keys, so `columns:`/`column_widths:`
+# placed there would silently do nothing).
+columns:
+  File:
+    name: File
+    width: 500
+    stretch: true
+    match: ".*"
+  Version:
+    match: "[-_]V(\\d+(?:\\.\\d+)*)"
+    width: 120
+  Classification:
+    match: type
+    width: 150
+  Date:
+    match: date
+    width: 100
 
 configs:
   configuration_1:
@@ -414,13 +433,13 @@ configs:
 ```yaml
 # Find production files, exclude backups, include specific version
   extensions: [.lnk]
-  filters: [Prod -backup +V2026.7]
+  filters: ["Prod -backup +V2026.7"]
 
 # Multiple alternatives with exact phrases
-  filters: ["Production Program" OR "Test Suite" -deprecated]
+  filters: ['"Production Program" OR "Test Suite" -deprecated']
 
 # Combine AND and OR logic
-  filters: [(Prod OR Dev) -tmp "V2026.*"]
+  filters: ['(Prod OR Dev) -tmp "V2026.*"']
 ```
 
 ### Operator Precedence Examples
@@ -545,8 +564,8 @@ python -m profiles --config C:\path\to\.profiles
 **Solution**:
 
 ```yaml
-# Match .lnk files (both .lnk and .LNK)
-  extensions: [All, .lnk, .LNK  # All equivalent]
+# Match .lnk files (both .lnk and .LNK — all equivalent)
+  extensions: [All, .lnk, .LNK]
 
 # Match multiple extensions
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
@@ -585,7 +604,7 @@ defaults:
 2. **Limit file extensions**:
 
 ```yaml
-  extensions: [.lnk, .pdf  # Only scan these types]
+  extensions: [.lnk, .pdf]  # Only scan these types
 ```
 
 3. **Use specific search directory**:
