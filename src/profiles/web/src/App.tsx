@@ -1169,6 +1169,9 @@ export default function App() {
         setShowShortcuts(false);
         setShowLogViewer(false);
         setShowTimerModal(false);
+        setShowBarcodeModal(false);
+        setBarcodeFilePath(undefined);
+        setShowCameraScanner(false);
         // Cancelled drags may never fire dragleave (WKWebView) — make
         // Escape a hard reset for the drop overlay.
         applyDragState(resetDragState());
