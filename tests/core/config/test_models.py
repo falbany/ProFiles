@@ -29,7 +29,7 @@ class TestAppConfig:
         assert config.filters == ("", "PROD", "DEV")
         assert config.search_exclude_dirs == (".git",)
         assert config.search_exclude_files == ()
-        assert config.theme == "light"
+        assert config.theme == "auto"
         assert config.verbose == "INFO"
         assert config.configurations == []
         assert config.config_path == Path.cwd() / ".profiles"

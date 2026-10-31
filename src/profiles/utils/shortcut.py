@@ -52,11 +52,12 @@ def _get_windows_desktop() -> Path | None:
     """
     try:
         import ctypes
+        from ctypes import wintypes
 
         csidl_desktop = 0x000C
         shgfp_type_current = 0
 
-        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+        buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
         result = ctypes.windll.shell32.SHGetFolderPathW(
             None, csidl_desktop, None, shgfp_type_current, buf
         )

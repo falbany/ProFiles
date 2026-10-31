@@ -71,17 +71,9 @@ path = "src/profiles/web/build_hook.py"
 packages = ["src/profiles"]
 artifacts = ["src/profiles/web/dist"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/profiles" = "profiles_app"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["profiles", "profiles.*"]
-
 # ============================================
 # Briefcase — native installer config
 # ============================================
-# See docs/superpowers/specs/2026-09-01-briefcase-installer-design.md
 # Note: the app version is deliberately NOT repeated here. Briefcase
 # merges PEP 621 metadata (merge_pep621_config in briefcase.config), so
 # [project].version above is the single source of truth for installers.
@@ -130,7 +122,6 @@ requires = [
 # ``document_types`` key is absorbed by **kwargs and overwritten with {}),
 # and each entry requires extension/icon/description/url. The literal
 # dotfile ``.profiles`` is not claimable (no filename extension to match).
-# See docs/superpowers/specs/2026-10-13-launch-and-config-handoff-design.md
 [tool.briefcase.app.profiles.document_type.profiles]
 extension = "profiles"
 description = "ProFiles launch-handoff document"
@@ -158,7 +149,7 @@ reports = false
 ignored-classes = ["profiles"]
 
 [tool.pylint.TYPECHECK]
-ignored-modules = ["profiles.utils.shortcut", "zxingcpp", "WebKit"]
+ignored-modules = ["zxingcpp", "WebKit"]
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = "C0114,C0115,C0116,C0301,C0103,R0902,R0903,R0917,W0603,W0718,R0801,R1705,C0415,E0401,E0611"
@@ -183,13 +174,6 @@ max-locals = 20
 max-branches = 15
 max-module-lines = 1200
 max-statements = 60
-
-[tool.setuptools.package-data]
-"profiles" = ["py.typed"]
-# The React/Vite frontend is built with `npm run build` (see src/profiles/web)
-# and the resulting dist/ is committed to the repository so that
-# `pip install .` yields a working app without needing a Node.js toolchain.
-"profiles.web" = ["dist/**/*"]
 
 [tool.ruff]
 target-version = "py311"

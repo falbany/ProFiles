@@ -61,7 +61,7 @@ Cette section définit les paramètres par défaut applicables à toutes les mac
 | `title`               | string             | `""`                 | Titre personnalisé ajouté à la fenêtre principale                           |
 | `gui_auto_launch`     | bool               | `true`               | Afficher la fenêtre de l'interface web lors de `python -m profiles`       |
 | `close_after_execute` | bool               | `false`              | Fermer la fenêtre après un lancement réussi                                 |
-| `theme`               | enum               | `"light"`            | Thème d'interface : `"light"` ou `"dark"` (Material Design 3)               |
+| `theme`               | enum               | `"auto"`             | Thème d'interface : `"light"`, `"dark"` ou `"auto"` (Material Design 3)     |
 | `language`            | enum               | `"en"`               | Langue de l'interface : `"en"` (anglais) ou `"fr"` (français) ; basculable via le bouton langue de la barre de statut (cycle en → fr → en) |
 | `search_dir`          | string             | `""`                 | Répertoire de recherche par défaut pour le champ Directory                  |
 | `recursive_search`    | bool               | `false`              | État initial de la case à cocher Recursive                                  |
