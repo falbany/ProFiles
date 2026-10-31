@@ -22,7 +22,7 @@ export function FilterSyntaxHelper({ query, visible }: FilterSyntaxHelperProps) 
     return (
       <div
         data-testid="filter-syntax-helper"
-        className="pointer-events-none absolute left-0 right-0 top-full z-[70] mt-1 rounded-md border border-status-danger-border bg-surface-strong px-3 py-2 text-[11px] leading-5 text-status-danger-text/90 shadow-xl"
+        className="pointer-events-none absolute left-0 right-0 top-full z-[var(--z-syntax-helper)] mt-1 rounded-md border border-status-danger-border bg-surface-strong px-3 py-2 text-[11px] leading-5 text-status-danger-text/90 shadow-xl"
       >
         {description.error}
       </div>
@@ -34,7 +34,7 @@ export function FilterSyntaxHelper({ query, visible }: FilterSyntaxHelperProps) 
   return (
     <div
       data-testid="filter-syntax-helper"
-      className="pointer-events-none absolute left-0 right-0 top-full z-[70] mt-1 rounded-md border border-line bg-surface-strong px-3 py-2 text-[11px] leading-5 text-ink-secondary shadow-xl"
+      className="pointer-events-none absolute left-0 right-0 top-full z-[var(--z-syntax-helper)] mt-1 rounded-md border border-line bg-surface-strong px-3 py-2 text-[11px] leading-5 text-ink-secondary shadow-xl"
     >
       <span className="mr-1.5 align-[1px] text-[10px] uppercase tracking-wide text-ink-muted">
         reads as

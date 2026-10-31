@@ -11,12 +11,19 @@ type TooltipProps = {
   block?: boolean;
   /** Preferred placement; the actual side flips automatically when there is no room. */
   placement?: Placement;
+  /**
+   * Keep the bubble hidden while true — used by combobox callers so the
+   * tooltip can never overlay their unfolded list (issue #53).
+   */
+  suppress?: boolean;
 };
 
 /** Breathing room kept between the bubble and the viewport edges. */
 const VIEWPORT_MARGIN = 8;
 /** Gap between the trigger and the bubble. */
 const OFFSET = 8;
+/** Hover-intent delay before a pointer-triggered bubble appears (focus is instant). */
+const HOVER_DELAY_MS = 400;
 
 /** Opposite side used when the preferred one has no room in the window. */
 const FLIPPED: Record<Placement, Placement> = {
@@ -85,16 +92,36 @@ const Tooltip: React.FC<TooltipProps> = ({
   children,
   block = true,
   placement = "top",
+  suppress = false,
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const bubbleRef = useRef<HTMLSpanElement>(null);
   const tooltipId = useId();
+  const hoverTimerRef = useRef<number | null>(null);
 
   const [visible, setVisible] = useState(false);
   const [side, setSide] = useState<Placement>(placement);
   const [nudge, setNudge] = useState({ x: 0, y: 0 });
   /** Viewport position of the resolved bubble box (see `measure`). */
   const [bubblePos, setBubblePos] = useState({ left: -9999, top: -9999 });
+
+  const clearHoverTimer = () => {
+    if (hoverTimerRef.current !== null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
+
+  /** Suppression (unfolded combobox list) always wins, immediately. */
+  useEffect(() => {
+    if (suppress) {
+      clearHoverTimer();
+      setVisible(false);
+    }
+  }, [suppress]);
+
+  // Never leave a pending reveal timer across unmounts.
+  useEffect(() => () => clearHoverTimer(), []);
 
   /**
    * Anchor the bubble in viewport coordinates. The bubble renders through a
@@ -150,18 +177,71 @@ const Tooltip: React.FC<TooltipProps> = ({
     };
   }, [visible]);
 
-  /** Hover and keyboard focus both reveal the tooltip (WCAG tooltip-keyboard). */
-  const show = () => {
-    measure();
-    setVisible(true);
+  /**
+   * Reveal the bubble. Pointer hovers go through a short hover-intent delay
+   * (issue #61); keyboard focus reveals instantly. Suppressed callers never
+   * show.
+   */
+  const show = (immediate: boolean) => {
+    if (suppress) return;
+    clearHoverTimer();
+    const reveal = () => {
+      measure();
+      setVisible(true);
+    };
+    if (immediate) {
+      reveal();
+    } else {
+      hoverTimerRef.current = window.setTimeout(reveal, HOVER_DELAY_MS);
+    }
   };
-  const hide = () => setVisible(false);
+
+  const hide = () => {
+    clearHoverTimer();
+    setVisible(false);
+  };
+
+  // Escape dismisses the bubble (WCAG 1.4.13, issue #61). Capture phase so
+  // handlers that stopPropagation on Escape (menus, comboboxes) can't swallow
+  // it; we never consume the event, so those handlers still run.
+  useEffect(() => {
+    if (!visible) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setVisible(false);
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [visible]);
+
+  // The bubble sits above every other layer (z-tooltip), so a dialog mounting
+  // while it is up — the trigger's own action opened one — would float over
+  // the modal (issue #59). Yield the moment a dialog appears; a fresh hover
+  // re-measures once it is gone.
+  useEffect(() => {
+    if (!visible) return;
+    const dialogOpen = () =>
+      Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
+    if (dialogOpen()) {
+      setVisible(false);
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (dialogOpen()) setVisible(false);
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["role", "aria-modal", "open", "class"],
+    });
+    return () => observer.disconnect();
+  }, [visible]);
 
   /** Attach hover/focus handling plus an accessible reference to the bubble. */
   const triggerProps = {
-    onMouseEnter: show,
+    onMouseEnter: () => show(false),
     onMouseLeave: hide,
-    onFocus: show,
+    onFocus: () => show(true),
     onBlur: hide,
     "aria-describedby": tooltipId,
   } as Record<string, unknown>;
@@ -170,9 +250,9 @@ const Tooltip: React.FC<TooltipProps> = ({
     <div
       ref={wrapperRef}
       className={`group relative ${block ? "flex min-w-0 flex-1 items-center" : "inline-flex shrink-0 items-center"}`}
-      onMouseEnter={show}
+      onMouseEnter={() => show(false)}
       onMouseLeave={hide}
-      onFocus={show}
+      onFocus={() => show(true)}
       onBlur={hide}
     >
       {cloneElement(children, triggerProps)}
@@ -181,7 +261,7 @@ const Tooltip: React.FC<TooltipProps> = ({
           ref={bubbleRef}
           id={tooltipId}
           role="tooltip"
-          className={`pointer-events-none invisible fixed z-[100] w-max max-w-[calc(100vw-16px)] rounded-md border border-line bg-elevated px-2 py-1 text-left text-[11px] leading-relaxed text-ink shadow-lg ${
+          className={`pointer-events-none invisible fixed z-[var(--z-tooltip)] w-max max-w-[calc(100vw-16px)] rounded-md border border-line bg-elevated px-2 py-1 text-left text-[11px] leading-relaxed text-ink shadow-lg ${
             visible ? "visible opacity-100" : "opacity-0"
           }`}
           style={{

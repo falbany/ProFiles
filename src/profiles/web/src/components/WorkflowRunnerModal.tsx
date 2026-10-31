@@ -242,7 +242,7 @@ export function WorkflowRunnerModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="workflow-runner-title"
-      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
     >
       <div className="animate-modal-in flex h-[80vh] w-full max-w-4xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
         {/* Header */}

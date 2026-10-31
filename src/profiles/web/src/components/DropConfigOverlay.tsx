@@ -17,7 +17,7 @@ export function DropConfigOverlay({ visible, onFileSelected }: DropConfigOverlay
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-40 flex items-center justify-center bg-black/65 backdrop-blur-sm"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-drop-overlay)] flex items-center justify-center bg-black/65 backdrop-blur-sm"
       onClick={() => inputRef.current?.click()}
       data-testid="drop-config-overlay"
     >

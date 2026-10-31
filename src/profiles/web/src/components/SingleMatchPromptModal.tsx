@@ -38,10 +38,13 @@ export function SingleMatchPromptModal({
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={onDismiss}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`1 file matched: ${file.filename}`}
         className="animate-modal-in w-full max-w-sm rounded-xl border border-frame-line glass-panel p-5 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >

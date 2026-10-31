@@ -62,10 +62,13 @@ export function SearchBar({
 }: SearchBarProps) {
   // Whether the filter input itself has focus — drives the live syntax helper.
   const [filterFocused, setFilterFocused] = useState(false);
+  // Unfolded combobox lists — tooltips and the syntax helper yield to them (issue #53/#59).
+  const [filterListOpen, setFilterListOpen] = useState(false);
+  const [extListOpen, setExtListOpen] = useState(false);
 
   return (
     <div className="flex w-full flex-wrap items-center gap-3 border-b border-line bg-surface-glass p-3 text-xs">
-      <Tooltip text={OPERATOR_HELP}>
+      <Tooltip text={OPERATOR_HELP} suppress={filterListOpen}>
         <div
           className="relative min-w-0 flex-1 basis-64"
           onFocusCapture={(event) => {
@@ -82,17 +85,22 @@ export function SearchBar({
             value={filterText}
             options={filterOptions || []}
             onChange={onFilterTextChange}
+            onOpenChange={setFilterListOpen}
             placeholder="Filter files: keyword, a OR b, -tag, exact phrase..."
             className="w-full"
             inputClassName="pl-9 pr-3"
             optionLabel={(filter) => filter || "(No filter)"}
           />
-          {/* Live filter interpretation — visual only, never blocks the input. */}
-          <FilterSyntaxHelper query={filterText} visible={filterFocused && filterText.trim().length > 0} />
+          {/* Live filter interpretation — visual only, never blocks the input.
+              Yields while the preset list is open so it can't cover it (issue #59). */}
+          <FilterSyntaxHelper
+            query={filterText}
+            visible={filterFocused && !filterListOpen && filterText.trim().length > 0}
+          />
         </div>
       </Tooltip>
 
-      <Tooltip text={OPERATOR_HELP} block={false}>
+      <Tooltip text={OPERATOR_HELP} block={false} suppress={extListOpen}>
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="text-ink-muted">Ext:</span>
           <EditableCombobox
@@ -101,6 +109,7 @@ export function SearchBar({
             value={activeExtension}
             options={extensions}
             onChange={onExtensionChange}
+            onOpenChange={setExtListOpen}
             placeholder=".py OR .toml"
             className="w-44"
             inputClassName="font-mono px-2.5"

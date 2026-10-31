@@ -1145,6 +1145,22 @@ export default function App() {
   };
 
   // Keyboard navigation & global shortcuts
+  // Any open surface that captures interaction: while one is up the global
+  // shortcuts must stay inert (issue #55) — otherwise Enter/keys double-fire
+  // into the hidden UI behind the dialog.
+  const anyModalOpen = Boolean(
+    contextMenuPos ||
+      showShortcuts ||
+      showDirPicker ||
+      showConfigPicker ||
+      showPropertiesModal ||
+      showLogViewer ||
+      showTimerModal ||
+      showBarcodeModal ||
+      showCameraScanner ||
+      singleMatchFile ||
+      workflowLaunchParams,
+  );
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Allow Esc to close context menu or modals
@@ -1159,14 +1175,27 @@ export default function App() {
         return;
       }
 
+      // Shortcuts are inert while a modal / context menu is open (issue #55).
+      if (anyModalOpen) return;
+
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "l") {
         e.preventDefault();
         document.querySelector<HTMLElement>("[data-testid='file-list']")?.focus();
         return;
       }
 
+      // Keys landing on a control that handles them itself (activation,
+      // sort, resize…) must not also drive the file list (issue #55).
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("button, a, [role='menuitem'], [role='option'], [role='columnheader'], [role='separator']")
+      ) {
+        return;
+      }
+
       // If typing in input / select, handle Enter for scan
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) {
+      if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
         if (e.key === "Enter") {
           handleScan();
         }
@@ -1204,24 +1233,21 @@ export default function App() {
       // Ctrl + D: Focus directory
       if (e.ctrlKey && e.key.toLowerCase() === "d") {
         e.preventDefault();
-        const dirInput = document.querySelector("input[list='directories-list']") as HTMLInputElement | null;
-        dirInput?.focus();
+        document.querySelector<HTMLInputElement>("#directory-combobox")?.focus();
         return;
       }
 
       // Ctrl + E: Focus extension
       if (e.ctrlKey && e.key.toLowerCase() === "e") {
         e.preventDefault();
-        const extInput = document.querySelector("input[list='extensions-list']") as HTMLInputElement | null;
-        extInput?.focus();
+        document.querySelector<HTMLInputElement>("#extension-combobox")?.focus();
         return;
       }
 
       // Ctrl + F: Focus filter
       if (e.ctrlKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
-        const filterInput = document.querySelector("input[placeholder*='Filter files']") as HTMLInputElement | null;
-        filterInput?.focus();
+        document.querySelector<HTMLInputElement>("#filter-combobox")?.focus();
         return;
       }
 
@@ -1313,7 +1339,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [visibleFiles, selectedIndex, activeDirectory, activeExtension, filterText, recursive, barcodeMode]);
+  }, [anyModalOpen, visibleFiles, selectedIndex, activeDirectory, activeExtension, filterText, recursive, barcodeMode]);
 
   // Apply theme attribute + persist preference
   useEffect(() => {

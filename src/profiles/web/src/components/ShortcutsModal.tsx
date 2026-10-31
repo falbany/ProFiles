@@ -30,8 +30,13 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
   ];
 
   return (
-    <div className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="animate-modal-in w-[450px] max-w-full rounded-2xl border border-frame-line glass-panel p-5">
+    <div className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Keyboard Shortcuts"
+        className="animate-modal-in w-[450px] max-w-full rounded-2xl border border-frame-line glass-panel p-5"
+      >
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 font-semibold text-ink">
             <Keyboard className="h-5 w-5 text-chip-indigo-text" />

@@ -4,6 +4,26 @@
   color-scheme: dark light;
 }
 
+/* Overlay layering scale (issue #59) — single source of truth for z-index.
+   Components use `z-[var(--z-…)]`; never stack two surfaces from the same
+   layer, and never reintroduce raw z-[N] values for these surfaces:
+     60 combobox listbox (unfolds from the control)
+     65 filter syntax helper (must not cover the listbox — yields while it is open)
+     70 context menu (backdrop = menu − 1)
+     80 modal overlays (dialogs render above menus and dropdowns)
+     85 drag & drop config overlay
+     90 toasts (must stay visible over modals)
+    100 tooltips (topmost — they suppress themselves while a dialog is open) */
+:root {
+  --z-combobox-list: 60;
+  --z-syntax-helper: 65;
+  --z-context-menu: 70;
+  --z-modal: 80;
+  --z-drop-overlay: 85;
+  --z-toast: 90;
+  --z-tooltip: 100;
+}
+
 /* Semantic design tokens — dark (default) and light themes.
    Components reference tokens (bg-app, text-ink, border-line, ...)
    instead of hard-coded slate-* colors so a single attribute flips the theme. */
