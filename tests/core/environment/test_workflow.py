@@ -47,12 +47,56 @@ def test_workflow_replace_step(tmp_path: Path):
 
 
 def test_workflow_skip_step_over():
+    """Skip ignores only the answered step; the next step still executes."""
+    captured: list[str] = []
     steps = [
         WorkflowStep(action="run", command="echo 1", ask="Skip?"),
         WorkflowStep(action="run", command="echo 2"),
     ]
-    outcome = run_workflow(steps, None, user_choice="skip")
+    with patch(
+        "profiles.core.environment.workflow._run_command", side_effect=_record_run(captured)
+    ):
+        outcome = run_workflow(steps, None, user_choice="skip")
     assert outcome == WorkflowOutcome.CONTINUE
+    assert captured == ["echo 2"]
+
+
+def test_notify_with_ask_single_gate():
+    """notify + ask: the composed ask dialog IS the notification (#22).
+
+    Answering Yes through the ask dialog completes the step — no second
+    blocking notify display. An explicit user_choice bypasses display
+    entirely, so the notify message still shows in that case.
+    """
+    notifications: list[tuple[str, bool]] = []
+    steps = [
+        WorkflowStep(action="notify", message="Ready", ask="Proceed?", wait=True),
+        WorkflowStep(action="run", command="echo after"),
+    ]
+
+    def ask_callback(text: str, pre_message: str | None):
+        assert pre_message == "Ready"
+        return "yes"
+
+    with patch("profiles.core.environment.workflow._run_command", side_effect=_record_run([])):
+        outcome = run_workflow(
+            steps,
+            None,
+            ask_callback=ask_callback,
+            notify_callback=lambda msg, wait: notifications.append((msg, wait)),
+        )
+    assert outcome == WorkflowOutcome.CONTINUE
+    assert notifications == []
+
+    # user_choice bypasses the dialog display → the message still shows once.
+    via_choice: list[tuple[str, bool]] = []
+    run_workflow(
+        steps,
+        None,
+        user_choice="yes",
+        notify_callback=lambda msg, wait: via_choice.append((msg, wait)),
+    )
+    assert via_choice == [("Ready", True)]
 
 
 def test_timeout_aborts_on_run_failure():

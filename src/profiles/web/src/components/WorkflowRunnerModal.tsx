@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  abortWorkflowSession,
   respondWorkflowSession,
   startWorkflowSession,
 } from "../api/client";
@@ -21,6 +22,22 @@ interface WorkflowRunnerModalProps {
   release?: string;
   args?: string;
   onFinished?: (status: string, message: string) => void;
+}
+
+/** Terminal statuses: no abort is sent when the session already ended. */
+function isSessionTerminal(status: string | undefined): boolean {
+  return status === "completed" || status === "aborted" || status === "failed";
+}
+
+/**
+ * Fire-and-forget abort of a still-interactive session (modal closed
+ * mid-workflow). Errors are suppressed: closing must never surface them.
+ */
+function abortIfInteractive(session: WorkflowSessionState | null): void {
+  if (!session || isSessionTerminal(session.status)) return;
+  abortWorkflowSession(session.session_id).catch(() => {
+    /* the session is cleaned up by the server TTL anyway */
+  });
 }
 
 /** Simple parser for Markdown subset (# heading, **bold**, *italic*, `code`, \n) */
@@ -164,13 +181,26 @@ export function WorkflowRunnerModal({
     }
   };
 
-  // Close on Escape key press
+  // Close on Escape key press: abort the interactive session first (#24).
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  useEffect(() => {
+    // Unmount with a live session (e.g. parent removed the modal): abort.
+    return () => abortIfInteractive(sessionRef.current);
+  }, []);
+
+  const handleClose = () => {
+    abortIfInteractive(session);
+    onClose();
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -186,6 +216,26 @@ export function WorkflowRunnerModal({
 
   const isFinished =
     session?.status === "completed" || session?.status === "aborted" || session?.status === "failed";
+
+  // Command box for the interactive (waiting_*) panels: the generic detail
+  // panel below is suppressed while the session waits on the current step,
+  // so the command must be surfaced here as well — after the human-readable
+  // message, per the message-first ordering.
+  const showInteractivePanels =
+    selectedStepIndex === null || selectedStepIndex === session?.current_index;
+  const interactiveCommandBox =
+    showInteractivePanels &&
+    activeStep?.command &&
+    (session?.status === "waiting_notify" ||
+      session?.status === "waiting_notice" ||
+      session?.status === "waiting_ask") ? (
+      <div className="space-y-2">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
+        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+          {activeStep.command}
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div
@@ -212,7 +262,7 @@ export function WorkflowRunnerModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-md p-1.5 text-ink-muted hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <X className="h-4 w-4" />
@@ -267,8 +317,11 @@ export function WorkflowRunnerModal({
                         </span>
                         <span className="text-[10px] font-mono text-ink-faint">#{st.index}</span>
                       </div>
-                      <p className="truncate font-mono text-[11px] text-ink-secondary mt-0.5" title={st.command}>
-                        {st.command}
+                      <p
+                        className="truncate font-mono text-[11px] text-ink-secondary mt-0.5"
+                        title={st.command}
+                      >
+                        {st.message ? st.message.split("\n")[0] : st.command}
                       </p>
                       {st.note && (
                         <p className="mt-1 text-[10px] text-ink-faint italic">{st.note}</p>
@@ -324,6 +377,7 @@ export function WorkflowRunnerModal({
                       <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
                         {renderMarkdown(session.notify_message)}
                       </div>
+                      {interactiveCommandBox}
                     </div>
                   )}
 
@@ -333,6 +387,7 @@ export function WorkflowRunnerModal({
                       <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
                         {renderMarkdown(session.notice_message)}
                       </div>
+                      {interactiveCommandBox}
                       <p className="text-[11px] text-ink-faint">The command will run when you continue.</p>
                     </div>
                   )}
@@ -348,6 +403,7 @@ export function WorkflowRunnerModal({
                       <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-4 text-sm font-medium text-ink">
                         {session.ask_prompt}
                       </div>
+                      {interactiveCommandBox}
                     </div>
                   )}
 
@@ -401,13 +457,6 @@ export function WorkflowRunnerModal({
                   {!(isFinished && selectedStepIndex === null) &&
                    !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
                     <div className="space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
-                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
-                          {activeStep?.command ? activeStep.command : "Waiting..."}
-                        </div>
-                      </div>
-
                       {activeStep?.message && (
                         <div className="space-y-2">
                           <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Message:</p>
@@ -416,6 +465,13 @@ export function WorkflowRunnerModal({
                           </div>
                         </div>
                       )}
+
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+                          {activeStep?.command ? activeStep.command : "Waiting..."}
+                        </div>
+                      </div>
 
                       {activeStep?.output && (
                         <div className="space-y-2">

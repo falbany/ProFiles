@@ -304,7 +304,9 @@ class TestLaunchHooksIntegration:
         mock_confirm_dialog.assert_called_once_with(
             "Proceed?", headless=False, pre_message="Proceed?"
         )
-        mock_notify.assert_called_once_with("Proceed?", blocking=True, headless=False)
+        # Single interaction (#22): the composed ask dialog IS the notify
+        # display — no second blocking dialog after the confirmation.
+        mock_notify.assert_not_called()
         mock_launch_file.assert_called_once_with(target)
 
     def test_launch_with_confirmation_and_user_cancels(self, mocker, tmp_path: Path) -> None:

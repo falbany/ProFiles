@@ -209,6 +209,11 @@ Pour les étapes `run` / `check` / `replace` / `run_after` portant un `message:`
   `content:` ne pouvait pas exprimer : une étape `run` qui s'explique sans
   étape `notify` séparée.
 
+**Les étapes `notify` avec une garde `ask:`** suivent la même règle
+d'interaction unique : le dialogue ask composé **est** l'affichage de la
+notification. Répondre **Oui** complète l'étape et le workflow avance —
+aucune seconde porte bloquante « Continue Workflow » n'apparaît ensuite.
+
 ```yaml
 - action: run
   command: "prepare_env.exe --file {{path}}"
@@ -267,9 +272,11 @@ entries:
 **Scénarios** :
 
 - **Oui → Oui → Oui** : Tous les étapes exécutés, lanceur spécial utilisé
-- **Oui → Passer → Oui** : Étape 2 sautée, lanceur spécial utilisé
-- **Passer** (premier) : Étape 1 sautée, continue aux étapes suivants
+- **Oui → Passer → Oui** : Étape 3 (validate) sautée par son garde, tous les autres étapes exécutés — lanceur spécial utilisé
+- **Passer** (premier) : Étape 1 sautée par son garde, le workflow continue à l'étape suivante
 - **Non** (n'importe où) : Workflow aborté, fichier **non lancé**
+
+> **Remarque** : **Passer** n'affecte que l'étape dont le garde a été répondu — l'étape suivante s'exécute quand même (et pose son propre garde, le cas échéant).
 
 ---
 

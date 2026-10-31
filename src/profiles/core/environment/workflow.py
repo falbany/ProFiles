@@ -186,17 +186,9 @@ def run_workflow(
     if not steps:
         return WorkflowOutcome.CONTINUE
 
-    skip_next = False
     state = _WorkflowState()
 
     for i, step in enumerate(steps):
-        # If previous step was skipped via "skip", skip this step
-        if skip_next:
-            if logger is not None:
-                logger.debug("Skipping step %d (action: %s)", i + 1, step.action)
-            skip_next = False
-            continue
-
         _emit_workflow_step(
             logger, index=i + 1, total=len(steps), action=step.action, result="start"
         )
@@ -226,10 +218,9 @@ def run_workflow(
                     action=step.action,
                     result="skipped-user",
                 )
-                # If skipping the last step, return SKIP_LAUNCH
+                # If skipping the last step, end without OS launch
                 if i == len(steps) - 1:
                     return WorkflowOutcome.SKIP_LAUNCH
-                skip_next = True
                 continue
 
         # Evaluate conditional guard
@@ -261,6 +252,10 @@ def run_workflow(
             failure_context=failure_context,
             logger=logger,
             show_notice=not bool(step.ask and step.message),
+            # Resolved through the dialog or an ask_callback: the message
+            # was displayed. An explicit *user_choice* bypasses display
+            # entirely, so the notify step still shows its message.
+            ask_displayed=choice is not None and user_choice is None,
             state=state,
         )
         if outcome is not None:
@@ -449,6 +444,7 @@ def _execute_step(
     failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
     show_notice: bool = True,
+    ask_displayed: bool = False,
     state: _WorkflowState | None = None,
 ) -> WorkflowOutcome | None:
     """Execute a single step. Returns terminal WorkflowOutcome or None to continue.
@@ -468,6 +464,11 @@ def _execute_step(
             non-blocking notice before executing the command. Callers that
             already displayed it (e.g. in the composed ask dialog or via a
             web session) pass False to avoid showing it twice.
+        ask_displayed: Whether the step's ``ask`` guard was just resolved
+            through a channel that displayed the step's message (the 3-way
+            dialog or an *ask_callback*). On ``notify`` steps the composed
+            ask dialog **is** the notification display, so the dialog is
+            not shown a second time (no second blocking gate).
         state: Optional workflow state receiving the captured output of
             blocking command steps (fed back as the ``{{output}}`` token).
     """
@@ -482,6 +483,13 @@ def _execute_step(
                 "'command' is ignored on a 'notify' step: %s",
                 step.command,
             )
+        if ask_displayed:
+            # The composed ask dialog already displayed this notification
+            # (message rendered above the question); answering Yes completed
+            # the interaction — do not gate the user a second time.
+            if logger is not None:
+                logger.debug("Notify already displayed by its ask dialog: %s", message)
+            return None
         if notify_callback is not None:
             notify_callback(message, step.wait)
         else:
