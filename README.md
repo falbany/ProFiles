@@ -243,7 +243,7 @@ defaults:
     - pattern: DEV
       color: "#E65100"
   search_exclude_dirs: [.git, __pycache__, node_modules, .venv, tmp]
-  search_exclude_files: [*backup*, ~$*, *.tmp]
+  search_exclude_files: ["*backup*", "~$*", "*.tmp"]
   verbose: INFO
   scan_metrics: false
 

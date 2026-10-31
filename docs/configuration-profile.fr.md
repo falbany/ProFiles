@@ -99,7 +99,7 @@ defaults:
     - pattern: TMP
       color: "#BAC015"
   search_exclude_dirs: [.git, tmp, Obsolete, Debug, __pycache__, node_modules]
-  search_exclude_files: [*backup*, ~$*, *.tmp]
+  search_exclude_files: ["*backup*", "~$*", "*.tmp"]
   verbose: INFO
   scan_metrics: false
 ```
@@ -112,6 +112,8 @@ Les deux clés acceptent des motifs glob insensibles à la casse avec les jokers
 | --- | --- | --- | --- |
 | `search_exclude_dirs` | Noms de répertoires ignorés lors du scan **récursif** | `.git` | `node_modules`, `Debug*`, `*tmp` |
 | `search_exclude_files` | Noms de fichiers Ignés lors du scan (**récursif et non récursif**) | `""` | `*backup*`, `~$*`, `*.tmp` |
+
+> **⚠️ Quotez toujours les globs en YAML** : un élément de liste non quoté commençant par `*` (p. ex. `[*backup*, *.tmp]`) est interprété comme un **alias** YAML, pas comme une chaîne — le fichier ne charge pas avec `found undefined alias 'backup*'`. Écrivez plutôt `["*backup*", "*.tmp"]`. La même règle vaut pour toute valeur commençant par `*`.
 
 **Ajout par configuration** : `search_exclude_files` dans une section `configs` est AJOUTÉ à la liste de base `defaults.search_exclude_files` — les deux jeux de motifs s'appliquent pour cette configuration. L'exclusion de répertoires (`search_exclude_dirs`) est globale uniquement.
 
@@ -187,7 +189,7 @@ configs:
         color: "#1565C0"
       - pattern: DEV
         color: "#757575"
-    search_exclude_files: [*brouillon*, *.bak]
+    search_exclude_files: ["*brouillon*", "*.bak"]
 ```
 
 ---
@@ -306,10 +308,8 @@ defaults:
   theme: dark
   search_dir: /chemin/vers/racine/production
   recursive_search: true
-  columns: File, Version, Classification, Date
-  column_widths: 500, 120, 150, 100
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
-  filters: [, PROD, DEV, DEV, TMP]
+  filters: ["", PROD, DEV, DEV, TMP]
   row_colors:
     - pattern: PROD
       color: "#1565C0"
@@ -321,13 +321,32 @@ defaults:
       color: "#FF6F00"
   search_exclude_dirs: [.git, tmp, Obsolete, Debug, Backup]
 
+# Colonnes dynamiques — un mappage `columns:` au NIVEAU SUPÉRIEUR, PAS une
+# clé de `defaults:` (le bloc defaults ignore les clés inconnues : y placer
+# `columns:`/`column_widths:` n'aurait donc AUCUN effet, sans erreur).
+columns:
+  File:
+    name: File
+    width: 500
+    stretch: true
+    match: ".*"
+  Version:
+    match: "[-_]V(\\d+(?:\\.\\d+)*)"
+    width: 120
+  Classification:
+    match: type
+    width: 150
+  Date:
+    match: date
+    width: 100
+
 configs:
   configuration_1:
     match:
       hostname: ["POSTE-TRAVAIL-PROD-01"]
     scan: /chemin/vers/production/station1
     extensions: [.lnk, .pdf]
-    filters: [, prod, specific]
+    filters: ["", prod, specific]
     row_colors:
       - pattern: CRITICAL
         color: "#B71C1C"
@@ -339,7 +358,7 @@ configs:
       hostname: ["POSTE-TRAVAIL-ING-05"]
     scan: /chemin/vers/ingenierie/tests
     extensions: [.lnk, .txt, .log]
-    filters: [, dev, test, debug]
+    filters: ["", dev, test, debug]
     row_colors:
       - pattern: DEV
         color: "#4A148C"
@@ -353,7 +372,7 @@ configs:
       hostname: ["*"]
     scan: /chemin/vers/production
     extensions: [.lnk]
-    filters: [, PROD]
+    filters: ["", PROD]
     row_colors: []
 ```
 
@@ -393,7 +412,7 @@ configs:
       hostname: ["*"]
     scan: /chemin/vers/projet/development
     extensions: [.lnk, .py, .sh]
-    filters: [, dev, test, tmp]
+    filters: ["", dev, test, tmp]
     row_colors:
       - pattern: FEATURE
         color: "#2E7D32"
@@ -412,13 +431,13 @@ configs:
 ```yaml
 # Trouver fichiers production, exclure sauvegardes, inclure version spécifique
   extensions: [.lnk]
-  filters: [Prod -backup +V2026.7]
+  filters: ["Prod -backup +V2026.7"]
 
 # Alternatives multiples avec phrases exactes
-  filters: ["Programme Production" OR "Suite Test" -obsolète]
+  filters: ['"Programme Production" OR "Suite Test" -obsolète']
 
 # Combiner logique AND et OR
-  filters: [(Prod OR Dev) -tmp "V2026.*"]
+  filters: ['(Prod OR Dev) -tmp "V2026.*"']
 ```
 
 ### Exemples de Précedence des Opérateurs
@@ -536,8 +555,8 @@ python -m profiles --config C:\chemin\vers\.profiles
 
 **Solution** :
 ```yaml
-# Correspondre les fichiers .lnk (both .lnk et .LNK)
-  extensions: [All, .lnk, .LNK  # Tous équivalents]
+# Correspondre les fichiers .lnk ('.lnk' et '.LNK' — tous équivalents)
+  extensions: [All, .lnk, .LNK]
 
 # Correspondre plusieurs extensions
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
@@ -573,7 +592,7 @@ defaults:
 
 2. **Limiter les extensions de fichiers** :
 ```yaml
-  extensions: [.lnk, .pdf  # Scanner uniquement ces types]
+  extensions: [.lnk, .pdf]  # Scanner uniquement ces types
 ```
 
 3. **Utiliser un répertoire de recherche spécifique** :

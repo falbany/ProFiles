@@ -128,6 +128,8 @@ class HooksConfig(BaseModel):
 class Defaults(BaseModel):
     """Global defaults inherited by every configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     title: str = ""
     gui_auto_launch: bool = True
     close_after_execute: bool = False
