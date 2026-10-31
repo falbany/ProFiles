@@ -36,30 +36,83 @@ Ce document définit les standards d'architecture, les principes de conception e
 
 ## 📁 Structure de l'Application
 
+> **⚠️ Keep in sync with the code** : cet arbre reflète `src/profiles/` au
+> 31/10/2026. Toute création, suppression ou déplacement de module doit mettre
+> à jour cette section dans le même commit — ainsi que `tests/AGENTS.md`,
+> qui reflète l'arbre de tests 1:1. Avant d'utiliser un chemin d'import des
+> extraits ci-dessous, vérifiez-le contre `src/profiles/core/__init__.py`
+> (la surface publique du core) ou `docs/advanced/guide-avance.fr.md`.
+
 ```
-src/
-├── core/               # Logique métier — indépendante de l'UI
-│   ├── scanner.py      # File scanning + filtering pipeline
-│   ├── config_service.py# Opérations de configuration
-│   ├── actions.py      # Actions domaine (I/O, lancement)
-│   ├── system.py       # Informations système
-│   └── logger.py       # Configuration du logger
+src/profiles/
+├── core/                     # Logique métier — indépendante de toute UI
+│   ├── actions.py            # Actions domaine (lancement, ouverture, ActionResult)
+│   ├── config/               # Sous-système configuration
+│   │   ├── models.py         #   AppConfig, MachineConfiguration, ColumnConfiguration
+│   │   ├── loader.py         #   load_config, propose_config_creation
+│   │   ├── reader.py         #   ConfigReader (parsing .profiles)
+│   │   ├── service.py        #   auto_select_directory, find_active_config
+│   │   ├── matcher.py        #   Correspondance config ↔ hostname
+│   │   ├── schema.py         #   Schéma de validation
+│   │   ├── validator.py      #   Validation des valeurs
+│   │   ├── inheritance.py    #   Héritage entre configurations
+│   │   ├── template.py       #   STARTER_CONFIG_TEMPLATE (génération .profiles)
+│   │   └── io/yaml_io.py     #   Lecture/écriture YAML
+│   ├── processing/           # Pipeline de scan
+│   │   ├── scanner.py        #   scan_and_process, ScannedFile
+│   │   ├── file_classifier.py#   get_file_info, classification d'extensions
+│   │   ├── file_metadata.py  #   Métadonnées fichiers
+│   │   └── column_extractor.py#  Extraction des colonnes (version, …)
+│   ├── environment/          # Environnement OS & exécution
+│   │   ├── system.py         #   collect_system_info, SystemInfo, format_user_host
+│   │   ├── execution.py      #   Spawn de processus, hooks de lancement
+│   │   ├── workflow.py       #   Étapes de workflow
+│   │   └── matcher.py, render.py, interactions.py, message_dialog.py
+│   └── telemetry/            # Logging & diagnostics
+│       ├── diagnostics.py    #   get_logger, configure_logger, crash hook
+│       ├── events.py         #   Événements (COMMAND_OUTPUT, …)
+│       └── metrics.py, log_viewer.py, diagnostics.py
 │
-├── gui/                # Couche présentation (Tkinter)
-│   ├── main_window.py  # Orchestration des widgets
-│   ├── ui.py           # Helpers de layout
-│   ├── styles.py       # ToolTip, configure_styles
-│   ├── theme.py        # Md3Theme, apply_theme
-│   └── context_menu.py # Menu contextuel
+├── launch/                   # Résolution launch-time (logique pure)
+│   ├── context.py            #   LaunchContext, détection du signal OS
+│   ├── resolution.py         #   Sélection du fichier de config à utiliser
+│   └── creation.py           #   Proposition/écriture d'un .profiles de départ
 │
-├── utils/              # Fonctions utilitaires pures
-│   ├── file_utils.py   # scan_directory, get_file_info, launch_file
-│   ├── network.py      # hostname, IP, username
-│   └── search_parser.py# tokenize, match_filter
+├── server/                   # Serveur FastAPI local (backend du front-end web)
+│   ├── app.py                #   create_app
+│   ├── state.py              #   ServerState
+│   ├── static.py             #   Service des assets web/dist
+│   └── routes/               #   actions, config, fs, instance, logs, scan, system, workflow
 │
-├── app.py              # Cycle de vie application (GUI & headless)
-└── config.py           # AppConfig, MachineConfiguration, load_config
+├── web/                      # Front-end par défaut (React PWA + Vite + TypeScript)
+│   ├── src/                  #   App.tsx, components/, api/, utils/
+│   ├── dist/                 #   Build servi par server/static.py
+│   └── build.py, build_hook.py  # Build intégré au packaging (hook hatch)
+│
+├── desktop/                  # Shell PyWebView (fenêtrage natif)
+│   ├── launcher.py           #   Démarrage serveur + fenêtre
+│   ├── lifecycle.py          #   Cycle de vie de l'application
+│   └── instance.py, handoff.py  # Instances multiples, handoff de port
+│
+├── gui/                      # ⚠️ DÉPRÉCIÉ (Tkinter) — suppression prévue (phase 2)
+│   │                         # Ne pas y ajouter de fonctionnalités ; le
+│   │                         # front-end par défaut est web/. Tests skippés.
+│   ├── main_window.py        # Orchestration des widgets
+│   └── ui.py, styles.py, theme.py, i18n.py, controllers/, presentation/
+│
+├── utils/                    # Fonctions utilitaires pures & stateless
+│   ├── file_utils.py         # scan_directory, launch_file, open_with_default_app
+│   ├── network.py            # hostname, IP, username
+│   ├── search_parser.py      # tokenize, match_filter
+│   └── shortcut.py           # Raccourcis
+│
+├── app.py                    # Point d'entrée : backend web/desktop ou CLI headless
+└── config.py                 # Shim de ré-export (AppConfig, load_config, …)
 ```
+
+> `src/profiles/config.py` n'est qu'un module de commodité qui ré-exporte
+> `profiles.core.config.*` sous un chemin court. Le code nouveau importe
+> depuis `profiles.core` (surface publique) ou ses sous-paquets.
 
 ---
 
@@ -70,7 +123,7 @@ src/
 **Responsabilité** : Logique métier pure, indépendante de tout framework
 
 **Règles** :
-- ✅ Zéro dépendance vers les couches UI (Tkinter, CLI, TUI)
+- ✅ Zéro dépendance vers les couches UI (React/web, desktop, Tkinter, CLI)
 - ✅ Fonctions pures où c'est possible
 - ✅ Retourner des structures de données typées (jamais `None` pour les collections)
 - ✅ Documenter toutes les fonctions publiques avec des docstrings
@@ -101,15 +154,21 @@ def merge(base, override):
     return base
 ```
 
-### GUI Layer (`profiles.gui`)
+### Couche Présentation
 
-**Responsabilité** : Gestion exclusive des objets Tkinter et de l'expérience utilisateur
+**Couche par défaut** : `profiles.web` (React PWA) + `profiles.server`
+(FastAPI) + `profiles.desktop` (shell PyWebView). Le Tkinter
+`profiles.gui` est **déprécié** (suppression prévue, phase 2) — ne pas y
+ajouter de fonctionnalités ; les extraits ci-dessous ne valent que pour la
+maintenance de la couche legacy.
+
+**Responsabilité** : Gestion exclusive des objets d'interface et de l'expérience utilisateur
 
 **Règles** :
-- ✅ Tous les objets Tkinter sont créés et gérés ici
+- ✅ Tous les objets d'UI sont créés et gérés dans la couche présentation
 - ✅ Déléguer la logique métier à `profiles.core.*`
-- ✅ Gérer uniquement le code de liaison spécifique aux widgets
-- ✅ Utiliser les widgets `ttk` pour un theming cohérent
+- ✅ Gérer uniquement le code de liaison spécifique aux widgets/composants
+- ✅ Utiliser les widgets `ttk` pour un theming cohérent (legacy Tkinter)
 - ✅ Implémenter une gestion d'erreur robuste pour les actions utilisateur
 - ✅ Ne jamais contenir de logique métier directe
 
@@ -292,8 +351,8 @@ def validate_extension_comprehensive(
 class AppConfig:
     """Application configuration."""
 
-    def __init__(self, directory: str, extensions: list[str]) -> None:
-        self.directory = directory
+    def __init__(self, search_dir: str, extensions: tuple[str, ...]) -> None:
+        self.search_dir = search_dir
         self.extensions = extensions
 
 
@@ -382,14 +441,20 @@ def test_scan(tmp_path):
 | **Unitaires**    | Tester les fonctions/classes isolément | pytest           |
 | **Intégration**  | Tester les interactions entre modules  | pytest           |
 | **Fonctionnels** | Tester les cas d'usage complets        | pytest           |
-| **Performance**  | Vérifier les temps de réponse          | pytest-benchmark |
+| **Front-end web**| Tester les composants React            | vitest (`src/profiles/web`) |
 
 ### Fixtures Réutilisables
+
+> La vraie forme de `AppConfig` est définie dans
+> `src/profiles/core/config/models.py` (dataclass à champs typés) ; voir aussi
+> `tests/AGENTS.md` pour l'organisation des fixtures du projet.
 
 ```python
 # ✅ CORRECT : Fixtures dans conftest.py
 import pytest
 from pathlib import Path
+
+from profiles.core.config.models import AppConfig
 
 
 @pytest.fixture
@@ -406,8 +471,8 @@ def temp_directory(tmp_path: Path) -> Path:
 def sample_config(temp_directory: Path) -> AppConfig:
     """Create a sample application configuration."""
     return AppConfig(
-        directory=str(temp_directory),
-        extensions=[".txt", ".py"],
+        search_dir=str(temp_directory),
+        extensions=(".txt", ".py"),
     )
 ```
 
@@ -422,7 +487,7 @@ def sample_config(temp_directory: Path) -> AppConfig:
 | **Ruff**   | Formatter & linter rapide    | `ruff format .`, `ruff check .` |
 | **Pylint** | Analyse statique approfondie | `pylint src/profiles`         |
 | **pytest** | Framework de test            | `pytest --cov=src/profiles`   |
-| **mypy**   | Vérification des types       | `mypy src/profiles`           |
+| **pyright**| Vérification des types       | `pyright src/profiles`        |
 
 ### Métriques Cibles
 
@@ -592,7 +657,7 @@ def test_file_processor():
     mock_scanner = Mock()
     mock_scanner.scan.return_value = ["file1.txt", "file2.py"]
     mock_logger = Mock()
-    mock_config = AppConfig("/tmp", [".txt"])
+    mock_config = AppConfig(search_dir="/tmp", extensions=(".mttl",))
 
     processor = FileProcessor(mock_scanner, mock_logger, mock_config)
     result = processor.process("/tmp")
@@ -615,11 +680,12 @@ def test_file_processor():
 - [ ] **Aucun TODO** laissé (ou documenté dans le tracker d'issues)
 - [ ] **Type hints** ajoutés pour les fonctions publiques
 - [ ] **Docstrings** présents pour les APIs publiques
+- [ ] **AGENTS.md à jour** si l'arborescence ou les imports publics ont changé (voir « Keep in sync »)
 
 ### Conformité Architecture
 
-- [ ] **Core layer** n'a pas d'imports Tkinter
-- [ ] **GUI layer** délègue la logique métier à `profiles.core.*`
+- [ ] **Core layer** n'a pas d'imports UI (Tkinter, FastAPI, React)
+- [ ] **Couche présentation** (web/server/desktop, ou gui legacy) délègue la logique métier à `profiles.core.*`
 - [ ] **Utils layer** est stateless et agnostique au framework
 - [ ] **Imports** suivent les boundaries des couches
 - [ ] **Aucune dépendance circulaire** entre modules
@@ -663,6 +729,9 @@ open htmlcov/index.html
 
 ### CI/CD Recommandé
 
+> Aligné sur les workflows réels du dépôt (`.github/workflows/`), qui
+> utilisent `actions/checkout@v5` et `astral-sh/setup-uv@v6` avec uv.
+
 ```yaml
 name: CI
 
@@ -672,41 +741,54 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
+      - uses: actions/checkout@v5
+      - name: Set up Python (uv)
+        uses: astral-sh/setup-uv@v6
       - name: Install dependencies
-        run: |
-          pip install -e ".[dev]"
+        run: uv sync --locked
       - name: Format check
-        run: ruff format --check .
+        run: uv run ruff format --check .
       - name: Lint check
-        run: ruff check .
+        run: uv run ruff check .
       - name: Pylint check
-        run: pylint src/profiles --fail-under=8.0
+        run: uv run pylint src/profiles --fail-under=8.0
       - name: Run tests with coverage
-        run: pytest --cov=src/profiles --cov-report=xml --cov-fail-under=85
+        run: uv run pytest --cov=src/profiles --cov-report=xml --cov-fail-under=85
 ```
 
 ---
 
 ## 📚 Guide pour Ajouter un Nouveau Front-end
 
-Pour ajouter un CLI ou TUI sans dépendre du GUI :
+> ProFiles embarque déjà un front-end web complet (React PWA +
+> `profiles.server` FastAPI intégré + shell PyWebView `profiles.desktop`).
+> L'exemple ci-dessous montre comment s'appuyer sur l'API Python du core pour
+> créer un front-end alternatif (CLI, TUI, …). Les imports ci-dessous sont
+> vérifiés contre la surface publique de `profiles.core` ; des exemples
+> complets figurent dans `docs/advanced/guide-avance.fr.md`.
 
-1. **Importer depuis le core layer** :
+1. **Importer depuis le core layer** (surface publique recommandée) :
    ```python
-   from profiles.core.scanner import scan_and_process
-   from profiles.core.config_service import auto_select_directory
-   from profiles.core.actions import launch_selected_file
-   from profiles.core.system import collect_system_info
+   from profiles.core import (
+       scan_and_process,
+       launch_selected_file,
+       ActionStatus,
+       auto_select_directory,
+       collect_system_info,
+       load_config,
+   )
+
+   # Ou en import direct de sous-paquets, pour un contrôle fin :
+   from profiles.core.processing.scanner import scan_and_process, ScannedFile
+   from profiles.core.config.service import auto_select_directory, find_active_config
+   from profiles.core.config.loader import load_config
+   from profiles.core.actions import launch_selected_file, ActionStatus, ActionResult
+   from profiles.core.environment.system import collect_system_info, SystemInfo
    ```
 
 2. **Sélectionner le bon répertoire** :
    ```python
-   config = load_config()
+   config = load_config()  # cherche .profiles dans l'arborescence si chemin None
    hostname = collect_system_info().hostname
    directory = auto_select_directory(config, hostname)
    ```
@@ -725,14 +807,16 @@ Pour ajouter un CLI ou TUI sans dépendre du GUI :
    result = launch_selected_file(
        directory,
        results[0].filename,
-       "v2.1",
+       config.release,
        username,
    )
+   if result.status is not ActionStatus.SUCCESS:
+       ...
    ```
 
 5. **Présenter les résultats** dans le format du front-end (table terminal, panel curses, etc.)
 
-6. **Zéro import Tkinter** nécessaire
+6. **Zéro import d'UI** nécessaire (pas de Tkinter, pas de React)
 
 ---
 
@@ -753,4 +837,4 @@ Pour ajouter un CLI ou TUI sans dépendre du GUI :
 
 ---
 
-**Note** : Ce document est vivant et doit évoluer avec le projet. Les bonnes pratiques doivent être révisées régulièrement et adaptées aux besoins spécifiques du projet.
+**Note** : Ce document est vivant et doit évoluer avec le projet. Les bonnes pratiques doivent être révisées régulièrement et adaptées aux besoins spécifiques du projet. En particulier, la **Structure de l'Application**, les **imports des extraits** et les **exemples de fixtures** doivent rester synchronisés avec le code — un chemin d'import obsolète ici génère du code cassé dans les suggestions des agents. En cas de doute, la source de vérité est `src/profiles/core/__init__.py` (surface publique) et `docs/advanced/guide-avance.fr.md` (exemples vérifiés).
