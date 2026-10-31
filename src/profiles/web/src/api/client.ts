@@ -335,3 +335,10 @@ export async function respondWorkflowSession(
   if (!res.ok) throw new Error("Failed to respond to workflow prompt");
   return res.json();
 }
+
+/** Abort a still-interactive workflow session (modal closed mid-workflow). */
+export async function abortWorkflowSession(sessionId: string): Promise<WorkflowSessionState> {
+  const res = await fetch(`/api/workflow/${sessionId}/abort`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to abort workflow session");
+  return res.json();
+}

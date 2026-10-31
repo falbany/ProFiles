@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  abortWorkflowSession,
   respondWorkflowSession,
   startWorkflowSession,
 } from "../api/client";
@@ -21,6 +22,22 @@ interface WorkflowRunnerModalProps {
   release?: string;
   args?: string;
   onFinished?: (status: string, message: string) => void;
+}
+
+/** Terminal statuses: no abort is sent when the session already ended. */
+function isSessionTerminal(status: string | undefined): boolean {
+  return status === "completed" || status === "aborted" || status === "failed";
+}
+
+/**
+ * Fire-and-forget abort of a still-interactive session (modal closed
+ * mid-workflow). Errors are suppressed: closing must never surface them.
+ */
+function abortIfInteractive(session: WorkflowSessionState | null): void {
+  if (!session || isSessionTerminal(session.status)) return;
+  abortWorkflowSession(session.session_id).catch(() => {
+    /* the session is cleaned up by the server TTL anyway */
+  });
 }
 
 /** Simple parser for Markdown subset (# heading, **bold**, *italic*, `code`, \n) */
@@ -164,13 +181,26 @@ export function WorkflowRunnerModal({
     }
   };
 
-  // Close on Escape key press
+  // Close on Escape key press: abort the interactive session first (#24).
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  useEffect(() => {
+    // Unmount with a live session (e.g. parent removed the modal): abort.
+    return () => abortIfInteractive(sessionRef.current);
+  }, []);
+
+  const handleClose = () => {
+    abortIfInteractive(session);
+    onClose();
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -232,7 +262,7 @@ export function WorkflowRunnerModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-md p-1.5 text-ink-muted hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <X className="h-4 w-4" />
