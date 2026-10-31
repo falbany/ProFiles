@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -67,10 +68,29 @@ class WorkflowSession:
     last_output: str = ""
     release: str = ""
     args: str = ""
+    created_at: float = field(default_factory=time.time)
 
 
 # In-memory session store
 _sessions: dict[str, WorkflowSession] = {}
+
+# Terminal sessions (completed / aborted / failed) are evicted once older
+# than this TTL, so a long-lived desktop process does not accumulate them.
+_SESSION_TTL_SECONDS = 3600
+
+_TERMINAL_STATUSES = ("completed", "aborted", "failed")
+
+
+def _purge_stale_sessions() -> None:
+    """Drop terminal sessions past the TTL (interactive ones are kept)."""
+    now = time.time()
+    stale = [
+        session_id
+        for session_id, session in _sessions.items()
+        if session.status in _TERMINAL_STATUSES and now - session.created_at > _SESSION_TTL_SECONDS
+    ]
+    for session_id in stale:
+        del _sessions[session_id]
 
 
 class StartWorkflowRequest(BaseModel):
@@ -172,6 +192,17 @@ def _advance_session(session: WorkflowSession) -> None:
             session.ask_message = message_sub if step.message else None
             rec.status = "running"
             return
+
+        # A notify step's composed ask dialog IS its notification display:
+        # once the guard is answered, complete the step instead of pausing
+        # a second time in waiting_notify (#22).
+        if step.action == "notify" and step.ask and session.ask_answered:
+            rec.status = "completed"
+            session.ask_prompt = None
+            session.ask_message = None
+            session.ask_answered = False
+            session.current_index += 1
+            continue
 
         # Non-blocking notice for a command step's message (no ask guard):
         # pause until the web UI acknowledges, then execute the command.
@@ -300,6 +331,8 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
     matched_pattern = matcher.select_most_specific_pattern(patterns, payload.filename)
     if not matched_pattern or matched_pattern not in config.launch_hooks:
         raise HTTPException(status_code=400, detail="No matching workflow found for file")
+
+    _purge_stale_sessions()
 
     steps = list(config.launch_hooks[matched_pattern])
     username = get_username()
@@ -440,6 +473,44 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
             session.ask_prompt = None
             session.ask_answered = True
             _advance_session(session)
+
+    return {
+        "session_id": session_id,
+        "status": session.status,
+        "current_index": session.current_index,
+        "ask_prompt": session.ask_prompt,
+        "ask_message": session.ask_message,
+        "notice_message": session.notice_message,
+        "notify_message": session.notify_message,
+        "final_message": session.final_message,
+        "last_output": session.last_output,
+        "steps": [_format_step_record(r) for r in session.step_records],
+    }
+
+
+@router.post("/{session_id}/abort")
+async def abort_workflow(session_id: str) -> dict:
+    """Abort a still-interactive session (modal closed mid-workflow).
+
+    Idempotent: aborting an already-terminal session is a no-op that
+    returns its current state; unknown ids 404.
+    """
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status not in _TERMINAL_STATUSES:
+        if session.current_index < len(session.step_records):
+            interrupted = session.step_records[session.current_index]
+            if interrupted.status == "running":
+                interrupted.status = "failed"
+                interrupted.note = "Aborted by user (modal closed)"
+        session.status = "aborted"
+        session.final_message = "Aborted by user (modal closed)."
+        session.ask_prompt = None
+        session.ask_message = None
+        session.notify_message = None
+        session.notice_message = None
 
     return {
         "session_id": session_id,

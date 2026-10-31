@@ -449,3 +449,149 @@ async def test_replace_final_message_is_token_substituted(tmp_path: Path) -> Non
         data = resp.json()
         assert data["status"] == "completed"
         assert data["final_message"] == "Launched replacement: echo 'Opening tool.mttl'"
+
+
+@pytest.mark.anyio
+async def test_notify_with_ask_single_gate(tmp_path: Path) -> None:
+    """notify + ask: Yes completes the step — no second waiting_notify gate (#22)."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Notify Ask Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="notify", message="# Ready", ask="Proceed?", wait=True),
+                WorkflowStep(action="run", command="echo post", ask="Run post-launch?"),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with (
+            patch("profiles.core.environment.workflow._execute_step", return_value=0),
+            patch("profiles.core.actions.launch_file", return_value=True),
+        ):
+            resp = await client.post(
+                "/api/workflow/start",
+                json={"directory": str(test_dir), "filename": "tool.mttl"},
+            )
+            data = resp.json()
+            assert data["status"] == "waiting_ask"
+            assert data["ask_prompt"] == "Proceed?"
+            assert data["ask_message"] == "# Ready"
+
+            yes = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "yes"},
+            )
+            final = yes.json()
+            # The notify step completed; the session advanced to step 2's
+            # own ask instead of pausing again on a notification.
+            assert final["steps"][0]["status"] == "completed"
+            assert final["status"] == "waiting_ask"
+            assert final["ask_prompt"] == "Run post-launch?"
+            assert final["notify_message"] is None
+
+            yes2 = await client.post(
+                f"/api/workflow/{final['session_id']}/respond",
+                json={"action": "yes"},
+            )
+            assert yes2.json()["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_abort_aborts_interactive_session(workflow_state: ServerState) -> None:
+    """Closing mid-workflow aborts the session server-side (#24)."""
+    app = create_app(workflow_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(workflow_state.active_directory), "filename": "tool.mttl"},
+        )
+        session_id = resp.json()["session_id"]
+        assert resp.json()["status"] == "waiting_notify"
+
+        abort = await client.post(f"/api/workflow/{session_id}/abort")
+        assert abort.status_code == 200
+        data = abort.json()
+        assert data["status"] == "aborted"
+        assert data["final_message"] == "Aborted by user (modal closed)."
+        assert data["steps"][0]["status"] == "failed"
+        assert data["steps"][0]["note"] == "Aborted by user (modal closed)"
+
+        # Idempotent: a second abort returns the same terminal state.
+        again = await client.post(f"/api/workflow/{session_id}/abort")
+        assert again.status_code == 200
+        assert again.json()["status"] == "aborted"
+
+        status = await client.get(f"/api/workflow/{session_id}")
+        assert status.json()["status"] == "aborted"
+
+
+@pytest.mark.anyio
+async def test_abort_unknown_session_returns_404() -> None:
+    app = create_app(ServerState(config=None, active_directory=None))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/api/workflow/does-not-exist/abort")
+        assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_abort_terminal_session_is_a_noop(capture_state: ServerState) -> None:
+    """Aborting an already-finished session leaves its outcome untouched."""
+    app = create_app(capture_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch("profiles.core.actions.launch_file", return_value=True):
+            resp = await client.post(
+                "/api/workflow/start",
+                json={
+                    "directory": str(capture_state.active_directory),
+                    "filename": "tool.mttl",
+                },
+            )
+        data = resp.json()
+        assert data["status"] == "completed"
+        original_final = data["final_message"]
+
+        abort = await client.post(f"/api/workflow/{data['session_id']}/abort")
+        assert abort.status_code == 200
+        assert abort.json()["status"] == "completed"
+        assert abort.json()["final_message"] == original_final
+
+
+def test_purge_stale_sessions_keeps_waiting_and_fresh_terminal() -> None:
+    """TTL purge drops only terminal sessions past the age limit."""
+    import time as time_mod
+
+    from profiles.server.routes import workflow as wf_routes
+
+    def make_session(session_id: str, status: str, created_at: float) -> wf_routes.WorkflowSession:
+        return wf_routes.WorkflowSession(
+            session_id=session_id,
+            directory=Path("/tmp"),
+            filename="tool.mttl",
+            file_path=Path("/tmp/tool.mttl"),
+            pattern="*.mttl",
+            steps=[],
+            step_records=[],
+            status=status,
+            created_at=created_at,
+        )
+
+    now = time_mod.time()
+    stale = make_session("stale", "completed", now - wf_routes._SESSION_TTL_SECONDS - 10)
+    fresh = make_session("fresh", "completed", now)
+    waiting = make_session("waiting", "waiting_ask", now - wf_routes._SESSION_TTL_SECONDS - 10)
+    wf_routes._sessions.update({"stale": stale, "fresh": fresh, "waiting": waiting})
+    try:
+        wf_routes._purge_stale_sessions()
+        assert "stale" not in wf_routes._sessions
+        assert "fresh" in wf_routes._sessions
+        assert "waiting" in wf_routes._sessions
+    finally:
+        for key in ("fresh", "waiting"):
+            wf_routes._sessions.pop(key, None)

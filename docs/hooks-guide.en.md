@@ -210,6 +210,11 @@ For `run` / `check` / `replace` / `run_after` steps carrying a `message:`:
   executes. This is the feature the old `content:` design could not express:
   a `run` step that explains itself without a separate `notify` step.
 
+**`notify` steps with an `ask:` guard** follow the same single-interaction
+rule: the composed ask dialog **is** the notification display. Answering
+**Yes** completes the step and the workflow advances — no second blocking
+"Continue Workflow" gate appears afterwards.
+
 ```yaml
 - action: run
   command: "prepare_env.exe --file {{path}}"

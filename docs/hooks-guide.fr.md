@@ -209,6 +209,11 @@ Pour les étapes `run` / `check` / `replace` / `run_after` portant un `message:`
   `content:` ne pouvait pas exprimer : une étape `run` qui s'explique sans
   étape `notify` séparée.
 
+**Les étapes `notify` avec une garde `ask:`** suivent la même règle
+d'interaction unique : le dialogue ask composé **est** l'affichage de la
+notification. Répondre **Oui** complète l'étape et le workflow avance —
+aucune seconde porte bloquante « Continue Workflow » n'apparaît ensuite.
+
 ```yaml
 - action: run
   command: "prepare_env.exe --file {{path}}"
