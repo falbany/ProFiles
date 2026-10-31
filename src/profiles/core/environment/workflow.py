@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime
 import locale
 import logging
+import os
+import shlex
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -555,12 +557,18 @@ def _resolve_step_texts(
     """Resolve a step's ``command`` and ``message`` with token substitution.
 
     Standard tokens (``{{path}}``, ``{{username}}``, ``{{output}}``, ...)
-    are substituted first; the ``{{command}}`` / ``{{message}}`` step
-    tokens are then cross-resolved in a single pass (mutual references are
-    not recursive).
+    are substituted first — shell-quoted in the command (see
+    :func:`_substitute_variables`), verbatim in the message; the
+    ``{{command}}`` / ``{{message}}`` step tokens are then cross-resolved
+    in a single pass (mutual references are not recursive).
     """
     command = _substitute_variables(
-        step.command, file_path, username=username, hostname=hostname, output=last_output
+        step.command,
+        file_path,
+        username=username,
+        hostname=hostname,
+        output=last_output,
+        shell_quote=True,
     )
     message = _substitute_variables(
         step.message, file_path, username=username, hostname=hostname, output=last_output
@@ -569,6 +577,24 @@ def _resolve_step_texts(
         command = _replace_step_token(command, "message", message)
         message = _replace_step_token(message, "command", command)
     return command, message
+
+
+def _replace_step_token(text: str, key: str, value: str) -> str:
+    """Replace both brace forms (``{{key}}`` and ``{key}``) of a single token."""
+    text = text.replace("{{" + key + "}}", value)
+    return text.replace("{" + key + "}", value)
+
+
+def _quote_for_shell(value: str) -> str:
+    """Quote *value* as a single argument for the platform shell.
+
+    POSIX uses ``shlex.quote``; Windows uses ``subprocess.list2cmdline``
+    (the double-quote form ``cmd.exe`` understands). Values without shell
+    metacharacters come back unchanged, so simple templates are unaffected.
+    """
+    if os.name == "nt":
+        return subprocess.list2cmdline([value])
+    return shlex.quote(value)
 
 
 def _substitute_variables(
@@ -580,6 +606,7 @@ def _substitute_variables(
     username: str | None = None,
     hostname: str | None = None,
     output: str = "",
+    shell_quote: bool = False,
 ) -> str:
     """Substitute variables in step text (supporting both {{token}} and {token}).
 
@@ -588,6 +615,13 @@ def _substitute_variables(
     any step text (e.g. an ``ask`` prompt). ``output`` carries the captured
     output of the most recent completed blocking command step, referenced
     as ``{{output}}`` (empty string before any has run).
+
+    With ``shell_quote=True`` (command templates only — never display text),
+    every substituted value is quoted as a single shell argument. Templates
+    that already wrap a token in quotes have those quotes consumed, so
+    ``'{{path}}'`` and ``"{{path}}"`` stay correct while a hostile value
+    arriving from a filename or from ``{{output}}`` cannot break out
+    (worst case the command fails, it never executes injected shell).
     """
     res = template
     tokens: dict[str, str | None] = {
@@ -605,9 +639,18 @@ def _substitute_variables(
     }
 
     for key, val in tokens.items():
-        if val is not None:
-            res = res.replace("{{" + key + "}}", val)
-            res = res.replace("{" + key + "}", val)
+        if val is None:
+            continue
+        # An empty value stays verbatim (substitutes to nothing, as before)
+        # instead of becoming an explicit empty shell argument.
+        value = _quote_for_shell(val) if shell_quote and val else val
+        # Quoted-template forms first: the template's own quotes are
+        # consumed so a platform-quoted value is never double-quoted.
+        for q in ("'", '"'):
+            res = res.replace(q + "{{" + key + "}}" + q, value)
+            res = res.replace(q + "{" + key + "}" + q, value)
+        res = res.replace("{{" + key + "}}", value)
+        res = res.replace("{" + key + "}", value)
 
     return res
 

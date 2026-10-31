@@ -301,6 +301,14 @@ The engine automatically substitutes **placeholders** at runtime.
 | `{{hostname}}` | Machine hostname           | `workstation-01`          |
 | `{{date}}`     | Today's date (ISO 8601)    | `2026-08-29`              |
 
+> **Shell safety**: values spliced into a **`command:`** template are
+> quoted as a single shell argument (POSIX `sh` / Windows `cmd`), so a
+> filename containing spaces or shell metacharacters can never execute
+> injected shell. Wrapping a token in quotes in the template is optional —
+> both `tool.exe {{path}}` and `tool.exe "{{path}}"` behave identically
+> (the template's own quotes are consumed). **`message:`** and **`ask:`**
+> render values verbatim: they are display text, never executed.
+
 ### Usage Examples
 
 ```yaml

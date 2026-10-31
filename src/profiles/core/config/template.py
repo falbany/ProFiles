@@ -259,6 +259,12 @@ columns:
 #   {{output}}     captured output of the previous blocking command
 #                  (combined stdout+stderr, last ~4 KB)
 #
+#   Shell safety: token values spliced into a command are quoted as ONE
+#   shell argument (POSIX sh / Windows cmd), so a filename containing
+#   spaces or shell metacharacters can never inject commands. Quotes
+#   around a token are optional — {{path}} and "{{path}}" behave
+#   identically. message / ask texts render values verbatim (display only).
+#
 # failmode: "warn" | "abort" | "skip" — behavior for failing 'before' steps.
 # timeout: seconds for blocking steps.
 # ============================================================================

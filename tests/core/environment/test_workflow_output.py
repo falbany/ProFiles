@@ -152,7 +152,8 @@ class TestOutputToken:
                 WorkflowStep(action="run", command="log.exe --text {output}"),
             ]
             run_workflow(steps, None, failmode="warn")
-        assert commands == ["probe.exe", "log.exe --text probe ok"]
+        # The captured output is shell-quoted as one argument (#27).
+        assert commands == ["probe.exe", "log.exe --text 'probe ok'"]
 
     def test_output_token_empty_before_any_command(self):
         notices = []
@@ -377,6 +378,8 @@ class TestOutputOnNonBlockingSteps:
                 WorkflowStep(action="run", command="echo {{output}}"),
             ]
             run_workflow(steps, None)
+        # No blocking command ran before the echo: {{output}} resolves to
+        # the empty string, substituted verbatim (#27: empty → nothing).
         assert commands == ["detached.exe", "echo "]
 
 
