@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Folder, FolderOpen, Home, Terminal } from "lucide-react";
+import { ArrowRight, ChevronRight, Folder, FolderOpen, Home, Terminal } from "lucide-react";
 import { EditableCombobox } from "./EditableCombobox";
 import Tooltip from "./Tooltip";
 
@@ -103,7 +103,7 @@ export function HeaderBar({
               aria-label="Go to parent directory"
               className="btn btn-secondary shrink-0 p-1.5"
             >
-              <span className="font-mono text-sm leading-none font-bold">&lt;</span>
+              <ChevronRight className="h-3.5 w-3.5 rotate-180" />
             </button>
           </Tooltip>
         )}

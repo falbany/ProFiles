@@ -55,6 +55,9 @@ const AUTO_RESCAN_DEBOUNCE_MS = 800;
 /** Poll interval for server-side UI events (config handoff toasts). */
 const NOTIFICATION_POLL_MS = 4000;
 
+// Rows jumped by PageUp/PageDown in the file list (~a viewport of 28px rows).
+const TABLE_PAGE_JUMP = 20;
+
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -1079,6 +1082,19 @@ export default function App() {
     if (!barcodeMode) return;
 
     const handleKeydown = (e: KeyboardEvent) => {
+      // Keystrokes typed into an editable element belong to that element —
+      // never accumulate them into the wedge buffer or hijack its Enter
+      // (issue #58). A wedge scanner "typing" while an input is focused
+      // lands in the input, which is the correct destination anyway.
+      const target = e.target;
+      const isEditable =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement);
+      if (isEditable) return;
+
       if (e.key === "Enter") {
         const raw = barcodeBufferRef.current;
         if (!raw) {
@@ -1329,6 +1345,33 @@ export default function App() {
         e.preventDefault();
         setSelectedIndex((prev) => {
           const next = Math.max(prev - 1, 0);
+          selectedPathRef.current = visibleFiles[next]?.path ?? null;
+          return next;
+        });
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        setSelectedIndex((prev) => {
+          selectedPathRef.current = visibleFiles[0]?.path ?? null;
+          return prev === 0 ? prev : 0;
+        });
+      } else if (e.key === "End") {
+        e.preventDefault();
+        setSelectedIndex((prev) => {
+          const next = Math.max(0, visibleFiles.length - 1);
+          selectedPathRef.current = visibleFiles[next]?.path ?? null;
+          return prev === next ? prev : next;
+        });
+      } else if (e.key === "PageUp") {
+        e.preventDefault();
+        setSelectedIndex((prev) => {
+          const next = Math.max(prev - TABLE_PAGE_JUMP, 0);
+          selectedPathRef.current = visibleFiles[next]?.path ?? null;
+          return next;
+        });
+      } else if (e.key === "PageDown") {
+        e.preventDefault();
+        setSelectedIndex((prev) => {
+          const next = Math.min(prev + TABLE_PAGE_JUMP, Math.max(0, visibleFiles.length - 1));
           selectedPathRef.current = visibleFiles[next]?.path ?? null;
           return next;
         });

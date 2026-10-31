@@ -1,4 +1,7 @@
+import { useRef } from "react";
 import { Keyboard, X } from "lucide-react";
+
+import { useModalA11y } from "../utils/useModalA11y";
 
 interface ShortcutsModalProps {
   isOpen: boolean;
@@ -6,6 +9,9 @@ interface ShortcutsModalProps {
 }
 
 export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleDialogKeyDown = useModalA11y({ isOpen, onClose, dialogRef });
+
   if (!isOpen) return null;
 
   const shortcuts = [
@@ -14,6 +20,8 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "Enter", desc: "Execute / launch selected file" },
     { key: "P", desc: "Open properties for selected file" },
     { key: "↑ / ↓", desc: "Navigate file list" },
+    { key: "Home / End", desc: "Jump to first / last file" },
+    { key: "PageUp / PageDown", desc: "Page through the file list" },
     { key: "Ctrl + D", desc: "Focus Directory field" },
     { key: "Ctrl + E", desc: "Focus Extension field" },
     { key: "Ctrl + F", desc: "Focus Filter / Search field" },
@@ -32,9 +40,11 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
   return (
     <div className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard Shortcuts"
+        onKeyDown={handleDialogKeyDown}
         className="animate-modal-in w-[450px] max-w-full rounded-2xl border border-frame-line glass-panel p-5"
       >
         <div className="mb-4 flex items-center justify-between border-b border-line pb-3">

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, X, AlertCircle } from "lucide-react";
 
 import { decodeBarcodeImage } from "../api/client";
+import { useModalA11y } from "../utils/useModalA11y";
 import {
   DECODE_FORMATS,
   captureVideoFrame,
@@ -25,6 +26,8 @@ const CAMERA_START_TIMEOUT_MS = 8000;
 
 export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcodeModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleDialogKeyDown = useModalA11y({ isOpen, onClose, dialogRef });
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const pollerStopRef = useRef<(() => void) | null>(null);
@@ -217,9 +220,11 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Camera barcode scanner"
+        onKeyDown={handleDialogKeyDown}
         className="relative w-full max-w-lg rounded-2xl border border-frame-line glass-panel p-6 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Copy, Check, Plus, Trash2, Hash, Download } from "lucide-react";
 import { generateBarcode } from "../api/client";
+import { useModalA11y } from "../utils/useModalA11y";
 
 interface BarcodeModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
   const [copied, setCopied] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  const handleDialogKeyDown = useModalA11y({ isOpen, onClose, dialogRef: modalRef });
 
   // Initialize from file path or content
   useEffect(() => {
@@ -147,6 +149,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
         role="dialog"
         aria-modal="true"
         aria-label="QR Code Settings"
+        onKeyDown={handleDialogKeyDown}
         className="animate-modal-in w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
         onClick={(e) => e.stopPropagation()}
       >

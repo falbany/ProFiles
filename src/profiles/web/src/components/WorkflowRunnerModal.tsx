@@ -12,6 +12,7 @@ import {
   respondWorkflowSession,
   startWorkflowSession,
 } from "../api/client";
+import { useModalA11y } from "../utils/useModalA11y";
 import type { WorkflowSessionState, WorkflowStepRecord } from "../api/types";
 
 interface WorkflowRunnerModalProps {
@@ -126,6 +127,7 @@ export function WorkflowRunnerModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen || !directory || !filename) {
@@ -195,6 +197,14 @@ export function WorkflowRunnerModal({
     onClose();
   };
 
+  // Focus trap / initial focus / restore (issue #62); Escape routes
+  // through handleClose so a live session is aborted first.
+  const handleDialogKeyDown = useModalA11y({
+    isOpen,
+    onClose: handleClose,
+    dialogRef,
+  });
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -239,9 +249,11 @@ export function WorkflowRunnerModal({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="workflow-runner-title"
+      onKeyDown={handleDialogKeyDown}
       className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
     >
       <div className="animate-modal-in flex h-[80vh] w-full max-w-4xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
