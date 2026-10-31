@@ -48,7 +48,7 @@ export function ActionBar({
           role="status"
           aria-live={isError ? "assertive" : "polite"}
           aria-atomic="true"
-          className={`animate-toast-in absolute left-1/2 top-1/2 z-50 max-w-[min(80vw,640px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border px-4 py-2 text-xs font-medium glass-panel-strong ${
+          className={`animate-toast-in absolute left-1/2 top-1/2 z-[var(--z-toast)] max-w-[min(80vw,640px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border px-4 py-2 text-xs font-medium glass-panel-strong ${
             isError
               ? "pointer-events-auto flex max-w-[min(70vw,560px)] items-center gap-2.5 border-status-danger-border text-left text-ink"
               : "pointer-events-none max-w-[min(70vw,560px)] text-center text-ink"

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ArrowRight, Folder, FolderOpen, Home, Terminal } from "lucide-react";
 import { EditableCombobox } from "./EditableCombobox";
 import Tooltip from "./Tooltip";
@@ -27,6 +28,8 @@ export function HeaderBar({
   onOpenActiveDirectory,
   onOpenTerminal,
 }: HeaderBarProps) {
+  // Unfolded directory list — the tooltip yields to it (issue #53).
+  const [dirListOpen, setDirListOpen] = useState(false);
   return (
     <header className="relative z-30 flex flex-wrap items-center gap-3 border-b border-line bg-app/90 px-5 py-2 text-xs backdrop-blur-xl shadow-xs transition-all duration-200">
       <div className="flex shrink-0 items-center gap-3">
@@ -63,13 +66,14 @@ export function HeaderBar({
           <Folder className="h-3.5 w-3.5 text-chip-indigo-text" />
           <span>Directory:</span>
         </label>
-        <Tooltip text="Select or type a directory path to scan files from.">
+        <Tooltip text="Select or type a directory path to scan files from." suppress={dirListOpen}>
           <EditableCombobox
             id="directory-combobox"
             ariaLabel="Directory"
             value={activeDirectory}
             options={directories}
             onChange={onDirectoryChange}
+            onOpenChange={setDirListOpen}
             placeholder="/path/to/directory"
             className="w-full"
             inputClassName="font-mono"

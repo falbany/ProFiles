@@ -130,7 +130,7 @@ export function ContextMenu({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40"
+        className="fixed inset-0 z-[calc(var(--z-context-menu)-1)]"
         onClick={onClose}
         onContextMenu={(e) => { e.preventDefault(); onClose(); }}
         aria-hidden="true"
@@ -163,7 +163,7 @@ export function ContextMenu({
             items.at(-1)?.focus();
           }
         }}
-        className="animate-modal-in fixed z-50 max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
+        className="animate-modal-in fixed z-[var(--z-context-menu)] max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-line bg-surface-glass py-1 text-xs text-ink shadow-2xl backdrop-blur-md"
         style={menuCoordinates ?? { left: x, top: y, visibility: "hidden" }}
       >
         <div className="border-b border-line px-3 py-2 font-medium text-ink-muted truncate">
@@ -404,7 +404,7 @@ export function ContextMenu({
       {/* Launch with Args Modal */}
       {showArgsModal && (
         <dialog
-          className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 rounded-xl"
+          className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 rounded-xl"
           aria-modal="true"
           aria-labelledby="args-modal-title"
         >

@@ -139,11 +139,14 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="QR Code Settings"
         className="animate-modal-in w-full max-w-md rounded-xl border border-frame-line glass-panel p-6"
         onClick={(e) => e.stopPropagation()}
       >

@@ -109,7 +109,7 @@ export function DirectoryPickerModal({
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
     >
       <div

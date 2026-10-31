@@ -213,10 +213,13 @@ export function CameraBarcodeModal({ isOpen, onClose, onDetected }: CameraBarcod
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Camera barcode scanner"
         className="relative w-full max-w-lg rounded-2xl border border-frame-line glass-panel p-6 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >

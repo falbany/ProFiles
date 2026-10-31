@@ -236,7 +236,7 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+      className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="properties-modal-title"

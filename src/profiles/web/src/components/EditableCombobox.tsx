@@ -12,6 +12,8 @@ interface EditableComboboxProps {
   className?: string;
   inputClassName?: string;
   optionLabel?: (value: string) => string;
+  /** Notified whenever the list unfolds/folds (e.g. to yield overlapping popovers). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function EditableCombobox({
@@ -24,6 +26,7 @@ export function EditableCombobox({
   className = "",
   inputClassName = "",
   optionLabel = (option) => option,
+  onOpenChange,
 }: EditableComboboxProps) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,6 +51,12 @@ export function EditableCombobox({
     document.addEventListener("mousedown", closeOnOutsideClick);
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, []);
+
+  // Let the parent react to the list unfolding (issue #53: overlapping
+  // tooltips / syntax helpers must yield while the list is up).
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const openList = () => {
     setQuery("");
@@ -108,7 +117,8 @@ export function EditableCombobox({
         aria-activedescendant={activeOptionId}
         value={value}
         placeholder={placeholder}
-        onFocus={openList}
+        // No expand-on-focus (WAI-ARIA APG): clicking in to edit a value must
+        // not pop the list open — ArrowDown, typing or the chevron unfold it.
         onChange={(event) => {
           onChange(event.target.value);
           setQuery(event.target.value);
@@ -134,7 +144,7 @@ export function EditableCombobox({
           id={listboxId}
           role="listbox"
           aria-label={`${ariaLabel} options`}
-          className="absolute left-0 top-full z-[60] mt-1 max-h-60 w-full min-w-48 overflow-y-auto rounded-md border border-line bg-surface py-1 text-ink shadow-xl"
+          className="absolute left-0 top-full z-[var(--z-combobox-list)] mt-1 max-h-60 w-full min-w-48 overflow-y-auto rounded-md border border-line bg-surface py-1 text-ink shadow-xl"
         >
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, index) => {
