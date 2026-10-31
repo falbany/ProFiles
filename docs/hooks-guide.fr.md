@@ -292,6 +292,16 @@ Le moteur substitue automatiquement des **placeholders** au moment de l'exécuti
 | `{{hostname}}` | Nom de machine                | `workstation-01`             |
 | `{{date}}`     | Date du jour (ISO 8601)       | `2026-08-29`                 |
 
+> **Sécurité shell** : les valeurs insérées dans un template
+> **`command:`** sont quotées comme un argument shell unique (POSIX `sh` /
+> Windows `cmd`), donc un nom de fichier contenant des espaces ou des
+> métacaractères shell ne peut jamais exécuter du shell injecté. Entourer
+> un jeton de guillemets dans le template est optionnel — `tool.exe
+> {{path}}` et `tool.exe "{{path}}"` se comportent identiquement (les
+> guillemets du template sont consommés). **`message:`** et **`ask:`**
+> affichent les valeurs telles quelles : ce sont des textes d'affichage,
+> jamais exécutés.
+
 ### Exemples d'Utilisation
 
 ```yaml

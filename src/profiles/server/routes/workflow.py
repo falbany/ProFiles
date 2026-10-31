@@ -305,11 +305,14 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
         StepRecord(
             index=idx + 1,
             action=s.action,
+            # Display mirrors execution: the engine shell-quotes token
+            # values spliced into commands (shell-injection hardening).
             command=_substitute_variables(
                 s.command,
                 target_file,
                 username=username,
                 hostname=hostname,
+                shell_quote=True,
             ),
             message=_substitute_variables(
                 s.message,

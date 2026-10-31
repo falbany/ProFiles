@@ -55,6 +55,92 @@ def test_workflow_skip_step_over():
     assert outcome == WorkflowOutcome.CONTINUE
 
 
+class TestShellQuotedSubstitution:
+    """Token values spliced into commands are shell-quoted (#27).
+
+    Filenames come from the scanned tree and ``{{output}}`` from previous
+    commands, so a hostile value must never break out into shell syntax.
+    """
+
+    def test_quote_for_shell_posix(self):
+        from profiles.core.environment import workflow as wf
+
+        assert wf._quote_for_shell("plain.png") == "plain.png"
+        assert wf._quote_for_shell("a;b.png") == "'a;b.png'"
+        assert wf._quote_for_shell("my file.png") == "'my file.png'"
+
+    def test_quote_for_shell_windows(self, monkeypatch):
+        from profiles.core.environment import workflow as wf
+
+        monkeypatch.setattr(wf.os, "name", "nt")
+        assert wf._quote_for_shell("plain.png") == "plain.png"
+        assert wf._quote_for_shell("my file.png") == '"my file.png"'
+
+    def test_hostile_filename_cannot_inject_shell(self, tmp_path: Path):
+        """`x; touch pwned ...` as {{filename}} must run as ONE argument."""
+        hostile = "x; touch pwned-27.txt $(touch pwned-27b).png"
+        target = tmp_path / hostile
+        target.write_text("content")
+        out = tmp_path / "out.txt"
+
+        steps = [WorkflowStep(action="run", command=f"printf '%s' {{{{filename}}}} > '{out}'")]
+        outcome = run_workflow(steps, target)
+
+        assert outcome == WorkflowOutcome.CONTINUE
+        assert not (tmp_path / "pwned-27.txt").exists()
+        assert not (tmp_path / "pwned-27b").exists()
+        assert out.read_text() == hostile
+
+    def test_quoted_template_is_not_double_quoted(self, tmp_path: Path):
+        """A token already wrapped in template quotes consumes its quotes."""
+        target = tmp_path / "my file.png"
+        target.write_text("content")
+        out = tmp_path / "out.txt"
+
+        steps = [WorkflowStep(action="run", command=f"printf '%s' '{{{{path}}}}' > '{out}'")]
+        run_workflow(steps, target)
+
+        assert out.read_text() == str(target)
+
+    def test_safe_values_keep_behavior(self, tmp_path: Path):
+        """Metachar-free values substitute verbatim (no visible change)."""
+        target = tmp_path / "plain.png"
+        target.write_text("content")
+        captured: list[str] = []
+        with patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=_record_run(captured),
+        ):
+            run_workflow([WorkflowStep(action="run", command="echo {{stem}}")], target)
+        assert captured == ["echo plain"]
+
+    def test_output_token_is_shell_quoted(self, tmp_path: Path):
+        """Captured {{output}} spliced into the next command is one argument."""
+        out = tmp_path / "out.txt"
+        steps = [
+            WorkflowStep(action="run", command="echo 'a; b'"),
+            WorkflowStep(action="run", command=f"printf '%s' {{{{output}}}} > '{out}'"),
+        ]
+        run_workflow(steps, None)
+
+        assert out.read_text().strip() == "a; b"
+        assert not (tmp_path / "b").exists()
+
+    def test_display_text_is_not_quoted(self, tmp_path: Path):
+        """`message:` / `ask:` render raw values — quoting is command-only."""
+        from profiles.core.environment import workflow as wf
+
+        target = tmp_path / "a;b.png"
+        target.write_text("content")
+        step = WorkflowStep(
+            action="run",
+            command="echo {{filename}}",
+            message="File: {{filename}}",
+        )
+        _, message = wf._resolve_step_texts(step, target)
+        assert message == "File: a;b.png"
+
+
 def test_timeout_aborts_on_run_failure():
     """A timed-out command on a ``run`` step with on_failure=stop → ABORT."""
     with patch(
