@@ -28,9 +28,9 @@ Download the installer for your platform from the
   to `/Applications`. First launch: right-click → **Open** (builds are
   not signed).
 - **Linux**: `profiles_<version>_amd64.deb`
-  (`sudo dpkg -i ... && sudo apt-get install -f`) or
-  `ProFiles-<version>.AppImage` (`chmod +x`, then double-click — no
-  installation required).
+  (`sudo dpkg -i ... && sudo apt-get install -f`). No AppImage is
+  shipped — the AppImage backend is currently broken upstream in
+  Briefcase (see the CHANGELOG).
 
 Launch ProFiles from your Start Menu (Windows), `/Applications` (macOS),
 or your application launcher (Linux). No Python installation is needed.
@@ -40,14 +40,14 @@ or your application launcher (Linux). No Python installation is needed.
 Requires Python 3.11+ on the machine.
 
 ```bash
-# Variant A — from PyPI (when published)
-uv tool install profiles-app
-
-# Variant B — from a GitHub release wheel
+# Variant A — from a GitHub release wheel (primary: not on PyPI yet)
 uv tool install profiles-app --from <url-to-profiles_app-<version>-py3-none-any.whl>
 
 # pipx equivalent
-pipx install profiles-app
+pipx install <url-to-profiles_app-<version>-py3-none-any.whl>
+
+# Variant B — from PyPI (when published)
+uv tool install profiles-app
 ```
 
 Upgrade with `uv tool upgrade profiles-app`. The `profiles` and
@@ -609,7 +609,7 @@ ProFiles uses chunked insertion for large file lists. If you experience memory i
 
 **1. Uninstall package**:
 ```bash
-pip uninstall profiles
+pip uninstall profiles-app
 ```
 
 **2. Remove virtual environment**:
@@ -636,7 +636,7 @@ rm .profiles
 
 **5. Remove installed files** (system installation):
 ```bash
-pip uninstall profiles
+pip uninstall profiles-app
 # Manually remove if needed
 rm -rf ~/.local/lib/python3.11/site-packages/profiles*
 ```
@@ -746,7 +746,7 @@ Examples:
 ### With pip
 
 ```bash
-pip uninstall profiles
+pip uninstall profiles-app
 ```
 
 ### Remove virtual environment

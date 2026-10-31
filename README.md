@@ -79,15 +79,16 @@ Download the installer for your OS from
 
 - Windows: `ProFiles-<version>.msi`
 - macOS: `ProFiles-<version>.dmg`
-- Linux: `.deb` or `.AppImage`
+- Linux: `profiles_<version>_amd64.deb`
 
 ### Option 2: One-Line Install (Developers)
 
 ```bash
-uv tool install profiles-app      # or: pipx install profiles-app
+# From a GitHub release wheel (the package is not on PyPI yet):
+uv tool install profiles-app --from <url-to-profiles_app-<version>-py3-none-any.whl>
 ```
 
-_(requires Python 3.11+; from GitHub release wheel: add `--from <wheel-url>`)_
+_(requires Python 3.11+; `pipx install <wheel-url>` is equivalent. Plain `uv tool install profiles-app` will work once the package is published to PyPI)_
 
 ### Option 3: Wizard / Manual
 

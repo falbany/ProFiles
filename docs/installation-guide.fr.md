@@ -26,8 +26,9 @@ Téléchargez l'installateur de votre plateforme depuis la page
 - **macOS** : `ProFiles-<version>.dmg` — glissez `ProFiles.app` vers
   `/Applications`. Premier lancement : clic droit → **Ouvrir**.
 - **Linux** : `profiles_<version>_amd64.deb`
-  (`sudo dpkg -i ... && sudo apt-get install -f`) ou
-  `ProFiles-<version>.AppImage` (`chmod +x`, puis double-clic).
+  (`sudo dpkg -i ... && sudo apt-get install -f`). Aucune AppImage n'est
+  publiée — le backend AppImage est cassé en amont dans Briefcase
+  (voir le CHANGELOG).
 
 Aucune installation de Python n'est requise.
 
@@ -36,14 +37,14 @@ Aucune installation de Python n'est requise.
 Nécessite Python 3.11+.
 
 ```bash
-# Variante A — depuis PyPI (une fois publié)
-uv tool install profiles-app
-
-# Variante B — depuis une wheel de release GitHub
+# Variante A — depuis une wheel de release GitHub (prioritaire : pas encore sur PyPI)
 uv tool install profiles-app --from <url-de-la-wheel>
 
 # équivalent pipx
-pipx install profiles-app
+pipx install <url-de-la-wheel>
+
+# Variante B — depuis PyPI (une fois publié)
+uv tool install profiles-app
 ```
 
 Mise à jour : `uv tool upgrade profiles-app`.
@@ -628,7 +629,7 @@ ProFiles utilise l'insertion par morceaux pour les grandes listes de fichiers. S
 
 **1. Désinstaller le package** :
 ```bash
-pip uninstall profiles
+pip uninstall profiles-app
 ```
 
 **2. Supprimer l'environnement virtuel** :
@@ -655,7 +656,7 @@ rm .profiles
 
 **5. Supprimer les fichiers installés** (installation système) :
 ```bash
-pip uninstall profiles
+pip uninstall profiles-app
 # Supprimer manuellement si nécessaire
 rm -rf ~/.local/lib/python3.11/site-packages/profiles*
 ```
@@ -755,7 +756,7 @@ options:
 ### Avec pip
 
 ```bash
-pip uninstall profiles
+pip uninstall profiles-app
 ```
 
 ### Supprimer l'environnement virtuel

@@ -14,7 +14,7 @@ BRIEFCASE := $(UV) run briefcase
 # ============================================
 # Installation
 # ============================================
-.PHONY: install install-system install-system-dev uninstall install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-package-windows briefcase-package-macos briefcase-package-linux-deb briefcase-package-linux-appimage briefcase-package-local briefcase-clean
+.PHONY: install install-system install-system-dev uninstall install-uv install-poetry briefcase-dev briefcase-build briefcase-run briefcase-package briefcase-package-windows briefcase-package-macos briefcase-package-linux-deb briefcase-package-local briefcase-clean
 
 install: ## Install with uv (recommended)
 	@echo "📦 Installing ProFiles with uv..."
@@ -33,7 +33,7 @@ install-system-dev: ## Install system-wide (development mode)
 
 uninstall: ## Uninstall ProFiles from system-wide installation
 	@echo "🗑️  Uninstalling ProFiles..."
-	pip uninstall -y profiles
+	pip uninstall -y profiles-app
 	@echo "✅ Uninstallation complete!"
 
 install-uv: ## Install uv package manager
@@ -97,11 +97,6 @@ briefcase-package-linux-deb: ## Package the Linux .deb — Linux host only
 	@echo "📦 Packaging Linux .deb (requires Linux host)..."
 	$(BRIEFCASE) package linux -p deb
 	@echo "✅ Package written to dist/"
-
-briefcase-package-linux-appimage: ## Package the Linux .AppImage — Linux host only
-	@echo "📦 Packaging Linux AppImage (requires Linux host)..."
-	$(BRIEFCASE) package linux -p appimage
-	@echo "✅ AppImage written to dist/"
 
 briefcase-package-local: ## Package for the current host OS (auto-detect)
 	@echo "📦 Detected host package target: $(HOST_PKG)"
