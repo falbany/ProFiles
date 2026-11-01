@@ -1,4 +1,7 @@
+import { useRef } from "react";
 import { Clock, PauseCircle, PlayCircle, Timer, X } from "lucide-react";
+
+import { useModalA11y } from "../utils/useModalA11y";
 
 export interface TimerPreset {
   label: string;
@@ -26,6 +29,9 @@ export function TimerModal({
   onClose,
   onSetInterval,
 }: TimerModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleDialogKeyDown = useModalA11y({ isOpen, onClose, dialogRef });
+
   if (!isOpen) return null;
 
   const isActive = currentInterval > 0;
@@ -51,9 +57,11 @@ export function TimerModal({
   return (
     <div className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Auto-Rescan Timer"
+        onKeyDown={handleDialogKeyDown}
         className="animate-modal-in w-[420px] max-w-full rounded-2xl border border-frame-line glass-panel p-5"
       >
         {/* Header */}

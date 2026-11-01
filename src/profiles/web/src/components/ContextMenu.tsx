@@ -64,8 +64,18 @@ export function ContextMenu({
   const [showArgsModal, setShowArgsModal] = useState(false);
   const [argsValue, setArgsValue] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
+  const argsDialogRef = useRef<HTMLDialogElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [menuCoordinates, setMenuCoordinates] = useState<{ left: number; top: number } | null>(null);
+
+  // The args dialog is a native <dialog>: showModal() gives the focus trap,
+  // top-layer stacking, backdrop-click target and Escape/cancel handling
+  // the raw rendered-but-not-shown dialog lacked (issue #62).
+  useEffect(() => {
+    if (showArgsModal) {
+      argsDialogRef.current?.showModal();
+    }
+  }, [showArgsModal]);
 
   useLayoutEffect(() => {
     if (!position) {
@@ -320,7 +330,7 @@ export function ContextMenu({
             const dirPath = getDirectoryPath(file.path);
             navigator.clipboard.writeText(dirPath);
             onClose();
-            showToast?.('Copy Directory');
+            showToast?.(`Copied: ${dirPath}`);
           }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={'Copy Directory'}
@@ -404,9 +414,16 @@ export function ContextMenu({
       {/* Launch with Args Modal */}
       {showArgsModal && (
         <dialog
+          ref={argsDialogRef}
           className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 rounded-xl"
-          aria-modal="true"
           aria-labelledby="args-modal-title"
+          onClick={(e) => {
+            if (e.target === argsDialogRef.current) setShowArgsModal(false);
+          }}
+          onCancel={(e) => {
+            e.preventDefault();
+            setShowArgsModal(false);
+          }}
         >
           <div className="animate-modal-in w-96 rounded-xl border border-frame-line glass-panel p-4">
             <h3 id="args-modal-title" className="mb-2 text-sm font-semibold text-ink">Launch with Arguments</h3>

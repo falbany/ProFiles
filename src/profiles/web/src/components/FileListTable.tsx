@@ -612,20 +612,25 @@ export function FileListTable({
                     )}
                     <span className="hidden sm:inline">{idx + 1}</span>
                   </div>
-                  {resolvedKeys.map((key, kIdx) => (
-                    <div
-                      key={kIdx}
-                      role="gridcell"
-                      data-column-key={key}
-                      className="truncate px-3 font-mono"
-                      style={{
-                        minWidth: MIN_COLUMN_WIDTH,
-                      }}
-                      title={key === "Path" ? file.path : undefined}
-                    >
-                      {file.column_values[key] || (key === "File" ? file.filename : "-")}
-                    </div>
-                  ))}
+                  {resolvedKeys.map((key, kIdx) => {
+                    const cellValue = file.column_values[key] || (key === "File" ? file.filename : "-");
+                    return (
+                      <div
+                        key={kIdx}
+                        role="gridcell"
+                        data-column-key={key}
+                        className="truncate px-3 font-mono"
+                        style={{
+                          minWidth: MIN_COLUMN_WIDTH,
+                        }}
+                        // Truncated cells expose their full value on hover (#63);
+                        // the Path column keeps its absolute-path tooltip.
+                        title={key === "Path" ? file.path : cellValue}
+                      >
+                        {cellValue}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

@@ -58,6 +58,15 @@ export function EditableCombobox({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
+  // Keep the highlighted option inside the scrolled viewport (issue #60):
+  // arrowing past the visible window must not lose track of the selection.
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    document
+      .getElementById(`${listboxId}-option-${activeIndex}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, listboxId]);
+
   const openList = () => {
     setQuery("");
     setActiveIndex(-1);
