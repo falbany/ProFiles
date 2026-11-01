@@ -277,15 +277,22 @@ def file_launched(
 
 
 def workflow_step(
-    logger: logging.Logger, *, index: int, total: int, action: str, result: str
+    logger: logging.Logger,
+    *,
+    index: int,
+    total: int,
+    action: str,
+    result: str,
+    phase: str = "pre",
 ) -> None:
     """Emit WORKFLOW_STEP."""
     logger.info(
-        'WORKFLOW_STEP index=%d total=%d action="%s" result="%s"',
+        'WORKFLOW_STEP index=%d total=%d action="%s" result="%s" phase="%s"',
         index,
         total,
         action,
         result,
+        phase,
     )
 
 

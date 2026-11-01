@@ -17,10 +17,14 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
-from profiles.core.config.models import AppConfig
+from profiles.core.config.models import AppConfig, WorkflowStep
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.core.environment.matcher import select_most_specific_pattern
-from profiles.core.environment.workflow import WorkflowOutcome, run_workflow
+from profiles.core.environment.workflow import (
+    WorkflowOutcome,
+    filter_steps_by_phase,
+    run_workflow,
+)
 from profiles.core.processing.file_classifier import ensure_trailing_separator
 from profiles.core.telemetry import events
 from profiles.utils.file_utils import (
@@ -165,11 +169,16 @@ def launch_selected_file(
             plain ``launch_file`` path otherwise.
         logger: Optional logger to record the attempt.
         config: Optional loaded :class:`AppConfig`; when provided the
-            per-extension hook pipeline is executed before the OS launch.
-            When *config* is provided, hooks run before the OS launch and
-            their outcome may short-circuit the launch (ABORT → FAILED,
+            per-extension hook pipeline is executed around the OS launch.
+            Hooks run in two passes: ``phase: pre`` steps (the default)
+            before the launch and may short-circuit it (ABORT → FAILED,
             SKIP → SUCCESS with the ``instead`` hook having handled the
-            file, CONTINUE → proceed to the OS launch as normal).
+            file, CONTINUE → proceed to the OS launch as normal);
+            ``phase: post`` steps run only after a successful OS launch,
+            before any caller-side ``close_after_execute`` handling (the
+            window close happens after this function returns). When the
+            launch fails — or the pre phase aborted/skipped it — the post
+            phase is skipped entirely (debug-logged).
 
     Returns:
         ``ActionResult`` describing the outcome.
@@ -186,21 +195,25 @@ def launch_selected_file(
             path=file_path,
         )
 
+    post_steps: list[WorkflowStep] = []
     if config is not None:
         patterns = list(config.launch_hooks.keys())
         selected_pattern = select_most_specific_pattern(patterns, filename)
 
         if selected_pattern and selected_pattern in config.launch_hooks:
             steps = list(config.launch_hooks[selected_pattern])
+            pre_steps = filter_steps_by_phase(steps, "pre")
+            post_steps = filter_steps_by_phase(steps, "post")
             failure_context: list[str] = []
             workflow_outcome = run_workflow(
-                steps,
+                pre_steps,
                 file_path,
                 timeout=config.launch_hook_timeout,
                 failmode=config.launch_hook_failmode,
                 username=username,
                 failure_context=failure_context,
                 logger=logger,
+                phase="pre",
             )
 
             if workflow_outcome == WorkflowOutcome.ABORT:
@@ -236,6 +249,8 @@ def launch_selected_file(
     if not launched:
         if logger is not None:
             events.file_launch_failed(logger, path=str(file_path), error="OS launch failed")
+            if post_steps:
+                logger.debug("OS launch failed — skipping post-launch hook steps")
         return ActionResult(
             status=ActionStatus.FAILED,
             message=(
@@ -253,6 +268,24 @@ def launch_selected_file(
             user=username,
             args=args or "-",
         )
+
+    # Post-launch phase: run `phase: post` steps only now that the OS launch
+    # has actually succeeded. The outcome is consumed: an ABORT here (a post
+    # step failure or a user answering "No") merely ends the post workflow —
+    # the launch is already done and must not surface as aborted.
+    if post_steps:
+        post_outcome = run_workflow(
+            post_steps,
+            file_path,
+            timeout=config.launch_hook_timeout if config is not None else None,
+            failmode=config.launch_hook_failmode if config is not None else "warn",
+            username=username,
+            logger=logger,
+            phase="post",
+        )
+        if logger is not None:
+            logger.debug("Post-launch workflow ended: %s", post_outcome.value)
+
     return ActionResult(
         status=ActionStatus.SUCCESS,
         message=f"Launched {file_path}",

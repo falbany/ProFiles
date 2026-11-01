@@ -75,3 +75,43 @@ class TestWorkflowStepRequiredFields:
         step = WorkflowStep(action="run", command="echo hi", message="hello")
         assert step.command == "echo hi"
         assert step.message == "hello"
+
+
+class TestWorkflowStepPhase:
+    """The ``phase`` key (#9): pre default, replace+post rejected."""
+
+    def test_phase_defaults_to_pre(self):
+        step = WorkflowStep(action="run", command="echo hi")
+        assert step.phase == "pre"
+
+    def test_phase_post_accepted_on_command_actions(self):
+        for action in ("run", "run_after", "check", "notify"):
+            kwargs = {"command": "x"} if action != "notify" else {"message": "hi"}
+            step = WorkflowStep(action=action, phase="post", **kwargs)
+            assert step.phase == "post"
+
+    def test_replace_with_post_phase_rejected(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="replace.*cannot use 'phase: post'"):
+            WorkflowStep(action="replace", command="launch.exe", phase="post")
+
+
+class TestWorkflowStepEvaluateCondition:
+    """evaluate_condition delegates to the shared grammar (#8)."""
+
+    def test_unset_condition_is_true(self):
+        assert WorkflowStep(action="run", command="x").evaluate_condition() is True
+
+    def test_env_set(self, monkeypatch):
+        monkeypatch.setenv("MODEL_COND", "1")
+        step = WorkflowStep(action="run", command="x", if_="env:MODEL_COND")
+        assert step.evaluate_condition() is True
+
+    def test_negated_file_condition(self, tmp_path):
+        step = WorkflowStep(action="run", command="x", if_=f"!file:{tmp_path / 'nope'}")
+        assert step.evaluate_condition() is True
+
+    def test_unknown_syntax_is_false(self):
+        step = WorkflowStep(action="run", command="x", if_="bogus")
+        assert step.evaluate_condition() is False

@@ -962,3 +962,206 @@ class TestOpenTerminalInDirectory:
             result = actions.open_terminal_in_directory(tmp_path)
         assert result.status is ActionStatus.FAILED
         assert "No terminal emulator" in result.message
+
+
+class TestPostLaunchPhase:
+    """`phase: post` steps run only after a successful OS launch (#9)."""
+
+    def _target(self, tmp_path: Path) -> Path:
+        target = tmp_path / "test.mttl"
+        target.touch()
+        return target
+
+    def test_post_steps_run_after_successful_launch(self, mocker, tmp_path: Path) -> None:
+        self._target(tmp_path)
+        """Pre step → OS launch → post step, in that order."""
+        captured: list[str] = []
+        mocker.patch(
+            "profiles.core.actions.launch_file",
+            side_effect=lambda p: (captured.append("LAUNCH"), True)[1],
+        )
+        mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, wait=False, **kw: (
+                captured.append(cmd),
+                _RESULT_OK,
+            )[1],
+        )
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="run", command="echo pre"),
+                WorkflowStep(action="run", command="echo post-{{filename}}", phase="post"),
+            )
+        }
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.SUCCESS
+        assert captured == ["echo pre", "LAUNCH", "echo post-test.mttl"]
+
+    def test_post_steps_skipped_when_pre_phase_aborts(self, mocker, tmp_path: Path) -> None:
+        self._target(tmp_path)
+        """An ask 'no' in the pre phase prevents both launch and post steps."""
+        captured: list[str] = []
+        mocker.patch("profiles.core.environment.workflow.confirm_dialog_3way", return_value="no")
+        mocker.patch(
+            "profiles.core.actions.launch_file",
+            side_effect=lambda p: (captured.append("LAUNCH"), True)[1],
+        )
+        mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, wait=False, **kw: (captured.append(cmd), _RESULT_OK)[1],
+        )
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="run", command="echo pre", ask="Proceed?"),
+                WorkflowStep(action="run", command="echo post", phase="post"),
+            )
+        }
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.FAILED
+        assert captured == []
+
+    def test_post_steps_skipped_on_replace(self, mocker, tmp_path: Path) -> None:
+        self._target(tmp_path)
+        """A replace step skips the OS launch — and the post phase with it."""
+        captured: list[str] = []
+        mocker.patch(
+            "profiles.core.actions.launch_file",
+            side_effect=lambda p: (captured.append("LAUNCH"), True)[1],
+        )
+        mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, wait=False, **kw: (captured.append(cmd), _RESULT_OK)[1],
+        )
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="replace", command="special.exe {{path}}"),
+                WorkflowStep(action="run", command="echo post", phase="post"),
+            )
+        }
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.SUCCESS
+        assert "workflow" in result.message
+        assert captured == ["special.exe " + str(self._target(tmp_path))]
+
+    def test_post_steps_skipped_when_launch_fails(self, mocker, tmp_path: Path) -> None:
+        self._target(tmp_path)
+        """A failed OS launch skips the post phase silently (debug-logged)."""
+        captured: list[str] = []
+        mocker.patch("profiles.core.actions.launch_file", return_value=False)
+        mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, wait=False, **kw: (captured.append(cmd), _RESULT_OK)[1],
+        )
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (WorkflowStep(action="run", command="echo post", phase="post"),)
+        }
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.FAILED
+        assert captured == []
+
+    def test_post_ask_no_ends_post_phase_not_the_launch(self, mocker, tmp_path: Path) -> None:
+        self._target(tmp_path)
+        """'No' on a post step stops the post phase; the launch stands (#9)."""
+        mocker.patch("profiles.core.environment.workflow.confirm_dialog_3way", return_value="no")
+        mock_launch_file = mocker.patch("profiles.core.actions.launch_file", return_value=True)
+        captured: list[str] = []
+        mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, wait=False, **kw: (captured.append(cmd), _RESULT_OK)[1],
+        )
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="run", command="echo post-1", ask="Run audit?", phase="post"),
+                WorkflowStep(action="run", command="echo post-2", phase="post"),
+            )
+        }
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        assert result.status is ActionStatus.SUCCESS
+        assert "Launched" in result.message
+        mock_launch_file.assert_called_once()
+        assert captured == []
+
+    def test_post_phase_failmode_skip_stops_remaining_post_steps(
+        self, mocker, tmp_path: Path
+    ) -> None:
+        """A failing post step ends the post phase; the launch result stands."""
+        self._target(tmp_path)
+        captured: list[str] = []
+        mocker.patch("profiles.core.actions.launch_file", return_value=True)
+        mocker.patch(
+            "profiles.core.environment.workflow._run_command",
+            side_effect=lambda cmd, wait=False, **kw: (
+                captured.append(cmd),
+                _RESULT_FAIL if cmd == "echo boom" else _RESULT_OK,
+            )[1],
+        )
+
+        config = _make_config_for_actions(tmp_path)
+        config.launch_hooks = {
+            ".mttl": (
+                WorkflowStep(action="run", command="echo boom", phase="post"),
+                WorkflowStep(action="run", command="echo after", phase="post"),
+            )
+        }
+
+        result = launch_selected_file(
+            directory=str(tmp_path),
+            filename="test.mttl",
+            release="test",
+            username="tester",
+            config=config,
+        )
+
+        # The launch result is unaffected by the post-step failure.
+        assert result.status is ActionStatus.SUCCESS
+        assert captured == ["echo boom"]

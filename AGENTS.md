@@ -54,6 +54,7 @@ src/profiles/
 │   │   ├── service.py        #   auto_select_directory, find_active_config
 │   │   ├── matcher.py        #   Correspondance config ↔ hostname
 │   │   ├── schema.py         #   Schéma de validation
+│   │   ├── conditions.py     #   Grammaire des conditions if: des hook steps
 │   │   ├── validator.py      #   Validation des valeurs
 │   │   ├── inheritance.py    #   Héritage entre configurations
 │   │   ├── template.py       #   STARTER_CONFIG_TEMPLATE (génération .profiles)

@@ -25,11 +25,13 @@ Les workflows de lancement constituent un moteur puissant permettant d'exécuter
 6. [Notifications Riches (Markdown)](#notifications-riches-markdown)
 7. [Gestion des Erreurs et Failmode](#gestion-des-erreurs-et-failmode)
 8. [Comportement des Timeout](#comportement-des-timeout)
-9. [Spécificité des Motifs (Pattern Matching)](#spécificité-des-motifs-pattern-matching)
-10. [Exemples Complets](#exemples-complets)
-11. [Migration depuis `content:`](#migration-depuis-content)
-12. [API de Programmation](#api-de-programmation)
-13. [Dépannage](#dépannage)
+9. [Phases d'Exécution (`phase`)](#phases-dexécution-phase)
+10. [Exécution Conditionnelle (`if`)](#exécution-conditionnelle-if)
+11. [Spécificité des Motifs (Pattern Matching)](#spécificité-des-motifs-pattern-matching)
+12. [Exemples Complets](#exemples-complets)
+13. [Migration depuis `content:`](#migration-depuis-content)
+14. [API de Programmation](#api-de-programmation)
+15. [Dépannage](#dépannage)
 
 ---
 
@@ -37,7 +39,7 @@ Les workflows de lancement constituent un moteur puissant permettant d'exécuter
 
 Les workflows utilisent une structure YAML par étapes. Chaque entrée dans `hooks.entries` est un **motif glob** qui correspond à des noms de fichiers.
 
-Chaque étape porte deux clés à rôle dédié : **`command:`** — le modèle de commande shell — et **`message:`** — un message Markdown affiché à l'utilisateur. Les deux clés sont acceptées sur chaque action ; celle qui est requise dépend de l'action.
+Chaque étape porte deux clés à rôle dédié : **`command:`** — le modèle de commande shell — et **`message:`** — un message Markdown affiché à l'utilisateur. Les deux clés sont acceptées sur chaque action ; celle qui est requise dépend de l'action. Une étape peut aussi porter une clé optionnelle **`phase:`** (`pre` par défaut, `post` pour s'exécuter après le lancement OS — voir [Phases d'Exécution](#phases-dexécution-phase)).
 
 ```yaml
 hooks:
@@ -486,31 +488,85 @@ Les étapes `run_after` **ne sont pas sujettes au timeout** :
 
 ---
 
+## Phases d'Exécution (`phase`)
+
+Chaque étape possède une **phase** d'exécution par rapport au lancement OS :
+
+| Valeur | Sémantique                                                                                                  |
+| ------ | ------------------------------------------------------------------------------------------------------------ |
+| `pre`  | Par défaut. Les étapes s'exécutent avant la décision de lancement — `ask: No`, échec de `check` ou `replace` peuvent empêcher le lancement. |
+| `post` | Les étapes s'exécutent **uniquement après un lancement OS réussi** du fichier correspondant.                  |
+
+```yaml
+"*.pdf":
+  - action: check              # pre (défaut)
+    command: "env_check.exe --verify {{dir}}"
+    on_failure: stop
+  - action: notify             # post — seulement si le fichier a réellement été lancé
+    phase: post
+    message: "**{{filename}}** lancé sur {{hostname}} — {{date}}."
+  - action: run_after          # post, toujours asynchrone
+    phase: post
+    command: "backup_writer.exe index={{stem}} --time {{date}}"
+```
+
+### Règles
+
+- **`replace` + `phase: post` est une erreur de schéma** — une étape replace *est* le lancement, elle ne peut donc s'exécuter qu'avant le lancement OS.
+- La phase post est **entièrement ignorée** (journalisée en debug) lorsque la phase pre se termine par `ask: No`, un `check` échoué (`on_failure: stop`), une étape `replace`, ou lorsque le lancement OS lui-même échoue.
+- `notify`, `run`, `run_after` et `check` sont tous autorisés avec `phase: post` ; `on_failure`, `failmode`, `if:`, `timeout:`, `ask:` et les jetons se comportent exactement comme en phase pre.
+- Un `ask: No` sur une étape post n'arrête que la **phase post** — le lancement a déjà eu lieu, il n'apparaît donc jamais comme un lancement annulé.
+- Les hooks post se terminent **avant** que l'application n'applique `close_after_execute` (la fenêtre se ferme uniquement après tout le cycle de lancement).
+
+### `run_after` vs `phase: post`
+
+- `run_after` = un **spawn asynchrone** (fire-and-forget), valide dans toute phase.
+- `phase: post` = une **garantie synchrone** que le lancement a réussi d'abord ; l'étape décide ensuite de manière synchrone (`run`) ou asynchrone (`run_after`).
+
+> ⚠️ Ne détournez pas `run_after` pour un usage post-lancement : un `run_after`
+> en phase pre s'exécute *avant* le lancement, sans garantie que celui-ci ait
+> jamais lieu (un `ask: No`, un échec de `check` ou un `replace` peuvent
+> l'empêcher).
+
+---
+
 ## Exécution Conditionnelle (`if`)
 
-Chaque étape peut inclure une condition `if` qui contrôle si l'étape s'exécute.
+Chaque étape peut inclure une condition `if` qui contrôle si l'étape s'exécute. La chaîne de condition est **d'abord substituée par les jetons** (même pipeline `{{path}}` / `{{dir}}` / `{{date}}` / … que `command:` et `message:`), puis évaluée avec la grammaire ci-dessous.
 
-### Vérifications de Variables d'Environnement
+### Grammaire des Conditions
 
-Le champ `if` supporte les vérifications de variables d'environnement :
+| Syntaxe           | Vrai lorsque                                        |
+| ----------------- | --------------------------------------------------- |
+| `env:VAR`         | `VAR` est **défini** (n'importe quelle valeur)      |
+| `env:VAR=value`   | `VAR` est défini et **vaut** `value`                |
+| `env:VAR!=value`  | `VAR` est défini et **diffère** de `value`          |
+| `file:PATH`       | `PATH` **existe** (fichier ou répertoire)           |
+| `!COND`           | `COND` s'évalue à faux (négation de toute forme ci-dessus) |
 
 ```yaml
 entries:
   "*.mttl":
+    - action: check
+      command: "ping -n 1 fileserver01"
+      if: "!file:{{dir}}\\offline.flag" # ignore le check si un marqueur offline existe
+      on_failure: warn
     - action: run
-      command: "deploy.exe --production {{path}}"
-      if: "env:DEPLOY_ENV" # S'exécute seulement si DEPLOY_ENV est défini
+      command: "deploy_prod.exe {{path}}"
+      if: "env:DEPLOY_ENV!=dev" # jamais sur les postes de dev
+      ask: "Déployer {{filename}} ?"
     - action: run
-      command: "staging_deploy.exe {{path}}"
-      if: "env:DEPLOY_ENV=prod" # S'exécute seulement si DEPLOY_ENV = "prod"
+      command: "deploy_prod.exe {{path}}"
+      if: "!file:{{dir}}\\.prepared-{{date}}" # ignore si déjà préparé aujourd'hui
 ```
 
-| Syntaxe         | Comportement                                                             |
-| --------------- | ------------------------------------------------------------------------ |
-| `env:VAR_NAME`  | L'étape s'exécute si `VAR_NAME` est **défini** (n'importe quelle valeur) |
-| `env:VAR=value` | L'étape s'exécute si `VAR_NAME` **vaut** `value`                         |
+### Notes de Comportement
 
-Si la condition **n'est pas remplie**, l'étape est silencieusement ignorée — le workflow continue à l'étape suivante.
+- Un `if:` vide ou ne contenant que des espaces est traité comme absent — l'étape s'exécute toujours.
+- **Syntaxe inconnue** (tout ce qui est hors grammaire) ignore l'étape et émet un **log de debug** afin que la mauvaise configuration soit visible dans les journaux.
+- `!` est un opérateur de préfixe strict sur le reste de la condition (`!file:X`, `!env:V`, `!env:V=x` sont tous valides).
+- L'existence `file:` utilise `os.path.exists()` — la sensibilité à la casse suit l'OS. Seuls les caractères juste après `file:` / `env:` sont de la grammaire ; le reste de la valeur est littéral.
+- Si la condition **n'est pas remplie**, l'étape est silencieusement ignorée — le workflow continue à l'étape suivante.
 
 ---
 

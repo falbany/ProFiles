@@ -49,6 +49,7 @@ tests/
 │   │   ├── test_reader.py                    # ← core/config/reader.py
 │   │   ├── test_reader_robustness.py         # ← core/config/reader.py (supplement: bad YAML/validation)
 │   │   ├── test_reader_workflow.py           # ← core/config/reader.py (supplement: hook steps)
+│   │   ├── test_conditions.py                # ← core/config/conditions.py (grammaire if: #8)
 │   │   ├── test_schema.py                    # ← core/config/schema.py
 │   │   ├── test_schema_coercion.py           # ← core/config/schema.py (supplement: MatchCriteria coercion)
 │   │   ├── test_service.py                   # ← core/config/service.py

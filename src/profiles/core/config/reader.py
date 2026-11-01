@@ -227,6 +227,7 @@ class ConfigReader:
                         timeout=entry.timeout,
                         if_=entry.if_,
                         output=entry.output,
+                        phase=entry.phase,
                     )
                 )
             config.launch_hooks[pattern] = tuple(steps)

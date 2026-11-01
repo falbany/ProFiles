@@ -14,6 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
+from profiles.core.config.conditions import evaluate_hook_condition
 from profiles.core.config.models import WorkflowStep
 from profiles.core.environment.interactions import confirm_dialog_3way
 from profiles.core.environment.message_dialog import show_notify_dialog
@@ -75,10 +76,13 @@ def _emit_workflow_step(
     total: int,
     action: str,
     result: str,
+    phase: str = "pre",
 ) -> None:
     """Emit a WORKFLOW_STEP event when *logger* is available (no-op otherwise)."""
     if logger is not None:
-        events.workflow_step(logger, index=index, total=total, action=action, result=result)
+        events.workflow_step(
+            logger, index=index, total=total, action=action, result=result, phase=phase
+        )
 
 
 def _ask_step_input(
@@ -141,6 +145,45 @@ def _resolve_ask_choice(
     )
 
 
+def filter_steps_by_phase(
+    steps: list[WorkflowStep], phase: Literal["pre", "post"]
+) -> list[WorkflowStep]:
+    """Return the steps of *steps* whose ``phase`` equals *phase*.
+
+    Steps configured before the ``phase`` key existed default to ``pre``,
+    so legacy configurations land entirely in the pre bucket.
+    """
+    return [step for step in steps if step.phase == phase]
+
+
+def evaluate_step_condition(
+    step: WorkflowStep,
+    file_path: Path | None,
+    *,
+    username: str | None = None,
+    hostname: str | None = None,
+    output: str = "",
+) -> bool:
+    """Evaluate a step's ``if`` condition with tokens substituted first.
+
+    The condition string goes through the same :func:`_substitute_variables`
+    pipeline as ``message``/``ask`` (verbatim values, no shell quoting), so
+    ``file:{{dir}}\\.marker`` or ``env:SITE={{hostname}}`` resolve to literal
+    text before the grammar in
+    :func:`profiles.core.config.conditions.evaluate_hook_condition` runs.
+    """
+    if not step.if_:
+        return True
+    condition = _substitute_variables(
+        step.if_,
+        file_path,
+        username=username,
+        hostname=hostname,
+        output=output,
+    )
+    return evaluate_hook_condition(condition)
+
+
 # Public facade mirroring the workflow config surface; kwargs are additive.
 # pylint: disable-next=too-many-arguments
 def run_workflow(
@@ -157,6 +200,7 @@ def run_workflow(
     hostname: str | None = None,
     failure_context: list[str] | None = None,
     logger: logging.Logger | None = None,
+    phase: Literal["pre", "post"] = "pre",
 ) -> WorkflowOutcome:
     """Execute a list of workflow steps sequentially.
 
@@ -181,6 +225,9 @@ def run_workflow(
             Descriptions include the exit code, and the captured command
             output when the failing step sets ``output: show``/``fail_only``.
         logger: Optional logger for workflow execution traces.
+        phase: Execution phase of this pass (`"pre"` before the OS launch,
+            `"post"` after a successful launch) — telemetry wording only;
+            pass the steps already filtered by :func:`filter_steps_by_phase`.
 
     Returns:
         WorkflowOutcome indicating whether to proceed to OS launch, skip, or abort.
@@ -192,7 +239,12 @@ def run_workflow(
 
     for i, step in enumerate(steps):
         _emit_workflow_step(
-            logger, index=i + 1, total=len(steps), action=step.action, result="start"
+            logger,
+            index=i + 1,
+            total=len(steps),
+            action=step.action,
+            result="start",
+            phase=phase,
         )
 
         # Handle 'ask' confirmation guard if present
@@ -209,7 +261,12 @@ def run_workflow(
         if choice is not None:
             if choice == "no":
                 _emit_workflow_step(
-                    logger, index=i + 1, total=len(steps), action=step.action, result="aborted"
+                    logger,
+                    index=i + 1,
+                    total=len(steps),
+                    action=step.action,
+                    result="aborted",
+                    phase=phase,
                 )
                 return WorkflowOutcome.ABORT
             if choice == "skip":
@@ -219,20 +276,28 @@ def run_workflow(
                     total=len(steps),
                     action=step.action,
                     result="skipped-user",
+                    phase=phase,
                 )
                 # If skipping the last step, end without OS launch
                 if i == len(steps) - 1:
                     return WorkflowOutcome.SKIP_LAUNCH
                 continue
 
-        # Evaluate conditional guard
-        if not step.evaluate_condition():
+        # Evaluate conditional guard (tokens substituted before evaluation)
+        if not evaluate_step_condition(
+            step,
+            file_path,
+            username=username,
+            hostname=hostname,
+            output=state.last_output,
+        ):
             _emit_workflow_step(
                 logger,
                 index=i + 1,
                 total=len(steps),
                 action=step.action,
                 result="skipped-condition",
+                phase=phase,
             )
             continue
 
@@ -540,12 +605,6 @@ def _execute_step(
     return None
 
 
-def _replace_step_token(text: str, key: str, value: str) -> str:
-    """Replace both brace forms (``{{key}}`` and ``{key}``) of a single token."""
-    text = text.replace("{{" + key + "}}", value)
-    return text.replace("{" + key + "}", value)
-
-
 def _resolve_step_texts(
     step: WorkflowStep,
     file_path: Path | None,
@@ -715,4 +774,11 @@ def _run_command(
         return CommandResult(code=-1, output="")
 
 
-__all__ = ["CommandResult", "WorkflowOutcome", "run_workflow", "FailMode"]
+__all__ = [
+    "CommandResult",
+    "FailMode",
+    "WorkflowOutcome",
+    "evaluate_step_condition",
+    "filter_steps_by_phase",
+    "run_workflow",
+]
