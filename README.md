@@ -62,7 +62,7 @@
 - **One-Click Launch**: Native OS execution (Windows `os.startfile`, macOS `open`, Linux `xdg-open`).
 - **Custom CLI Arguments**: Right-click to launch with custom arguments, remembered per row.
 - **Headless Mode**: Trigger file launches via CLI for CI/CD or scripts.
-- **File Operations**: Bulk launch, copy path, hash verification (SHA-256), and safe deletion.
+- **File Operations**: Copy path, hash verification (SHA-256), and safe deletion.
 
 ### ⚙️ Auto-Configuration
 
@@ -331,6 +331,7 @@ ProFiles/
 │   ├── server/            # FastAPI backend — REST API routes, workflow & scan sessions
 │   ├── web/               # React + TypeScript + Vite PWA frontend (src/, dist/, build.py)
 │   ├── desktop/           # PyWebView desktop shell & background server lifecycle
+│   ├── launch/            # Launch-time resolution: *.profiles handoff & config selection
 │   ├── gui/               # Legacy Tkinter presentation layer (deprecated)
 │   ├── utils/             # Stateless helpers (file ops, network, search parser, shortcut)
 │   ├── app.py             # Application lifecycle (web desktop, server-only, Tk, headless)

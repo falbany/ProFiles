@@ -260,7 +260,7 @@ class AppConfig:
     close_after_execute: bool = False
     search_dir: str = ""
     recursive_search: bool = False
-    theme: str = "light"
+    theme: str = "auto"
     language: str = "en"
     column_names: tuple[str, ...] = ()  # Built from [COLUMN_*] sections
     column_widths: tuple[int, ...] = ()  # Built from [COLUMN_*] sections

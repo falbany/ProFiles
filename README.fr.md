@@ -63,7 +63,7 @@
 - **Lancement en un clic** : exécution native (Windows `os.startfile`, macOS `open`, Linux `xdg-open`).
 - **Arguments CLI personnalisés** : clic droit pour lancer avec des arguments personnalisés, mémorisés par ligne.
 - **Mode headless** : déclenchez des lancements de fichiers via CLI pour la CI/CD ou vos scripts.
-- **Opérations sur les fichiers** : lancement en masse, copie de chemin, vérification de hash (SHA-256) et suppression sécurisée.
+- **Opérations sur les fichiers** : copie de chemin, vérification de hash (SHA-256) et suppression sécurisée.
 
 ### ⚙️ Auto-configuration
 
@@ -332,6 +332,7 @@ ProFiles/
 │   ├── server/            # Backend FastAPI — routes API REST, sessions workflow & scan
 │   ├── web/               # Frontend PWA React + TypeScript + Vite (src/, dist/, build.py)
 │   ├── desktop/           # Shell de bureau PyWebView & cycle de vie du serveur en fond
+│   ├── launch/            # Résolution au lancement : handoff *.profiles & sélection de config
 │   ├── gui/               # Couche de présentation Tkinter historique (dépréciée)
 │   ├── utils/             # Helpers stateless (file ops, network, search parser, shortcut)
 │   ├── app.py             # Cycle de vie applicatif (web desktop, server-only, Tk, headless)

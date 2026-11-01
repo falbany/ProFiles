@@ -2,59 +2,59 @@
 
 **Version**: 1.0  
 **Date**: 2026-10-15  
-**Feature**: Partage réseau local - Accès depuis d'autres PC
+**Feature**: Local network sharing — access from other PCs
 
 ---
 
 ## 📖 Introduction
 
-Ce guide explique comment rendre ProFiles accessible depuis d'autres PC de votre réseau local, permettant à vos collègues ou autres machines d'accéder aux fichiers hébergés sur votre PC.
+This guide explains how to make ProFiles accessible from other PCs on your local network, so that colleagues or other machines can access the files hosted on your PC.
 
 ---
 
-## 🎯 Prérequis
+## 🎯 Prerequisites
 
-### Configuration Système
+### System Requirements
 
-- **PC Hôte** : Windows avec ProFiles installé
-- **PC Clients** : N'importe quel PC avec un navigateur web moderne
-- **Réseau** : Tous les PC doivent être sur le même réseau local (même sous-réseau)
+- **Host PC**: Windows with ProFiles installed
+- **Client PCs**: Any PC with a modern web browser
+- **Network**: All PCs must be on the same local network (same subnet)
 
-### Vérifications
+### Checks
 
-1. **Même réseau** : Vérifiez que tous les PC sont sur le même réseau (ex: 192.168.1.x)
-2. **Firewall** : Le pare-feu Windows doit être configuré pour autoriser le port 8088
-3. **ProFiles installé** : Le PC hôte doit avoir ProFiles installé et fonctionnel
+1. **Same network**: Make sure all PCs are on the same network (e.g. 192.168.1.x)
+2. **Firewall**: Windows Firewall must be configured to allow port 8088
+3. **ProFiles installed**: The host PC must have a working ProFiles installation
 
 ---
 
-## 🚀 Configuration du PC Hôte
+## 🚀 Configuring the Host PC
 
-### Étape 1: Autoriser le port dans le Firewall
+### Step 1: Allow the port in the firewall
 
-Ouvrez PowerShell en **administrateur** et exécutez :
+Open PowerShell **as administrator** and run:
 
 ```powershell
 New-NetFirewallRule -DisplayName "ProFiles Server" -Direction Inbound -Protocol TCP -LocalPort 8088 -Action Allow
 ```
 
-**Alternative via l'interface graphique** :
+**Alternative through the graphical interface**:
 
-1. Ouvrez "Pare-feu Windows Defender avec sécurité avancée"
-2. Cliquez sur "Règles de trafic entrant"
-3. "Nouvelle règle..." → "Port" → "TCP" → "8088"
-4. "Autoriser la connexion"
-5. Nommez-la "ProFiles Server"
+1. Open "Windows Defender Firewall with Advanced Security"
+2. Click "Inbound Rules"
+3. "New Rule..." → "Port" → "TCP" → "8088"
+4. "Allow the connection"
+5. Name it "ProFiles Server"
 
-### Étape 2: Démarrer le serveur
+### Step 2: Start the server
 
-Dans un terminal, exécutez :
+In a terminal, run:
 
 ```powershell
 ProFiles --server-only
 ```
 
-**Sortie attendue** :
+**Expected output**:
 
 ```
 ProFiles server running at:
@@ -63,77 +63,100 @@ ProFiles server running at:
   Access from other PCs on your network (press Ctrl+C to stop)
 ```
 
-**Note importante** : Notez l'adresse **Network** (ex: `192.168.1.100:8088`) - c'est l'URL que les autres PC utiliseront.
+**Important note**: Note the **Network** address (e.g. `192.168.1.100:8088`) — this is the URL the other PCs will use.
 
-### Étape 3: Vérifier que le serveur fonctionne
+### Step 3: Verify the server is running
 
-Ouvrez votre navigateur sur le PC hôte et accédez à :
+Open your browser on the host PC and go to:
 
 ```
 http://127.0.0.1:8088
 ```
 
-Vous devriez voir l'interface ProFiles.
+You should see the ProFiles interface.
 
 ---
 
-## 💻 Accès depuis les PC Clients
+## 💻 Accessing from Client PCs
 
-### Étape 1: Ouvrir le navigateur
+### Step 1: Open the browser
 
-Sur un PC client (dans le même réseau), ouvrez n'importe quel navigateur moderne :
+On a client PC (on the same network), open any modern browser:
 
 - Chrome, Edge, Firefox, Safari
 
-### Étape 2: Accéder à l'URL du serveur
+### Step 2: Go to the server URL
 
-Dans la barre d'adresse, tapez l'URL affichée sur le PC hôte :
+In the address bar, enter the URL displayed on the host PC:
 
 ```
 http://192.168.1.100:8088
 ```
 
-**Remplacez** `192.168.1.100` par l'IP réelle affichée sur le PC hôte.
+**Replace** `192.168.1.100` with the actual IP shown on the host PC.
 
-### Étape 3: Utiliser l'interface
+### Step 3: Use the interface
 
-L'interface ProFiles s'affiche exactement comme sur le PC hôte :
+The ProFiles interface appears exactly as it does on the host PC:
 
-- ✅ **Scan des fichiers** : Cliquez sur "Scan" pour lister les fichiers
-- ✅ **Filtrage** : Filtrez par extension (.txt, .py, etc.)
-- ✅ **Lancement** : Cliquez sur un fichier pour le lancer **sur le PC hôte**
-- ✅ **Configuration** : Chargez des configurations personnalisées
+- ✅ **File scanning**: Click "Scan" to list the files
+- ✅ **Filtering**: Filter by extension (.txt, .py, etc.)
+- ✅ **Launching**: Click a file to launch it **on the host PC**
+- ✅ **Configuration**: Load custom configurations
 
-**Important** : Les fichiers sont lancés sur le **PC hôte**, pas sur le PC client.
+**Important**: Files are launched on the **host PC**, not on the client PC.
 
 ---
 
-## 🔧 Configuration Avancée
+## 🔧 Advanced Configuration
 
-### Changer le port par défaut
+### Changing the default port
 
-Si le port 8088 est occupé, vous pouvez en utiliser un autre :
+If port 8088 is already taken, you can use a different one. The default port is not defined in a single place: it appears as the default value of several constants in the source code.
 
-```powershell
-# Dans app.py, modifiez la constante _DEFAULT_PORT
+Edit the following defaults:
+
+```python
+# src/profiles/app.py — module-level constant used by --server-only mode
 _DEFAULT_PORT = 9090
+
+# src/profiles/desktop/lifecycle.py — fallback probe and background server
+def find_available_port(start_port: int = 9090, max_attempts: int = 50) -> int:  # line 35
+    ...
+
+class BackgroundServer:
+    def __init__(self, config: AppConfig, host: str = "0.0.0.0", port: int = 9090) -> None:  # line 63
+        # line 66 also calls find_available_port(9090) when port == 0
+        ...
+
+# src/profiles/desktop/launcher.py — desktop entry point
+def launch_desktop_window(
+    config: AppConfig,
+    port: int = 9090,  # line 65
+    ...
 ```
 
-Ou lancez avec un port spécifique (si supporté par la CLI) :
+Locations of the default values (as of the current source tree):
 
-```powershell
-# À vérifier selon l'implémentation
-ProFiles --server-only --port 9090
-```
+| File | Line | Constant / default |
+|---|---|---|
+| `src/profiles/app.py` | 36 | `_DEFAULT_PORT = 8088` |
+| `src/profiles/desktop/lifecycle.py` | 35 | `find_available_port(start_port=8088)` |
+| `src/profiles/desktop/lifecycle.py` | 63 | `BackgroundServer.__init__(..., port=8088)` |
+| `src/profiles/desktop/launcher.py` | 65 | `launch_desktop_window(..., port=8088)` |
 
-### IP statique pour le PC Hôte
+Note that a busy port is never fatal: the server probes the next free port automatically (up to 50 attempts from the starting port, then falls back to an OS-assigned ephemeral port).
 
-Pour éviter que l'IP change à chaque redémarrage :
+The CLI currently does **not** expose a `--port` option; changing the port requires editing the constants above.
 
-1. **Via le routeur** : Configurez une réservation DHCP pour le PC hôte
-2. **Via Windows** : Configurez une IP statique manuelle
+### Static IP for the host PC
 
-**Exemple de configuration statique** :
+To prevent the IP address from changing on every reboot:
+
+1. **Via the router**: Configure a DHCP reservation for the host PC
+2. **Via Windows**: Configure a manual static IP
+
+**Example static configuration**:
 
 ```
 IP Address: 192.168.1.100
@@ -142,149 +165,149 @@ Gateway: 192.168.1.1
 DNS: 8.8.8.8
 ```
 
-### Arrêter le serveur
+### Stopping the server
 
-Appuyez sur **Ctrl+C** dans le terminal où le serveur tourne.
-
----
-
-## 🛡️ Sécurité
-
-### Bonnes Pratiques
-
-✅ **Faire** :
-- Utiliser sur un réseau de confiance (bureau, domicile)
-- Configurer le firewall Windows
-- Limiter l'accès aux utilisateurs autorisés
-- Surveiller les logs du serveur
-
-❌ **Éviter** :
-- **NE PAS** configurer de port forwarding sur le routeur
-- **NE PAS** exposer sur Internet (WiFi public, réseau invité)
-- **NE PAS** partager l'URL en dehors du réseau local
-- **NE PAS** utiliser pour des fichiers sensibles sans authentification
-
-### Niveau de Sécurité Actuel
-
-⚠️ **Attention** : Cette configuration n'a **pas d'authentification**. Elle est conçue pour des réseaux locaux de confiance.
-
-**Pour une sécurité renforcée** :
-- Utilisez un VPN pour accéder au réseau
-- Configurez un proxy inverse avec authentification (Nginx, Apache)
-- Envisagez l'option B (authentification) pour une future évolution
+Press **Ctrl+C** in the terminal where the server is running.
 
 ---
 
-## 🐛 Dépannage
+## 🛡️ Security
 
-### Problème: "Unable to connect" sur le PC client
+### Best Practices
 
-**Cause** : Firewall bloquant le port 8088
+✅ **Do**:
+- Use it on a trusted network (office, home)
+- Configure Windows Firewall
+- Limit access to authorized users
+- Monitor the server logs
 
-**Solution** :
+❌ **Avoid**:
+- Do **NOT** set up port forwarding on the router
+- Do **NOT** expose it to the Internet (public Wi-Fi, guest network)
+- Do **NOT** share the URL outside the local network
+- Do **NOT** use it for sensitive files without authentication
+
+### Current Security Level
+
+⚠️ **Warning**: This setup has **no authentication**. It is designed for trusted local networks.
+
+**For stronger security**:
+- Use a VPN to access the network
+- Set up a reverse proxy with authentication (Nginx, Apache)
+- Consider Option B (authentication) as a future evolution
+
+---
+
+## 🐛 Troubleshooting
+
+### Problem: "Unable to connect" on the client PC
+
+**Cause**: Firewall blocking port 8088
+
+**Solution**:
 ```powershell
-# Vérifier la règle firewall sur le PC hôte
+# Check the firewall rule on the host PC
 Get-NetFirewallRule -DisplayName "ProFiles Server"
 
-# Si absente, recréer la règle
+# If it is missing, recreate it
 New-NetFirewallRule -DisplayName "ProFiles Server" -Direction Inbound -Protocol TCP -LocalPort 8088 -Action Allow
 ```
 
-### Problème: "Connection refused"
+### Problem: "Connection refused"
 
-**Cause** : Serveur non démarré ou port occupé
+**Cause**: Server not started or port already in use
 
-**Solution** :
+**Solution**:
 ```powershell
-# Vérifier si le serveur tourne
+# Check whether the server is running
 netstat -ano | findstr :8088
 
-# Si le port est occupé, changez de port ou arrêtez l'autre processus
+# If the port is taken, switch ports or stop the other process
 taskkill /PID <PID> /F
 ```
 
-### Problème: L'IP change à chaque redémarrage
+### Problem: The IP address changes on every reboot
 
-**Cause** : DHCP attribue une IP différente
+**Cause**: DHCP assigns a different IP address
 
-**Solution** :
-- Configurez une réservation DHCP sur le routeur
-- Ou configurez une IP statique sur le PC hôte
+**Solution**:
+- Configure a DHCP reservation on the router
+- Or configure a static IP on the host PC
 
-### Problème: "Network unreachable"
+### Problem: "Network unreachable"
 
-**Cause** : PC clients sur un sous-réseau différent
+**Cause**: Client PCs on a different subnet
 
-**Solution** :
-- Vérifiez que tous les PC sont sur le même sous-réseau (ex: 192.168.1.x)
-- Vérifiez le masque de sous-réseau (généralement 255.255.255.0)
+**Solution**:
+- Make sure all PCs are on the same subnet (e.g. 192.168.1.x)
+- Check the subnet mask (usually 255.255.255.0)
 
-### Problème: Les fichiers ne se lancent pas
+### Problem: Files do not launch
 
-**Cause** : Chemin de fichier incorrect ou fichier inexistant
+**Cause**: Incorrect file path or missing file
 
-**Solution** :
-- Vérifiez que les fichiers existent sur le PC hôte
-- Vérifiez les permissions d'accès aux fichiers
-- Consultez les logs du serveur pour les erreurs
+**Solution**:
+- Make sure the files exist on the host PC
+- Check the file access permissions
+- Check the server logs for errors
 
 ---
 
 ## 📊 Performance
 
-### Limitations Connues
+### Known Limitations
 
-| Métrique | Valeur Recommandée |
+| Metric | Recommended Value |
 |----------|-------------------|
-| Nombre de fichiers | < 10 000 |
-| Profondeur de répertoire | < 10 niveaux |
-| Latence réseau | < 50 ms |
-| Bande passante | > 100 Mbps |
+| Number of files | < 10,000 |
+| Directory depth | < 10 levels |
+| Network latency | < 50 ms |
+| Bandwidth | > 100 Mbps |
 
-### Optimisations
+### Optimizations
 
-- **Scan initial** : Peut prendre quelques secondes pour de grands répertoires
-- **Filtres** : Utilisez les filtres d'extension pour réduire la liste
-- **Répertoire actif** : Sélectionnez un répertoire spécifique plutôt que le root
-
----
-
-## 📝 Exemple d'Utilisation
-
-### Scénario: Bureau partagé
-
-**Contexte** : 3 PC dans un bureau, fichiers centralisés sur le PC principal
-
-**Configuration** :
-- **PC Hôte** : 192.168.1.100 (fichiers partagés)
-- **PC Client 1** : 192.168.1.101
-- **PC Client 2** : 192.168.1.102
-
-**Workflow** :
-1. PC Hôte : `ProFiles --server-only`
-2. PC Client 1 : Navigateur → `http://192.168.1.100:8088`
-3. PC Client 2 : Navigateur → `http://192.168.1.100:8088`
-4. Tous peuvent scanner et lancer les fichiers du PC Hôte
+- **Initial scan**: May take a few seconds for large directories
+- **Filters**: Use the extension filters to shorten the list
+- **Active directory**: Select a specific directory rather than the root
 
 ---
 
-## 🔮 Évolutions Futures
+## 📝 Usage Example
 
-### Authentification (Option B)
+### Scenario: Shared office
 
-Ajouter un token d'accès ou authentification basique pour sécuriser l'accès.
+**Context**: 3 PCs in an office, files centralized on the main PC
 
-### Découverte Auto (Option C)
+**Setup**:
+- **Host PC**: 192.168.1.100 (shared files)
+- **Client PC 1**: 192.168.1.101
+- **Client PC 2**: 192.168.1.102
 
-Utiliser mDNS/Bonjour pour que les PC clients trouvent automatiquement le serveur.
+**Workflow**:
+1. Host PC: `ProFiles --server-only`
+2. Client PC 1: Browser → `http://192.168.1.100:8088`
+3. Client PC 2: Browser → `http://192.168.1.100:8088`
+4. Everyone can scan and launch the files on the host PC
+
+---
+
+## 🔮 Future Evolutions
+
+### Authentication (Option B)
+
+Add an access token or basic authentication to secure access.
+
+### Auto-discovery (Option C)
+
+Use mDNS/Bonjour so that client PCs can discover the server automatically.
 
 ### HTTPS (Option D)
 
-Chiffrer les communications avec un certificat SSL.
+Encrypt communications with an SSL certificate.
 
 ---
 
-## 📚 Ressources
+## 📚 Resources
 
 - [Spec technique](../specs/2026-10-15-network-server-design.md)
 - [README principal](../../README.md)
@@ -292,6 +315,6 @@ Chiffrer les communications avec un certificat SSL.
 
 ---
 
-**Dernière mise à jour** : 2026-10-15  
-**Auteur** : ProFiles Team  
-**Version** : 1.0
+**Last updated**: 2026-10-15  
+**Author**: ProFiles Team  
+**Version**: 1.0

@@ -55,6 +55,7 @@ Every line follows this shape:
 | `COMMAND_TIMEOUT` | Exec timeout | `timeout_s`, `command` |
 | `COMMAND_EXIT` | Exec finished (DEBUG) | `code`, `command` |
 | `COMMAND_FAILED` | Exec exception | `error`, `command` |
+| `COMMAND_OUTPUT` | Blocking command finished — captured stdout+stderr, INFO on success / WARNING otherwise | `code`, `command`, `output` (line breaks escaped as `\n`) |
 | `FILE_REVEALED` | Right-click → Reveal | `path`, `status`, `error` |
 | `EXTERNAL_OPENED` | Right-click → Open folder / Open terminal | `kind`, `path`, `status`, `reason`, `error` |
 | `FILTER_CHANGED` | Right-click → Filter applied | `kind`, `value` |
@@ -65,14 +66,18 @@ Every line follows this shape:
 ## Examples
 
 ```
-2026-08-29 13:01:15 - INFO  - MACBOOKFA.LOCAL: APP_STARTED version="2026.8.0" headless=false
+2026-08-29 13:01:15 - INFO  - MACBOOKFA.LOCAL: APP_STARTED version="0.10.0" headless=false
 2026-08-29 13:01:15 - DEBUG - MACBOOKFA.LOCAL: SCAN_COMPLETE dir="base" ext="*" filter="" files=284 recursive=true
 2026-08-29 13:01:15 - DEBUG - MACBOOKFA.LOCAL: SCAN_METRICS dir="base" duration_ms=25.657 rate=11082.31 errors=0
 2026-08-29 13:01:22 - INFO  - MACBOOKFA.LOCAL: THEME_SWITCHED value=dark warnings=2
 2026-08-29 13:01:22 - WARNING - MACBOOKFA.LOCAL: WCAG_CONTRAST_FAINT pair="border/surface" ratio=4.22 fg=#7A7680 bg=#121212
-2026-08-29 13:01:30 - INFO  - MACBOOKFA.LOCAL: FILE_LAUNCHED path="/Users/falbany/.../README.md" version="2026.8.0" user="falbany" args="-"
+2026-08-29 13:01:30 - INFO  - MACBOOKFA.LOCAL: FILE_LAUNCHED path="/Users/falbany/.../README.md" version="0.10.0" user="falbany" args="-"
+2026-08-29 13:01:40 - INFO  - MACBOOKFA.LOCAL: COMMAND_OUTPUT code=0 command="run_tests.cmd" output="42 passed\n0 failed"
 2026-08-29 13:01:51 - INFO  - MACBOOKFA.LOCAL: APP_CLOSED uptime_s=36
 ```
+
+> The app emits SemVer versions (e.g. `0.10.0`) since v0.9.0; older logs may
+> show CalVer strings such as `2026.8.0`.
 
 ## Useful Grep Examples
 
@@ -118,7 +123,5 @@ grep -E '(FILE_REVEALED.*status="failed"|FILE_LAUNCH_FAILED)' profiles.log
 
 ## See Also
 
-- `docs/superpowers/specs/2026-08-29-log-format-and-telemetry-design.md` — full spec
-- `docs/superpowers/specs/2026-08-29-context-menu-telemetry-design.md` — context menu events
 - `src/profiles/core/telemetry/events.py` — event helper source of truth
 - `tests/core/telemetry/test_events.py` — one test per event

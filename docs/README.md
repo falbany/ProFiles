@@ -157,6 +157,7 @@ ProFiles/
 │   ├── server/             # FastAPI backend — REST API, workflow & scan sessions
 │   ├── web/                # React + TypeScript + Vite PWA frontend (src/, dist/, build.py)
 │   ├── desktop/            # PyWebView desktop shell & background server lifecycle
+│   ├── launch/             # Launch-time resolution: *.profiles handoff & config selection
 │   ├── gui/                # Legacy Tkinter presentation layer (deprecated)
 │   ├── utils/              # Stateless utility functions
 │   ├── app.py              # Application lifecycle (web desktop, server-only, Tk, headless)

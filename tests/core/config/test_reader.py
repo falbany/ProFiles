@@ -46,6 +46,13 @@ class TestConfigReader:
         assert config.extensions == ("All", ".lnk")
         assert config.config_path == tmp_path / ".profiles"
 
+    def test_theme_default_is_stable_with_or_without_config_file(self, tmp_path: Path) -> None:
+        """No config file and a config without a theme key must agree on the default."""
+        without_file = ConfigReader(tmp_path / ".profiles").load()
+        conf = _write_yaml(tmp_path / ".profiles", "defaults:\n  title: X\n")
+        without_key = ConfigReader(conf).load()
+        assert without_file.theme == without_key.theme == "auto"
+
     def test_loads_defaults(self, tmp_path: Path) -> None:
         conf = _write_yaml(
             tmp_path / ".profiles",
