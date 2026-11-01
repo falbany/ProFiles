@@ -6,7 +6,13 @@ from unittest.mock import patch
 import pytest
 
 from profiles.core.config.models import WorkflowStep
-from profiles.core.environment.workflow import CommandResult, WorkflowOutcome, run_workflow
+from profiles.core.environment.workflow import (
+    CommandResult,
+    WorkflowOutcome,
+    evaluate_step_condition,
+    filter_steps_by_phase,
+    run_workflow,
+)
 
 _RESULT_OK = CommandResult(code=0, output="")
 _RESULT_FAIL = CommandResult(code=1, output="")
@@ -791,3 +797,97 @@ class TestHeadlessAskComposition:
         assert "**" not in out
         # …then the substituted question with the choice prompt.
         assert "Proceed with demo? [y/s/N]:" in mock_input.call_args[0][0]
+
+
+# ---------------------------------------------------------------------------
+# #8 — condition substitution before evaluation
+# ---------------------------------------------------------------------------
+
+
+class TestEvaluateStepCondition:
+    """Tokens are substituted into ``if`` before grammar evaluation (#8)."""
+
+    def test_file_token_substitution(self, tmp_path):
+        marker = tmp_path / "prepared-2026-11-01"
+        marker.touch()
+        step = WorkflowStep(action="run", command="x", if_="!file:{{dir}}/prepared-{{date}}")
+        assert (
+            evaluate_step_condition(step, tmp_path / "job.txt", hostname="h") is False
+        )  # marker exists → negated condition false
+
+    def test_env_token_substitution(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("WF_FILE", "job.txt")
+        step = WorkflowStep(action="run", command="x", if_="env:WF_FILE={{filename}}")
+        assert evaluate_step_condition(step, tmp_path / "job.txt") is True
+
+    def test_output_token_substitution(self, tmp_path):
+        step = WorkflowStep(action="run", command="x", if_="env:WF_LAST=done")
+        # No env var set — but the {{output}} substitution itself must not crash.
+        assert evaluate_step_condition(step, tmp_path / "j.txt", output="done") is False
+
+    def test_unset_if_is_true(self):
+        step = WorkflowStep(action="run", command="x")
+        assert evaluate_step_condition(step, None) is True
+
+    def test_hostname_token_substitution(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("WF_HOST", "station01")
+        step = WorkflowStep(action="run", command="x", if_="env:WF_HOST={{hostname}}")
+        assert evaluate_step_condition(step, tmp_path / "j.txt", hostname="station01") is True
+
+
+# ---------------------------------------------------------------------------
+# #9 — phase filtering
+# ---------------------------------------------------------------------------
+
+
+class TestFilterStepsByPhase:
+    def test_legacy_steps_all_land_in_pre(self):
+        steps = [WorkflowStep(action="run", command="a"), WorkflowStep(action="check", command="b")]
+        assert filter_steps_by_phase(steps, "pre") == steps
+        assert filter_steps_by_phase(steps, "post") == []
+
+    def test_phase_split_keeps_order(self):
+        pre1 = WorkflowStep(action="run", command="a")
+        post1 = WorkflowStep(action="notify", message="m", phase="post")
+        pre2 = WorkflowStep(action="check", command="b")
+        post2 = WorkflowStep(action="run_after", command="c", phase="post")
+        steps = [pre1, post1, pre2, post2]
+        assert filter_steps_by_phase(steps, "pre") == [pre1, pre2]
+        assert filter_steps_by_phase(steps, "post") == [post1, post2]
+
+
+# ---------------------------------------------------------------------------
+# #9 — phase-aware telemetry
+# ---------------------------------------------------------------------------
+
+
+class TestPhaseTelemetry:
+    def test_post_phase_visible_in_workflow_step_event(self, caplog):
+        import logging
+
+        logger = logging.getLogger("profiles.test-workflow-phase")
+        steps = [WorkflowStep(action="run", command="echo hi", phase="post")]
+        with (
+            caplog.at_level(logging.INFO, logger="profiles.test-workflow-phase"),
+            patch(
+                "profiles.core.environment.workflow._run_command",
+                side_effect=_record_run([]),
+            ),
+        ):
+            run_workflow(steps, None, logger=logger, phase="post")
+        assert 'phase="post"' in caplog.text
+
+    def test_pre_phase_is_the_default(self, caplog):
+        import logging
+
+        logger = logging.getLogger("profiles.test-workflow-phase")
+        steps = [WorkflowStep(action="run", command="echo hi")]
+        with (
+            caplog.at_level(logging.INFO, logger="profiles.test-workflow-phase"),
+            patch(
+                "profiles.core.environment.workflow._run_command",
+                side_effect=_record_run([]),
+            ),
+        ):
+            run_workflow(steps, None, logger=logger)
+        assert 'phase="pre"' in caplog.text

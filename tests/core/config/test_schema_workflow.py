@@ -187,3 +187,57 @@ class TestOutputKey:
                 "        command: 'echo hi'\n"
                 "        output: always\n"
             )
+
+
+class TestPhaseKey:
+    """The ``phase:`` step key (#9): pre default, post accepted, replace+post rejected."""
+
+    def test_phase_defaults_to_pre(self) -> None:
+        schema = _parse_steps(
+            "hooks:\n  entries:\n    '*.mttl':\n      - action: run\n        command: 'echo hi'\n"
+        )
+        assert schema.hooks.entries["*.mttl"][0].phase == "pre"
+
+    def test_phase_post_accepted(self) -> None:
+        schema = _parse_steps(
+            "hooks:\n"
+            "  entries:\n"
+            "    '*.mttl':\n"
+            "      - action: notify\n"
+            "        message: 'Launched {{filename}}'\n"
+            "        phase: post\n"
+        )
+        assert schema.hooks.entries["*.mttl"][0].phase == "post"
+
+    def test_phase_invalid_value_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="phase"):
+            _parse_steps(
+                "hooks:\n"
+                "  entries:\n"
+                "    '*.mttl':\n"
+                "      - action: run\n"
+                "        command: 'echo hi'\n"
+                "        phase: mid\n"
+            )
+
+    def test_replace_with_post_phase_rejected(self) -> None:
+        """A replace step can never be post: replace *is* the launch (#9)."""
+        with pytest.raises(ValidationError, match="replace.*cannot use 'phase: post'"):
+            _parse_steps(
+                "hooks:\n"
+                "  entries:\n"
+                "    '*.mttl':\n"
+                "      - action: replace\n"
+                "        command: 'special.exe {{path}}'\n"
+                "        phase: post\n"
+            )
+
+    def test_replace_with_default_phase_is_valid(self) -> None:
+        schema = _parse_steps(
+            "hooks:\n"
+            "  entries:\n"
+            "    '*.mttl':\n"
+            "      - action: replace\n"
+            "        command: 'special.exe {{path}}'\n"
+        )
+        assert schema.hooks.entries["*.mttl"][0].action == "replace"

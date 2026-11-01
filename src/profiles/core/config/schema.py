@@ -90,6 +90,7 @@ class WorkflowStepSchema(BaseModel):
     timeout: int | None = None
     if_: str | None = Field(default=None, alias="if")
     output: Literal["hide", "show", "fail_only"] = "hide"
+    phase: Literal["pre", "post"] = "pre"
 
 
 class HooksConfig(BaseModel):
@@ -121,6 +122,12 @@ class HooksConfig(BaseModel):
                     raise ValueError(
                         f"hooks entry '{pattern}' step {pos + 1}: "
                         f"a '{step.action}' step requires 'command'"
+                    )
+                if step.action == "replace" and step.phase == "post":
+                    raise ValueError(
+                        f"hooks entry '{pattern}' step {pos + 1}: "
+                        "a 'replace' step cannot use 'phase: post' — replace "
+                        "*is* the launch, so it can only run before the OS launch"
                     )
         return self
 

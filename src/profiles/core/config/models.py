@@ -6,12 +6,12 @@ No I/O, no parsing, no UI dependencies. Safe to import from anywhere.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
 from profiles import __version__ as _pkg_version
+from profiles.core.config.conditions import evaluate_hook_condition
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.config.schema import MatchCriteriaSchema
 from profiles.utils.file_utils import DEFAULT_MAX_SEARCH_DEPTH
@@ -41,8 +41,14 @@ class WorkflowStep:
         timeout: Optional per-step timeout in seconds. Overrides the
             global ``failmode`` timeout when set. Default: None (uses global).
         if_: Optional conditional. If present, the step is skipped when the
-            condition evaluates to false. Syntax: ``env:VAR`` or
-            ``env:VAR=value``. Default: None.
+            condition evaluates to false. Grammar: ``env:VAR`` (set),
+            ``env:VAR=value`` (equals), ``env:VAR!=value`` (set and differs),
+            ``file:PATH`` (path exists), and ``!COND`` (negation of any
+            form). Tokens are substituted before evaluation. Default: None.
+        phase: Execution phase — ``"pre"`` (default) runs before the OS
+            launch decision; ``"post"`` runs only after a successful OS
+            launch. ``replace`` steps cannot be ``post`` (a replace step
+            *is* the launch).
         output: Command output display mode for blocking command steps —
             one of ``"hide"`` (capture and discard), ``"show"`` (show the
             captured output as a non-blocking notice), or ``"fail_only"``
@@ -65,6 +71,7 @@ class WorkflowStep:
     timeout: int | None = None
     if_: str | None = None
     output: Literal["hide", "show", "fail_only"] = "hide"
+    phase: Literal["pre", "post"] = "pre"
 
     def __post_init__(self) -> None:
         """Validate per-action required fields (mirrors config-load validation)."""
@@ -73,23 +80,21 @@ class WorkflowStep:
                 raise ValueError("A 'notify' workflow step requires a 'message'.")
         elif not self.command:
             raise ValueError(f"A '{self.action}' workflow step requires a 'command'.")
+        if self.action == "replace" and self.phase == "post":
+            raise ValueError(
+                "A 'replace' step cannot use 'phase: post': replace *is* the launch, "
+                "so it can only run before the OS launch."
+            )
 
     def evaluate_condition(self) -> bool:
         """Evaluate the ``if_`` conditional. Always True when ``if_`` is unset.
 
-        Supports ``env:VAR`` (true when VAR is set) and ``env:VAR=value``
-        (true when VAR equals value). Unknown syntax defaults to False.
+        Delegates to :func:`profiles.core.config.conditions.evaluate_hook_condition`
+        (see the grammar there). Note: this raw evaluation does not perform
+        token substitution — the workflow engine substitutes tokens into the
+        condition string before evaluation.
         """
-        if not self.if_:
-            return True
-        if not self.if_.startswith("env:"):
-            return False
-        body = self.if_[4:]
-        if "=" in body:
-            name, _, expected = body.partition("=")
-            actual = os.environ.get(name)
-            return actual is not None and actual == expected
-        return os.environ.get(body) is not None
+        return evaluate_hook_condition(self.if_)
 
 
 @dataclass(frozen=True)

@@ -26,11 +26,13 @@ Launch workflows constitute a powerful engine that executes a sequence of action
 7. [Error Handling and Failmode](#error-handling-and-failmode)
 8. [Command Output Capture](#command-output-capture)
 9. [Timeout Behavior](#timeout-behavior)
-10. [Pattern Specificity (Pattern Matching)](#pattern-specificity-pattern-matching)
-11. [Complete Examples](#complete-examples)
-12. [Migrating from `content:`](#migrating-from-content)
-13. [Programming API](#programming-api)
-14. [Troubleshooting](#troubleshooting)
+10. [Execution Phases (`phase`)](#execution-phases-phase)
+11. [Conditional Execution (`if`)](#conditional-execution-if)
+12. [Pattern Specificity (Pattern Matching)](#pattern-specificity-pattern-matching)
+13. [Complete Examples](#complete-examples)
+14. [Migrating from `content:`](#migrating-from-content)
+15. [Programming API](#programming-api)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -38,7 +40,7 @@ Launch workflows constitute a powerful engine that executes a sequence of action
 
 Workflows use a step-based YAML structure. Each entry in `hooks.entries` is a **glob pattern** that matches filenames.
 
-Every step carries two purpose-specific keys: **`command:`** — the shell command template — and **`message:`** — a Markdown message shown to the user. Both keys are accepted on every action; which one is required depends on the action.
+Every step carries two purpose-specific keys: **`command:`** — the shell command template — and **`message:`** — a Markdown message shown to the user. Both keys are accepted on every action; which one is required depends on the action. Steps may also carry an optional **`phase:`** key (`pre` by default, `post` to run after the OS launch — see [Execution Phases](#execution-phases-phase)).
 
 ```yaml
 hooks:
@@ -556,31 +558,84 @@ A timeout results in a failure outcome (non-0 return code) and triggers the step
 
 ---
 
+## Execution Phases (`phase`)
+
+Every step has an execution **phase** relative to the OS launch:
+
+| Value  | Semantics                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------------- |
+| `pre`  | Default. Steps run before the launch decision — `ask` No / `check` failure / `replace` can all prevent the launch. |
+| `post` | Steps run **only after a successful OS launch** of the matched file.                                |
+
+```yaml
+"*.pdf":
+  - action: check              # pre (default)
+    command: "env_check.exe --verify {{dir}}"
+    on_failure: stop
+  - action: notify             # post — only when the file actually launched
+    phase: post
+    message: "**{{filename}}** launched on {{hostname}} — {{date}}."
+  - action: run_after          # post, still async-capable
+    phase: post
+    command: "backup_writer.exe index={{stem}} --time {{date}}"
+```
+
+### Rules
+
+- **`replace` + `phase: post` is a schema error** — a replace step *is* the launch, so it can only run before the OS launch.
+- The post phase is **skipped entirely** (debug-logged) when the pre phase ends with `ask: No`, a failed `check` (`on_failure: stop`), a `replace` step, or when the OS launch itself fails.
+- `notify`, `run`, `run_after` and `check` are all allowed with `phase: post`; `on_failure`, global `failmode`, `if:`, `timeout:`, `ask:` and tokens behave exactly as in the pre phase.
+- An `ask: No` on a post step only stops the **post phase** — the launch already happened, so it never surfaces as an aborted launch.
+- Post hooks complete **before** the app applies `close_after_execute` (the window closes only after the whole launch lifecycle).
+
+### `run_after` vs `phase: post`
+
+- `run_after` = an **async spawn** (fire-and-forget), valid in any phase.
+- `phase: post` = a **synchronous guarantee** that the launch succeeded first; the step then decides sync (`run`) or async (`run_after`).
+
+> ⚠️ Don't repurpose `run_after` for post-launch intent: a `run_after` in the
+> pre phase spawns *before* the launch, with no guarantee the launch ever
+> happens (a preceding `ask: No`, `check` failure or `replace` can stop it).
+
+---
+
 ## Conditional Execution (`if`)
 
-Each step can include an `if` condition that controls whether the step executes.
+Each step can include an `if` condition that controls whether the step executes. The condition string is **token-substituted first** (same `{{path}}` / `{{dir}}` / `{{date}}` / … pipeline as `command:` and `message:`), then evaluated with the grammar below.
 
-### Environment Variable Checks
+### Condition Grammar
 
-The `if` field supports environment variable checks:
+| Syntax            | True when                                          |
+| ----------------- | -------------------------------------------------- |
+| `env:VAR`         | `VAR` is **set** (any value)                       |
+| `env:VAR=value`   | `VAR` is set and **equals** `value`                |
+| `env:VAR!=value`  | `VAR` is set and **differs** from `value`          |
+| `file:PATH`       | `PATH` **exists** (file or directory)              |
+| `!COND`           | `COND` evaluates to false (negates any form above) |
 
 ```yaml
 entries:
   "*.mttl":
+    - action: check
+      command: "ping -n 1 fileserver01"
+      if: "!file:{{dir}}\\offline.flag" # skip the check when an offline marker exists
+      on_failure: warn
     - action: run
-      command: "deploy.exe --production {{path}}"
-      if: "env:DEPLOY_ENV" # Executes only if DEPLOY_ENV is set
+      command: "deploy_prod.exe {{path}}"
+      if: "env:DEPLOY_ENV!=dev" # never on dev stations
+      ask: "Deploy {{filename}}?"
     - action: run
-      command: "staging_deploy.exe {{path}}"
-      if: "env:DEPLOY_ENV=prod" # Executes only if DEPLOY_ENV equals "prod"
+      command: "deploy_prod.exe {{path}}"
+      if: "!file:{{dir}}\\.prepared-{{date}}" # skip when already prepared today
 ```
 
-| Syntax          | Behavior                                       |
-| --------------- | ---------------------------------------------- |
-| `env:VAR_NAME`  | Step runs if `VAR_NAME` is **set** (any value) |
-| `env:VAR=value` | Step runs if `VAR_NAME` **equals** `value`     |
+### Behavior Notes
 
-If the condition is **not met**, the step is silently skipped — the workflow continues to the next step.
+- Empty or whitespace-only `if:` is treated as unset — the step always runs.
+- **Unknown syntax** (anything outside the grammar) skips the step and emits a **debug log** so the misconfiguration is visible in the log.
+- `!` is a strict prefix operator over the whole remaining condition (`!file:X`, `!env:V`, `!env:V=x` are all valid).
+- `file:` existence uses `os.path.exists()` — case-sensitivity follows the OS. Only the characters right after `file:` / `env:` are grammar; the rest of the value is literal.
+- If the condition is **not met**, the step is silently skipped — the workflow continues to the next step.
 
 ---
 

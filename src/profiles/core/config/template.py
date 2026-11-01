@@ -238,8 +238,15 @@ columns:
 #   output      "hide" | "show" | "fail_only" (default "hide") — capture the
 #               blocking command's output (last ~4 KB): "show" displays it
 #               as a notice after the step, "fail_only" only on failure.
-#   if          string, optional — conditional guard, e.g. "env:VAR" (var is set)
-#               or "env:VAR=value" (var equals value). Step is skipped if not met.
+#   if          string, optional — conditional guard. Tokens are substituted
+#               first, then evaluated: "env:VAR" (var is set), "env:VAR=value"
+#               (var equals value), "env:VAR!=value" (var set and differs),
+#               "file:PATH" (path exists) and "!COND" (negation of any form).
+#               Step is skipped if not met; unrecognized syntax skips the
+#               step and logs a debug line.
+#   phase       "pre" (default) | "post" — "post" steps run ONLY after a
+#               successful OS launch (notify/run/run_after/check allowed;
+#               'replace' cannot be post). See the example below.
 #
 # ACTIONS:
 #   notify      Show a message to the user. Supports simple Markdown (**bold**,
@@ -295,6 +302,12 @@ hooks:
     #   - action: run_after
     #     command: "logger.exe --opened {{filename}} --user {{username}} --date {{date}}"
     #     wait: false
+    #   - action: notify                 # post-launch phase: runs ONLY after
+    #     phase: post                    # the file actually launched (a pre
+    #     message: "**{{filename}}** launched on {{hostname}} at {{date}}."
+    #   - action: run                    #   ask/check failure/replace skips it)
+    #     phase: post
+    #     command: "audit_logger.exe --launched {{filename}} --user {{username}}"
     # "report_?.docx":
     #   - action: run
     #     command: "archiver.exe --out {{dir}}/{{stem}}_{{date}}.zip {{path}}"

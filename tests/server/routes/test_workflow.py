@@ -595,3 +595,138 @@ def test_purge_stale_sessions_keeps_waiting_and_fresh_terminal() -> None:
     finally:
         for key in ("fresh", "waiting"):
             wf_routes._sessions.pop(key, None)
+
+
+# ---------------------------------------------------------------------------
+# Post-launch phase (#9) and condition substitution (#8) in web sessions
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def post_phase_state(tmp_path: Path) -> ServerState:
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Post Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo prepare"),
+                WorkflowStep(action="notify", message="Launched {{filename}}", phase="post"),
+            )
+        },
+    )
+    return ServerState(config=config, active_directory=test_dir)
+
+
+@pytest.mark.anyio
+async def test_post_step_waits_after_launch(post_phase_state: ServerState) -> None:
+    """A post-phase notify pauses only after the OS launch succeeded (#9)."""
+    app = create_app(post_phase_state)
+    with patch("profiles.core.actions.launch_file", return_value=True) as mock_launch:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/workflow/start",
+                json={
+                    "directory": str(post_phase_state.active_directory),
+                    "filename": "tool.mttl",
+                },
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            # The pre step ran, the launch happened, and the post notify
+            # is now waiting for acknowledgement.
+            assert data["steps"][0]["status"] == "completed"
+            assert data["steps"][1]["phase"] == "post"
+            assert data["status"] == "waiting_notify"
+            assert "Launched tool.mttl" in data["notify_message"]
+            mock_launch.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_post_session_completes_after_ack(post_phase_state: ServerState) -> None:
+    app = create_app(post_phase_state)
+    with patch("profiles.core.actions.launch_file", return_value=True):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            start = await client.post(
+                "/api/workflow/start",
+                json={
+                    "directory": str(post_phase_state.active_directory),
+                    "filename": "tool.mttl",
+                },
+            )
+            session_id = start.json()["session_id"]
+            ack = await client.post(f"/api/workflow/{session_id}/respond", json={"action": "ack"})
+            data = ack.json()
+            assert data["status"] == "completed"
+            assert data["final_message"] == "Launched tool.mttl"
+
+
+@pytest.mark.anyio
+async def test_post_ask_no_completes_session_instead_of_abort(tmp_path: Path) -> None:
+    """'No' on a post step ends the post workflow; the launch stands (#9)."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Post Ask Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo audit", ask="Run audit?", phase="post"),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    with patch("profiles.core.actions.launch_file", return_value=True) as mock_launch:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            start = await client.post(
+                "/api/workflow/start",
+                json={"directory": str(test_dir), "filename": "tool.mttl"},
+            )
+            data = start.json()
+            assert data["status"] == "waiting_ask"
+            respond = await client.post(
+                f"/api/workflow/{data['session_id']}/respond", json={"action": "no"}
+            )
+            result = respond.json()
+            assert result["status"] == "completed"
+            assert result["final_message"] == "Launched tool.mttl"
+            mock_launch.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_condition_tokens_substituted_in_session(tmp_path: Path) -> None:
+    """``if:`` conditions see file tokens in web sessions too (#8)."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Cond Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                # Marker exists next to the file → negated condition skips it
+                WorkflowStep(action="run", command="echo gated", if_="!file:{{dir}}/tool.mttl"),
+                WorkflowStep(action="run", command="echo ungated", if_="file:{{dir}}"),
+            )
+        },
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    with patch("profiles.core.actions.launch_file", return_value=True):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            start = await client.post(
+                "/api/workflow/start",
+                json={"directory": str(test_dir), "filename": "tool.mttl"},
+            )
+            data = start.json()
+            assert data["status"] == "completed"
+            assert data["steps"][0]["status"] == "skipped"
+            assert data["steps"][0]["note"] == "Condition not met"
+            assert data["steps"][1]["status"] == "completed"

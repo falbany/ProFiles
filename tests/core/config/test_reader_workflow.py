@@ -85,3 +85,28 @@ def test_output_key_passthrough():
 
     step = config.launch_hooks["*.mttl"][0]
     assert step.output == "fail_only"
+
+
+def test_apply_workflow_steps_passes_phase_through(tmp_path):
+    """The schema's ``phase`` value lands on the runtime WorkflowStep (#9)."""
+    reader = ConfigReader(config_path=tmp_path / "config.yaml")
+    config = AppConfig()
+
+    mock_schema = MagicMock()
+    mock_schema.hooks.failmode = "warn"
+    mock_schema.hooks.timeout = 30
+
+    mock_entry = MagicMock()
+    mock_entry.action = "notify"
+    mock_entry.command = ""
+    mock_entry.message = "Launched"
+    mock_entry.ask = None
+    mock_entry.wait = True
+    mock_entry.on_failure = "stop"
+    mock_entry.phase = "post"
+
+    mock_schema.hooks.entries = {"*.mttl": [mock_entry]}
+
+    reader._apply_hooks(config, mock_schema)
+
+    assert config.launch_hooks["*.mttl"][0].phase == "post"

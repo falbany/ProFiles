@@ -33,6 +33,7 @@ class StepRecord:
     message: str = ""
     ask: str | None = None
     wait: bool = True
+    phase: str = "pre"
     status: Literal["pending", "running", "completed", "skipped", "failed"] = "pending"
     note: str = ""
     output: str = ""
@@ -47,6 +48,10 @@ class WorkflowSession:
     pattern: str
     steps: list[WorkflowStep]
     step_records: list[StepRecord]
+    # Index of the OS launch point inside *steps*: pre steps occupy
+    # [0, launch_index), post steps [launch_index, len(steps)).
+    launch_index: int = 0
+    launched: bool = False
     current_index: int = 0
     status: Literal[
         "idle",
@@ -112,6 +117,7 @@ def _format_step_record(r: StepRecord) -> dict:
         "message": r.message,
         "ask": r.ask,
         "wait": r.wait,
+        "phase": r.phase,
         "status": r.status,
         "note": r.note,
         "output": r.output,
@@ -154,6 +160,157 @@ def _execute_step_with_capture(
     return ret, state.last_output, failure_context
 
 
+def _launch_session_file(session: WorkflowSession) -> bool:
+    """Perform the OS launch of the session's file (with args when set)."""
+    if session.args:
+        return actions.launch_file_with_args(session.file_path, session.args)
+    return actions.launch_file(session.file_path)
+
+
+def _interactive_pause(
+    session: WorkflowSession,
+    step: WorkflowStep,
+    rec: StepRecord,
+    *,
+    username: str,
+    hostname: str,
+) -> bool:
+    """Pause the session on the step's interactive gate, if any.
+
+    Handles the three pausing branches — ask prompt, command-step notice,
+    notify acknowledgement — setting the matching ``waiting_*`` status.
+    Returns True when the session paused (the caller must stop advancing).
+    """
+    # If step has an ask prompt and we haven't asked yet:
+    # the dialog composes the step's Markdown message (if any) above
+    # the ask question, mirroring the native engine behavior.
+    if step.ask and not session.ask_answered:
+        command_sub, message_sub = workflow._resolve_step_texts(
+            step,
+            session.file_path,
+            username=username,
+            hostname=hostname,
+            last_output=session.last_output,
+        )
+        ask_content = _substitute_variables(
+            step.ask,
+            session.file_path,
+            command=command_sub,
+            message=message_sub,
+            username=username,
+            hostname=hostname,
+            output=session.last_output,
+        )
+        session.status = "waiting_ask"
+        session.ask_prompt = ask_content
+        session.ask_message = message_sub if step.message else None
+        rec.status = "running"
+        return True
+
+    # Non-blocking notice for a command step's message (no ask guard):
+    # pause until the web UI acknowledges, then execute the command.
+    # Placed after the condition check so skipped steps stay silent.
+    if (
+        step.action != "notify"
+        and step.message
+        and not step.ask
+        and not session.notice_acknowledged
+    ):
+        _, message_sub = workflow._resolve_step_texts(
+            step,
+            session.file_path,
+            username=username,
+            hostname=hostname,
+            last_output=session.last_output,
+        )
+        session.status = "waiting_notice"
+        session.notice_message = message_sub
+        rec.status = "running"
+        return True
+
+    # If step is notify and we haven't acknowledged yet. A notify step
+    # whose composed ask dialog was just answered is handled by the caller
+    # (single-gate completion, #22) — never pause a second time here.
+    if (
+        step.action == "notify"
+        and session.notify_message is None
+        and not (step.ask and session.ask_answered)
+    ):
+        _, msg_text = workflow._resolve_step_texts(
+            step,
+            session.file_path,
+            username=username,
+            hostname=hostname,
+            last_output=session.last_output,
+        )
+        session.status = "waiting_notify"
+        session.notify_message = msg_text
+        rec.status = "running"
+        return True
+
+    return False
+
+
+def _execute_and_resolve(
+    session: WorkflowSession,
+    step: WorkflowStep,
+    rec: StepRecord,
+    index: int,
+    *,
+    username: str,
+    hostname: str,
+) -> bool:
+    """Execute a non-interactive step and record its outcome.
+
+    Returns True when the session reached a terminal state and the caller
+    must stop advancing.
+    """
+    # Execute action (run, check, replace, run_after)
+    ret, captured_output, failure_context = _execute_step_with_capture(
+        step, session, username=username, hostname=hostname
+    )
+
+    if step.action in ("run", "check", "replace"):
+        rec.output = captured_output
+        session.last_output = captured_output
+
+    if step.action == "replace":
+        # replace returns WorkflowOutcome.SKIP_LAUNCH (not int), or None
+        rec.status = "completed"
+        session.status = "completed"
+        command_sub, _ = workflow._resolve_step_texts(
+            step,
+            session.file_path,
+            username=username,
+            hostname=hostname,
+            last_output=session.last_output,
+        )
+        session.final_message = f"Launched replacement: {command_sub or step.command}"
+        return True
+
+    if step.action == "run_after":
+        # run_after runs asynchronously in background and must not block
+        rec.status = "completed"
+        return False
+
+    if ret is not None and ret != 0:
+        rec.status = "failed"
+        on_fail = step.on_failure or "warn"
+        if on_fail in ("stop", "abort"):
+            session.status = "failed"
+            # failure_context carries the rc + captured-output
+            # description for steps configured to reveal them.
+            session.final_message = (
+                failure_context[-1] if failure_context else f"Step {index + 1} failed"
+            )
+            return True
+        rec.note = "Warning: step returned error outcome"
+    else:
+        rec.status = "completed"
+
+    return False
+
+
 # pylint: enable=protected-access
 
 
@@ -167,30 +324,18 @@ def _advance_session(session: WorkflowSession) -> None:
         step = session.steps[i]
         rec = session.step_records[i]
 
-        # If step has an ask prompt and we haven't asked yet:
-        # the dialog composes the step's Markdown message (if any) above
-        # the ask question, mirroring the native engine behavior.
-        if step.ask and not session.ask_answered:
-            command_sub, message_sub = workflow._resolve_step_texts(
-                step,
-                session.file_path,
-                username=username,
-                hostname=hostname,
-                last_output=session.last_output,
-            )
-            ask_content = _substitute_variables(
-                step.ask,
-                session.file_path,
-                command=command_sub,
-                message=message_sub,
-                username=username,
-                hostname=hostname,
-                output=session.last_output,
-            )
-            session.status = "waiting_ask"
-            session.ask_prompt = ask_content
-            session.ask_message = message_sub if step.message else None
-            rec.status = "running"
+        # OS launch point: every pre step has run. Launch the file; the
+        # step at *i* is the first post step and proceeds only after a
+        # successful launch (#9).
+        if i == session.launch_index:
+            session.launched = _launch_session_file(session)
+            if not session.launched:
+                session.status = "failed"
+                session.final_message = "Failed to open file"
+                return
+            # Fall through: process the first post step in this iteration.
+
+        if _interactive_pause(session, step, rec, username=username, hostname=hostname):
             return
 
         # A notify step's composed ask dialog IS its notification display:
@@ -204,41 +349,6 @@ def _advance_session(session: WorkflowSession) -> None:
             session.current_index += 1
             continue
 
-        # Non-blocking notice for a command step's message (no ask guard):
-        # pause until the web UI acknowledges, then execute the command.
-        # Placed after the condition check so skipped steps stay silent.
-        if (
-            step.action != "notify"
-            and step.message
-            and not step.ask
-            and not session.notice_acknowledged
-        ):
-            _, message_sub = workflow._resolve_step_texts(
-                step,
-                session.file_path,
-                username=username,
-                hostname=hostname,
-                last_output=session.last_output,
-            )
-            session.status = "waiting_notice"
-            session.notice_message = message_sub
-            rec.status = "running"
-            return
-
-        # If step is notify and we haven't acknowledged yet:
-        if step.action == "notify" and session.notify_message is None:
-            _, msg_text = workflow._resolve_step_texts(
-                step,
-                session.file_path,
-                username=username,
-                hostname=hostname,
-                last_output=session.last_output,
-            )
-            session.status = "waiting_notify"
-            session.notify_message = msg_text
-            rec.status = "running"
-            return
-
         # Execute normal or acknowledged step
         rec.status = "running"
         session.ask_prompt = None
@@ -247,7 +357,13 @@ def _advance_session(session: WorkflowSession) -> None:
         session.notify_message = None
         session.notice_acknowledged = False
 
-        if not step.evaluate_condition():
+        if not workflow.evaluate_step_condition(
+            step,
+            session.file_path,
+            username=username,
+            hostname=hostname,
+            output=session.last_output,
+        ):
             rec.status = "skipped"
             rec.note = "Condition not met"
             session.current_index += 1
@@ -258,61 +374,23 @@ def _advance_session(session: WorkflowSession) -> None:
             session.current_index += 1
             continue
 
-        # Execute action (run, check, replace, run_after)
-        ret, captured_output, failure_context = _execute_step_with_capture(
-            step, session, username=username, hostname=hostname
-        )
-
-        if step.action in ("run", "check", "replace"):
-            rec.output = captured_output
-            session.last_output = captured_output
-
-        if step.action == "replace":
-            # replace returns WorkflowOutcome.SKIP_LAUNCH (not int), or None
-            rec.status = "completed"
-            session.status = "completed"
-            command_sub, _ = workflow._resolve_step_texts(
-                step,
-                session.file_path,
-                username=username,
-                hostname=hostname,
-                last_output=session.last_output,
-            )
-            session.final_message = f"Launched replacement: {command_sub or step.command}"
+        if _execute_and_resolve(session, step, rec, i, username=username, hostname=hostname):
             return
-
-        if step.action == "run_after":
-            # run_after runs asynchronously in background and must not block
-            rec.status = "completed"
-            session.current_index += 1
-            continue
-
-        if ret is not None and ret != 0:
-            rec.status = "failed"
-            on_fail = step.on_failure or "warn"
-            if on_fail in ("stop", "abort"):
-                session.status = "failed"
-                # failure_context carries the rc + captured-output
-                # description for steps configured to reveal them.
-                session.final_message = (
-                    failure_context[-1] if failure_context else f"Step {i + 1} failed"
-                )
-                return
-            rec.note = "Warning: step returned error outcome"
-        else:
-            rec.status = "completed"
 
         session.current_index += 1
 
-    # All steps completed — proceed to OS launch
-    session.status = "completed"
-    file_path = session.file_path
-    if session.args:
-        launched = actions.launch_file_with_args(file_path, session.args)
-    else:
-        launched = actions.launch_file(file_path)
+    # All steps completed. When there were no post steps the OS launch has
+    # not happened yet (the loop ended at the launch point); otherwise it
+    # already succeeded mid-loop.
+    if not session.launched:
+        session.launched = _launch_session_file(session)
+        if not session.launched:
+            session.status = "failed"
+            session.final_message = "Failed to open file"
+            return
 
-    session.final_message = f"Launched {file_path.name}" if launched else "Failed to open file"
+    session.status = "completed"
+    session.final_message = f"Launched {session.file_path.name}"
 
 
 @router.post("/start")
@@ -335,6 +413,12 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
     _purge_stale_sessions()
 
     steps = list(config.launch_hooks[matched_pattern])
+    pre_steps = workflow.filter_steps_by_phase(steps, "pre")
+    post_steps = workflow.filter_steps_by_phase(steps, "post")
+    # Execution order is pre steps then post steps (each phase keeps its
+    # configured order), so the OS launch point always sits between them.
+    steps = pre_steps + post_steps
+    launch_index = len(pre_steps)
     username = get_username()
     hostname = get_hostname()
     step_records = [
@@ -365,6 +449,7 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
             if s.ask
             else None,
             wait=s.wait,
+            phase=s.phase,
         )
         for idx, s in enumerate(steps)
     ]
@@ -378,6 +463,7 @@ async def start_workflow(payload: StartWorkflowRequest, request: Request) -> dic
         pattern=matched_pattern,
         steps=steps,
         step_records=step_records,
+        launch_index=launch_index,
         release=payload.release,
         args=payload.args,
     )
@@ -447,6 +533,21 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
 
     elif session.status == "waiting_ask":
         if payload.action == "no":
+            if session.current_index >= session.launch_index and session.launched:
+                # A "No" on a post step only ends the post-launch workflow:
+                # the OS launch already happened (#9), so this must not
+                # surface as an abort of the (completed) launch.
+                rec = session.step_records[session.current_index]
+                rec.status = "skipped"
+                rec.note = "Post-launch workflow ended by user"
+                session.status = "completed"
+                session.final_message = f"Launched {session.file_path.name}"
+                return {
+                    "session_id": session_id,
+                    "status": session.status,
+                    "final_message": session.final_message,
+                    "steps": [_format_step_record(r) for r in session.step_records],
+                }
             session.status = "aborted"
             session.step_records[session.current_index].status = "failed"
             session.step_records[session.current_index].note = "Aborted by user"
@@ -461,7 +562,9 @@ async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> 
             session.step_records[session.current_index].status = "skipped"
             session.step_records[session.current_index].note = "Skipped by user"
             session.ask_prompt = None
-            if session.current_index == len(session.steps) - 1:
+            if session.current_index == session.launch_index - 1:
+                # Skipping the last pre step skips the OS launch (and the
+                # post phase with it).
                 session.status = "completed"
                 session.final_message = "Skipped launch on final step."
                 return {
