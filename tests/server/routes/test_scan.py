@@ -350,4 +350,34 @@ async def test_launch_with_args_handles_boolean_result(
             )
 
     assert response.status_code == expected_status
-    launch_mock.assert_called_once_with(target_file.resolve(), "--preview")
+    launch_mock.assert_called_once_with(target_file, "--preview")
+
+
+@pytest.mark.anyio
+async def test_scan_keeps_symlink_form_of_requested_directory(
+    test_state: ServerState,
+    tmp_path: Path,
+) -> None:
+    """The requested directory form is stored verbatim, not resolved.
+
+    Path.resolve() rewrites Windows mapped network drives (M:/...) to their
+    UNC target; the scan root must keep the form the client sent. A symlink
+    stands in for that transformation on every platform, and result rows —
+    built under the scan root — inherit the same form.
+    """
+    real_dir = tmp_path / "real-programs"
+    real_dir.mkdir()
+    (real_dir / "app_1.0_PROD.mttl").write_text("launchable")
+    link = tmp_path / "link-programs"
+    link.symlink_to(real_dir, target_is_directory=True)
+
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/scan", json={"directory": str(link), "recursive": True})
+        assert response.status_code == 200
+        assert test_state.active_directory == link
+        results = await client.get("/api/scan/results")
+
+    items = results.json()["items"]
+    assert len(items) >= 1
+    assert items[0]["path"].startswith(str(link))

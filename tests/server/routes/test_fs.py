@@ -77,3 +77,30 @@ async def test_hidden_config_flagged_as_config(fs_state: ServerState, tmp_path: 
     config_entry = next(item for item in items if item["name"] == ".profiles")
     assert config_entry["is_config"] is True
     assert config_entry["extension"] == ".profiles"
+
+
+@pytest.mark.anyio
+async def test_browse_keeps_symlink_form_of_requested_path(
+    fs_state: ServerState, tmp_path: Path
+) -> None:
+    """The browsed directory is echoed back in the form the client sent.
+
+    resolve() would canonicalize Windows mapped network drives (M:/...) to
+    their UNC target, making the picker display paths the user never
+    configured. A symlink stands in for that transformation on every
+    platform.
+    """
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    (real_dir / "visible.txt").write_text("ok", encoding="utf-8")
+    link = tmp_path / "link"
+    link.symlink_to(real_dir, target_is_directory=True)
+
+    app = create_app(fs_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/fs/browse?path={link}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_path"] == str(link)
+    assert [item["path"] for item in payload["items"]] == [str(link / "visible.txt")]
