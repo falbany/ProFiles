@@ -193,6 +193,55 @@ async def test_export_csv_saves_content_and_reports_path(
 
 
 @pytest.mark.anyio
+async def test_save_image_delegates_to_core_and_reports_path(test_state: ServerState) -> None:
+    """The save-image endpoint decodes base64 and delegates to core (issue #31)."""
+    import base64
+
+    png = b"\x89PNG-fake"
+    expected = ActionResult(
+        status=ActionStatus.SUCCESS,
+        message="Image saved to /Downloads/qr.png",
+        path=Path("/Downloads/qr.png"),
+    )
+    app = create_app(test_state)
+
+    with patch(
+        "profiles.server.routes.actions.actions.save_image_export", return_value=expected
+    ) as save_mock:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/actions/save-image",
+                json={
+                    "image_base64": "data:image/png;base64," + base64.b64encode(png).decode(),
+                    "filename": "profiles-qr-1.png",
+                },
+            )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "success",
+        "message": "Image saved to /Downloads/qr.png",
+        "path": "/Downloads/qr.png",
+    }
+    assert save_mock.call_args.args == (png, "profiles-qr-1.png")
+
+
+@pytest.mark.anyio
+async def test_save_image_rejects_invalid_base64(test_state: ServerState) -> None:
+    """A non-base64 payload is rejected with 400 before touching the disk."""
+    app = create_app(test_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/actions/save-image",
+            json={"image_base64": "!!!not-base64!!!", "filename": "x.png"},
+        )
+
+    assert response.status_code == 400
+    assert "Invalid base64 image payload" in response.json()["detail"]
+
+
+@pytest.mark.anyio
 async def test_export_csv_reports_failure_without_raising(test_state: ServerState) -> None:
     """A core-level failure is surfaced as a failed status, not an HTTP error."""
     expected = ActionResult(

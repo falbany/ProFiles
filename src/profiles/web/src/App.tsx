@@ -44,6 +44,7 @@ import { SingleMatchPromptModal } from "./components/SingleMatchPromptModal";
 import { StatusBar } from "./components/StatusBar";
 import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { parseBarcodeInput } from "./utils/barcodeScanner";
 import { exportToCsv } from "./utils/exportCsv";
 import { matchFilter } from "./utils/searchSyntax";
@@ -97,6 +98,9 @@ export default function App() {
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
   const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
   const [showPropertiesModal, setShowPropertiesModal] = useState<boolean>(false);
+  // File awaiting delete confirmation (in-app dialog — window.confirm is a
+  // no-op inside the desktop webviews, issue #31).
+  const [pendingDeleteFile, setPendingDeleteFile] = useState<ScannedFileItem | null>(null);
   const [propertiesFile, setPropertiesFile] = useState<ScannedFileItem | null>(null);
   const [showLogViewer, setShowLogViewer] = useState<boolean>(false);
   const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
@@ -569,6 +573,12 @@ export default function App() {
 
   // Initial load (also re-run by the retry panel when it fails).
   const runInitialLoad = async () => {
+    // Same supersede protocol as beginScan(): a retry must abort any
+    // in-flight scan fetch from the failed load instead of racing it
+    // (issue #34). No spinner/pending-rescan side effects here — the init
+    // panel owns the feedback and no auto-rescan is scheduled yet.
+    scanAbortRef.current?.abort();
+    scanAbortRef.current = new AbortController();
     const scanGeneration = ++scanGenerationRef.current;
     setInitError(null);
     setInitRetrying(true);
@@ -642,8 +652,8 @@ export default function App() {
         filter_text: filterText,
         recursive,
       });
-    } catch (err) {
-      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    } catch (err: any) {
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
     } finally {
       finishScan(scanGeneration);
     }
@@ -700,8 +710,8 @@ export default function App() {
         filter_text: "",
         recursive,
       });
-    } catch (err) {
-      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    } catch (err: any) {
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
     } finally {
       finishScan(scanGeneration);
     }
@@ -806,8 +816,8 @@ export default function App() {
       extension: activeExtension,
       filter_text: folder,
       recursive,
-    }).catch((err) => {
-      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    }).catch((err: any) => {
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
     }).finally(() => finishScan(scanGeneration));
   };
 
@@ -819,32 +829,40 @@ export default function App() {
       extension: ext,
       filter_text: filterText,
       recursive,
-    }).catch((err) => {
-      if (isCurrentScan(scanGeneration)) console.error("Scan error:", err);
+    }).catch((err: any) => {
+      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
     }).finally(() => finishScan(scanGeneration));
   };
 
-  const handleCopyPath = (file: ScannedFileItem, forwardSlash?: boolean) => {
+  const handleCopyPath = async (file: ScannedFileItem, forwardSlash?: boolean) => {
     const p = forwardSlash ? file.path.replace(/\\/g, "/") : file.path;
-    navigator.clipboard.writeText(p);
-    showToast("Path copied to clipboard.");
+    try {
+      await navigator.clipboard.writeText(p);
+      showToast("Path copied to clipboard.");
+    } catch (err: any) {
+      showToast(`Copy failed: ${err?.message ?? err}`, "error");
+    }
   };
 
-  const handleCopyFilename = (file: ScannedFileItem, withoutExt?: boolean) => {
+  const handleCopyFilename = async (file: ScannedFileItem, withoutExt?: boolean) => {
     let name = file.filename;
     if (withoutExt) {
       const idx = name.lastIndexOf(".");
       if (idx !== -1) name = name.slice(0, idx);
     }
-    navigator.clipboard.writeText(name);
-    showToast("Filename copied to clipboard.");
+    try {
+      await navigator.clipboard.writeText(name);
+      showToast("Filename copied to clipboard.");
+    } catch (err: any) {
+      showToast(`Copy failed: ${err?.message ?? err}`, "error");
+    }
   };
 
   const handleComputeHash = async (file: ScannedFileItem, algorithm: "md5" | "sha256") => {
     try {
       showToast(`Computing ${algorithm.toUpperCase()}...`);
       const res = await computeHash(file.path, algorithm);
-      navigator.clipboard.writeText(res.hash);
+      await navigator.clipboard.writeText(res.hash);
       showToast(`${algorithm.toUpperCase()} hash copied: ${res.hash.slice(0, 12)}...`);
     } catch (err: any) {
       showToast(`Hash computation failed: ${err.message}`, "error");
@@ -854,7 +872,7 @@ export default function App() {
   const handleCopyUri = async (file: ScannedFileItem) => {
     try {
       const uri = new URL("file:///").href + file.path.replace(/\\/g, "/");
-      navigator.clipboard.writeText(uri);
+      await navigator.clipboard.writeText(uri);
       showToast("File URI copied to clipboard.");
     } catch (err: any) {
       showToast(`URI copy failed: ${err.message}`, "error");
@@ -886,10 +904,16 @@ export default function App() {
     setShowPropertiesModal(true);
   };
 
-  const handleClearFile = async (file: ScannedFileItem) => {
-    if (!confirm(`Are you sure you want to delete this file?\n\n${file.path}\n\nThis action cannot be undone.`)) {
-      return;
-    }
+  // Opens the in-app delete confirmation (window.confirm is a no-op inside
+  // the desktop webviews — issue #31).
+  const handleClearFile = (file: ScannedFileItem) => {
+    setPendingDeleteFile(file);
+  };
+
+  const confirmDeleteFile = async () => {
+    const file = pendingDeleteFile;
+    setPendingDeleteFile(null);
+    if (!file) return;
     try {
       showToast("Deleting file...");
       const res = await fetch(`/api/actions/delete`, {
@@ -967,7 +991,12 @@ export default function App() {
       const filename = `profiles-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-")}.csv`;
       // Saved server-side: browser blob downloads navigate to raw CSV inside the desktop webview.
       const result = await exportCsvToDisk(csvContent, filename);
-      showToast(result.message);
+      // Be explicit about scope: this exports the LOADED rows only (issue
+      // #35), not the whole backend result set.
+      showToast(
+        `Exported ${files.length} loaded row${files.length === 1 ? "" : "s"}` +
+        `${filterText ? ` matching "${filterText}"` : ""} — ${result.message}`,
+      );
     } catch (err: any) {
       showToast(`Export failed: ${err.message}`, "error");
     }
@@ -1069,9 +1098,11 @@ export default function App() {
       // Disable barcode mode after applying
       setBarcodeMode(false);
       barcodeBufferRef.current = "";
-      // Use a short timeout to let state propagate before scanning
+      // Use a short timeout so the state updates above commit before the
+      // scan starts; handleScanRef guarantees the scan reads the NEW
+      // values, not the ones captured by this render (issue #34).
       setTimeout(() => {
-        void handleScan();
+        void handleScanRef.current();
       }, 50);
     }
   };
@@ -1111,7 +1142,9 @@ export default function App() {
           showToast(`Barcode filter: ${result.values.filter}`);
           setFilterText(result.values.filter || "");
           setBarcodeMode(false);
-          setTimeout(() => void handleScan(), 50);
+          // handleScanRef: scan with the just-set filter, not this render's
+          // stale closure (issue #34).
+          setTimeout(() => void handleScanRef.current(), 50);
         } else {
           // Parsed key=value pairs — apply all and auto-scan
           const vals = result.values;
@@ -1136,11 +1169,13 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeydown, true);
   }, [barcodeMode]);
 
-  // Timer — periodic rescan effect.
+  // Timer — periodic rescan effect. Runs through handleScanRef so every
+  // tick uses the CURRENT directory/extension/filter (issue #34: the
+  // interval previously captured the values from when it was enabled).
   useEffect(() => {
     if (autoRescanInterval > 0) {
       timerRef.current = setInterval(() => {
-        void handleScan();
+        void handleScanRef.current();
       }, autoRescanInterval * 1000);
     }
     return () => {
@@ -1175,7 +1210,8 @@ export default function App() {
       showBarcodeModal ||
       showCameraScanner ||
       singleMatchFile ||
-      workflowLaunchParams,
+      workflowLaunchParams ||
+      Boolean(pendingDeleteFile),
   );
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1439,6 +1475,7 @@ export default function App() {
         <FileListTable
           files={visibleFiles}
           totalCount={totalCount}
+          rawLoadedCount={files.length}
           onLoadMore={handleLoadMore}
           loadingMore={loadingMore}
           scanning={scanning}
@@ -1469,9 +1506,16 @@ export default function App() {
             // Reset the selection anchor; a re-ordered set is authoritative.
             selectedPathRef.current = null;
             setSelectedIndex(0);
-            const generation = scanGenerationRef.current;
-            setLoadingMore(false);
-            void loadScanResults(generation, next);
+            // A sort is a new authoritative scan: beginScan() aborts any
+            // in-flight scan fetch and cancels a pending deferred
+            // auto-rescan so neither can overwrite the sorted result
+            // out-of-order (issue #34).
+            const generation = beginScan();
+            void loadScanResults(generation, next)
+              .catch((err: any) => {
+                if (isCurrentScan(generation)) showToast(`Sort failed: ${err.message}`, "error");
+              })
+              .finally(() => finishScan(generation));
           }}
         />
       )}
@@ -1565,6 +1609,7 @@ export default function App() {
       <FilePropertiesModal
         isOpen={showPropertiesModal}
         file={propertiesFile}
+        onLaunch={handleLaunch}
         onClose={() => {
           setShowPropertiesModal(false);
           setPropertiesFile(null);
@@ -1620,6 +1665,17 @@ export default function App() {
         isOpen={showCameraScanner}
         onClose={() => setShowCameraScanner(false)}
         onDetected={handleCameraDetected}
+      />
+
+      {/* Delete confirmation (in-app; window.confirm is a webview no-op) */}
+      <ConfirmDialog
+        isOpen={Boolean(pendingDeleteFile)}
+        title="Delete file"
+        message={`Delete this file?\n\n${pendingDeleteFile?.path ?? ""}\n\nThis action cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDeleteFile}
+        onCancel={() => setPendingDeleteFile(null)}
       />
 
       {/* Single Match Launch Confirmation */}

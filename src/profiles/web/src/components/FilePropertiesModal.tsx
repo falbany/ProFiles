@@ -2,7 +2,7 @@ import Tooltip from "./Tooltip";
 import { useEffect, useRef, useState } from "react";
 import { X, File, Folder, Calendar, Hash, Copy, Check, QrCode, Eye, Play, FolderOpen, Lock, EyeOff, Link2 } from "lucide-react";
 import type { FileMetadata, ScannedFileItem } from "../api/types";
-import { fetchFileMetadata, launchFile, openFolder, revealFile } from "../api/client";
+import { fetchFileMetadata, openFolder, revealFile } from "../api/client";
 import { BarcodeModal } from "./BarcodeModal";
 import {
   buildPropertiesSummary,
@@ -17,9 +17,15 @@ export interface FilePropertiesModalProps {
   isOpen: boolean;
   file: ScannedFileItem | null;
   onClose: () => void;
+  /**
+   * Launch handler owned by the app (issue #32): routes hook-attached files
+   * through the workflow runner and launches with `rel_path` relative to the
+   * active directory — the exact payload the main table sends.
+   */
+  onLaunch?: (file: ScannedFileItem) => void | Promise<void>;
 }
 
-export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesModalProps) {
+export function FilePropertiesModal({ isOpen, file, onClose, onLaunch }: FilePropertiesModalProps) {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +238,6 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
   if (!isOpen || !file) return null;
   // Captures the narrowed file so JSX callbacks keep a non-null type.
   const activeFile = file;
-  const directory = parentDirectory(activeFile.path);
 
   return (
     <div
@@ -452,8 +457,13 @@ export function FilePropertiesModal({ isOpen, file, onClose }: FilePropertiesMod
               </Tooltip>
               <Tooltip text="Launch file with default association" block={false}>
               <button
-                onClick={() => void runFileAction("launch", "Launched", () => launchFile({ directory, filename: activeFile.filename }))}
-                disabled={actionBusy !== null}
+                onClick={() => {
+                  if (!onLaunch) return;
+                  // App-owned launch (hook routing + rel_path payload).
+                  setActionBusy("launch");
+                  void Promise.resolve(onLaunch(activeFile)).finally(() => setActionBusy(null));
+                }}
+                disabled={actionBusy !== null || !onLaunch}
                 className={actionButtonClass("launch")}
 
               >

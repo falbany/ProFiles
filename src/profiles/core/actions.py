@@ -301,6 +301,25 @@ def write_starter_config(
     )
 
 
+def _downloads_target(filename: str, *, default_prefix: str, suffix: str) -> Path:
+    """Resolve a sanitized target path in the user's Downloads directory.
+
+    The suggested name is reduced to a bare file name (no directories, no
+    hidden files) and forced to *suffix*; an unusable name falls back to a
+    timestamped one. The target directory is ``~/Downloads`` when it exists,
+    otherwise the home directory.
+    """
+    bare_name = Path(filename).name.strip()
+    if not bare_name or bare_name.startswith("."):
+        bare_name = f"{default_prefix}-{datetime.now():%Y%m%d-%H%M%S}{suffix}"
+    if not bare_name.lower().endswith(suffix):
+        bare_name += suffix
+
+    downloads_dir = Path.home() / "Downloads"
+    target_dir = downloads_dir if downloads_dir.is_dir() else Path.home()
+    return target_dir / bare_name
+
+
 def save_csv_export(
     content: str,
     filename: str,
@@ -324,15 +343,7 @@ def save_csv_export(
     Returns:
         ``ActionResult`` describing the outcome, with the written path.
     """
-    bare_name = Path(filename).name.strip()
-    if not bare_name or bare_name.startswith("."):
-        bare_name = f"profiles-export-{datetime.now():%Y%m%d-%H%M%S}.csv"
-    if not bare_name.lower().endswith(".csv"):
-        bare_name += ".csv"
-
-    downloads_dir = Path.home() / "Downloads"
-    target_dir = downloads_dir if downloads_dir.is_dir() else Path.home()
-    target = target_dir / bare_name
+    target = _downloads_target(filename, default_prefix="profiles-export", suffix=".csv")
 
     try:
         target.write_text(content, encoding="utf-8")
@@ -350,6 +361,48 @@ def save_csv_export(
     return ActionResult(
         status=ActionStatus.SUCCESS,
         message=f"CSV exported to {target}",
+        path=target,
+    )
+
+
+def save_image_export(
+    data: bytes,
+    filename: str,
+    *,
+    logger: logging.Logger | None = None,
+) -> ActionResult:
+    """Write binary image data to the user's Downloads directory.
+
+    Browser downloads (``<a download>``) are a no-op inside the desktop
+    webview, so the server persists the bytes instead — the same mechanism
+    as :func:`save_csv_export`.
+
+    Args:
+        data: Raw image bytes to write (e.g. a decoded PNG QR code).
+        filename: Suggested file name; sanitized before use.
+        logger: Optional logger used to record the write.
+
+    Returns:
+        ``ActionResult`` describing the outcome, with the written path.
+    """
+    target = _downloads_target(filename, default_prefix="profiles-qr", suffix=".png")
+
+    try:
+        target.write_bytes(data)
+    except OSError as exc:
+        if logger is not None:
+            logger.error("Image export failed for %s: %s", target, exc)
+        return ActionResult(
+            status=ActionStatus.FAILED,
+            message=f"Could not write image:\n{target} ({exc})",
+            path=target,
+        )
+
+    if logger is not None:
+        logger.info("Image export written: %s", target)
+    return ActionResult(
+        status=ActionStatus.SUCCESS,
+        message=f"Image saved to {target}",
         path=target,
     )
 
