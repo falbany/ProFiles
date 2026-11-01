@@ -37,7 +37,7 @@ interface ContextMenuProps {
   onProperties: (file: ScannedFileItem) => void;
   onClearFile: (file: ScannedFileItem) => void;
   onGenerateBarcode: (file: ScannedFileItem) => void;
-  showToast?: (message: string) => void;
+  showToast?: (message: string, kind?: "info" | "error") => void;
 }
 
 export function ContextMenu({
@@ -326,11 +326,17 @@ export function ContextMenu({
         </button>
         <button
           role="menuitem"
-          onClick={() => {
+          onClick={async () => {
             const dirPath = getDirectoryPath(file.path);
-            navigator.clipboard.writeText(dirPath);
             onClose();
-            showToast?.(`Copied: ${dirPath}`);
+            try {
+              // Await the write: clipboard failures (permissions, insecure
+              // context) must not report success (issue #35).
+              await navigator.clipboard.writeText(dirPath);
+              showToast?.(`Copied: ${dirPath}`);
+            } catch (err: any) {
+              showToast?.(`Copy failed: ${err?.message ?? err}`, "error");
+            }
           }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={'Copy Directory'}

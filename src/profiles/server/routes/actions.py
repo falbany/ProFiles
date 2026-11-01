@@ -368,3 +368,27 @@ async def export_csv(payload: ExportCsvRequest) -> dict:
         "message": res.message,
         "path": str(res.path) if res.path else None,
     }
+
+
+class SaveImageRequest(BaseModel):
+    image_base64: str = Field(max_length=8_000_000)
+    filename: str = ""
+
+
+@router.post("/save-image")
+async def save_image(payload: SaveImageRequest) -> dict:
+    """Save a generated image (e.g. a QR code PNG) to the user's Downloads
+    directory.
+
+    The desktop webview cannot perform browser downloads (an
+    ``<a download>`` click is a no-op), so the server persists the decoded
+    bytes and reports the path back to the UI — same mechanism as
+    ``/export-csv`` (issue #31).
+    """
+    data = _decode_base64_image(payload.image_base64)
+    res = actions.save_image_export(data, payload.filename)
+    return {
+        "status": str(res.status.value),
+        "message": res.message,
+        "path": str(res.path) if res.path else None,
+    }

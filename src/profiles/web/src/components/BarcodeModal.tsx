@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Copy, Check, Plus, Trash2, Hash, Download } from "lucide-react";
-import { generateBarcode } from "../api/client";
+import { generateBarcode, saveImageToDisk } from "../api/client";
 import { useModalA11y } from "../utils/useModalA11y";
 
 interface BarcodeModalProps {
@@ -23,6 +23,7 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const handleDialogKeyDown = useModalA11y({ isOpen, onClose, dialogRef: modalRef });
 
@@ -102,14 +103,19 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
     void updateBarcode(newPairs);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!barcodeImage) return;
-    const link = document.createElement("a");
-    link.href = barcodeImage;
-    link.download = `profiles-qr-${new Date().getTime()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    setSaveStatus("Saving…");
+    try {
+      // Browser downloads (<a download>) are a no-op inside the desktop
+      // webview (issue #31) — the server writes the PNG to ~/Downloads.
+      const res = await saveImageToDisk(barcodeImage, `profiles-qr-${Date.now()}.png`);
+      setSaveStatus(res.path || res.message);
+    } catch (err: any) {
+      setSaveStatus(`Save failed: ${err?.message ?? err}`);
+    } finally {
+      setTimeout(() => setSaveStatus(null), 6000);
+    }
   };
 
   const copyText = async () => {
@@ -209,6 +215,11 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
                   Save Image
                 </button>
               </div>
+              {saveStatus && (
+                <p className="break-all text-center text-[11px] text-ink-muted" role="status">
+                  {saveStatus}
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">

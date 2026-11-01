@@ -272,6 +272,52 @@ class TestSaveCsvExport:
         assert "Could not write CSV export" in result.message
 
 
+class TestSaveImageExport:
+    """Tests for save_image_export()."""
+
+    def test_saves_bytes_to_downloads(self, mocker, tmp_path: Path) -> None:
+        """Raw image bytes are written into ~/Downloads when it exists."""
+        mocker.patch("pathlib.Path.home", return_value=tmp_path)
+        (tmp_path / "Downloads").mkdir()
+
+        result = actions.save_image_export(b"\x89PNG-riff", "profiles-qr-1.png")
+
+        expected = tmp_path / "Downloads" / "profiles-qr-1.png"
+        assert result.status is ActionStatus.SUCCESS
+        assert result.path == expected
+        assert expected.read_bytes() == b"\x89PNG-riff"
+
+    def test_sanitizes_path_traversal_and_extension(self, mocker, tmp_path: Path) -> None:
+        """Directory components are stripped and a .png suffix is enforced."""
+        mocker.patch("pathlib.Path.home", return_value=tmp_path)
+
+        result = actions.save_image_export(b"data", "../../evil.gif")
+
+        assert result.status is ActionStatus.SUCCESS
+        assert result.path == tmp_path / "evil.gif.png"
+
+    def test_unusable_name_gets_timestamped_default(self, mocker, tmp_path: Path) -> None:
+        """Empty or hidden names fall back to a timestamped profiles-qr name."""
+        mocker.patch("pathlib.Path.home", return_value=tmp_path)
+
+        result = actions.save_image_export(b"data", ".hidden")
+
+        assert result.status is ActionStatus.SUCCESS
+        assert result.path is not None
+        assert result.path.name.startswith("profiles-qr-")
+        assert result.path.name.endswith(".png")
+
+    def test_write_failure_returns_failed(self, mocker, tmp_path: Path) -> None:
+        """An OSError while writing surfaces as FAILED, never raises."""
+        mocker.patch("pathlib.Path.home", return_value=tmp_path)
+        mocker.patch("pathlib.Path.write_bytes", side_effect=OSError(13, "Permission denied"))
+
+        result = actions.save_image_export(b"data", "out.png")
+
+        assert result.status is ActionStatus.FAILED
+        assert "Could not write image" in result.message
+
+
 class TestLaunchHooksIntegration:
     """Integration tests for advanced hooks in launch pipeline via launch_selected_file."""
 

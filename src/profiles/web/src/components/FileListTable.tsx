@@ -158,6 +158,12 @@ interface FileListTableProps {
   files: ScannedFileItem[];
   /** Total rows reported by the backend, even if not all are loaded yet. */
   totalCount?: number;
+  /**
+   * Rows loaded from the backend BEFORE client-side prefiltering (issue #33).
+   * `files` here is the prefiltered view, so paging decisions (hasMore,
+   * load-more gating, the paging indicator) must use the raw count.
+   */
+  rawLoadedCount?: number;
   onLoadMore?: () => void;
   /** Whether a page request is currently in flight. */
   loadingMore?: boolean;
@@ -229,6 +235,7 @@ const COLUMN_WEIGHTS: Record<string, number> = { File: 2, Path: 3, FileName: 1, 
 export function FileListTable({
   files,
   totalCount,
+  rawLoadedCount,
   onLoadMore,
   loadingMore = false,
   scanning = false,
@@ -289,10 +296,19 @@ export function FileListTable({
 
   /** Guards against firing multiple concurrent page requests. */
   const loadingRef = useRef(false);
+  /** Signature of the last render-fallback trigger — loop guard (issue #33). */
+  const lastLoadSignatureRef = useRef<string | null>(null);
 
-  const loadedCount = files.length;
-  const grandTotal = totalCount ?? loadedCount;
-  const hasMore = loadedCount < grandTotal;
+  const renderedCount = files.length;
+  const rawCount = rawLoadedCount ?? renderedCount;
+  const grandTotal = totalCount ?? rawCount;
+  const hasMore = rawCount < grandTotal;
+  // While a client-side prefilter is active the rendered view is a subset of
+  // the loaded rows: auto-paging to satisfy it once looped forever when the
+  // filtered list was shorter than the viewport (issue #33). The prefilter
+  // note points at the server search instead.
+  const prefiltered = renderedCount < rawCount;
+  const canLoadMore = hasMore && !prefiltered;
 
   // Track viewport size so the rendered window adapts to resizes.
   useEffect(() => {
@@ -313,7 +329,7 @@ export function FileListTable({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || selectedIndex < 0 || selectedIndex >= loadedCount) return;
+    if (!el || selectedIndex < 0 || selectedIndex >= renderedCount) return;
     const headerHeight = el.querySelector<HTMLElement>("[data-file-list-header]")?.offsetHeight ?? 0;
     const rowTop = headerHeight + selectedIndex * ROW_HEIGHT;
     const rowBottom = rowTop + ROW_HEIGHT;
@@ -327,7 +343,7 @@ export function FileListTable({
       el.scrollTop = nextScrollTop;
       setScrollTop(nextScrollTop);
     }
-  }, [selectedIndex, loadedCount]);
+  }, [selectedIndex, renderedCount]);
 
   /**
    * Fetch the next page when the user approaches the end of the loaded rows.
@@ -342,11 +358,14 @@ export function FileListTable({
 
     const maybeLoadMore = () => {
       if (loadingRef.current) return;
-      if (!hasMore || !onLoadMore) return;
+      if (!canLoadMore || !onLoadMore) return;
       const viewEnd = el.scrollTop + el.clientHeight;
-      // Distance, in px, from the bottom of the loaded window.
-      const distanceToEnd = loadedCount * ROW_HEIGHT - viewEnd;
-      if (distanceToEnd < OVERSCAN * ROW_HEIGHT) {
+      // Distance, in px, from the bottom of the RENDERED window. When the
+      // rendered list is shorter than the viewport there is nothing to
+      // scroll toward — never auto-page (issue #33).
+      const renderedEnd = renderedCount * ROW_HEIGHT;
+      const distanceToEnd = renderedEnd - viewEnd;
+      if (distanceToEnd < OVERSCAN * ROW_HEIGHT && renderedEnd > viewEnd) {
         loadingRef.current = true;
         window.setTimeout(() => {
           loadingRef.current = false;
@@ -363,29 +382,39 @@ export function FileListTable({
       el.removeEventListener("scroll", maybeLoadMore);
       window.removeEventListener("scroll", maybeLoadMore);
     };
-  }, [files, hasMore, onLoadMore, loadedCount]);
+  }, [files, canLoadMore, onLoadMore, renderedCount]);
 
   // Render-time fallback: covers the case where the appended page still leaves
   // the viewport near the end (e.g. a large jump) with no further scroll.
   useEffect(() => {
     if (loadingRef.current) return;
-    if (!hasMore || !onLoadMore) return;
-    const distanceToEnd = loadedCount * ROW_HEIGHT - (scrollTop + viewportHeight);
-    if (distanceToEnd < OVERSCAN * ROW_HEIGHT) {
-      onLoadMore();
+    if (!canLoadMore || !onLoadMore) return;
+    const renderedEnd = renderedCount * ROW_HEIGHT;
+    const viewEnd = scrollTop + viewportHeight;
+    const distanceToEnd = renderedEnd - viewEnd;
+    if (!(distanceToEnd < OVERSCAN * ROW_HEIGHT && renderedEnd > viewEnd)) return;
+    // Loop guard: if the list signature did not advance since the previous
+    // fallback trigger, a page came back with no new rows — re-firing would
+    // hammer the server (issue #33). The scroll path still allows a manual
+    // retry after a transient failure.
+    const signature = `${renderedCount}:${rawCount}:${grandTotal}`;
+    if (import.meta.env.DEV && lastLoadSignatureRef.current === signature) {
+      console.warn("[FileListTable] load-more re-fired with an unchanged list signature — skipped");
+      return;
     }
+    lastLoadSignatureRef.current = signature;
+    onLoadMore();
   });
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
-  const total = grandTotal;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
   // Never render past what is actually loaded — the window is clipped to the
   // loaded page so the bottom of the list stays reachable while paging.
-  const endIndex = Math.min(loadedCount, startIndex + visibleCount);
+  const endIndex = Math.min(renderedCount, startIndex + visibleCount);
   const offsetY = startIndex * ROW_HEIGHT;
 
   const getRowStyle = (filename: string, isSelected: boolean): { className: string; style: React.CSSProperties } => {
@@ -414,7 +443,11 @@ export function FileListTable({
 
   // While paging, reserve room past the loaded rows so the user can keep
   // scrolling to trigger the next page instead of hitting a dead end.
-  const spacerHeight = (hasMore ? Math.max(total, loadedCount + visibleCount) : total) * ROW_HEIGHT;
+  // Size the spacer from RENDERED rows, not the backend total: a large
+  // server-side count behind an active prefilter used to create a tall
+  // blank scroll region (issue #33). Room past the rows is reserved only
+  // while more pages can actually load.
+  const spacerHeight = (canLoadMore ? renderedCount + visibleCount : renderedCount) * ROW_HEIGHT;
 
   /** Shared styling for the empty-state action buttons (row-button idiom). */
   const emptyActionButtonClass =
@@ -426,13 +459,13 @@ export function FileListTable({
       onScroll={handleScroll}
       className="flex-1 overflow-auto bg-app text-xs transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-[-2px]"
       data-testid="file-list"
-      data-loaded-count={loadedCount}
+      data-loaded-count={rawCount}
       aria-busy={scanning}
       role="grid"
       aria-label="Discovered files"
-      aria-rowcount={Math.max(grandTotal, loadedCount === 0 ? 1 : 0) + 1}
+      aria-rowcount={Math.max(grandTotal, renderedCount === 0 ? 1 : 0) + 1}
       aria-colcount={resolvedKeys.length + 1}
-      aria-activedescendant={loadedCount > 0 ? `file-row-${selectedIndex}` : undefined}
+      aria-activedescendant={renderedCount > 0 ? `file-row-${selectedIndex}` : undefined}
       tabIndex={0}
     >
       <div className="sticky top-0 z-10" role="presentation">
@@ -479,7 +512,7 @@ export function FileListTable({
 
       {/* Prefilter coverage hint — inline (scrolls), visually quieter than the
           scan status bar and the empty-state feedback above. */}
-      {prefilterNote && loadedCount > 0 && (
+      {prefilterNote && renderedCount > 0 && (
         <div
           role="note"
           data-testid="prefilter-note"
@@ -490,7 +523,7 @@ export function FileListTable({
         </div>
       )}
 
-      {loadedCount === 0 ? (
+      {renderedCount === 0 ? (
         <div role="row" aria-rowindex={2} data-testid="file-list-empty">
           <div role="gridcell" aria-colspan={resolvedKeys.length + 1} className="p-8 text-center text-ink-faint">
             {scanning ? (
@@ -643,7 +676,7 @@ export function FileListTable({
               {loadingMore ? (
                 <ArrowLeftRight className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none text-ink-muted" />
               ) : null}
-              ({loadedCount} of {grandTotal} loaded)
+              ({rawCount} of {grandTotal} loaded)
             </div>
           )}
         </div>

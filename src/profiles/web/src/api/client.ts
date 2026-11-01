@@ -299,6 +299,21 @@ export async function exportCsvToDisk(content: string, filename: string): Promis
   return res.json();
 }
 
+/**
+ * Save an image (data URL or bare base64) via the server, which writes it
+ * to ~/Downloads — browser downloads are a no-op in the desktop webview
+ * (issue #31).
+ */
+export async function saveImageToDisk(image: string, filename: string): Promise<{ status: string; message: string; path?: string | null }> {
+  const res = await fetch("/api/actions/save-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_base64: image, filename }),
+  });
+  if (!res.ok) throw new Error("Failed to save image");
+  return res.json();
+}
+
 export async function startWorkflowSession(params: {
   directory: string;
   filename: string;
