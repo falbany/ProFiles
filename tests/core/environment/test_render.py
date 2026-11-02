@@ -32,3 +32,20 @@ def test_headless_mode():
     result = render_text("# **Bold**\\nText", headless=True)
     assert isinstance(result, str)
     assert result == "Bold\nText"
+
+
+def test_headless_link_degrades_to_label_and_url():
+    result = render_text("See [docs](https://example.com)", headless=True)
+    assert result == "See docs (https://example.com)"
+
+
+def test_headless_image_degrades_to_alt_and_url():
+    result = render_text("![logo](https://example.com/logo.png)", headless=True)
+    assert result == "logo (https://example.com/logo.png)"
+
+
+def test_headless_block_syntax_stays_literal():
+    # Lists, tables and blockquotes are not stripped: their raw lines stay
+    # readable in a terminal (documented degradation contract).
+    result = render_text("- item\\n> quoted\\n| a | b |", headless=True)
+    assert result == "- item\n> quoted\n| a | b |"

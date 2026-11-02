@@ -43,8 +43,18 @@ def render_text(text: str, headless: bool = False) -> str | RenderTree:
 
 
 def _strip_markdown(text: str) -> str:
-    """Remove Markdown syntax for headless mode."""
+    """Remove Markdown syntax for headless mode.
+
+    Inline syntax is stripped; links/images degrade to ``label (url)`` so the
+    target survives in stdout and logs. Block-level structures (lists,
+    tables, blockquotes, fenced code) stay as literal text lines, which
+    remains readable in a terminal.
+    """
     text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
+    # Images first: the link pattern would otherwise eat the label and leave
+    # the leading "!" behind.
+    text = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", r"\1 (\2)", text)
+    text = re.sub(r"\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", r"\1 (\2)", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"\*(.+?)\*", r"\1", text)
     text = re.sub(r"`(.+?)`", r"\1", text)
