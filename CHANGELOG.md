@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0-rc.2] - 2026-11-02
+
+### Added
+
+- **Workflow `if:` condition grammar** (#8): hook-step conditions accept
+  `env:VAR`, `env:VAR=value`, and now `env:VAR!=value`, `file:PATH` and
+  `!COND` negation. Conditions are token-substituted (`{{path}}`,
+  `{{dir}}`, `{{filename}}`, `{{date}}`, `{{output}}`, …) before
+  evaluation, in both the engine and the web session runner;
+  unrecognized syntax now skips the step with a debug log instead of
+  failing silently.
+- **Post-launch phase hooks** (#9): workflow steps accept a
+  `phase: pre | post` key (default `pre`; `replace` + `phase: post` is
+  rejected by schema and model validation). Post steps run in a second
+  pass after a successful OS launch; abort paths and failed launches
+  skip them. The web session runner reorders steps pre→post with an
+  explicit launch point, and `WORKFLOW_STEP` telemetry now carries
+  `phase="pre|post"`.
+- Web: a workflow session aborts when the runner modal is closed (#24),
+  and the step message is shown before the command box in the runner
+  panels (#20).
+
+### Security
+
+- Token values spliced into hook commands are shell-quoted, closing a
+  command-injection vector in workflow `run`/`check`/`replace` steps
+  (#27).
+
 ### Fixed
 
 - **Web UI: mapped network drive paths keep their configured drive letter**
@@ -22,6 +50,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   physical identity matters (scan dedup, config discovery, instance
   handoff). The desktop flow was already correct, so both front-ends now
   behave consistently.
+- Workflow engine and runner: `ask:` skip answers affect only the current
+  step and `{{output}}` resolves in web prompts (#21, #23); the
+  notify-message gate runs once and renders above the ask dialog (#22);
+  session abort on modal close is wired on both the core and web paths
+  (#24); the command box is surfaced in the interactive runner panels and
+  tokens resolve in the replace step's final message (#20).
+- Web UX and bugs: overlay layering on scaled displays with
+  tooltip/combobox conflicts and keyboard guards (#53, #55, #56, #57,
+  #58, #59, #60, #62, #63); desktop-shell deletes and QR save, scan
+  races, load-more loop and silent failures (#31, #32, #33, #34, #35).
+- Quick wins: env-dependent test stabilisation, theme default,
+  packaging and docs corrections (#36, #37, #38, #47).
+
+### Docs
+
+- AGENTS.md rewritten for the current architecture (#46); config guide
+  fixes — uncopyable YAML examples, phantom `defaults` keys,
+  `pc_hostname` advice (#44); install docs corrected — AppImage claims,
+  uninstall name, PyPI install demotion (#45).
 
 ## [0.10.0] - 2026-10-28
 
