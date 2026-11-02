@@ -128,12 +128,17 @@ export function WorkflowRunnerModal({
   const [error, setError] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  /** Current primary action button (status-dependent); initial/transition focus (#81). */
+  const primaryActionRef = useRef<HTMLButtonElement>(null);
+  /** One close per modal lifetime: guards double-invocation from any handler (#83). */
+  const closingRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen || !directory || !filename) {
       setSession(null);
       setError(null);
       setSelectedStepIndex(null);
+      closingRef.current = false;
       return;
     }
 
@@ -193,16 +198,28 @@ export function WorkflowRunnerModal({
   }, []);
 
   const handleClose = () => {
-    abortIfInteractive(session);
+    // Exactly one close per press, whatever handler sees the key first (#83).
+    // Read the session through sessionRef: the window-level Escape listener
+    // below is attached once at mount, so a state-closure here would stay
+    // null forever and aborting would silently skip the live session (#24).
+    if (closingRef.current) return;
+    closingRef.current = true;
+    abortIfInteractive(sessionRef.current);
     onClose();
   };
 
-  // Focus trap / initial focus / restore (issue #62); Escape routes
-  // through handleClose so a live session is aborted first.
+  // Focus trap / initial focus / restore (issue #62); initial focus lands on
+  // the primary action button, not the close X (#81). Escape has two
+  // focus-dependent entry points, but exactly one can fire per press:
+  // - focus inside the dialog → hook handler (its stopPropagation keeps the
+  //   key from reaching the window listener below),
+  // - focus outside (body/backdrop) → only the window listener sees it.
+  // A single close per press is additionally enforced by closingRef (#83).
   const handleDialogKeyDown = useModalA11y({
     isOpen,
     onClose: handleClose,
     dialogRef,
+    initialFocusRef: primaryActionRef,
   });
 
   useEffect(() => {
@@ -216,6 +233,14 @@ export function WorkflowRunnerModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
+
+  // Keep focus on the new primary action when the session moves on (respond
+  // → next status / termination), not on a just-unmounted button (#81).
+  useEffect(() => {
+    if (!isOpen || !session) return;
+    const frame = requestAnimationFrame(() => primaryActionRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, session?.status]);
 
   if (!isOpen) return null;
 
@@ -348,8 +373,13 @@ export function WorkflowRunnerModal({
           </div>
 
           {/* Right Content Area */}
-          <div className="flex-1 flex flex-col bg-app overflow-y-auto p-6 justify-between">
-            <div className="space-y-6">
+          {/* Scroll wrapper wraps the content only, so the action footer
+              stays anchored to the modal bottom whatever the content height
+              (#75). The footer carries the horizontal padding (p-6 moved to
+              the wrapper) and `shrink-0`/bg-app. */}
+          <div className="flex-1 flex flex-col bg-app">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
+              <div className="space-y-6">
               {error && (
                 <div className="flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-text">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -509,10 +539,11 @@ export function WorkflowRunnerModal({
                   )}
                 </div>
               </div>
+              </div>
             </div>
 
             {/* Bottom Action Area (Ask Callbacks / Dismiss) */}
-            <div className="pt-4 border-t border-line flex items-center justify-between mt-6">
+            <div className="shrink-0 px-6 pt-4 pb-4 border-t border-line flex items-center justify-between bg-app">
               <div className="text-xs text-ink-muted">
                 {session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
                   ? "Action required to proceed:"
@@ -529,6 +560,7 @@ export function WorkflowRunnerModal({
                 {session?.status === "waiting_notice" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <button
                     type="button"
+                    ref={primaryActionRef}
                     disabled={loading}
                     onClick={() => handleRespond("ack")}
                     className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
@@ -540,6 +572,7 @@ export function WorkflowRunnerModal({
                 {session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <button
                     type="button"
+                    ref={primaryActionRef}
                     disabled={loading}
                     onClick={() => handleRespond("ack")}
                     className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
@@ -568,6 +601,7 @@ export function WorkflowRunnerModal({
                     </button>
                     <button
                       type="button"
+                      ref={primaryActionRef}
                       disabled={loading}
                       onClick={() => handleRespond("yes")}
                       className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
@@ -580,6 +614,7 @@ export function WorkflowRunnerModal({
                 {isFinished && (
                   <button
                     type="button"
+                    ref={primaryActionRef}
                     onClick={onClose}
                     className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                   >
