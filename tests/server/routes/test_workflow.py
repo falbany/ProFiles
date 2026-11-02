@@ -768,3 +768,215 @@ async def test_condition_tokens_substituted_in_session(tmp_path: Path) -> None:
             assert data["steps"][0]["status"] == "skipped"
             assert data["steps"][0]["note"] == "Condition not met"
             assert data["steps"][1]["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# Bypass (web-UI "Launch now" escape hatch): respond action "bypass" skips
+# the remaining workflow and guarantees the OS launch; the post phase still
+# applies when the launch happens as a result of the bypass.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def bypass_state(tmp_path: Path) -> ServerState:
+    """Pre ask gate + two post steps, to exercise both bypass branches."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Bypass Bench",
+        search_dir=str(test_dir),
+        launch_hooks={
+            "*.mttl": (
+                WorkflowStep(action="run", command="echo prepare", ask="Execute prepare?"),
+                WorkflowStep(action="notify", message="Launched!", phase="post"),
+                WorkflowStep(action="notify", message="Bye!", phase="post"),
+            )
+        },
+    )
+    return ServerState(config=config, active_directory=test_dir)
+
+
+@pytest.mark.anyio
+async def test_bypass_from_pre_ask_launches_then_pauses_on_post(bypass_state: ServerState) -> None:
+    """Bypass on a pre gate: remaining pre steps skipped, launch, post phase runs."""
+    app = create_app(bypass_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(bypass_state.active_directory), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        assert data["status"] == "waiting_ask"
+        assert data["current_index"] == 0
+
+        with patch("profiles.core.actions.launch_file", return_value=True) as launch_mock:
+            bypass = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "bypass"},
+            )
+        launch_mock.assert_called_once()
+        result = bypass.json()
+        # The launch point was reached and the first post step pauses.
+        assert result["status"] == "waiting_notify"
+        assert result["current_index"] == 1
+        assert result["steps"][0]["status"] == "skipped"
+        assert result["steps"][0]["note"] == "Bypassed by user"
+
+        # The post phase still applies after a bypassed launch.
+        ack = await client.post(
+            f"/api/workflow/{data['session_id']}/respond",
+            json={"action": "ack"},
+        )
+        assert ack.json()["status"] == "waiting_notify"
+        assert ack.json()["current_index"] == 2
+
+        ack2 = await client.post(
+            f"/api/workflow/{data['session_id']}/respond",
+            json={"action": "ack"},
+        )
+        final = ack2.json()
+        assert final["status"] == "completed"
+        assert final["final_message"] == "Launched tool.mttl"
+
+
+@pytest.mark.anyio
+async def test_bypass_without_post_steps_completes_with_launch(tmp_path: Path) -> None:
+    """Bypass on the only step (pre, no post phase) launches right away."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Solo Bench",
+        search_dir=str(test_dir),
+        launch_hooks={"*.mttl": (WorkflowStep(action="run", command="echo x", ask="Run?"),)},
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(test_dir), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        assert data["status"] == "waiting_ask"
+
+        with patch("profiles.core.actions.launch_file", return_value=True) as launch_mock:
+            bypass = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "bypass"},
+            )
+        launch_mock.assert_called_once()
+        result = bypass.json()
+        assert result["status"] == "completed"
+        assert result["final_message"] == "Launched tool.mttl"
+        assert result["steps"][0]["status"] == "skipped"
+
+
+@pytest.mark.anyio
+async def test_bypass_on_post_gate_ends_post_workflow(bypass_state: ServerState) -> None:
+    """Bypass while parked on a post step: launch already happened, skip the rest."""
+    app = create_app(bypass_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(bypass_state.active_directory), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        # The pre ask gate pauses first.
+        assert data["status"] == "waiting_ask"
+
+        with (
+            patch("profiles.core.environment.workflow._execute_step", return_value=0),
+            patch("profiles.core.actions.launch_file", return_value=True),
+        ):
+            yes = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "yes"},
+            )
+        data = yes.json()
+        # The pre step ran, the launch happened, the first post notify pauses.
+        assert data["status"] == "waiting_notify"
+        assert data["current_index"] == 1
+        assert data["steps"][0]["status"] == "completed"
+
+        bypass = await client.post(
+            f"/api/workflow/{data['session_id']}/respond",
+            json={"action": "bypass"},
+        )
+        result = bypass.json()
+        assert result["status"] == "completed"
+        assert result["final_message"] == "Launched tool.mttl"
+        assert result["steps"][1]["status"] == "skipped"
+        assert result["steps"][1]["note"] == "Bypassed by user"
+        assert result["steps"][2]["status"] == "skipped"
+
+
+@pytest.mark.anyio
+async def test_bypass_launch_failure_marks_session_failed(tmp_path: Path) -> None:
+    """When the post-bypass launch fails, the session surfaces the failure."""
+    test_dir = tmp_path / "apps"
+    test_dir.mkdir()
+    (test_dir / "tool.mttl").write_text("content")
+
+    config = AppConfig(
+        title="Fail Bench",
+        search_dir=str(test_dir),
+        launch_hooks={"*.mttl": (WorkflowStep(action="run", command="echo x", ask="Run?"),)},
+    )
+    state = ServerState(config=config, active_directory=test_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(test_dir), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+
+        with patch("profiles.core.actions.launch_file", return_value=False):
+            bypass = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "bypass"},
+            )
+        result = bypass.json()
+        assert result["status"] == "failed"
+        assert result["final_message"] == "Failed to open file"
+
+
+@pytest.mark.anyio
+async def test_bypass_without_active_gate_is_rejected(workflow_state: ServerState) -> None:
+    """Bypass on a session with no interactive prompt is a 400."""
+    app = create_app(workflow_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(workflow_state.active_directory), "filename": "tool.mttl"},
+        )
+        data = resp.json()
+        # Start parks on the notify gate; drive the session to completion.
+        assert data["status"] == "waiting_notify"
+
+        with (
+            patch("profiles.core.environment.workflow._execute_step", return_value=0),
+            patch("profiles.core.actions.launch_file", return_value=True),
+        ):
+            ack = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "ack"},
+            )
+            data = ack.json()
+            assert data["status"] == "waiting_ask"
+            yes = await client.post(
+                f"/api/workflow/{data['session_id']}/respond",
+                json={"action": "yes"},
+            )
+        data = yes.json()
+        assert data["status"] in ("completed", "aborted", "failed")
+
+        rejected = await client.post(
+            f"/api/workflow/{data['session_id']}/respond",
+            json={"action": "bypass"},
+        )
+        assert rejected.status_code == 400

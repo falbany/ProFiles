@@ -107,7 +107,7 @@ class StartWorkflowRequest(BaseModel):
 
 
 class RespondWorkflowRequest(BaseModel):
-    action: Literal["yes", "skip", "no", "ack"]
+    action: Literal["yes", "skip", "no", "ack", "bypass"]
 
 
 def _format_step_record(r: StepRecord) -> dict:
@@ -511,13 +511,58 @@ async def get_workflow_session(session_id: str) -> dict:
     }
 
 
+def _skip_step_record(session: WorkflowSession, index: int, note: str) -> None:
+    """Mark a step record skipped with *note* (bypass paths)."""
+    rec = session.step_records[index]
+    rec.status = "skipped"
+    rec.note = note
+
+
+def _drop_active_gate(session: WorkflowSession) -> None:
+    """Clear whichever interactive gate the session currently sits on."""
+    session.ask_prompt = None
+    session.ask_message = None
+    session.ask_answered = False
+    session.notify_message = None
+    session.notice_message = None
+    session.notice_acknowledged = False
+
+
 @router.post("/{session_id}/respond")
 async def respond_workflow(session_id: str, payload: RespondWorkflowRequest) -> dict:
     session = _sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.status == "waiting_notice":
+    if payload.action == "bypass":
+        # Web-UI escape hatch: skip everything that is still pending and
+        # make sure the file gets launched. Only meaningful while parked on
+        # an interactive gate (between requests the session is either on a
+        # gate or terminal — commands run synchronously inside advance).
+        if session.status not in ("waiting_ask", "waiting_notify", "waiting_notice"):
+            raise HTTPException(status_code=400, detail="No active prompt to bypass")
+        _skip_step_record(session, session.current_index, "Bypassed by user")
+        _drop_active_gate(session)
+
+        if session.current_index < session.launch_index:
+            # Pre phase: skip every remaining pre step, then jump to the
+            # launch point — _advance_session performs the OS launch there
+            # and continues into the post phase, which still applies (#9).
+            for i in range(session.current_index + 1, session.launch_index):
+                _skip_step_record(session, i, "Bypassed by user")
+            session.current_index = session.launch_index
+            _advance_session(session)
+        else:
+            # Post phase: the OS launch already happened (a gate can only
+            # pause after the launch point was passed), so bypassing just
+            # ends the post workflow.
+            for i in range(session.current_index + 1, len(session.steps)):
+                _skip_step_record(session, i, "Bypassed by user")
+            session.current_index = len(session.steps)
+            session.status = "completed"
+            session.final_message = f"Launched {session.file_path.name}"
+
+    elif session.status == "waiting_notice":
         if payload.action != "ack":
             raise HTTPException(status_code=400, detail="Expected ack for notice")
         session.notice_message = None

@@ -59,6 +59,8 @@ export interface WorkflowStepRecord {
   ask?: string | null;
   wait?: boolean;
   status: "pending" | "running" | "completed" | "skipped" | "failed";
+  /** Execution phase relative to the OS launch (server default: pre). */
+  phase?: "pre" | "post";
   note?: string;
   /** Captured stdout+stderr of a blocking command step, if any. */
   output?: string;

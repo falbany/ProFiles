@@ -340,7 +340,7 @@ export async function fetchWorkflowSession(sessionId: string): Promise<WorkflowS
 
 export async function respondWorkflowSession(
   sessionId: string,
-  action: "yes" | "skip" | "no" | "ack",
+  action: "yes" | "skip" | "no" | "ack" | "bypass",
 ): Promise<WorkflowSessionState> {
   const res = await fetch(`/api/workflow/${sessionId}/respond`, {
     method: "POST",

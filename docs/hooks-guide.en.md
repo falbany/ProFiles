@@ -251,6 +251,22 @@ If user chooses **Skip** on the **last** step:
 - Workflow terminates
 - OS launch is **skipped** (SKIP_LAUNCH)
 
+### Web UI: Launch Now (bypass)
+
+The web workflow modal's header carries a **Launch now** button next to the
+close button (active while a prompt is up):
+
+- On a pre-phase prompt it **skips every remaining pre step, performs the OS
+  launch immediately, then lets the `post` phase run normally**. It is the
+  explicit "I want the launch" path — including past `replace` steps, whose
+  intent it deliberately overrides. Skipped steps are recorded as
+  "Bypassed by user" in the step list.
+- On a post-phase prompt (the OS launch already happened) it reads
+  **Skip rest** and just ends the post-launch workflow.
+- While an ask prompt is up, the keyboard answers it directly: **Y** = Yes,
+  **S** = Skip, **N** = No; **Enter** activates the prompt's primary action
+  (Yes, or Run/Continue on notify and notice prompts).
+
 ### Example with Multiple Guards
 
 ```yaml

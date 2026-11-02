@@ -134,3 +134,103 @@ describe("initial focus (#81)", () => {
     await waitFor(() => expect(document.activeElement).toBe(closeRunner));
   });
 });
+
+describe("bypass button", () => {
+  it("sends the bypass action from the header on a pre-phase ask gate", async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const bypass = await screen.findByRole("button", { name: /launch now/i });
+    await user.click(bypass);
+    await waitFor(() => expect(respondSpy).toHaveBeenCalledWith("sess-1", "bypass"));
+  });
+
+  it("labels the action Skip rest on a post-phase gate", async () => {
+    startSpy.mockResolvedValue(
+      makeSession({
+        status: "waiting_notify",
+        current_index: 1,
+        notify_message: "Launched!",
+        steps: [step(0), { ...step(1, "pending"), phase: "post" }],
+      }),
+    );
+    renderModal();
+    const bypass = await screen.findByRole("button", { name: /skip rest/i });
+    expect((bypass as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("is disabled while a step is running", async () => {
+    startSpy.mockResolvedValue(makeSession({ status: "running" }));
+    renderModal();
+    const bypass = await screen.findByRole("button", { name: /launch now/i });
+    expect((bypass as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("is hidden once the session is terminal", async () => {
+    startSpy.mockResolvedValue(makeSession({ status: "completed", current_index: 2 }));
+    renderModal();
+    await screen.findByRole("button", { name: "Close Runner" });
+    expect(screen.queryByRole("button", { name: /launch now/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /skip rest/i })).toBeNull();
+  });
+});
+
+describe("gate keyboard shortcuts", () => {
+  async function renderAskGate() {
+    renderModal();
+    await screen.findByRole("button", { name: "Execute Step" });
+  }
+
+  function press(key: string, modifiers: KeyboardEventInit = {}): void {
+    document.body.dispatchEvent(
+      new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...modifiers }),
+    );
+  }
+
+  it("Y answers yes on an ask gate", async () => {
+    await renderAskGate();
+    press("y");
+    await waitFor(() => expect(respondSpy).toHaveBeenLastCalledWith("sess-1", "yes"));
+  });
+
+  it("S skips the step on an ask gate", async () => {
+    await renderAskGate();
+    press("s");
+    await waitFor(() => expect(respondSpy).toHaveBeenLastCalledWith("sess-1", "skip"));
+  });
+
+  it("N aborts the launch on an ask gate", async () => {
+    await renderAskGate();
+    press("n");
+    await waitFor(() => expect(respondSpy).toHaveBeenLastCalledWith("sess-1", "no"));
+  });
+
+  it("Enter confirms the gate when focus is not on a button", async () => {
+    await renderAskGate();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    press("Enter");
+    await waitFor(() => expect(respondSpy).toHaveBeenLastCalledWith("sess-1", "yes"));
+  });
+
+  it("Enter does nothing while a button holds focus (native activation rules)", async () => {
+    await renderAskGate();
+    screen.getByRole("button", { name: "Abort Launch" }).focus();
+    press("Enter");
+    expect(respondSpy).not.toHaveBeenCalled();
+  });
+
+  it("ignores modifier combos", async () => {
+    await renderAskGate();
+    press("y", { ctrlKey: true });
+    press("n", { metaKey: true });
+    expect(respondSpy).not.toHaveBeenCalled();
+  });
+
+  it("ignores keys while inspecting another step", async () => {
+    const user = userEvent.setup();
+    await renderAskGate();
+    await user.click(screen.getByRole("button", { name: /#0/ }));
+    press("y");
+    press("Enter");
+    expect(respondSpy).not.toHaveBeenCalled();
+  });
+});

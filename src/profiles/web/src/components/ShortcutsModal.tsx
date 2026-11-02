@@ -34,6 +34,8 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "Ctrl + T", desc: "Open auto-rescan timer modal" },
     { key: "Ctrl + H", desc: "Set directory to home folder" },
     { key: "? or Ctrl + /", desc: "Show keyboard shortcuts" },
+    { key: "Y / S / N", desc: "Answer workflow guard: Yes / Skip / No (prompt open)" },
+    { key: "Enter", desc: "Confirm active workflow prompt (prompt open)" },
     { key: "Escape", desc: "Close dialogs / context menu" },
   ];
 
