@@ -1,5 +1,6 @@
 """Tests for workflow engine core execution."""
 
+import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -808,7 +809,9 @@ class TestEvaluateStepCondition:
     """Tokens are substituted into ``if`` before grammar evaluation (#8)."""
 
     def test_file_token_substitution(self, tmp_path):
-        marker = tmp_path / "prepared-2026-11-01"
+        # Marker named after the live date so it matches whatever ``{{date}}``
+        # expands to at evaluation time (#86).
+        marker = tmp_path / f"prepared-{datetime.date.today().isoformat()}"
         marker.touch()
         step = WorkflowStep(action="run", command="x", if_="!file:{{dir}}/prepared-{{date}}")
         assert (
