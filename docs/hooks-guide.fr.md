@@ -95,7 +95,7 @@ Le moteur supporte **cinq types d'actions**, chacune avec un comportement spéci
 
 ### 1. `notify` — Notification Utilisateur
 
-Affiche un message à l'utilisateur avec support partiel du Markdown.
+Affiche un message à l'utilisateur avec support du Markdown.
 
 ```yaml
 - action: notify
@@ -109,7 +109,7 @@ Affiche un message à l'utilisateur avec support partiel du Markdown.
 - **Mode headless** : Imprime le message formaté sur la sortie standard
 - **Backend Tkinter historique** : Affiche une fenêtre Tkinter avec le texte formaté
 - **Toujours réussi** : Ne peut pas échouer, donc `on_failure` est ignoré
-- **Support Markdown** : `# Heading`, `**bold**`, `*italic*`, `` `code` ``, `\\n`
+- **Support Markdown** : Markdown GitHub-flavored (voir [Notifications Riches](#notifications-riches-markdown))
 
 ### 2. `run` — Exécution Synchronisée
 
@@ -194,7 +194,7 @@ Chaque étape accepte une clé `message:` optionnelle — c'est ce qui permet au
 
 | Action       | `command:`                    | `message:`                                                        |
 | ------------ | ----------------------------- | ----------------------------------------------------------------- |
-| `notify`     | Ignorée (journalisée en debug)| **Requise.** Rendue avec le sous-ensemble Markdown ci-dessous      |
+| `notify`     | Ignorée (journalisée en debug)| **Requise.** Rendue en Markdown (voir ci-dessous)                 |
 | `run`        | **Requise.** Exécutée         | Optionnelle — voir règles ci-dessous                              |
 | `check`      | **Requise.** Exécutée         | Optionnelle — comme `run`                                         |
 | `replace`    | **Requise.** Exécutée         | Optionnelle — comme `run`                                         |
@@ -362,18 +362,41 @@ Les jetons `{{command}}` et `{{message}}` sont substitués avec la commande et l
 
 ## Notifications Riches (Markdown)
 
-L'action `notify` supporte un **sous-ensemble de Markdown** pour une communication claire.
+Les champs `message:` du workflow sont rendus en **Markdown GitHub-flavored**
+dans le frontend web (via [react-markdown](https://github.com/remarkjs/react-markdown) ;
+le HTML brut n'est jamais rendu). Le mode headless dégrade en texte plat.
 
 ### Syntaxe Supportée
 
-| Syntaxe         | Rendu                | Exemple                                |
-| --------------- | -------------------- | -------------------------------------- |
-| `# Titre`       | Heading niveau 1     | `# Lancement en cours`                 |
-| `## Sous-titre` | Heading niveau 2     | `## Préparation...`                    |
-| `**gras**`      | Texte en gras        | `**Important** : Vérifiez les données` |
-| `*italique*`    | Texte en italique    | `*Note* : Ceci est optionnel`          |
-| `` `code` ``    | Texte en police fixe | `` `commande.exe --arg` ``             |
-| `\\n`           | Nouvelle ligne       | `Ligne 1\\nLigne 2`                    |
+| Syntaxe         | Rendu (web)               | Exemple                                |
+| --------------- | ------------------------- | -------------------------------------- |
+| `# Titre`       | Heading niveau 1          | `# Lancement en cours`                 |
+| `## Sous-titre` | Heading niveau 2          | `## Préparation...`                    |
+| `### Section`   | Heading niveau 3          | `### Détails...`                       |
+| `**gras**`      | Texte en gras             | `**Important** : Vérifiez les données` |
+| `*italique*`    | Texte en italique         | `*Note* : Ceci est optionnel`          |
+| `~~barré~~`     | Texte barré               | `~~obsolète~~`                         |
+| `` `code` ``    | Texte en police fixe      | `` `commande.exe --arg` ``             |
+| `- item`        | Liste non ordonnée        | `- Première étape`                     |
+| `1. item`       | Liste ordonnée            | `1. Première étape`                    |
+| `> citation`    | Bloc de citation          | `> Mode lecture seule`                 |
+| `[texte](url)`  | Lien (ouvre l'externe)    | `[docs](https://example.com)`          |
+| `![alt](url)`   | Image                     | `![graphique](https://example.com/c.png)` |
+| `\| a \| b \|`  | Tableau (GFM)             | en-tête + lignes séparées par `---`    |
+| `\\n`           | Nouvelle ligne            | `Ligne 1\\nLigne 2`                    |
+
+Un **bloc de code clôturé** (trois accents graves) s'affiche dans une boîte
+monospace :
+
+````
+```
+prepare.exe --file {{path}}
+```
+````
+
+Les vraies nouvelles lignes simples coupent aussi la ligne (comme les
+commentaires GitHub) : `Ligne 1\\nLigne 2` et les scalaires YAML multi-lignes
+se comportent identiquement.
 
 ### Exemple Complet de Notification
 
@@ -389,18 +412,22 @@ L'action `notify` supporte un **sous-ensemble de Markdown** pour une communicati
     Commande : `prepare_env.exe --file {{path}}`
 ```
 
-**Rendu GUI** :
+**Rendu Web** (frontend par défaut) :
 
-- Titre en grand et gras
-- Texte en gras pour "Important"
-- Texte en italique pour les notes
-- Code en police fixe
-- Mise en page aérée
+- Markdown GitHub-flavored complet ; le HTML brut est échappé, jamais exécuté
+- Les liens s'ouvrent dans un nouveau contexte (`target="_blank"`, `rel="noopener"`)
 
 **Rendu Headless** :
 
-- Texte plat avec escape sequences
-- Markdown stripé (voir `render_text()` dans `src/profiles/core/environment/render.py`)
+- Texte plat avec escape sequences ; Markdown en ligne stripé
+- Liens/images réduits à `label (url)` ; blocs de code clôturés conservent
+  leur contenu sans les lignes de marqueurs ``` ; les autres structures de
+  bloc (listes, tableaux, citations) restent en lignes littérales
+- Voir `render_text()` dans `src/profiles/core/environment/render.py`
+
+**Backend Tkinter historique** : rend le sous-ensemble historique uniquement
+(titres `#`/`##`/`###`, gras, italique, code en ligne, `\\n`) ; les
+constructions plus riches dégradent en texte plat.
 
 ---
 
