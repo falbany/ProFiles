@@ -96,7 +96,7 @@ The engine supports **five action types**, each with specific behavior:
 
 ### 1. `notify` — User Notification
 
-Displays a message to the user with partial Markdown support.
+Displays a message to the user with Markdown support.
 
 ```yaml
 - action: notify
@@ -110,7 +110,7 @@ Displays a message to the user with partial Markdown support.
 - **Headless mode**: Prints formatted message to standard output
 - **Legacy Tkinter backend**: Displays a Tkinter window with formatted text
 - **Always succeeds**: Cannot fail, so `on_failure` is ignored
-- **Markdown support**: `# Heading`, `**bold**`, `*italic*`, `` `code` ``, `\\n`
+- **Markdown support**: GitHub-flavored Markdown (see [Rich Notifications](#rich-notifications-markdown))
 
 ### 2. `run` — Synchronous Execution
 
@@ -196,7 +196,7 @@ able to *talk to the user* (previously only `notify` steps could display text).
 
 | Action       | `command:`                    | `message:`                                                    |
 | ------------ | ----------------------------- | ------------------------------------------------------------- |
-| `notify`     | Ignored (debug-logged)        | **Required.** Rendered with the Markdown subset below          |
+| `notify`     | Ignored (debug-logged)        | **Required.** Rendered as Markdown (see below)                |
 | `run`        | **Required.** Executed        | Optional — see rules below                                     |
 | `check`      | **Required.** Executed        | Optional — same as `run`                                       |
 | `replace`    | **Required.** Executed        | Optional — same as `run`                                       |
@@ -345,18 +345,39 @@ The `{{command}}` and `{{message}}` tokens resolve to the current step's command
 
 ## Rich Notifications (Markdown)
 
-The `notify` action supports a **subset of Markdown** for clear communication.
+Workflow `message:` fields are rendered as **GitHub-flavored Markdown** in
+the web frontend (via [react-markdown](https://github.com/remarkjs/react-markdown);
+raw HTML is never rendered). Headless mode degrades to plain text.
 
 ### Supported Syntax
 
-| Syntax        | Rendered        | Example                      |
-| ------------- | --------------- | ---------------------------- |
-| `# Title`     | Heading level 1 | `# Launching...`             |
-| `## Subtitle` | Heading level 2 | `## Preparation...`          |
-| `**bold**`    | Bold text       | `**Important** : Check data` |
-| `*italic*`    | Italic text     | `*Note* : This is optional`  |
-| `` `code` ``  | Monospace text  | `` `command.exe --arg` ``    |
-| `\\n`         | New line        | `Line 1\\nLine 2`            |
+| Syntax          | Rendered (web)            | Example                      |
+| --------------- | ------------------------- | ---------------------------- |
+| `# Title`       | Heading level 1           | `# Launching...`             |
+| `## Subtitle`   | Heading level 2           | `## Preparation...`          |
+| `### Section`   | Heading level 3           | `### Details...`             |
+| `**bold**`      | Bold text                 | `**Important** : Check data` |
+| `*italic*`      | Italic text               | `*Note* : This is optional`  |
+| `~~strike~~`    | Strikethrough             | `~~deprecated~~`             |
+| `` `code` ``    | Inline monospace text     | `` `command.exe --arg` ``    |
+| `- item`        | Unordered list            | `- First step`               |
+| `1. item`       | Ordered list              | `1. First step`              |
+| `> quote`       | Blockquote                | `> Read-only mode`           |
+| `[text](url)`   | Link (opens externally)   | `[docs](https://example.com)` |
+| `![alt](url)`   | Image                     | `![chart](https://example.com/c.png)` |
+| `\| a \| b \|`  | Table (GFM)               | header + `---` separator rows |
+| `\\n`           | New line                  | `Line 1\\nLine 2`            |
+
+A **fenced code block** (triple backticks) renders in a monospace box:
+
+````
+```
+prepare.exe --file {{path}}
+```
+````
+
+Single real newlines also break lines (like GitHub comments), so `Line 1\\nLine 2`
+and multi-line YAML block scalars behave the same.
 
 ### Complete Notification Example
 
@@ -372,18 +393,22 @@ The `notify` action supports a **subset of Markdown** for clear communication.
     Command: `prepare_env.exe --file {{path}}`
 ```
 
-**GUI Rendering**:
+**Web rendering** (default front-end):
 
-- Large bold title
-- Bold text for "Important"
-- Italic text for notes
-- Monospace code
-- Spaced layout
+- Full GitHub-flavored Markdown; raw HTML is escaped, never executed
+- Links open in a new context (`target="_blank"`, `rel="noopener"`)
 
 **Headless Rendering**:
 
-- Plain text with escape sequences
-- Markdown stripped (see `render_text()` in `src/profiles/core/environment/render.py`)
+- Plain text with escape sequences; inline Markdown stripped
+- Links/images reduce to `label (url)`; fenced blocks keep their content
+  without the ``` marker lines; other block structures (lists, tables,
+  quotes) stay as literal text lines
+- See `render_text()` in `src/profiles/core/environment/render.py`
+
+**Legacy Tkinter backend**: renders the historical subset only (`#`/`##`/`###`
+headings, bold, italic, inline code, `\\n`); richer constructs degrade to
+plain text.
 
 ---
 

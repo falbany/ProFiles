@@ -13,6 +13,7 @@ import {
   startWorkflowSession,
 } from "../api/client";
 import { useModalA11y } from "../utils/useModalA11y";
+import { MarkdownMessage } from "./MarkdownMessage";
 import type { WorkflowSessionState, WorkflowStepRecord } from "../api/types";
 
 interface WorkflowRunnerModalProps {
@@ -38,79 +39,6 @@ function abortIfInteractive(session: WorkflowSessionState | null): void {
   if (!session || isSessionTerminal(session.status)) return;
   abortWorkflowSession(session.session_id).catch(() => {
     /* the session is cleaned up by the server TTL anyway */
-  });
-}
-
-/** Simple parser for Markdown subset (# heading, **bold**, *italic*, `code`, \n) */
-function renderMarkdown(text: string) {
-  if (!text) return null;
-  const unescaped = text
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\"/g, '"')
-    .replace(/\\'/g, "'")
-    .replace(/\\\\/g, "\\");
-
-  const lines = unescaped.split("\n");
-  return lines.map((line, lIdx) => {
-    let content = line;
-    let type: "h1" | "h2" | "p" = "p";
-
-    if (line.startsWith("# ")) {
-      type = "h1";
-      content = line.slice(2);
-    } else if (line.startsWith("## ")) {
-      type = "h2";
-      content = line.slice(3);
-    }
-
-    const parts = content.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
-
-    const renderedInline = parts.map((part, pIdx) => {
-      if (!part) return null;
-      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
-        return (
-          <strong key={pIdx} className="font-semibold text-ink">
-            {part.slice(2, -2)}
-          </strong>
-        );
-      }
-      if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
-        return (
-          <em key={pIdx} className="italic text-ink-secondary">
-            {part.slice(1, -1)}
-          </em>
-        );
-      }
-      if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
-        return (
-          <code key={pIdx} className="rounded bg-elevated px-1 py-0.5 font-mono text-chip-indigo-text">
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-      return <span key={pIdx}>{part}</span>;
-    });
-
-    if (type === "h1") {
-      return (
-        <h3 key={lIdx} className="text-base font-bold text-ink">
-          {renderedInline}
-        </h3>
-      );
-    }
-    if (type === "h2") {
-      return (
-        <h4 key={lIdx} className="text-sm font-semibold text-ink">
-          {renderedInline}
-        </h4>
-      );
-    }
-    return (
-      <p key={lIdx} className="min-h-[1rem]">
-        {renderedInline}
-      </p>
-    );
   });
 }
 
@@ -281,7 +209,7 @@ export function WorkflowRunnerModal({
       onKeyDown={handleDialogKeyDown}
       className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
     >
-      <div className="animate-modal-in flex h-[80vh] w-full max-w-4xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
+      <div className="animate-modal-in flex h-[80vh] w-full max-w-5xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5 bg-surface-strong/30 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -309,7 +237,7 @@ export function WorkflowRunnerModal({
         {/* Main Split Layout: Left Sidebar (Steps) + Right Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar: Steps */}
-          <div className="w-80 border-r border-line bg-surface-strong/20 p-4 overflow-y-auto flex flex-col gap-2 shrink-0">
+          <div className="w-72 border-r border-line bg-surface-strong/20 p-4 overflow-y-auto flex flex-col gap-2 shrink-0">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted px-1 mb-1">
               Workflow Steps (Click to inspect)
             </h3>
@@ -416,8 +344,8 @@ export function WorkflowRunnerModal({
                   {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notify" && session.notify_message && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notification Message:</p>
-                      <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
-                        {renderMarkdown(session.notify_message)}
+                      <div className="rounded-lg border border-line bg-surface-strong p-4 text-ink">
+                        <MarkdownMessage text={session.notify_message} />
                       </div>
                       {interactiveCommandBox}
                     </div>
@@ -426,8 +354,8 @@ export function WorkflowRunnerModal({
                   {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notice" && session.notice_message && (
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notice:</p>
-                      <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
-                        {renderMarkdown(session.notice_message)}
+                      <div className="rounded-lg border border-line bg-surface-strong p-4 text-ink">
+                        <MarkdownMessage text={session.notice_message} />
                       </div>
                       {interactiveCommandBox}
                       <p className="text-[11px] text-ink-faint">The command will run when you continue.</p>
@@ -437,8 +365,8 @@ export function WorkflowRunnerModal({
                   {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_ask" && session.ask_prompt && (
                     <div className="space-y-2">
                       {session.ask_message && (
-                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
-                          {renderMarkdown(session.ask_message)}
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 text-ink">
+                          <MarkdownMessage text={session.ask_message} />
                         </div>
                       )}
                       <p className="text-[11px] font-medium uppercase tracking-wider text-status-warning-text">Confirmation Prompt:</p>
@@ -502,8 +430,8 @@ export function WorkflowRunnerModal({
                       {activeStep?.message && (
                         <div className="space-y-2">
                           <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Message:</p>
-                          <div className="rounded-lg border border-line bg-surface-strong p-4 text-xs text-ink leading-relaxed space-y-2">
-                            {renderMarkdown(activeStep.message)}
+                          <div className="rounded-lg border border-line bg-surface-strong p-4 text-xs text-ink">
+                            <MarkdownMessage text={activeStep.message} />
                           </div>
                         </div>
                       )}
