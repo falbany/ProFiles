@@ -33,6 +33,23 @@ function isSessionTerminal(status: string | undefined): boolean {
 }
 
 /**
+ * Presentational keyboard hint inside a gate button (Y / S / N / ↵), so the
+ * shortcuts are discoverable where the eye already is instead of only in
+ * the ShortcutsModal. aria-hidden keeps the button's accessible name clean
+ * ("Execute Step", not "Execute Step Y") for queries and screen readers.
+ */
+function KeyHint({ label }: { label: string }) {
+  return (
+    <kbd
+      aria-hidden="true"
+      className="ml-1.5 inline-block rounded border border-line/60 bg-elevated/60 px-1 py-px font-mono text-[10px] font-normal leading-none opacity-90"
+    >
+      {label}
+    </kbd>
+  );
+}
+
+/**
  * Fire-and-forget abort of a still-interactive session (modal closed
  * mid-workflow). Errors are suppressed: closing must never surface them.
  */
@@ -575,6 +592,7 @@ export function WorkflowRunnerModal({
                     className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                   >
                     Run Command
+                    <KeyHint label="↵" />
                   </button>
                 )}
 
@@ -587,6 +605,7 @@ export function WorkflowRunnerModal({
                     className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                   >
                     Continue Workflow
+                    <KeyHint label="↵" />
                   </button>
                 )}
 
@@ -599,6 +618,7 @@ export function WorkflowRunnerModal({
                       className="btn rounded-md border-line bg-surface px-4 py-2 text-status-danger-text hover:bg-status-danger-bg"
                     >
                       Abort Launch
+                      <KeyHint label="N" />
                     </button>
                     <button
                       type="button"
@@ -607,6 +627,7 @@ export function WorkflowRunnerModal({
                       className="btn rounded-md border-line bg-surface px-4 py-2 text-status-warning-text hover:bg-status-warning-bg"
                     >
                       Skip Step
+                      <KeyHint label="S" />
                     </button>
                     <button
                       type="button"
@@ -616,6 +637,7 @@ export function WorkflowRunnerModal({
                       className="btn btn-primary px-5 py-2 font-semibold shadow-sm"
                     >
                       Execute Step
+                      <KeyHint label="Y" />
                     </button>
                   </>
                 )}

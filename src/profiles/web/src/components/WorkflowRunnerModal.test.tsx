@@ -234,3 +234,23 @@ describe("gate keyboard shortcuts", () => {
     expect(respondSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("gate key hints", () => {
+  it("shows Y / S / N hints on the ask buttons without changing their names", async () => {
+    renderModal();
+    const execute = await screen.findByRole("button", { name: "Execute Step" });
+    expect(execute.textContent).toContain("Y");
+    expect(screen.getByRole("button", { name: "Abort Launch" }).textContent).toContain("N");
+    expect(screen.getByRole("button", { name: "Skip Step" }).textContent).toContain("S");
+  });
+
+  it("hints Enter on the ack buttons", async () => {
+    startSpy.mockResolvedValue(
+      makeSession({ status: "waiting_notify", current_index: 0, notify_message: "Notice" }),
+    );
+    renderModal();
+    const ack = await screen.findByRole("button", { name: "Continue Workflow" });
+    expect(ack.textContent).toContain("↵");
+    expect(ack.querySelector("kbd")).toBeTruthy();
+  });
+});
