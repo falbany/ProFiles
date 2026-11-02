@@ -66,17 +66,17 @@ Every line follows this shape:
 ## Examples
 
 ```
-2026-08-29 13:01:15 - INFO  - MACBOOKFA.LOCAL: APP_STARTED version="0.11.0rc2" headless=false
+2026-08-29 13:01:15 - INFO  - MACBOOKFA.LOCAL: APP_STARTED version="0.11.0-rc.2" headless=false
 2026-08-29 13:01:15 - DEBUG - MACBOOKFA.LOCAL: SCAN_COMPLETE dir="base" ext="*" filter="" files=284 recursive=true
 2026-08-29 13:01:15 - DEBUG - MACBOOKFA.LOCAL: SCAN_METRICS dir="base" duration_ms=25.657 rate=11082.31 errors=0
 2026-08-29 13:01:22 - INFO  - MACBOOKFA.LOCAL: THEME_SWITCHED value=dark warnings=2
 2026-08-29 13:01:22 - WARNING - MACBOOKFA.LOCAL: WCAG_CONTRAST_FAINT pair="border/surface" ratio=4.22 fg=#7A7680 bg=#121212
-2026-08-29 13:01:30 - INFO  - MACBOOKFA.LOCAL: FILE_LAUNCHED path="/Users/falbany/.../README.md" version="0.11.0rc2" user="falbany" args="-"
+2026-08-29 13:01:30 - INFO  - MACBOOKFA.LOCAL: FILE_LAUNCHED path="/Users/falbany/.../README.md" version="0.11.0-rc.2" user="falbany" args="-"
 2026-08-29 13:01:40 - INFO  - MACBOOKFA.LOCAL: COMMAND_OUTPUT code=0 command="run_tests.cmd" output="42 passed\n0 failed"
 2026-08-29 13:01:51 - INFO  - MACBOOKFA.LOCAL: APP_CLOSED uptime_s=36
 ```
 
-> The app emits SemVer versions (e.g. `0.11.0rc2`) since v0.9.0; older logs may
+> The app emits SemVer versions (e.g. `0.11.0-rc.2`) since v0.9.0; older logs may
 > show CalVer strings such as `2026.8.0`.
 
 ## Useful Grep Examples
