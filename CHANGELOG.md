@@ -5,6 +5,24 @@ All notable changes to ProFiles are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Web UI: mapped network drive paths keep their configured drive letter**
+  (#25). The web server canonicalized every user-supplied path with
+  `Path.resolve()`, which on Windows rewrites a mapped network drive
+  (`M:/projects`) to its UNC target (`\\server\share\projects`). Scan
+  roots, result rows, workflow `{{path}}`/`{{dir}}` hook tokens, the final
+  OS launch, reveal/open-folder/terminal actions, barcode QR payloads and
+  the directory picker all showed the UNC form even though the
+  configuration defined `M:/`. User-facing paths are now normalized with a
+  new `profiles.utils.normalize_user_path()` helper (`expanduser` +
+  `os.path.normpath`, never `resolve()`); `resolve()` remains only where
+  physical identity matters (scan dedup, config discovery, instance
+  handoff). The desktop flow was already correct, so both front-ends now
+  behave consistently.
+
 ## [0.10.0] - 2026-10-28
 
 ### Breaking changes

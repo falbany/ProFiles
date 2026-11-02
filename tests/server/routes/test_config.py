@@ -103,6 +103,33 @@ async def test_select_directory_returns_its_configuration_presets(
 
 
 @pytest.mark.anyio
+async def test_select_directory_keeps_symlink_form_of_user_path(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """The picked directory is stored as sent, not canonicalized.
+
+    resolve() rewrites Windows mapped network drives (M:/...) to their UNC
+    target; the active directory must keep the user's drive-letter form.
+    A symlink stands in for that transformation on every platform.
+    """
+    real_dir = tmp_path / "real_programs"
+    real_dir.mkdir()
+    link = tmp_path / "link_programs"
+    link.symlink_to(real_dir, target_is_directory=True)
+    app = create_app(test_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/select-directory",
+            json={"directory": str(link)},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["active_directory"] == str(link)
+    assert test_state.active_directory == link
+
+
+@pytest.mark.anyio
 async def test_fs_browse(test_state: ServerState, tmp_path: Path) -> None:
     app = create_app(test_state)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

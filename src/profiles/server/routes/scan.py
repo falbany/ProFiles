@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.processing import scanner
 from profiles.server.state import ServerState
+from profiles.utils.path_utils import normalize_user_path
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
@@ -33,7 +34,7 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     state.scan_generation += 1
     scan_generation = state.scan_generation
     if payload.directory:
-        state.active_directory = Path(payload.directory).expanduser().resolve()
+        state.active_directory = normalize_user_path(payload.directory)
 
     scan_directory = state.active_directory
     if not scan_directory:

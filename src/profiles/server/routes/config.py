@@ -12,6 +12,7 @@ from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.launch.creation import propose_creation
 from profiles.server.state import ServerState
+from profiles.utils.path_utils import normalize_user_path
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -192,7 +193,7 @@ async def load_content_endpoint(payload: LoadContentRequest, request: Request) -
 async def create_config_endpoint(payload: CreateConfigRequest, request: Request) -> dict:
     """Create a starter config in the requested directory."""
     state: ServerState = request.app.state.server_state
-    target_dir = Path(payload.directory).expanduser().resolve()
+    target_dir = normalize_user_path(payload.directory)
     target_config = target_dir / ".profiles"
 
     if target_config.exists():
@@ -250,7 +251,7 @@ async def reload_config_endpoint(request: Request) -> dict:
 async def select_directory(payload: SelectDirectoryRequest, request: Request) -> dict:
     """Update active directory."""
     state: ServerState = request.app.state.server_state
-    path = Path(payload.directory).expanduser().resolve()
+    path = normalize_user_path(payload.directory)
     if not path.exists() or not path.is_dir():
         raise HTTPException(status_code=400, detail="Directory does not exist")
     state.active_directory = path

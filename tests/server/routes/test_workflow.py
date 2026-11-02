@@ -34,6 +34,44 @@ def workflow_state(tmp_path: Path) -> ServerState:
 
 
 @pytest.mark.anyio
+async def test_workflow_start_keeps_symlink_form_of_user_path(
+    tmp_path: Path,
+) -> None:
+    """Hook token substitution sees the path form the client sent.
+
+    resolve() rewrites Windows mapped network drives (M:/...) to their UNC
+    target, which would leak into {{path}}/{{dir}} tokens and the final OS
+    launch; the session must keep the configured form. A symlink stands in
+    for that transformation on every platform.
+    """
+    real_dir = tmp_path / "real-apps"
+    real_dir.mkdir()
+    (real_dir / "tool.mttl").write_text("content")
+    link = tmp_path / "link-apps"
+    link.symlink_to(real_dir, target_is_directory=True)
+
+    config = AppConfig(
+        title="Test Bench",
+        search_dir=str(real_dir),
+        launch_hooks={
+            "*.mttl": (WorkflowStep(action="notify", message="Path is {{path}}"),),
+        },
+    )
+    state = ServerState(config=config, active_directory=real_dir)
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/workflow/start",
+            json={"directory": str(link), "filename": "tool.mttl"},
+        )
+
+    assert resp.status_code == 200
+    session = resp.json()
+    assert session["status"] == "waiting_notify"
+    assert session["notify_message"] == f"Path is {link / 'tool.mttl'}"
+
+
+@pytest.mark.anyio
 async def test_workflow_start_returns_steps_and_session(workflow_state: ServerState) -> None:
     app = create_app(workflow_state)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
