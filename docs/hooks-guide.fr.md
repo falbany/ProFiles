@@ -403,8 +403,9 @@ se comportent identiquement.
 **Rendu Headless** :
 
 - Texte plat avec escape sequences ; Markdown en ligne stripé
-- Liens/images réduits à `label (url)` ; structures de bloc (listes,
-  tableaux, citations, blocs de code) conservées en lignes littérales
+- Liens/images réduits à `label (url)` ; blocs de code clôturés conservent
+  leur contenu sans les lignes de marqueurs ``` ; les autres structures de
+  bloc (listes, tableaux, citations) restent en lignes littérales
 - Voir `render_text()` dans `src/profiles/core/environment/render.py`
 
 **Backend Tkinter historique** : rend le sous-ensemble historique uniquement

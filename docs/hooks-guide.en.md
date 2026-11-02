@@ -401,8 +401,9 @@ and multi-line YAML block scalars behave the same.
 **Headless Rendering**:
 
 - Plain text with escape sequences; inline Markdown stripped
-- Links/images reduce to `label (url)`; block structures (lists, tables,
-  quotes, fences) stay as literal text lines
+- Links/images reduce to `label (url)`; fenced blocks keep their content
+  without the ``` marker lines; other block structures (lists, tables,
+  quotes) stay as literal text lines
 - See `render_text()` in `src/profiles/core/environment/render.py`
 
 **Legacy Tkinter backend**: renders the historical subset only (`#`/`##`/`###`

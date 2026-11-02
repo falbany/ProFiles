@@ -49,3 +49,8 @@ def test_headless_block_syntax_stays_literal():
     # readable in a terminal (documented degradation contract).
     result = render_text("- item\\n> quoted\\n| a | b |", headless=True)
     assert result == "- item\n> quoted\n| a | b |"
+
+
+def test_headless_fence_markers_stripped_content_kept():
+    result = render_text("Intro:\\n\\n```text\\ncode line\\n```\\n\\nOutro", headless=True)
+    assert result == "Intro:\n\ncode line\n\nOutro"

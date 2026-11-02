@@ -46,11 +46,17 @@ def _strip_markdown(text: str) -> str:
     """Remove Markdown syntax for headless mode.
 
     Inline syntax is stripped; links/images degrade to ``label (url)`` so the
-    target survives in stdout and logs. Block-level structures (lists,
-    tables, blockquotes, fenced code) stay as literal text lines, which
-    remains readable in a terminal.
+    target survives in stdout and logs. Fenced code blocks keep their content
+    but lose the ``` / ~~~ marker lines (and runs of blank lines collapse to
+    a single paragraph break); other block-level structures (lists, tables,
+    blockquotes) stay as literal text lines, which remains readable in a
+    terminal.
     """
     text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
+    # Fence marker lines first: left in place, the inline-code strip would
+    # chew the ``` ticks into stray backticks around the content.
+    text = re.sub(r"^(?:```|~~~)[a-zA-Z0-9_-]*\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     # Images first: the link pattern would otherwise eat the label and leave
     # the leading "!" behind.
     text = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", r"\1 (\2)", text)
