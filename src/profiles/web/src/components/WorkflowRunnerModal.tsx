@@ -209,7 +209,7 @@ export function WorkflowRunnerModal({
       onKeyDown={handleDialogKeyDown}
       className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
     >
-      <div className="animate-modal-in flex h-[80vh] w-full max-w-4xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
+      <div className="animate-modal-in flex h-[80vh] w-full max-w-5xl flex-col rounded-xl border border-frame-line glass-panel overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5 bg-surface-strong/30 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -237,7 +237,7 @@ export function WorkflowRunnerModal({
         {/* Main Split Layout: Left Sidebar (Steps) + Right Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar: Steps */}
-          <div className="w-80 border-r border-line bg-surface-strong/20 p-4 overflow-y-auto flex flex-col gap-2 shrink-0">
+          <div className="w-72 border-r border-line bg-surface-strong/20 p-4 overflow-y-auto flex flex-col gap-2 shrink-0">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted px-1 mb-1">
               Workflow Steps (Click to inspect)
             </h3>
