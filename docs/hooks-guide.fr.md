@@ -250,6 +250,23 @@ Si l'utilisateur choisit **Passer** sur le **dernier** étape :
 - Le workflow se termine
 - Le lancement OS est **sauté** (SKIP_LAUNCH)
 
+### Web UI : « Launch now » (contournement)
+
+La modale de workflow web porte un bouton **Launch now** à côté du bouton de
+fermeture (actif tant qu'un prompt est affiché) :
+
+- Sur un prompt de phase pré, il **passe toutes les étapes pré restantes,
+  effectue immédiatement le lancement OS, puis laisse la phase `post`
+  s'exécuter normalement**. C'est le chemin explicite « je veux le
+  lancement » — y compris au-delà des étapes `replace`, dont l'intention est
+  volontairement ignorée. Les étapes sautées sont enregistrées
+  « Bypassed by user » dans la liste des étapes.
+- Sur un prompt de phase post (lancement OS déjà effectué), il devient
+  **Skip rest** et termine simplement le workflow post-lancement.
+- Pendant un prompt ask, le clavier répond directement : **Y** = Oui,
+  **S** = Passer, **N** = Non ; **Enter** active l'action principale du
+  prompt (Oui, ou Exécuter/Continuer sur les prompts notify et notice).
+
 ### Exemple avec Multiple Guards
 
 ```yaml

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   FastForward,
   Loader2,
+  Rocket,
   Webhook,
   X,
 } from "lucide-react";
@@ -56,6 +57,8 @@ export function WorkflowRunnerModal({
   const [error, setError] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  /** Re-entry guard: one in-flight respond per session gate (#83 class). */
+  const respondingRef = useRef(false);
   /** Current primary action button (status-dependent); initial/transition focus (#81). */
   const primaryActionRef = useRef<HTMLButtonElement>(null);
   /** One close per modal lifetime: guards double-invocation from any handler (#83). */
@@ -100,8 +103,11 @@ export function WorkflowRunnerModal({
     };
   }, [isOpen, directory, filename, release, args]);
 
-  const handleRespond = async (action: "yes" | "skip" | "no" | "ack") => {
-    if (!session) return;
+  const handleRespond = async (action: "yes" | "skip" | "no" | "ack" | "bypass") => {
+    // Re-entry guard: a racing double-click or a held key must not answer
+    // the same gate twice (same failure class as the #83 double-close).
+    if (!session || respondingRef.current) return;
+    respondingRef.current = true;
     setLoading(true);
     try {
       const next = await respondWorkflowSession(session.session_id, action);
@@ -112,6 +118,7 @@ export function WorkflowRunnerModal({
     } catch (err: any) {
       setError(err.message || "Failed to process workflow response");
     } finally {
+      respondingRef.current = false;
       setLoading(false);
     }
   };
@@ -119,6 +126,13 @@ export function WorkflowRunnerModal({
   // Close on Escape key press: abort the interactive session first (#24).
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  // Gate answers from the keyboard read the latest respond fn / inspection
+  // state through refs: this window listener attaches once per open, so
+  // state closures would go stale (same reason as sessionRef, #24).
+  const respondRef = useRef(handleRespond);
+  respondRef.current = handleRespond;
+  const inspectedRef = useRef(selectedStepIndex);
+  inspectedRef.current = selectedStepIndex;
 
   useEffect(() => {
     // Unmount with a live session (e.g. parent removed the modal): abort.
@@ -156,6 +170,47 @@ export function WorkflowRunnerModal({
       if (e.key === "Escape") {
         e.preventDefault();
         handleClose();
+        return;
+      }
+      // Gate keyboard answers: Y/S/N on an ask gate, Enter = the gate's
+      // primary action (yes / ack). Only while the interactive panel is
+      // visible, never while a respond is in flight, never with modifiers.
+      const s = sessionRef.current;
+      if (!s || isSessionTerminal(s.status) || respondingRef.current) return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const inspected = inspectedRef.current;
+      const interactiveVisible = inspected === null || inspected === s.current_index;
+      const primaryAction =
+        s.status === "waiting_ask"
+          ? "yes"
+          : s.status === "waiting_notify" || s.status === "waiting_notice"
+            ? "ack"
+            : null;
+      if (!interactiveVisible || primaryAction === null) return;
+
+      if (e.key === "Enter") {
+        // A focused button activates natively on Enter, and #81 keeps the
+        // primary action focused: stay out of the way there or the gate
+        // would answer twice (#83 lesson).
+        const target = e.target as HTMLElement | null;
+        if (target?.tagName === "BUTTON" || document.activeElement?.tagName === "BUTTON") {
+          return;
+        }
+        e.preventDefault();
+        void respondRef.current(primaryAction);
+        return;
+      }
+      if (s.status !== "waiting_ask") return;
+      const key = e.key.toLowerCase();
+      if (key === "y") {
+        e.preventDefault();
+        void respondRef.current("yes");
+      } else if (key === "s") {
+        e.preventDefault();
+        void respondRef.current("skip");
+      } else if (key === "n") {
+        e.preventDefault();
+        void respondRef.current("no");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -179,6 +234,14 @@ export function WorkflowRunnerModal({
 
   const isFinished =
     session?.status === "completed" || session?.status === "aborted" || session?.status === "failed";
+
+  // Bypass reaches different points depending on the phase the session is
+  // parked in: pre gate → launch now; post gate → the launch already
+  // happened, only the remaining post steps are skipped.
+  const bypassActive =
+    !!session && !isFinished && (session.status?.startsWith("waiting") ?? false);
+  const bypassInPost =
+    (session?.steps[session?.current_index ?? -1]?.phase ?? "pre") === "post";
 
   // Command box for the interactive (waiting_*) panels: the generic detail
   // panel below is suppressed while the session waits on the current step,
@@ -225,13 +288,31 @@ export function WorkflowRunnerModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-md p-1.5 text-ink-muted hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {session && !isFinished && (
+              <button
+                type="button"
+                disabled={!bypassActive || loading}
+                onClick={() => handleRespond("bypass")}
+                title={
+                  bypassInPost
+                    ? "Skip the remaining post-launch steps"
+                    : "Skip the remaining steps and launch with the OS default app"
+                }
+                className="btn inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-status-warning-text hover:bg-status-warning-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                {bypassInPost ? "Skip rest" : "Launch now"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-md p-1.5 text-ink-muted hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Main Split Layout: Left Sidebar (Steps) + Right Content */}
