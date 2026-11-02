@@ -348,171 +348,174 @@ export function WorkflowRunnerModal({
           </div>
 
           {/* Right Content Area */}
-          <div className="flex-1 flex flex-col bg-app overflow-y-auto p-6 justify-between">
-            <div className="space-y-6">
-              {error && (
-                <div className="flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-text">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Active / Inspected Step Details */}
-              <div className="rounded-xl border border-line bg-surface p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-line pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-chip-indigo-bg px-2 py-0.5 font-mono text-xs font-semibold uppercase text-chip-indigo-text">
-                      {activeStep?.action || session?.status}
-                    </span>
-                    <span className="text-xs text-ink-muted">
-                      {activeStep ? `Step ${activeStep.index} of ${session?.steps.length}` : "Status"}
-                    </span>
-                    {(selectedStepIndex !== null && selectedStepIndex !== session?.current_index) && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStepIndex(null)}
-                        className="text-[11px] text-chip-indigo-text hover:underline ml-2"
-                      >
-                        (Return to active step)
-                      </button>
-                    )}
+          <div className="flex-1 flex flex-col bg-app">
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto p-6 min-h-0">
+              <div className="space-y-6">
+                {error && (
+                  <div className="flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-text">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
                   </div>
-                  {loading && <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />}
-                </div>
+                )}
 
-                {/* Content Body / Rendered Markdown */}
-                <div className="space-y-3 text-xs text-ink font-sans leading-relaxed">
-                  {/* Priority 1: Interactive Prompts (only if on CURRENT executing step) */}
-                  {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notify" && session.notify_message && (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notification Message:</p>
-                      <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
-                        {renderMarkdown(session.notify_message)}
-                      </div>
-                      {interactiveCommandBox}
-                    </div>
-                  )}
-
-                  {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notice" && session.notice_message && (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notice:</p>
-                      <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
-                        {renderMarkdown(session.notice_message)}
-                      </div>
-                      {interactiveCommandBox}
-                      <p className="text-[11px] text-ink-faint">The command will run when you continue.</p>
-                    </div>
-                  )}
-
-                  {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_ask" && session.ask_prompt && (
-                    <div className="space-y-2">
-                      {session.ask_message && (
-                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
-                          {renderMarkdown(session.ask_message)}
-                        </div>
-                      )}
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-status-warning-text">Confirmation Prompt:</p>
-                      <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-4 text-sm font-medium text-ink">
-                        {session.ask_prompt}
-                      </div>
-                      {interactiveCommandBox}
-                    </div>
-                  )}
-
-                  {/* Priority 2: Full-screen completion banner (only if NO step is specifically being inspected) */}
-                  {isFinished && selectedStepIndex === null && (
-                    <div className={`rounded-xl border p-8 text-center space-y-4 ${
-                      session?.status === "completed"
-                        ? "border-status-success-border bg-status-success-bg text-status-success-text"
-                        : "border-status-danger-border bg-status-danger-bg text-status-danger-text"
-                    }`}>
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface/50 mx-auto">
-                        {session?.status === "completed" ? (
-                          <CheckCircle2 className="h-6 w-6 text-status-success-text" />
-                        ) : (
-                          <AlertCircle className="h-6 w-6 text-status-danger-text" />
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="text-base font-bold">
-                          {session?.status === "completed" ? "Workflow Finished" : "Workflow Terminated"}
-                        </h3>
-                        <p className="text-xs text-ink-secondary max-w-md mx-auto">
-                          {session?.final_message || "The launch sequence has ended."}
-                        </p>
-                      </div>
-                      <div className="pt-2">
+                {/* Active / Inspected Step Details */}
+                <div className="rounded-xl border border-line bg-surface p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-line pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-chip-indigo-bg px-2 py-0.5 font-mono text-xs font-semibold uppercase text-chip-indigo-text">
+                        {activeStep?.action || session?.status}
+                      </span>
+                      <span className="text-xs text-ink-muted">
+                        {activeStep ? `Step ${activeStep.index} of ${session?.steps.length}` : "Status"}
+                      </span>
+                      {(selectedStepIndex !== null && selectedStepIndex !== session?.current_index) && (
                         <button
                           type="button"
-                          onClick={onClose}
-                          className="btn btn-primary px-8 py-2.5 font-bold shadow-lg"
+                          onClick={() => setSelectedStepIndex(null)}
+                          className="text-[11px] text-chip-indigo-text hover:underline ml-2"
                         >
-                          Close Engine Runner
+                          (Return to active step)
                         </button>
+                      )}
+                    </div>
+                    {loading && <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />}
+                  </div>
+
+                  {/* Content Body / Rendered Markdown */}
+                  <div className="space-y-3 text-xs text-ink font-sans leading-relaxed">
+                    {/* Priority 1: Interactive Prompts (only if on CURRENT executing step) */}
+                    {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notify" && session.notify_message && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notification Message:</p>
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
+                          {renderMarkdown(session.notify_message)}
+                        </div>
+                        {interactiveCommandBox}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Command output of the last executed step, below the banner */}
-                  {isFinished && selectedStepIndex === null && session?.last_output && (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
-                        Command Output:
-                      </p>
-                      <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
-                        {session.last_output}
-                      </pre>
-                    </div>
-                  )}
+                    {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_notice" && session.notice_message && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Notice:</p>
+                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
+                          {renderMarkdown(session.notice_message)}
+                        </div>
+                        {interactiveCommandBox}
+                        <p className="text-[11px] text-ink-faint">The command will run when you continue.</p>
+                      </div>
+                    )}
 
-                  {/* Priority 3: General content display for inspected or non-prompting current step */}
-                  {!(isFinished && selectedStepIndex === null) &&
-                   !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
-                    <div className="space-y-4">
-                      {activeStep?.message && (
+                    {(selectedStepIndex === null || selectedStepIndex === session?.current_index) && session?.status === "waiting_ask" && session.ask_prompt && (
+                      <div className="space-y-2">
+                        {session.ask_message && (
+                          <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-ink space-y-2">
+                            {renderMarkdown(session.ask_message)}
+                          </div>
+                        )}
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-status-warning-text">Confirmation Prompt:</p>
+                        <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-4 text-sm font-medium text-ink">
+                          {session.ask_prompt}
+                        </div>
+                        {interactiveCommandBox}
+                      </div>
+                    )}
+
+                    {/* Priority 2: Full-screen completion banner (only if NO step is specifically being inspected) */}
+                    {isFinished && selectedStepIndex === null && (
+                      <div className={`rounded-xl border p-8 text-center space-y-4 ${
+                        session?.status === "completed"
+                          ? "border-status-success-border bg-status-success-bg text-status-success-text"
+                          : "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+                      }`}>
+                        <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface/50 mx-auto">
+                          {session?.status === "completed" ? (
+                            <CheckCircle2 className="h-6 w-6 text-status-success-text" />
+                          ) : (
+                            <AlertCircle className="h-6 w-6 text-status-danger-text" />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-base font-bold">
+                            {session?.status === "completed" ? "Workflow Finished" : "Workflow Terminated"}
+                          </h3>
+                          <p className="text-xs text-ink-secondary max-w-md mx-auto">
+                            {session?.final_message || "The launch sequence has ended."}
+                          </p>
+                        </div>
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            className="btn btn-primary px-8 py-2.5 font-bold shadow-lg"
+                          >
+                            Close Engine Runner
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Command output of the last executed step, below the banner */}
+                    {isFinished && selectedStepIndex === null && session?.last_output && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                          Command Output:
+                        </p>
+                        <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
+                          {session.last_output}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Priority 3: General content display for inspected or non-prompting current step */}
+                    {!(isFinished && selectedStepIndex === null) &&
+                     !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
+                      <div className="space-y-4">
+                        {activeStep?.message && (
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Message:</p>
+                            <div className="rounded-lg border border-line bg-surface-strong p-4 text-xs text-ink leading-relaxed space-y-2">
+                              {renderMarkdown(activeStep.message)}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-2">
-                          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Message:</p>
-                          <div className="rounded-lg border border-line bg-surface-strong p-4 text-xs text-ink leading-relaxed space-y-2">
-                            {renderMarkdown(activeStep.message)}
+                          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
+                          <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+                            {activeStep?.command ? activeStep.command : "Waiting..."}
                           </div>
                         </div>
-                      )}
 
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
-                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
-                          {activeStep?.command ? activeStep.command : "Waiting..."}
-                        </div>
+                        {activeStep?.output && (
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Output:</p>
+                            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
+                              {activeStep.output}
+                            </pre>
+                          </div>
+                        )}
+
+                        {activeStep?.ask && (
+                          <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-text">
+                            <span className="font-semibold">Workflow Guard:</span> {activeStep.ask}
+                          </div>
+                        )}
+
+                        {activeStep?.note && (
+                          <div className="rounded-lg border border-line bg-surface-strong p-3 text-xs text-ink-muted italic">
+                            <span className="font-semibold text-ink-secondary not-italic uppercase text-[10px]">Log:</span> {activeStep.note}
+                          </div>
+                        )}
                       </div>
-
-                      {activeStep?.output && (
-                        <div className="space-y-2">
-                          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Output:</p>
-                          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
-                            {activeStep.output}
-                          </pre>
-                        </div>
-                      )}
-
-                      {activeStep?.ask && (
-                        <div className="rounded-lg border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning-text">
-                          <span className="font-semibold">Workflow Guard:</span> {activeStep.ask}
-                        </div>
-                      )}
-
-                      {activeStep?.note && (
-                        <div className="rounded-lg border border-line bg-surface-strong p-3 text-xs text-ink-muted italic">
-                          <span className="font-semibold text-ink-secondary not-italic uppercase text-[10px]">Log:</span> {activeStep.note}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Bottom Action Area (Ask Callbacks / Dismiss) */}
-            <div className="pt-4 border-t border-line flex items-center justify-between mt-6">
+            <div className="shrink-0 px-6 pb-4 pt-4 border-t border-line flex items-center justify-between bg-app">
               <div className="text-xs text-ink-muted">
                 {session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
                   ? "Action required to proceed:"
