@@ -34,6 +34,11 @@ class CreateConfigRequest(BaseModel):
     directory: str
 
 
+class ValidateRequest(BaseModel):
+    content: str
+    filename: str
+
+
 def _is_config_path(path: Path) -> bool:
     return path.name.endswith(CONFIG_FILE_NAMES)
 
@@ -132,6 +137,29 @@ def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     return _config_response(state)
+
+
+def validate_issues(content: str, display_name: str) -> list[dict[str, str]]:
+    """Validate configuration *content* in memory without touching live state.
+
+    Parses *content* strictly with :meth:`ConfigReader.from_content` and
+    reports the outcome as a plain issue list, so the YAML editor can
+    validate content that is not applied to the session.
+
+    Args:
+        content: Raw YAML configuration content.
+        display_name: Human-readable file name used in error messages.
+
+    Returns:
+        ``[]`` when the content parses and validates, otherwise a single
+        ``{"severity": "error", "message": ...}`` dict describing the
+        failure.
+    """
+    try:
+        ConfigReader.from_content(content, display_name=display_name)
+    except ValueError as exc:
+        return [{"severity": "error", "message": str(exc)}]
+    return []
 
 
 @router.get("")
@@ -245,6 +273,17 @@ async def reload_config_endpoint(request: Request) -> dict:
     response = _config_response(state)
     response["reloaded"] = True
     return response
+
+
+@router.post("/validate")
+async def validate_config_endpoint(payload: ValidateRequest) -> dict:
+    """Validate editor content in memory; never applied to the session state.
+
+    Returns ``{"valid": bool, "issues": [...]}`` rather than an HTTP error
+    status, so invalid drafts reach the editor as data to display.
+    """
+    issues = validate_issues(payload.content, display_name=payload.filename)
+    return {"valid": not issues, "issues": issues}
 
 
 @router.post("/select-directory")
