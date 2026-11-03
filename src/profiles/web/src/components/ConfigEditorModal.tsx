@@ -1,17 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup, EditorView } from "codemirror";
 import { yaml } from "@codemirror/lang-yaml";
-import { CircleDot, ExternalLink, FileCode2, X } from "lucide-react";
+import {
+  CircleDot,
+  ExternalLink,
+  FileCode2,
+  FilePlus2,
+  FlaskConical,
+  Play,
+  RotateCcw,
+  X,
+} from "lucide-react";
 
-import { fetchConfigContent, openConfigFile } from "../api/client";
-import type { AppConfigData, ConfigContentData } from "../api/types";
+import {
+  fetchConfigContent,
+  fetchConfigTemplate,
+  loadConfigContent,
+  openConfigFile,
+  validateConfigContent,
+} from "../api/client";
+import type { AppConfigData, ConfigContentData, ValidationIssue } from "../api/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useModalA11y } from "../utils/useModalA11y";
 
 export interface ConfigEditorModalProps {
   open: boolean;
   onClose: () => void;
-  /** Called after a save/apply succeeds (Save/Save As — Tasks 7–8). */
+  /** Called after Apply succeeds (Save/Save As fire it too — Task 8). */
   onApplied?: (data: AppConfigData) => void;
 }
 
@@ -20,6 +35,12 @@ type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; data: ConfigContentData };
+
+/** Inline feedback banner shown above the editor after a toolbar action. */
+type EditorStatus = { kind: "ok" | "error"; text: string } | null;
+
+/** Toolbar action parked behind the "Replace current edits?" confirmation. */
+type PendingAction = "new" | "revert";
 
 /**
  * Editor theme built from the app's `data-theme` CSS tokens (index.css
@@ -84,14 +105,22 @@ function isDirty(view: EditorView | null, loadedText: string): boolean {
 /**
  * Full-screen YAML configuration editor (issue #95). This shell owns the
  * CodeMirror 6 instance, load-on-open, dirty tracking and the guarded
- * Escape/✕ close; the toolbar action buttons (Save, Reload, …) are wired
- * in Tasks 7–8. The header bar carries the "Open in OS" shortcut, which
- * hands the file to the OS default editor via the existing client call.
+ * Escape/✕ close. The toolbar carries the content actions — New (starter
+ * template), Test (in-memory validation), Revert (reload from disk) and
+ * Apply (session-trial the current text); Save/Save-as arrive with Task 8.
+ * The header bar carries the "Open in OS" shortcut, which hands the file
+ * to the OS default editor via the existing client call.
  */
-export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: ConfigEditorModalProps) {
+export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModalProps) {
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [dirty, setDirty] = useState(false);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  /** Banner above the editor — Test/Apply/New/Revert outcomes. */
+  const [status, setStatus] = useState<EditorStatus>(null);
+  /** Validation issues from the Test action, listed under the banner. */
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  /** Action awaiting its "Replace current edits?" confirmation. */
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const editorHostRef = useRef<HTMLDivElement>(null);
@@ -113,6 +142,9 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
       setLoad({ status: "loading" });
       setDirty(false);
       setConfirmDiscardOpen(false);
+      setStatus(null);
+      setIssues([]);
+      setPendingAction(null);
       return;
     }
     let cancelled = false;
@@ -179,10 +211,118 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
     });
   }, []);
 
+  /** Current editor text — falls back to the baseline before the view mounts. */
+  function currentDocText(): string {
+    return editorViewRef.current?.state.doc.toString() ?? loadedTextRef.current;
+  }
+
+  /**
+   * Replace the editor document with the starter template (New action).
+   * The template text becomes the new dirty baseline, so an untouched
+   * template is not flagged as unsaved. Only `load` fields that describe
+   * the text are updated — the CodeMirror view remounts from it.
+   */
+  const loadTemplateIntoEditor = useCallback(async () => {
+    setStatus(null);
+    setIssues([]);
+    try {
+      const template = await fetchConfigTemplate();
+      const content = toEditorText(template.content);
+      loadedTextRef.current = content;
+      setDirty(false);
+      setLoad(
+        (prev): LoadState =>
+          prev.status === "ready"
+            ? {
+                status: "ready",
+                data: { ...prev.data, filename: template.filename, content, config_path: null },
+              }
+            : prev,
+      );
+      setStatus({ kind: "ok", text: "New configuration template loaded." });
+    } catch (err: unknown) {
+      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+  }, []);
+
+  /** Reload the active configuration file from the server (Revert action). */
+  const reloadFromServer = useCallback(async () => {
+    setStatus(null);
+    setIssues([]);
+    try {
+      const data = await fetchConfigContent();
+      const content = toEditorText(data.content);
+      loadedTextRef.current = content;
+      setDirty(false);
+      setLoad({ status: "ready", data: { ...data, content } });
+      setStatus({ kind: "ok", text: "Configuration reloaded from disk." });
+    } catch (err: unknown) {
+      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+  }, []);
+
+  /** New action: a dirty editor confirms before its edits are discarded. */
+  function requestNew() {
+    if (isDirty(editorViewRef.current, loadedTextRef.current)) {
+      setPendingAction("new");
+      return;
+    }
+    void loadTemplateIntoEditor();
+  }
+
+  /** Revert action: same guarded pattern as New, reloading from the server. */
+  function requestRevert() {
+    if (isDirty(editorViewRef.current, loadedTextRef.current)) {
+      setPendingAction("revert");
+      return;
+    }
+    void reloadFromServer();
+  }
+
+  /**
+   * Test action: validate the current text in memory. A valid result
+   * lights the ok banner; issues are listed above the editor verbatim.
+   */
+  const runValidation = useCallback(async () => {
+    if (load.status !== "ready") return;
+    try {
+      const result = await validateConfigContent(load.data.filename, currentDocText());
+      setIssues(result.issues);
+      setStatus(
+        result.valid
+          ? { kind: "ok", text: "Configuration is valid." }
+          : {
+              kind: "error",
+              text: `Validation failed with ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}.`,
+            },
+      );
+    } catch (err: unknown) {
+      setIssues([]);
+      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+  }, [load]);
+
+  /**
+   * Apply action: trial the current text as the session configuration.
+   * Success fires `onApplied` with the applied AppConfigData; a 400
+   * rejection surfaces the server's plain-string detail in the banner.
+   */
+  const applyContent = useCallback(async () => {
+    if (load.status !== "ready") return;
+    try {
+      const data = await loadConfigContent(load.data.filename, currentDocText());
+      setStatus({ kind: "ok", text: "Configuration applied (session trial)." });
+      onApplied?.(data);
+    } catch (err: unknown) {
+      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+  }, [load, onApplied]);
+
   if (!open) return null;
 
   const filename = load.status === "ready" ? load.data.filename : "";
   const sessionTrial = load.status === "ready" ? load.data.session_trial : false;
+  const toolbarDisabled = load.status !== "ready";
 
   return (
     <>
@@ -236,12 +376,53 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
             </div>
           </div>
 
-          {/* Toolbar placeholder — action buttons (Save, Reload, …) are wired
-              here in Tasks 7–8; for now it carries the dirty indicator. */}
+          {/* Toolbar — content actions; Save/Save-as arrive with Task 8. */}
           <div
             data-testid="editor-toolbar"
             className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-2"
           >
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={requestNew}
+                disabled={toolbarDisabled}
+                title="Load the starter configuration template"
+                className="btn btn-secondary px-3 py-1.5"
+              >
+                <FilePlus2 className="h-3.5 w-3.5" />
+                New
+              </button>
+              <button
+                type="button"
+                onClick={() => void runValidation()}
+                disabled={toolbarDisabled}
+                title="Validate the editor content in memory"
+                className="btn btn-secondary px-3 py-1.5"
+              >
+                <FlaskConical className="h-3.5 w-3.5" />
+                Test
+              </button>
+              <button
+                type="button"
+                onClick={requestRevert}
+                disabled={toolbarDisabled}
+                title="Discard edits and reload the file from disk"
+                className="btn btn-secondary px-3 py-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Revert
+              </button>
+              <button
+                type="button"
+                onClick={() => void applyContent()}
+                disabled={toolbarDisabled}
+                title="Trial the editor content as the session configuration"
+                className="btn btn-primary px-3 py-1.5 font-semibold"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Apply
+              </button>
+            </div>
             {dirty && (
               <span
                 role="status"
@@ -252,6 +433,41 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
               </span>
             )}
           </div>
+
+          {/* Inline feedback banner + validation issue list (Test outcome). */}
+          {(status !== null || issues.length > 0) && (
+            <div className="shrink-0 border-b border-line px-5 py-2">
+              {status !== null && (
+                <div
+                  data-testid="editor-status"
+                  aria-live="polite"
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+                    status.kind === "ok"
+                      ? "border-status-success-border bg-status-success-bg text-status-success-text"
+                      : "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+                  }`}
+                >
+                  {status.text}
+                </div>
+              )}
+              {issues.length > 0 && (
+                <ul data-testid="editor-issues" className="mt-1 space-y-1">
+                  {issues.map((issue, index) => (
+                    <li
+                      key={`${issue.severity}-${index}`}
+                      className={`rounded-md border px-3 py-1.5 text-xs ${
+                        issue.severity === "error"
+                          ? "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+                          : "border-chip-amber-border bg-chip-amber-bg text-chip-amber-text"
+                      }`}
+                    >
+                      {issue.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Editor body */}
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -286,6 +502,27 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
           onClose();
         }}
         onCancel={() => setConfirmDiscardOpen(false)}
+      />
+
+      {/* Same discard-warning pattern for New/Revert on a dirty editor. */}
+      <ConfirmDialog
+        isOpen={pendingAction !== null}
+        title="Replace current edits?"
+        message={
+          pendingAction === "revert"
+            ? "The editor contains unsaved changes.\nReverting will discard them and reload the file from disk."
+            : "The editor contains unsaved changes.\nLoading the starter template will discard them."
+        }
+        confirmLabel="Replace"
+        cancelLabel="Keep editing"
+        danger
+        onConfirm={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action === "new") void loadTemplateIntoEditor();
+          else if (action === "revert") void reloadFromServer();
+        }}
+        onCancel={() => setPendingAction(null)}
       />
     </>
   );

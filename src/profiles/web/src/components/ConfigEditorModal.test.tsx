@@ -4,12 +4,21 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorView } from "codemirror";
 import { ConfigEditorModal } from "./ConfigEditorModal";
-import { fetchConfigContent, openConfigFile } from "../api/client";
-import type { ConfigContentData } from "../api/types";
+import {
+  fetchConfigContent,
+  fetchConfigTemplate,
+  loadConfigContent,
+  openConfigFile,
+  validateConfigContent,
+} from "../api/client";
+import type { AppConfigData, ConfigContentData } from "../api/types";
 
 vi.mock("../api/client", () => ({
   fetchConfigContent: vi.fn(),
   openConfigFile: vi.fn(),
+  fetchConfigTemplate: vi.fn(),
+  validateConfigContent: vi.fn(),
+  loadConfigContent: vi.fn(),
 }));
 
 // jsdom gap (not a CodeMirror mock): the view's measurement code calls
@@ -25,8 +34,14 @@ rangeProto.getBoundingClientRect ??= () => new DOMRect(0, 0, 0, 0);
 
 const fetchContentSpy = vi.mocked(fetchConfigContent);
 const openInOSSpy = vi.mocked(openConfigFile);
+const templateSpy = vi.mocked(fetchConfigTemplate);
+const validateSpy = vi.mocked(validateConfigContent);
+const loadContentSpy = vi.mocked(loadConfigContent);
 
 const SAMPLE_YAML = 'release: "1.0"\nsearch_dir: "C:/data"\n';
+/** Starter template served with CRLF endings — realistic for Windows hosts. */
+const TEMPLATE_YAML = 'release: "2.0"\r\nsearch_dir: "D:/data"\r\n';
+const TEMPLATE_YAML_LF = 'release: "2.0"\nsearch_dir: "D:/data"\n';
 
 function makeContent(overrides: Partial<ConfigContentData> = {}): ConfigContentData {
   return {
@@ -38,10 +53,36 @@ function makeContent(overrides: Partial<ConfigContentData> = {}): ConfigContentD
   };
 }
 
+function makeAppConfig(): AppConfigData {
+  return {
+    title: "machine",
+    release: "1.0",
+    search_dir: "C:/data",
+    recursive_search: false,
+    theme: "dark",
+    directories: [],
+    extensions: [".mttl"],
+    filters: [],
+    active_directory: "C:/data",
+    config_path: "/home/user/.profiles/machine.profiles",
+    config_exists: true,
+    column_headers: [],
+    column_names: [],
+    row_colors: [],
+  };
+}
+
 function renderModal(overrides: { open?: boolean } = {}) {
   const onClose = vi.fn();
-  render(<ConfigEditorModal open={overrides.open ?? true} onClose={onClose} />);
-  return { onClose };
+  const onApplied = vi.fn();
+  render(
+    <ConfigEditorModal
+      open={overrides.open ?? true}
+      onClose={onClose}
+      onApplied={onApplied}
+    />,
+  );
+  return { onClose, onApplied };
 }
 
 /**
@@ -184,5 +225,163 @@ describe("ConfigEditorModal", () => {
     await waitFor(() => expect(openInOSSpy).toHaveBeenCalledTimes(1));
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
+  });
+
+  /** Dispatch a user edit through the real editor transaction seam. */
+  async function editDoc(insert: string): Promise<string> {
+    const view = await readyEditorView();
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert } });
+    });
+    return view.state.doc.toString();
+  }
+
+  it("test_new_loads_template_after_confirm", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    templateSpy.mockResolvedValue({ content: TEMPLATE_YAML, filename: "starter.profiles" });
+    const user = userEvent.setup();
+    const { onClose } = renderModal();
+
+    await editDoc("# edited\n");
+    expect(screen.getByRole("status")).toHaveTextContent(/unsaved changes/i);
+
+    // Dirty: New must ask before replacing.
+    await user.click(screen.getByRole("button", { name: /^new$/i }));
+    const warning = screen.getByRole("dialog", { name: /replace current edits\?/i });
+    expect(warning).toBeTruthy();
+    expect(templateSpy).not.toHaveBeenCalled();
+
+    // Confirming loads the starter template into the real editor.
+    await user.click(screen.getByRole("button", { name: /^replace$/i }));
+    expect(templateSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(view?.state.doc.toString()).toBe(TEMPLATE_YAML_LF);
+    });
+    // Dirty cleared (CRLF template text becomes the new baseline).
+    expect(screen.queryByRole("status")).toBeNull();
+    // Escape now closes immediately — the baseline moved with the template.
+    screen.getByRole("button", { name: /open in os/i }).focus();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: /discard changes\?/i })).toBeNull();
+  });
+
+  it("test_new_without_dirty_loads_immediately", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    templateSpy.mockResolvedValue({ content: TEMPLATE_YAML_LF, filename: "starter.profiles" });
+    const user = userEvent.setup();
+    renderModal();
+
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^new$/i }));
+    expect(templateSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(view?.state.doc.toString()).toBe(TEMPLATE_YAML_LF);
+    });
+    expect(screen.queryByRole("dialog", { name: /replace current edits\?/i })).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("test_test_shows_valid_badge", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    const user = userEvent.setup();
+    renderModal();
+
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    await waitFor(() =>
+      expect(validateSpy).toHaveBeenCalledWith("machine.profiles", SAMPLE_YAML),
+    );
+    const banner = await screen.findByTestId("editor-status");
+    expect(banner.textContent).toMatch(/valid/i);
+    expect(banner.className).toContain("status-success");
+    expect(screen.queryByTestId("editor-issues")).toBeNull();
+  });
+
+  it("test_test_shows_issue_list", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [
+        { severity: "error", message: "unknown key 'foo' at line 3" },
+        { severity: "warning", message: "search_dir does not exist" },
+      ],
+    });
+    const user = userEvent.setup();
+    renderModal();
+
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    const list = await screen.findByTestId("editor-issues");
+    expect(list.textContent).toContain("unknown key 'foo' at line 3");
+    expect(list.textContent).toContain("search_dir does not exist");
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-danger");
+    expect(banner.textContent).toMatch(/2/);
+  });
+
+  it("test_apply_calls_load_content_and_reports_success", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    const applied = makeAppConfig();
+    loadContentSpy.mockResolvedValue(applied);
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    // The applied text is the current doc, edits included.
+    const edited = await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^apply$/i }));
+    await waitFor(() =>
+      expect(loadContentSpy).toHaveBeenCalledWith("machine.profiles", edited),
+    );
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(onApplied.mock.calls[0][0]).toBe(applied);
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-success");
+    expect(banner.textContent).toMatch(/applied/i);
+  });
+
+  it("test_apply_error_shows_server_message", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    loadContentSpy.mockRejectedValue(new Error("unknown key 'filters_xyz' at line 4"));
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^apply$/i }));
+    const banner = await screen.findByTestId("editor-status");
+    expect(banner.textContent).toContain("unknown key 'filters_xyz' at line 4");
+    expect(banner.className).toContain("status-danger");
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it("test_revert_reloads_from_server_after_confirm", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    const user = userEvent.setup();
+    const { onClose } = renderModal();
+
+    await editDoc("# edited\n");
+    expect(fetchContentSpy).toHaveBeenCalledTimes(1);
+
+    // Dirty: Revert must confirm before discarding, like New.
+    await user.click(screen.getByRole("button", { name: /^revert$/i }));
+    expect(screen.getByRole("dialog", { name: /replace current edits\?/i })).toBeTruthy();
+    expect(fetchContentSpy).toHaveBeenCalledTimes(1);
+
+    // Confirming re-fetches the server content and restores the doc.
+    await user.click(screen.getByRole("button", { name: /^replace$/i }));
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(view?.state.doc.toString()).toBe(SAMPLE_YAML);
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+    // Clean again: Escape closes immediately.
+    screen.getByRole("button", { name: /open in os/i }).focus();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: /discard changes\?/i })).toBeNull();
   });
 });
