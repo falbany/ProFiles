@@ -138,10 +138,10 @@ def main() -> int:
     print("Building web frontend...")
     try:
         # Install dependencies
-        if not (WEB_ROOT / "node_modules").is_dir():
-            command = "npm ci"
-            print(f"> {command}", flush=True)
-            subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True, env=env)
+        # Use npm install instead of npm ci to handle lock file sync issues
+        command = "npm install"
+        print(f"> {command}", flush=True)
+        subprocess.run(command, cwd=WEB_ROOT, check=True, shell=True, env=env)
 
         # Build
         command = "npm run build"

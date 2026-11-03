@@ -4,12 +4,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME, find_config_file
 from profiles.core.config.models import AppConfig
 
 _MAX_EXTERNAL_EVENTS = 50
+
+
+class BindableServer(Protocol):
+    """The subset of ``BackgroundServer`` the route layer touches.
+
+    Declared here so ``server/routes`` can type the registered server
+    without importing ``profiles.desktop`` (desktop imports server; the
+    reverse would be a layering cycle).
+    """
+
+    @property
+    def is_running(self) -> bool: ...
+
+    @property
+    def host(self) -> str: ...
+
+    def rebind(self, host: str) -> None: ...
 
 
 @dataclass

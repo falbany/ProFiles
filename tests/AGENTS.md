@@ -32,6 +32,7 @@ tests/
 ├── conftest.py                               # os.startfile polyfill (root)
 ├── test_app.py                               # ← app.py
 ├── test_app_backend_selection.py             # ← app.py (supplement: --tkinter/web backend routing)
+├── test_app_host.py                          # ← app.py (supplement: --host CLI option)
 ├── test_app_launch_resolution.py             # ← app.py (supplement: launch config resolution)
 ├── test_app_log_path.py                      # ← app.py (supplement: CWD-independent log path)
 ├── test_app_no_tkinter.py                    # ← app.py (supplement: web/headless run with tkinter blocked)
@@ -77,7 +78,9 @@ tests/
 │       ├── test_events.py                    # ← core/telemetry/events.py
 │       └── test_metrics.py                   # ← core/telemetry/metrics.py
 ├── desktop/
-│   └── test_lifecycle.py                     # ← desktop/lifecycle.py   (launcher.py: no test yet)
+│   ├── test_lifecycle.py                     # ← desktop/lifecycle.py
+│   ├── test_launcher.py                      # ← desktop/launcher.py
+│   └── test_instance.py                      # ← desktop/instance.py
 ├── gui/                                      # DEPRECATED — conftest.py skip-marks everything here
 │   ├── conftest.py                           # skip mark: tkinter deprecation
 │   ├── test_context_menu.py                  # ← gui/context_menu.py
@@ -129,7 +132,7 @@ tests/
 - `tests/server/test_barcode_integration.py` — end-to-end server integration (app + state + routes).
 
 **Known coverage gaps (mirrored test file does not exist yet):**
-`core/telemetry/log_viewer.py`, `desktop/launcher.py`, `server/state.py` — `server/state.py` is partially exercised through `tests/server/test_app.py`.
+`core/telemetry/log_viewer.py`, `server/state.py` — `server/state.py` is partially exercised through `tests/server/test_app.py`.
 
 **Deprecated Tkinter isolation:** everything under `tests/gui/` is skip-marked by `tests/gui/conftest.py` with a deprecation reason, and `tests/test_app_tk_lifecycle.py` carries the same module-level skip. These files are deleted together with `src/profiles/gui` in phase 2.
 

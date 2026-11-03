@@ -526,6 +526,7 @@ class TestMain:
             server_only=False,
             no_config_propose=False,
             gui_backend="web",
+            host="0.0.0.0",
         )
         mock_app.return_value.run.assert_called_once_with(file=None)
 
@@ -554,6 +555,7 @@ class TestMain:
             server_only=False,
             no_config_propose=False,
             gui_backend="web",
+            host="0.0.0.0",
         )
 
 

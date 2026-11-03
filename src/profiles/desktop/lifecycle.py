@@ -129,6 +129,10 @@ class BackgroundServer:
             msg = f"ProFiles server failed to start on {self.host}:{self.port}: {exc}"
             raise ServerStartError(msg) from exc
 
+        # Route code reaches the running server through the app instance
+        # (structural BindableServer protocol in server/state.py).
+        self._app.state.background_server = self
+
         uv_config = uvicorn.Config(
             app=self._app,
             host=self.host,
@@ -216,3 +220,32 @@ class BackgroundServer:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3.0)
         self._reset()
+
+    def rebind(self, host: str) -> None:
+        """Restart the server bound to a new address, in place.
+
+        Used by the ``POST /api/system/bind`` route so the web UI can turn
+        LAN exposure on and off while a client is connected. When the new
+        bind fails, this server is brought back up on the *previous* host
+        and the original :class:`ServerStartError` is re-raised — the app
+        must never be left unreachable.
+
+        Args:
+            host: New bind address (e.g. ``"0.0.0.0"`` or ``"127.0.0.1"``).
+
+        Raises:
+            ServerStartError: The new bind could not be established. The
+                previous bind is still serving when this is raised.
+        """
+        if host == self.host and self.is_running:
+            return
+        previous_host = self.host
+        self.stop()
+        self.host = host
+        try:
+            self.start()
+        except ServerStartError:
+            self.host = previous_host
+            with contextlib.suppress(ServerStartError):
+                self.start()
+            raise

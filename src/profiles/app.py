@@ -7,6 +7,7 @@ In headless mode, files can be launched via command-line arguments.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import logging
 import platform
 import sys
@@ -43,6 +44,29 @@ _TKINTER_UNAVAILABLE_MSG = (
     "ERROR: The Tkinter frontend requires a full Python installation with Tk\n"
     "       (tkinter). Use the default web GUI instead: profiles"
 )
+
+
+def host_error(value: str) -> str | None:
+    """Validate a ``--host`` bind value; return an error message or ``None``.
+
+    The server socket is IPv4 (see ``profiles.desktop.lifecycle``), so only
+    ``0.0.0.0``, ``127.0.0.1`` and plain IPv4 addresses are accepted —
+    hostnames and IPv6 literals cannot be used as bind targets.
+
+    Args:
+        value: The bind address given on the command line.
+
+    Returns:
+        ``None`` when the value can be bound, else a human-readable message.
+    """
+    message = f"unsupported host '{value}' — use 0.0.0.0, 127.0.0.1, or an IPv4 address"
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return message
+    if ip.version != 4:
+        return message
+    return None
 
 
 def _stop_port_owner_command(port: int) -> str:
@@ -91,6 +115,7 @@ class ProFileApp:
         server_only: bool = False,
         no_config_propose: bool = False,
         gui_backend: str = "web",
+        host: str = "0.0.0.0",
     ) -> None:
         """Initialize the application.
 
@@ -102,6 +127,7 @@ class ProFileApp:
             server_only: Run only the web server without opening desktop window.
             no_config_propose: Do not offer to create a .profiles at startup.
             gui_backend: GUI backend to use ('tk' or 'web'). Defaults to 'web'.
+            host: Bind address for the web server ('0.0.0.0' serves the LAN).
         """
         self._config_path = Path(config_path) if config_path is not None else None
         self._log_path = Path(log_path) if log_path is not None else default_log_path()
@@ -109,6 +135,7 @@ class ProFileApp:
         self._server_only = server_only
         self._no_config_propose = no_config_propose
         self._gui_backend = gui_backend.lower()
+        self._host = host
         self._config: AppConfig | None = None
         self._window: MainWindow | None = None
         self._logger: logging.Logger | None = None
@@ -259,12 +286,16 @@ class ProFileApp:
         else:
             self._run_gui()
 
-    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str = "0.0.0.0") -> None:
+    def _run_server_only(self, port: int = _DEFAULT_PORT, host: str | None = None) -> None:
         """Run only the FastAPI background server without opening PyWebView.
 
         A busy port is never fatal: the config is handed off to a running
         ProFiles instance when one owns the port, otherwise the server
         retries on the next free port. Nothing is killed automatically.
+
+        Args:
+            port: TCP port to serve on.
+            host: Bind address; defaults to the ``--host`` CLI value.
         """
         import time
 
@@ -276,7 +307,7 @@ class ProFileApp:
         from profiles.utils.network import get_local_ip
 
         assert self._config is not None
-        server = BackgroundServer(config=self._config, host=host, port=port)
+        server = BackgroundServer(config=self._config, host=host or self._host, port=port)
         try:
             server.start()
         except ServerStartError:
@@ -285,7 +316,9 @@ class ProFileApp:
             fallback_port = find_available_port(port)
             if fallback_port != port:
                 self._announce_fallback_port(port, fallback_port)
-            server = BackgroundServer(config=self._config, host=host, port=fallback_port)
+            server = BackgroundServer(
+                config=self._config, host=host or self._host, port=fallback_port
+            )
             try:
                 server.start()
             except ServerStartError as exc:
@@ -305,7 +338,7 @@ class ProFileApp:
         finally:
             server.stop()
 
-    def _run_web_gui(self, port: int = _DEFAULT_PORT, host: str = "127.0.0.1") -> None:
+    def _run_web_gui(self, port: int = _DEFAULT_PORT, host: str | None = None) -> None:
         """Launch web backend via PyWebView desktop shell.
 
         A busy port is never fatal (issue #4): when a running ProFiles
@@ -313,13 +346,18 @@ class ProFileApp:
         launch exits 0; otherwise the server retries on the next free
         port. The manual "free the port" hint only appears when even the
         fallback port cannot be bound — nothing is killed automatically.
+
+        Args:
+            port: TCP port to serve on.
+            host: Bind address; defaults to the ``--host`` CLI value.
         """
         from profiles.desktop.launcher import launch_desktop_window
         from profiles.desktop.lifecycle import ServerStartError
 
         assert self._config is not None
+        effective_host = host or self._host
         try:
-            launch_desktop_window(self._config, port=port, host=host)
+            launch_desktop_window(self._config, port=port, host=effective_host)
             return
         except ServerStartError:
             pass  # busy port — try handoff or a free port below
@@ -333,7 +371,7 @@ class ProFileApp:
         if fallback_port != port:
             self._announce_fallback_port(port, fallback_port)
         try:
-            launch_desktop_window(self._config, port=fallback_port, host=host)
+            launch_desktop_window(self._config, port=fallback_port, host=effective_host)
         except ServerStartError as exc:
             self._report_server_start_failure(fallback_port, exc)
 
@@ -579,7 +617,17 @@ Examples:
   profiles --headless                       Headless: scan & launch all
   profiles --headless file.mttl             Headless: launch specific file
   profiles --init                           Generate default .profiles in CWD
+  profiles --host 127.0.0.1                 Restrict serving to this machine (loopback only)
         """,
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        type=str,
+        help=(
+            "Bind address for the web server (default: 0.0.0.0, reachable "
+            "from the local network; 127.0.0.1 restricts to this machine)"
+        ),
     )
     parser.add_argument(
         "--config",
@@ -626,6 +674,10 @@ Examples:
 
     args = parser.parse_args()
 
+    host_error_message = host_error(args.host)
+    if host_error_message is not None:
+        parser.error(host_error_message)
+
     if args.init:
         init_default_config()
         return
@@ -645,6 +697,7 @@ Examples:
         server_only=args.server_only,
         no_config_propose=args.no_config_propose,
         gui_backend=gui_backend,
+        host=args.host,
     )
     app.run(file=args.file)
 
