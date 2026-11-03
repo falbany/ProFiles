@@ -11,6 +11,7 @@ from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.server.app import create_app
+from profiles.server.routes.config import has_disk_path
 from profiles.server.state import ServerState
 
 
@@ -118,6 +119,36 @@ async def test_content_flags_session_trial(tmp_path: Path) -> None:
     payload = response.json()
     assert payload["session_trial"] is True
     assert payload["config_path"] is None
+
+
+@pytest.mark.anyio
+async def test_content_flags_session_trial_after_live_drop(
+    config_state: ServerState,
+) -> None:
+    """Pin the live flow: a dropped config must never expose a disk anchor.
+
+    Ruling R4: ``_config_response`` re-records a resolved path into the
+    state even for a drop, so trial detection must ride the explicit
+    ``ServerState.session_trial`` flag — not path absence.
+    """
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        drop = await client.post(
+            "/api/config/load-content",
+            json={"filename": "my.profiles", "content": "defaults:\n  title: Dropped\n"},
+        )
+        assert drop.status_code == 200
+        assert drop.json()["session_trial"] is True
+
+        assert has_disk_path(config_state) is False
+
+        response = await client.get("/api/config/content")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session_trial"] is True
+    assert payload["config_path"] is None
+    assert payload["filename"] == "Dropped"
 
 
 @pytest.mark.anyio

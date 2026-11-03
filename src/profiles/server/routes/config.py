@@ -134,6 +134,7 @@ def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
 
     loaded = ConfigReader(config_path).load()
     state.config = loaded
+    state.session_trial = False
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     return _config_response(state)
@@ -165,15 +166,17 @@ def validate_issues(content: str, display_name: str) -> list[dict[str, str]]:
 def has_disk_path(state: ServerState) -> bool:
     """Return True when the active configuration is backed by a recorded file.
 
-    A configuration applied from dropped content (``POST /load-content``)
-    is a session trial: neither the state nor the loaded
-    :class:`AppConfig` carries a recorded disk path, so there is no file
-    to save edits back to. Save endpoints gate on this helper to refuse
-    writing to a merely CWD-resolved path instead of the trial's source.
+    The explicit :attr:`ServerState.session_trial` flag takes precedence
+    over path presence: a configuration applied from dropped content
+    (``POST /load-content``) is a session trial with no disk anchor, even
+    though the shared ``_config_response`` helper re-records a resolved
+    path into the state for every response (existing shared behavior).
+    Save endpoints gate on this helper to refuse writing to a merely
+    CWD-resolved path instead of the trial's source.
     """
-    if state.config_path:
-        return True
-    return bool(getattr(state.config, "config_path", None))
+    return not state.session_trial and (
+        state.config_path is not None or getattr(state.config, "config_path", None) is not None
+    )
 
 
 @router.get("")
@@ -225,6 +228,7 @@ async def load_content_endpoint(payload: LoadContentRequest, request: Request) -
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     state.config = loaded
+    state.session_trial = True
     state.active_directory = _choose_active_directory(loaded, None)
     response = _config_response(state)
     response["session_trial"] = True
@@ -249,6 +253,7 @@ async def create_config_endpoint(payload: CreateConfigRequest, request: Request)
 
     loaded = ConfigReader(target_config).load()
     state.config = loaded
+    state.session_trial = False
     state.config_path = target_config
     state.active_directory = _choose_active_directory(loaded, target_config)
     return _config_response(state)
@@ -282,6 +287,7 @@ async def reload_config_endpoint(request: Request) -> dict:
 
     loaded.config_path = config_path
     state.config = loaded
+    state.session_trial = False
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     response = _config_response(state)
@@ -305,14 +311,16 @@ async def get_config_content(request: Request) -> dict:
     """Return the active configuration file's text for the YAML editor.
 
     Responds ``{"filename", "content", "config_path", "session_trial"}``.
-    A session trial (config applied from dropped content, no recorded
-    path) answers an empty payload flagged ``session_trial=True`` instead
-    of file text; a recorded-but-missing file answers 404.
+    A session trial (config applied from dropped content) answers an
+    empty body flagged ``session_trial=True`` — ``config_path`` stays
+    ``None`` so the stale CWD-resolved path never leaks, and ``filename``
+    carries the config's display name — instead of file text; a
+    recorded-but-missing file answers 404.
     """
     state: ServerState = request.app.state.server_state
     if not has_disk_path(state):
         return {
-            "filename": "",
+            "filename": state.config.title or "session-trial",
             "content": "",
             "config_path": None,
             "session_trial": True,
