@@ -17,6 +17,7 @@ import {
   loadConfigContent,
   reloadConfig,
   exportCsvToDisk,
+  setLanEnabled,
 } from "./api/client";
 import type { AppConfigData, ExternalEvent, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import {
@@ -104,6 +105,8 @@ export default function App() {
   const [propertiesFile, setPropertiesFile] = useState<ScannedFileItem | null>(null);
   const [showLogViewer, setShowLogViewer] = useState<boolean>(false);
   const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
+  /** Pending LAN toggle (true/false) awaiting user confirmation. */
+  const [lanPending, setLanPending] = useState<boolean | null>(null);
 
   // Workflow Modal state
   const [workflowLaunchParams, setWorkflowLaunchParams] = useState<{
@@ -149,6 +152,11 @@ export default function App() {
   const dismissToast = () => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(null);
+  };
+
+  /** Open the in-app confirmation dialog for a LAN toggle request. */
+  const toggleLan = (next: boolean) => {
+    setLanPending(next);
   };
 
   const beginScan = () => {
@@ -1553,6 +1561,8 @@ export default function App() {
         language={language}
         onLanguageChange={setLanguage}
         activeConfigName={config?.config_path ? config.config_path.split(/[\\/]/).pop() || config.config_path : undefined}
+        lanEnabled={systemInfo?.lan_enabled ?? null}
+        onToggleLan={toggleLan}
       />
       </div>
 
@@ -1676,6 +1686,40 @@ export default function App() {
         danger
         onConfirm={confirmDeleteFile}
         onCancel={() => setPendingDeleteFile(null)}
+      />
+
+      {/* LAN toggle confirmation */}
+      <ConfirmDialog
+        isOpen={lanPending !== null}
+        title={lanPending ? "Enable LAN access?" : "Restrict to this machine?"}
+        message={
+          lanPending
+            ? `ProFiles will be reachable by anyone on this network:\nhttp://${systemInfo?.hostname}:${window.location.port}\nhttp://${systemInfo?.ip}:${window.location.port}`
+            : "ProFiles will be reachable only on this machine."
+        }
+        confirmLabel={lanPending ? "Enable LAN" : "Restrict"}
+        onConfirm={async () => {
+          const next = lanPending!;
+          setLanPending(null);
+          try {
+            await setLanEnabled(next);
+            const sys = await fetchSystemInfo();
+            setSystemInfo(sys);
+            showToast(
+              next
+                ? "ProFiles is now reachable on the local network."
+                : "ProFiles is restricted to this machine.",
+              "info"
+            );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to update LAN binding";
+            showToast(`Failed to update LAN binding: ${msg}`, "error");
+            // Refetch to restore the actual state
+            const sys = await fetchSystemInfo();
+            setSystemInfo(sys);
+          }
+        }}
+        onCancel={() => setLanPending(null)}
       />
 
       {/* Single Match Launch Confirmation */}

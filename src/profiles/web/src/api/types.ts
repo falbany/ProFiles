@@ -3,6 +3,8 @@ export interface SystemInfo {
   ip: string;
   username: string;
   os_release: string;
+  /** Current bind state; null when the server object is unknown. */
+  lan_enabled: boolean | null;
 }
 
 export interface AppConfigData {

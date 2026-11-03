@@ -72,6 +72,28 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   return res.json();
 }
 
+/** Flip the running server between LAN exposure and loopback-only. */
+export async function setLanEnabled(
+  lan: boolean
+): Promise<{ host: string; lan_enabled: boolean }> {
+  const res = await fetch("/api/system/bind", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lan }),
+  });
+  if (!res.ok) {
+    let detail = "Failed to update LAN binding";
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep the fallback message
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 export async function fetchConfig(): Promise<AppConfigData> {
   const res = await fetch("/api/config");
   if (!res.ok) throw new Error("Failed to fetch app configuration");

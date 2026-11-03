@@ -1,5 +1,5 @@
 import Tooltip from "./Tooltip";
-import { Activity, Download, FileCog, FileText, Globe, Keyboard, Moon, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { Activity, Download, FileCog, FileText, Globe, Keyboard, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
@@ -21,6 +21,10 @@ interface StatusBarProps {
   language?: Language;
   onLanguageChange?: (lang: Language) => void;
   activeConfigName?: string;
+  /** Current bind state from /api/system; null while unknown. */
+  lanEnabled?: boolean | null;
+  /** Request a bind change; renders the LAN switch only when set. */
+  onToggleLan?: (next: boolean) => void;
 }
 
 export function StatusBar({
@@ -38,6 +42,8 @@ export function StatusBar({
   language = "en",
   onLanguageChange,
   activeConfigName,
+  lanEnabled,
+  onToggleLan,
 }: StatusBarProps) {
   return (
     <footer className="flex items-center justify-between border-t border-line bg-app px-4 py-2 text-[11px] text-ink-muted transition-colors duration-200">
@@ -70,6 +76,28 @@ export function StatusBar({
               <User className="h-3 w-3 text-ink-faint" />
               <span>{systemInfo.username || "operator"}</span>
             </span>
+            {onToggleLan !== undefined && (
+              <>
+                <span className="text-ink-faint">|</span>
+                <Tooltip text="LAN access" block={false}>
+                  <button
+                    onClick={() => onToggleLan(lanEnabled !== true)}
+                    disabled={lanEnabled === null}
+                    aria-pressed={lanEnabled === true}
+                    className={`focus-ring flex items-center gap-1 rounded px-1 py-0.5 text-[10px] ${
+                      lanEnabled === null
+                        ? "text-ink-faint cursor-not-allowed"
+                        : lanEnabled === true
+                        ? "text-status-success-text"
+                        : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    <Network className="h-3 w-3" />
+                    <span>LAN</span>
+                  </button>
+                </Tooltip>
+              </>
+            )}
           </div>
         )}
       </div>
