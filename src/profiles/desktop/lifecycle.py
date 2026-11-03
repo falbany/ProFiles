@@ -22,6 +22,8 @@ from profiles.server.app import create_app
 from profiles.server.state import ServerState
 
 _STARTUP_TIMEOUT_S = 10.0
+_GRACEFUL_STOP_TIMEOUT_S = 3.0
+_FORCE_STOP_TIMEOUT_S = 2.0
 
 
 class ServerStartError(RuntimeError):
@@ -94,17 +96,28 @@ class BackgroundServer:
     def _bind_listener(self) -> socket.socket:
         """Create, bind, and pre-listen the server socket.
 
-        Deliberately without ``SO_REUSEADDR`` (and without ``SO_REUSEPORT``):
-        on macOS/BSD those options permit a second bind against an active
-        listener, which would let two server instances silently share a
-        port. Binding here also surfaces address conflicts synchronously
-        instead of inside the worker thread.
+        ``SO_REUSEADDR`` is required for :meth:`rebind`: uvicorn closes the
+        accepted keep-alive connections server-side during shutdown, and each
+        of those leaves a TIME_WAIT socket pinned to the old address for
+        ~15-30 s on macOS. Without the option the new bind fails with
+        ``EADDRINUSE`` even though no listener holds the port anymore
+        (loopback→LAN rebind was therefore effectively impossible).
+
+        The double-bind hazard this option adds is contained elsewhere:
+        :func:`find_available_port` probes *without* it so port discovery
+        still refuses occupied ports, and a second launch is arbitrated by
+        the instance manifest/port-handoff mechanism (issue #4), never by
+        sharing the listener. ``SO_REUSEPORT`` stays off — that is the
+        option that would let two servers silently share the port. Binding
+        here still surfaces address conflicts synchronously instead of
+        inside the worker thread.
         """
         if self._sock is not None:
             self._sock.close()
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # Not SO_REUSEADDR — see docstring. IPv4 only: all call sites bind
-        # ``0.0.0.0`` or ``127.0.0.1`` (no IPv6-literal or hostname hosts).
+        # IPv4 only: all call sites bind ``0.0.0.0`` or ``127.0.0.1``
+        # (no IPv6-literal or hostname hosts).
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((self.host, self.port))
         sock.listen(1)
         self._sock = sock
@@ -210,15 +223,22 @@ class BackgroundServer:
     def stop(self) -> None:
         """Signal the Uvicorn server to stop and join the thread.
 
-        Safe to call before :meth:`start` or more than once.
+        Safe to call before :meth:`start` or more than once. A client
+        wedged in a long-lived request can outlast the graceful shutdown
+        window; in that case the server is force-exited (abruptly closing
+        outstanding requests) so the port is actually released for a
+        subsequent :meth:`start` — e.g. the rebind path.
         """
         if self._manifest_published:
             self._manifest_published = False
             remove_manifest(self.port)
-        if self._server is not None:
+        if self._server is not None and not self._server.should_exit:
             self._server.should_exit = True
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=3.0)
+            self._thread.join(timeout=_GRACEFUL_STOP_TIMEOUT_S)
+        if self._thread and self._thread.is_alive() and self._server is not None:
+            self._server.force_exit = True
+            self._thread.join(timeout=_FORCE_STOP_TIMEOUT_S)
         self._reset()
 
     def rebind(self, host: str) -> None:

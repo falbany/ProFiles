@@ -126,6 +126,45 @@ def test_rebind_changes_host_and_reverses(tmp_path: Path) -> None:
         server.stop()
 
 
+def test_start_and_rebind_succeed_with_timewait_sockets(tmp_path: Path) -> None:
+    """A prior server-side close (TIME_WAIT) must not block start or rebind.
+
+    Regression test: uvicorn closes accepted keep-alive connections
+    server-side during shutdown, leaving TIME_WAIT sockets pinned to the
+    old address for ~15-30 s on macOS. Without ``SO_REUSEADDR`` on the
+    listener, the loopback→LAN rebind then failed with ``EADDRINUSE``
+    ("Errno 48") even though no listener held the port. Real browsers
+    keep connections alive, so this was deterministic in production while
+    client-first-closing test HTTP clients masked it.
+    """
+    port = find_available_port(start_port=8000)
+
+    # Plant a TIME_WAIT socket on the exact address the server will bind:
+    # a connection on 127.0.0.1:<port> closed *server-side first*, which is
+    # what uvicorn does during shutdown.
+    pair_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    pair_listener.bind(("127.0.0.1", port))
+    pair_listener.listen(1)
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_sock.connect(("127.0.0.1", port))
+    conn, _ = pair_listener.accept()
+    conn.close()  # server side closes first → server side in TIME_WAIT
+    pair_listener.close()
+    client_sock.close()
+
+    server = BackgroundServer(
+        config=AppConfig(title="rebind over timewait"), host="127.0.0.1", port=port
+    )
+    server.start()
+    try:
+        server.rebind("0.0.0.0")
+        assert server.host == "0.0.0.0"
+        response = httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=2.0)
+        assert response.status_code == 200
+    finally:
+        server.stop()
+
+
 def _wait_for(condition, timeout_s: float = 5.0) -> bool:
     """Poll ``condition`` until truthy or ``timeout_s`` elapsed."""
     deadline = time.monotonic() + timeout_s
