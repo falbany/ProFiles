@@ -34,4 +34,4 @@ def test_launch_web_backend_calls_desktop() -> None:
     app._config = AppConfig(title="Test Bench")
     with patch("profiles.desktop.launcher.launch_desktop_window") as mock_launch:
         app._run_web_gui()
-        mock_launch.assert_called_once_with(app._config, port=8088, host="127.0.0.1")
+        mock_launch.assert_called_once_with(app._config, port=8088, host="0.0.0.0")

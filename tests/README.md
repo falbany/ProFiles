@@ -61,7 +61,7 @@ Highlights:
 | File | Source Module | Focus Areas |
 |---|---|---|
 | tests/test_app.py | profiles.app | ProFileApp, main(), init_default_config |
-| tests/test_app_*.py | profiles.app | supplements: backend selection, launch resolution, log path, no-tkinter run, deprecated tk lifecycle |
+| tests/test_app_*.py | profiles.app | supplements: backend selection, --host option, launch resolution, log path, no-tkinter run, deprecated tk lifecycle |
 | tests/test_config.py | profiles.config | shim re-exports (ColumnConfiguration, …) |
 | tests/core/… | profiles.core.* | actions, config (models/reader/schema/service/loader/matcher/validator/template/inheritance/yaml_io), environment (system/execution/matcher/render/interactions/message_dialog/workflow), processing (scanner/file_classifier/file_metadata/column_extractor), telemetry (diagnostics/events/metrics) |
 | tests/desktop/test_lifecycle.py | profiles.desktop.lifecycle | port discovery, background server lifecycle |

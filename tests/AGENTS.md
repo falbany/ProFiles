@@ -32,6 +32,7 @@ tests/
 ├── conftest.py                               # os.startfile polyfill (root)
 ├── test_app.py                               # ← app.py
 ├── test_app_backend_selection.py             # ← app.py (supplement: --tkinter/web backend routing)
+├── test_app_host.py                          # ← app.py (supplement: --host CLI option)
 ├── test_app_launch_resolution.py             # ← app.py (supplement: launch config resolution)
 ├── test_app_log_path.py                      # ← app.py (supplement: CWD-independent log path)
 ├── test_app_no_tkinter.py                    # ← app.py (supplement: web/headless run with tkinter blocked)

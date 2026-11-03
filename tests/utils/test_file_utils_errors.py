@@ -15,11 +15,19 @@ import pytest
 
 from profiles.utils.file_utils import _scan_subtree, scan_directory
 
+# ``os.geteuid`` exists only on POSIX, and POSIX chmod semantics are assumed
+# by every test below; evaluating it unconditionally broke collection on
+# Windows (AttributeError at decoration time). Skip everywhere non-POSIX.
+_SKIP_POSIX_PERMISSION_TESTS = not hasattr(os, "geteuid") or os.geteuid() == 0
+
 
 class TestPermissionSkipReporting:
     """Unreadable subtrees are skipped (other folders still scanned) and reported."""
 
-    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores permission bits")
+    @pytest.mark.skipif(
+        _SKIP_POSIX_PERMISSION_TESTS,
+        reason="POSIX permission bits required (and never ignored by root)",
+    )
     def test_locked_directory_recursive_scan_directory(self, tmp_path: Path) -> None:
         for rel in ("locked/a.pdf", "open/b.pdf"):
             p = tmp_path / rel
@@ -42,7 +50,10 @@ class TestPermissionSkipReporting:
         assert any("locked" in Path(p).name for p in locked_paths)
         assert all(isinstance(e, str) and e for _p, e in skips)
 
-    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores permission bits")
+    @pytest.mark.skipif(
+        _SKIP_POSIX_PERMISSION_TESTS,
+        reason="POSIX permission bits required (and never ignored by root)",
+    )
     def test_locked_directory_scan_subtree(self, tmp_path: Path) -> None:
         for rel in ("locked/a.pdf", "open/b.pdf"):
             p = tmp_path / rel
@@ -59,7 +70,10 @@ class TestPermissionSkipReporting:
         assert skips
 
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX chmod semantics")
-    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores permission bits")
+    @pytest.mark.skipif(
+        _SKIP_POSIX_PERMISSION_TESTS,
+        reason="POSIX permission bits required (and never ignored by root)",
+    )
     def test_no_callback_keeps_silent_behavior(self, tmp_path: Path) -> None:
         """Default on_skip=None: locked dirs are still silently skipped."""
         for rel in ("locked/a.pdf", "open/b.pdf"):
