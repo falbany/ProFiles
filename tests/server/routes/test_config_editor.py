@@ -11,7 +11,7 @@ from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.server.app import create_app
-from profiles.server.routes.config import has_disk_path
+from profiles.server.routes.config import has_disk_path, validate_issues
 from profiles.server.state import ServerState
 
 
@@ -506,3 +506,56 @@ async def test_save_as_applies_new_config(tmp_path: Path) -> None:
     assert state.active_directory == scan_dir
     assert state.session_trial is False
     assert payload["config"]["title"] == "Saved As Copy"
+
+
+@pytest.mark.anyio
+async def test_template_returns_starter_content(config_state: ServerState) -> None:
+    """Verify POST /template renders starter content that validates clean.
+
+    Given: A session in any state
+    When: POST /template is called
+    Then: 200 with filename ".profiles" and content that passes the
+        project's own validator (the template has brace-escaping history)
+    """
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/template")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["filename"] == ".profiles"
+    assert validate_issues(payload["content"], display_name=".profiles") == []
+
+
+@pytest.mark.anyio
+async def test_template_substitutes_active_directory(
+    config_state: ServerState, tmp_path: Path
+) -> None:
+    """Verify the cwd placeholder is substituted with the active directory."""
+    scan_dir = tmp_path / "scans"
+    scan_dir.mkdir()
+    config_state.active_directory = scan_dir
+
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/template")
+
+    assert response.status_code == 200
+    search_line = next(
+        line
+        for line in response.json()["content"].splitlines()
+        if line.lstrip().startswith("search_dir:")
+    )
+    assert str(scan_dir) in search_line
+
+
+@pytest.mark.anyio
+async def test_template_does_not_change_state(config_state: ServerState) -> None:
+    """Verify rendering is read-only: the live configuration is untouched."""
+    original = config_state.config
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/template")
+
+    assert response.status_code == 200
+    assert config_state.config is original

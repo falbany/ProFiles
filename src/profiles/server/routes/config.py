@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
+from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.launch.creation import propose_creation
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
@@ -283,6 +284,24 @@ async def create_config_endpoint(payload: CreateConfigRequest, request: Request)
     state.config_path = target_config
     state.active_directory = _choose_active_directory(loaded, target_config)
     return _config_response(state)
+
+
+@router.post("/template")
+async def template_config_endpoint(request: Request) -> dict:
+    """Render the starter configuration in memory; nothing written, no state change.
+
+    In-memory render of the same content ``--init``/``propose_creation``
+    writes to disk (the canonical :data:`STARTER_CONFIG_TEMPLATE`), powering
+    the editor's New action. The ``{cwd}`` placeholder — the template's
+    only single-brace placeholder — is substituted with the active
+    directory so the rendered draft scans where the session points.
+    """
+    state: ServerState = request.app.state.server_state
+    cwd = str(state.active_directory) if state.active_directory else str(Path.cwd())
+    return {
+        "content": STARTER_CONFIG_TEMPLATE.format(cwd=cwd),
+        "filename": ".profiles",
+    }
 
 
 @router.post("/reload")
