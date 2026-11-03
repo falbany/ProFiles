@@ -148,6 +148,30 @@ describe("ConfigEditorModal", () => {
     expect(screen.queryByRole("dialog", { name: /discard changes\?/i })).toBeNull();
   });
 
+  it("does not flag a freshly opened CRLF file as dirty (regression)", async () => {
+    // CodeMirror stores LF line endings; the dirty baseline must be
+    // normalized the same way or an untouched CRLF .profiles file would
+    // trigger "Discard changes?" on its first close request.
+    fetchContentSpy.mockResolvedValue(makeContent({ content: "a: 1\r\nb: 2\r\n" }));
+    const user = userEvent.setup();
+    const { onClose } = renderModal();
+
+    await readyEditorView();
+    // Untouched file: no dirty chip, and the fetched text round-trips
+    // through the editor as LF.
+    expect(screen.queryByRole("status")).toBeNull();
+    const view = EditorView.findFromDOM(
+      document.querySelector(".cm-editor") as HTMLElement,
+    );
+    expect(view?.state.doc.toString()).toBe("a: 1\nb: 2\n");
+
+    // Escape closes immediately — no discard warning.
+    screen.getByRole("button", { name: /open in os/i }).focus();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: /discard changes\?/i })).toBeNull();
+  });
+
   it("test_header_open_in_os_calls_open_config_file", async () => {
     fetchContentSpy.mockResolvedValue(makeContent());
     openInOSSpy.mockResolvedValue({ status: "SUCCESS", message: "Opened" });

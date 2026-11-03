@@ -66,6 +66,22 @@ const configEditorTheme = EditorView.theme({
 });
 
 /**
+ * Normalize fetched content to the LF line endings CodeMirror stores
+ * (CRLF is normalized away when the doc is created). The dirty check
+ * compares the doc against this baseline; without it an untouched CRLF
+ * file — realistic for .profiles files on Windows hosts — would read as
+ * dirty on its very first Escape/✕/backdrop close.
+ */
+function toEditorText(content: string): string {
+  return content.replace(/\r\n?/g, "\n");
+}
+
+/** True when the editor document differs from the text it was loaded with. */
+function isDirty(view: EditorView | null, loadedText: string): boolean {
+  return view !== null && view.state.doc.toString() !== loadedText;
+}
+
+/**
  * Full-screen YAML configuration editor (issue #95). This shell owns the
  * CodeMirror 6 instance, load-on-open, dirty tracking and the guarded
  * Escape/✕ close; the toolbar action buttons (Save, Reload, …) are wired
@@ -103,8 +119,9 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
     fetchConfigContent()
       .then((data) => {
         if (cancelled) return;
-        loadedTextRef.current = data.content;
-        setLoad({ status: "ready", data });
+        const content = toEditorText(data.content);
+        loadedTextRef.current = content;
+        setLoad({ status: "ready", data: { ...data, content } });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -130,7 +147,7 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
         configEditorTheme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            setDirty(update.state.doc.toString() !== loadedTextRef.current);
+            setDirty(isDirty(update.view, loadedTextRef.current));
           }
         }),
       ],
@@ -145,12 +162,11 @@ export function ConfigEditorModal({ open, onClose, onApplied: _onApplied }: Conf
 
   /**
    * Close request shared by Escape, the ✕ button and backdrop clicks.
-   * A dirty editor (doc ≠ loaded text) gets the discard warning instead;
-   * a clean editor closes immediately.
+   * A dirty editor (per the shared isDirty predicate) gets the discard
+   * warning instead; a clean editor closes immediately.
    */
   function requestClose() {
-    const view = editorViewRef.current;
-    if (view && view.state.doc.toString() !== loadedTextRef.current) {
+    if (isDirty(editorViewRef.current, loadedTextRef.current)) {
       setConfirmDiscardOpen(true);
       return;
     }
