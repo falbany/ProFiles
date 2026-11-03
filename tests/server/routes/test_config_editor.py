@@ -1,4 +1,4 @@
-"""Tests for the config editor endpoints: validate + content."""
+"""Tests for the config editor endpoints: validate + content + save."""
 
 from __future__ import annotations
 
@@ -165,3 +165,119 @@ async def test_content_for_missing_file_returns_text_or_error(
 
     assert response.status_code == 404
     assert str(missing_path) in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_save_refused_for_session_trial(config_state: ServerState, tmp_path: Path) -> None:
+    """Verify save is refused (400) for a session trial and writes nothing.
+
+    Given: A config applied from dropped content (no disk anchor)
+    When: POST /save is called
+    Then: 400 is returned and no file appears on disk
+    """
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        drop = await client.post(
+            "/api/config/load-content",
+            json={"filename": "my.profiles", "content": "defaults:\n  title: Dropped\n"},
+        )
+        assert drop.status_code == 200
+        assert has_disk_path(config_state) is False
+
+        response = await client.post(
+            "/api/config/save",
+            json={"content": "defaults:\n  title: Saved\n"},
+        )
+
+    assert response.status_code == 400
+    assert not (tmp_path / ".profiles").exists()
+
+
+@pytest.mark.anyio
+async def test_save_rejects_invalid_content_without_writing(tmp_path: Path) -> None:
+    """Verify invalid content answers 400 with the issues list, file bytes unchanged.
+
+    Given: A disk-anchored session with an on-disk config file
+    When: POST /save is called with invalid YAML and no force flag
+    Then: 400 with the issues list and the file bytes are untouched
+    """
+    config_path = tmp_path / ".profiles"
+    file_text = 'defaults:\n  title: "On Disk"\n'
+    config_path.write_text(file_text, encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={"content": "defaults: [unclosed"},
+        )
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    assert detail[0]["severity"] == "error"
+    assert detail[0]["message"]
+    assert config_path.read_text(encoding="utf-8") == file_text
+
+
+@pytest.mark.anyio
+async def test_save_force_writes_invalid_content(tmp_path: Path) -> None:
+    """Verify force=True writes invalid content to disk and answers SAVED.
+
+    Given: A disk-anchored session and invalid YAML content
+    When: POST /save is called with force=True
+    Then: 200 SAVED and the file contains the invalid text verbatim
+    """
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "On Disk"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    invalid_text = "defaults: [unclosed"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={"content": invalid_text, "force": True},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["path"] == str(config_path)
+    assert config_path.read_text(encoding="utf-8") == invalid_text
+    assert "config" in payload
+
+
+@pytest.mark.anyio
+async def test_save_writes_and_applies_valid_config(tmp_path: Path) -> None:
+    """Verify a valid save writes the file and applies it to the live state.
+
+    Given: A disk-anchored session and valid YAML content
+    When: POST /save is called without force
+    Then: 200 SAVED, the file is written, and ``state.config`` reflects
+        the new content with the session-trial flag cleared
+    """
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "Old Title"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    valid_text = f"defaults:\n  title: Fresh Title\n  search_dir: '{tmp_path}'\n"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={"content": valid_text},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["path"] == str(config_path)
+    assert config_path.read_text(encoding="utf-8") == valid_text
+    assert state.config.title == "Fresh Title"
+    assert payload["config"]["title"] == "Fresh Title"
+    assert state.session_trial is False

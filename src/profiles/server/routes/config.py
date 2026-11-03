@@ -39,6 +39,11 @@ class ValidateRequest(BaseModel):
     filename: str
 
 
+class SaveRequest(BaseModel):
+    content: str
+    force: bool = False
+
+
 def _is_config_path(path: Path) -> bool:
     return path.name.endswith(CONFIG_FILE_NAMES)
 
@@ -339,6 +344,40 @@ async def get_config_content(request: Request) -> dict:
         "config_path": str(config_path),
         "session_trial": False,
     }
+
+
+@router.post("/save")
+async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
+    """Write editor content to the active config file and apply it.
+
+    Gate order: session-trial refusal (:func:`has_disk_path`) →
+    :func:`validate_issues` → 400 with the issues list when invalid and
+    not ``force`` → write the file → :func:`_apply_config_from_disk`, so
+    the live configuration is always re-read from what is on disk.
+    ``force=True`` is the escape hatch that lets a broken draft reach the
+    disk (it will load as defaults until fixed); without it, bad YAML
+    never touches the file.
+
+    Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``;
+    the apply step clears ``session_trial``, anchoring the saved config
+    to its file.
+    """
+    state: ServerState = request.app.state.server_state
+    if not has_disk_path(state):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot save: the active configuration is a session trial "
+            "with no file on disk. Load or create a configuration first.",
+        )
+
+    config_path = state.active_config_path()
+    issues = validate_issues(payload.content, display_name=config_path.name)
+    if issues and not payload.force:
+        raise HTTPException(status_code=400, detail=issues)
+
+    config_path.write_text(payload.content, encoding="utf-8")
+    config = _apply_config_from_disk(state, config_path)
+    return {"status": "SAVED", "path": str(config_path), "config": config}
 
 
 @router.post("/select-directory")
