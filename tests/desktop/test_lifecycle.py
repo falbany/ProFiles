@@ -105,3 +105,49 @@ def test_background_server_lifecycle() -> None:
         server.stop()
         time.sleep(0.5)
         assert not server.is_running
+
+
+def test_rebind_changes_host_and_reverses(tmp_path: Path) -> None:
+    """rebind switches the live bind host; app-state registration exposes it."""
+    port = find_available_port(start_port=8000)
+    server = BackgroundServer(config=AppConfig(title="rebind"), host="127.0.0.1", port=port)
+    server.start()
+    try:
+        server.rebind("0.0.0.0")
+        assert server.host == "0.0.0.0"
+        response = httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=2.0)
+        assert response.status_code == 200
+        # The registration the route layer relies on:
+        assert server._app.state.background_server is server
+        server.rebind("127.0.0.1")
+        response = httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=2.0)
+        assert response.status_code == 200
+    finally:
+        server.stop()
+
+
+_original_socket_bind = socket.socket.bind
+
+
+def _bind_rejects_wildcard(sock: socket.socket, addr: tuple[str, int]) -> None:
+    """Bind normally except for 0.0.0.0, which is forced to fail (firewall sim)."""
+    if addr[0] == "0.0.0.0":
+        raise OSError("simulated bind failure for the wildcard address")
+    _original_socket_bind(sock, addr)
+
+
+def test_rebind_failure_reverts_to_previous_host(mocker, tmp_path: Path) -> None:
+    """A denied wildcard bind leaves the server serving the original address."""
+    mocker.patch.object(socket.socket, "bind", _bind_rejects_wildcard)
+    port = find_available_port(start_port=8000)
+    server = BackgroundServer(config=AppConfig(title="revert"), host="127.0.0.1", port=port)
+    server.start()
+    try:
+        with pytest.raises(ServerStartError):
+            server.rebind("0.0.0.0")
+        assert server.host == "127.0.0.1"
+        assert server.is_running
+        response = httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=2.0)
+        assert response.status_code == 200
+    finally:
+        server.stop()
