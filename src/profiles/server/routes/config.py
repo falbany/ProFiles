@@ -162,6 +162,20 @@ def validate_issues(content: str, display_name: str) -> list[dict[str, str]]:
     return []
 
 
+def has_disk_path(state: ServerState) -> bool:
+    """Return True when the active configuration is backed by a recorded file.
+
+    A configuration applied from dropped content (``POST /load-content``)
+    is a session trial: neither the state nor the loaded
+    :class:`AppConfig` carries a recorded disk path, so there is no file
+    to save edits back to. Save endpoints gate on this helper to refuse
+    writing to a merely CWD-resolved path instead of the trial's source.
+    """
+    if state.config_path:
+        return True
+    return bool(getattr(state.config, "config_path", None))
+
+
 @router.get("")
 async def get_config(request: Request) -> dict:
     """Return active application configuration and available directories."""
@@ -284,6 +298,39 @@ async def validate_config_endpoint(payload: ValidateRequest) -> dict:
     """
     issues = validate_issues(payload.content, display_name=payload.filename)
     return {"valid": not issues, "issues": issues}
+
+
+@router.get("/content")
+async def get_config_content(request: Request) -> dict:
+    """Return the active configuration file's text for the YAML editor.
+
+    Responds ``{"filename", "content", "config_path", "session_trial"}``.
+    A session trial (config applied from dropped content, no recorded
+    path) answers an empty payload flagged ``session_trial=True`` instead
+    of file text; a recorded-but-missing file answers 404.
+    """
+    state: ServerState = request.app.state.server_state
+    if not has_disk_path(state):
+        return {
+            "filename": "",
+            "content": "",
+            "config_path": None,
+            "session_trial": True,
+        }
+
+    config_path = state.active_config_path()
+    if not config_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Configuration file not found: {config_path}",
+        )
+
+    return {
+        "filename": config_path.name,
+        "content": config_path.read_text(encoding="utf-8"),
+        "config_path": str(config_path),
+        "session_trial": False,
+    }
 
 
 @router.post("/select-directory")
