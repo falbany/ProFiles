@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorView } from "codemirror";
 import { ConfigEditorModal } from "./ConfigEditorModal";
 import {
+  browseDirectory,
   fetchConfigContent,
   fetchConfigTemplate,
   loadConfigContent,
   openConfigFile,
+  saveConfigFile,
+  saveConfigFileAs,
   validateConfigContent,
 } from "../api/client";
-import type { AppConfigData, ConfigContentData, ValidationIssue } from "../api/types";
+import type { AppConfigData, BrowseResult, ConfigContentData, ValidationIssue } from "../api/types";
 
 vi.mock("../api/client", () => ({
   fetchConfigContent: vi.fn(),
@@ -19,6 +22,9 @@ vi.mock("../api/client", () => ({
   fetchConfigTemplate: vi.fn(),
   validateConfigContent: vi.fn(),
   loadConfigContent: vi.fn(),
+  saveConfigFile: vi.fn(),
+  saveConfigFileAs: vi.fn(),
+  browseDirectory: vi.fn(),
 }));
 
 // jsdom gap (not a CodeMirror mock): the view's measurement code calls
@@ -37,6 +43,9 @@ const openInOSSpy = vi.mocked(openConfigFile);
 const templateSpy = vi.mocked(fetchConfigTemplate);
 const validateSpy = vi.mocked(validateConfigContent);
 const loadContentSpy = vi.mocked(loadConfigContent);
+const saveSpy = vi.mocked(saveConfigFile);
+const saveAsSpy = vi.mocked(saveConfigFileAs);
+const browseSpy = vi.mocked(browseDirectory);
 
 const SAMPLE_YAML = 'release: "1.0"\nsearch_dir: "C:/data"\n';
 /** Starter template served with CRLF endings — realistic for Windows hosts. */
@@ -69,6 +78,18 @@ function makeAppConfig(): AppConfigData {
     column_headers: [],
     column_names: [],
     row_colors: [],
+  };
+}
+
+/** Listing served by /api/fs/browse for the Save As dialog. */
+function makeBrowseResult(overrides: Partial<BrowseResult> = {}): BrowseResult {
+  return {
+    current_path: "/home/user/configs",
+    parent_path: "/home/user",
+    items: [
+      { name: "other.profiles", path: "/home/user/configs/other.profiles", is_dir: false, is_config: true },
+    ],
+    ...overrides,
   };
 }
 
@@ -456,5 +477,258 @@ describe("ConfigEditorModal", () => {
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog", { name: /discard changes\?/i })).toBeNull();
+  });
+
+  it("test_save_validates_then_saves", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    const savedConfig = makeAppConfig();
+    saveSpy.mockResolvedValue(savedConfig);
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    // The saved text is the current doc, edits included.
+    const edited = await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // The client-side gate validation runs first, on the current doc text…
+    await waitFor(() => expect(validateSpy).toHaveBeenCalledWith("machine.profiles", edited));
+    // …then the save endpoint writes it, unforced.
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith(edited, false));
+    expect(saveAsSpy).not.toHaveBeenCalled();
+
+    // Success surface: ok banner, dirty cleared (baseline = saved text),
+    // onApplied with the fresh AppConfigData.
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-success");
+    expect(banner.textContent).toMatch(/saved/i);
+    expect(screen.queryByRole("status")).toBeNull();
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(onApplied.mock.calls[0][0]).toBe(savedConfig);
+
+    // Ctrl/Cmd+S on a disk-anchored editor triggers the same save flow.
+    await user.keyboard("{Control>}s");
+    await waitFor(() => expect(validateSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(2));
+    expect(saveSpy.mock.calls[1]).toEqual([edited, false]);
+    expect(onApplied).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_save_invalid_shows_gate_with_force_option", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [
+        { severity: "error", message: "unknown key 'foo' at line 3" },
+        { severity: "warning", message: "search_dir does not exist" },
+      ],
+    });
+    const user = userEvent.setup();
+    renderModal();
+
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // The gate lists the issues and offers both exits; nothing is saved yet.
+    const gate = await screen.findByRole("dialog", { name: /validation issues/i });
+    expect(gate.textContent).toContain("unknown key 'foo' at line 3");
+    expect(gate.textContent).toContain("search_dir does not exist");
+    expect(screen.getByRole("button", { name: /go back and fix/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /force save anyway/i })).toBeTruthy();
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    // "Go back and fix" dismisses the gate back to the editor, issues listed.
+    await user.click(screen.getByRole("button", { name: /go back and fix/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /validation issues/i })).toBeNull(),
+    );
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(screen.getByTestId("editor-issues").textContent).toContain(
+      "unknown key 'foo' at line 3",
+    );
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-danger");
+    expect(banner.textContent).toMatch(/cancel/i);
+
+    // Saving again re-validates and re-opens the gate.
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(validateSpy).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("dialog", { name: /validation issues/i })).toBeTruthy();
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("test_force_save_proceeds", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [{ severity: "error", message: "unknown key 'foo' at line 3" }],
+    });
+    saveSpy.mockResolvedValue(makeAppConfig());
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    const edited = await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await screen.findByRole("dialog", { name: /validation issues/i });
+
+    // Force is the escape hatch: exactly one save call, with force=true.
+    await user.click(screen.getByRole("button", { name: /force save anyway/i }));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(1));
+    expect(saveSpy).toHaveBeenCalledWith(edited, true);
+    expect(saveSpy.mock.calls[0]).toEqual([edited, true]);
+
+    // Gate cleared, ok banner, dirty cleared, onApplied fired.
+    expect(screen.queryByRole("dialog", { name: /validation issues/i })).toBeNull();
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-success");
+    expect(banner.textContent).toMatch(/saved/i);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByTestId("editor-issues")).toBeNull();
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+  });
+
+  it("test_save_disabled_without_disk_path", async () => {
+    // Session trial: nothing on disk to overwrite — Save must not offer itself.
+    fetchContentSpy.mockResolvedValue(
+      makeContent({ filename: "session-trial", config_path: null, session_trial: true }),
+    );
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    saveSpy.mockResolvedValue(makeAppConfig());
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    await readyEditorView();
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+    // Save As stays available — it is the way to anchor a trial onto disk.
+    expect(screen.getByRole("button", { name: /^save as$/i })).toBeTruthy();
+
+    // Ctrl/Cmd+S falls back to Apply for a session trial.
+    await user.keyboard("{Control>}s");
+    await waitFor(() =>
+      expect(loadContentSpy).toHaveBeenCalledWith("session-trial", SAMPLE_YAML),
+    );
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(saveAsSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+  });
+
+  it("test_save_double_click_dispatches_once", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    // Deferred save: the first request stays pending across both clicks.
+    let resolveSave!: (value: AppConfigData) => void;
+    saveSpy.mockReturnValue(
+      new Promise<AppConfigData>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    const saveButton = await screen.findByRole("button", { name: /^save$/i });
+    await user.click(saveButton);
+    // Second click while the first save is in flight must be swallowed.
+    await user.click(saveButton);
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(1));
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+
+    // The in-flight save still completes exactly once.
+    resolveSave(makeAppConfig());
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("editor-status").textContent).toMatch(/saved/i);
+
+    // The gate is released once the action settles — a follow-up works.
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    saveSpy.mockResolvedValue(makeAppConfig());
+    await user.click(saveButton);
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(2));
+    expect(onApplied).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_stale_save_resolution_dropped_after_new", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    templateSpy.mockResolvedValue({ content: TEMPLATE_YAML_LF, filename: "starter.profiles" });
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    // Deferred save: the save round-trip stays pending on purpose.
+    let resolveSave!: (value: AppConfigData) => void;
+    saveSpy.mockReturnValue(
+      new Promise<AppConfigData>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(1));
+
+    // New + confirm dispatches and completes while the save is pending.
+    await user.click(screen.getByRole("button", { name: /^new$/i }));
+    await user.click(screen.getByRole("button", { name: /^replace$/i }));
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(view?.state.doc.toString()).toBe(TEMPLATE_YAML_LF);
+    });
+
+    // The stale save resolution lands after New completed: it belongs to the
+    // discarded document and must not mark it saved or fire onApplied.
+    await act(async () => {
+      resolveSave(makeAppConfig());
+    });
+    expect(onApplied).not.toHaveBeenCalled();
+    const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+    expect(view?.state.doc.toString()).toBe(TEMPLATE_YAML_LF);
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.textContent).toMatch(/template loaded/i);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("test_save_as_runs_gate_then_dialog_then_saves", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [{ severity: "error", message: "unknown key 'foo' at line 3" }],
+    });
+    saveAsSpy.mockResolvedValue(makeAppConfig());
+    browseSpy.mockResolvedValue(makeBrowseResult());
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    const edited = await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save as$/i }));
+
+    // The SAME compliance gate runs first — no dialog, no save call yet.
+    await waitFor(() =>
+      expect(validateSpy).toHaveBeenCalledWith("machine.profiles", edited),
+    );
+    expect(screen.queryByRole("dialog", { name: /save configuration as/i })).toBeNull();
+    await user.click(await screen.findByRole("button", { name: /force save anyway/i }));
+
+    // Then the Save As dialog opens, listing directories via browseDirectory.
+    const dialog = await screen.findByRole("dialog", { name: /save configuration as/i });
+    await waitFor(() => expect(browseSpy).toHaveBeenCalled());
+    expect(dialog.textContent).toContain("/home/user/configs");
+
+    // Confirming hands the normalized name to saveConfigFileAs, force carried.
+    await user.type(await screen.findByLabelText(/file name/i), "copy");
+    await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(saveAsSpy).toHaveBeenCalledTimes(1));
+    expect(saveAsSpy).toHaveBeenCalledWith({
+      content: edited,
+      filename: "copy.profiles",
+      directory: "/home/user/configs",
+      force: true,
+      overwrite: false,
+    });
+
+    // Same success surface as Save: banner, clean editor, onApplied.
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-success");
+    expect(banner.textContent).toMatch(/saved/i);
+    expect(screen.queryByRole("status")).toBeNull();
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(saveSpy).not.toHaveBeenCalled();
   });
 });
