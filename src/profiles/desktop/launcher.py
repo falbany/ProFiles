@@ -96,9 +96,9 @@ def launch_desktop_window(
         webview.create_window(
             title=window_title,
             url=url,
-            width=1000,
+            width=1200,
             height=700,
-            min_size=(800, 500),
+            min_size=(1000, 500),
         )
         webview.start(debug=debug)
     finally:

@@ -48,10 +48,12 @@ New-NetFirewallRule -DisplayName "ProFiles Server" -Direction Inbound -Protocol 
 
 ### Step 2: Start the server
 
-In a terminal, run:
+By default ProFiles is reachable **only on the machine it runs on**
+(`127.0.0.1`). To serve the local network, pass `--host 0.0.0.0` (or use the
+**LAN** toggle in the status bar of the desktop app):
 
 ```powershell
-ProFiles --server-only
+ProFiles --server-only --host 0.0.0.0
 ```
 
 **Expected output**:

@@ -72,10 +72,14 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   return res.json();
 }
 
-/** Flip the running server between LAN exposure and loopback-only. */
+/** Flip the running server between LAN exposure and loopback-only.
+ *
+ * The rebind runs after the response ships, so the returned state is the
+ * *requested* one — observe the actual outcome with waitForLanState().
+ */
 export async function setLanEnabled(
   lan: boolean
-): Promise<{ host: string; lan_enabled: boolean }> {
+): Promise<{ host: string; lan_enabled: boolean; status: string }> {
   const res = await fetch("/api/system/bind", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -92,6 +96,30 @@ export async function setLanEnabled(
     throw new Error(detail);
   }
   return res.json();
+}
+
+/**
+ * Poll /api/system until the LAN state matches the request, or timeout.
+ * The rebind runs on the server after the bind response, so the state
+ * needs a moment to catch up — and the server may briefly refuse
+ * connections mid-restart, so failed polls are tolerated.
+ */
+export async function waitForLanState(
+  target: boolean,
+  timeoutMs = 10000
+): Promise<SystemInfo | null> {
+  const deadline = Date.now() + timeoutMs;
+  let last: SystemInfo | null = null;
+  while (Date.now() < deadline) {
+    try {
+      last = await fetchSystemInfo();
+      if (last.lan_enabled === target) return last;
+    } catch {
+      // the server may be mid-restart; keep polling until the deadline
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return last;
 }
 
 export async function fetchConfig(): Promise<AppConfigData> {

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Loopback-only by default**: the web server now binds `127.0.0.1` on launch
+  (`--host 127.0.0.1` is the default); use `--host 0.0.0.0` to pre-enable LAN
+  serving, or flip it at runtime with the new **LAN** toggle in the status
+  bar. Console banners only advertise `Network:` URLs when the bind actually
+  exposes the network.
+
 ## [0.11.0-rc.2] - 2026-11-02
 
 ### Added

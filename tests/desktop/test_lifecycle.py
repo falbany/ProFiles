@@ -126,6 +126,44 @@ def test_rebind_changes_host_and_reverses(tmp_path: Path) -> None:
         server.stop()
 
 
+def _wait_for(condition, timeout_s: float = 5.0) -> bool:
+    """Poll ``condition`` until truthy or ``timeout_s`` elapsed."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.05)
+    return condition()
+
+
+def test_bind_route_rebinds_off_the_serving_thread() -> None:
+    """The bind route must not join the server thread it is running on.
+
+    Regression test: the route handler runs on the uvicorn thread, so a
+    synchronous ``rebind()`` called ``stop()`` → ``self._thread.join()`` on
+    the *current* thread and died with ``RuntimeError: cannot join current
+    thread``. The rebind now happens after the response, on a worker thread.
+    """
+    port = find_available_port(start_port=8000)
+    server = BackgroundServer(config=AppConfig(title="route rebind"), host="127.0.0.1", port=port)
+    server.start()
+    try:
+        response = httpx.post(
+            f"http://127.0.0.1:{port}/api/system/bind",
+            json={"lan": True},
+            timeout=5.0,
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "rebinding"
+
+        # The rebind completes asynchronously, after the response is sent:
+        assert _wait_for(lambda: server.host == "0.0.0.0"), server.host
+        health = httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=2.0)
+        assert health.status_code == 200
+    finally:
+        server.stop()
+
+
 _original_socket_bind = socket.socket.bind
 
 

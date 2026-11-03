@@ -88,6 +88,26 @@ def web_client(logger: logging.Logger, *, ip: str, path: str, user_agent: str = 
     logger.info("WEB_CLIENT %s", " ".join(parts))
 
 
+def web_client_reconnected(logger: logging.Logger, *, ip: str, path: str) -> None:
+    """Emit WEB_CLIENT — a known client came back after the idle-disconnect window."""
+    logger.info('WEB_CLIENT event="reconnected" ip="%s" path=%s', ip, _quote(path))
+
+
+def web_client_left(logger: logging.Logger, *, ip: str, idle_s: int) -> None:
+    """Emit WEB_CLIENT — a client stopped polling and is considered gone."""
+    logger.info('WEB_CLIENT event="disconnected" ip="%s" idle_s=%d', ip, idle_s)
+
+
+def bind_changed(logger: logging.Logger, *, host: str, lan: bool) -> None:
+    """Emit BIND_CHANGED — the server rebound between LAN exposure and loopback."""
+    logger.info('BIND_CHANGED host="%s" lan=%s', host, "true" if lan else "false")
+
+
+def bind_change_failed(logger: logging.Logger, *, host: str, error: str) -> None:
+    """Emit BIND_CHANGE_FAILED — a rebind failed and the server reverted."""
+    logger.warning('BIND_CHANGE_FAILED host="%s" error="%s"', host, error)
+
+
 def app_restarting(logger: logging.Logger) -> None:
     """Emit APP_RESTARTING."""
     logger.info("APP_RESTARTING")

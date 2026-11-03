@@ -62,6 +62,9 @@ Every line follows this shape:
 | `FILTER_REJECTED` | Right-click → Filter pre-check failed | `kind`, `reason`, `value` |
 | `HASH_COMPUTED` | Right-click → Hash computed | `algorithm`, `path`, `status`, `duration_ms`, `error`, `reason` |
 | `HASH_VERIFIED` | Right-click → Hash verified against clipboard | `algorithm`, `path`, `match`, `status`, `reason`, `error` |
+| `WEB_CLIENT` | Web UI client connected / reconnected after an idle gap / disconnected after going silent (dedup per client IP; idle threshold 120 s) | `event` (`connected` / `reconnected` / `disconnected`), `ip`, `path`, `ua`, `idle_s` |
+| `BIND_CHANGED` | Server rebound between LAN exposure and loopback (status-bar LAN toggle) | `host`, `lan` |
+| `BIND_CHANGE_FAILED` | Rebind request failed; the server reverted to the previous address | `host`, `error` |
 
 ## Examples
 
@@ -104,6 +107,11 @@ grep 'SCAN_METRICS' profiles.log | awk -F'duration_ms=' '{print $2}' | sort -nr 
 **Audit trail (who launched what):**
 ```bash
 grep 'FILE_LAUNCHED' profiles.log
+```
+
+**Client connections (who opened the web UI):**
+```bash
+grep 'WEB_CLIENT' profiles.log
 ```
 
 **All right-click filter changes:**
