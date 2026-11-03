@@ -13,6 +13,7 @@ from profiles.core.telemetry.events import (
     app_launched,
     app_restarting,
     app_started,
+    bind_changed,
     command_exit,
     command_failed,
     command_output,
@@ -43,6 +44,9 @@ from profiles.core.telemetry.events import (
     scan_failed,
     theme_switched,
     wcag_contrast_faint,
+    web_client,
+    web_client_left,
+    web_client_reconnected,
     workflow_aborted,
     workflow_step,
     workflow_step_failed,
@@ -689,3 +693,55 @@ class TestHashVerified:
             'HASH_VERIFIED algorithm="md5" path=/a.zip status="rejected" reason="empty_clipboard"'
             in caplog.text
         )
+
+
+# ---------------------------------------------------------------------------
+# Web client & bind telemetry
+# ---------------------------------------------------------------------------
+
+
+class TestWebClientEvents:
+    def test_connected_with_user_agent(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_web_client_ua")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            web_client(logger, ip="192.168.1.50", path="/api/system", user_agent="Mozilla/5.0")
+        assert (
+            'WEB_CLIENT event="connected" ip="192.168.1.50" path=/api/system ua="Mozilla/5.0"'
+            in caplog.text
+        )
+
+    def test_connected_without_user_agent(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_web_client_noua")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            web_client(logger, ip="192.168.1.50", path="/api/system")
+        assert 'WEB_CLIENT event="connected" ip="192.168.1.50" path=/api/system' in caplog.text
+        assert "ua=" not in caplog.text
+
+    def test_reconnected(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_web_client_reconnected")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            web_client_reconnected(logger, ip="192.168.1.50", path="/api/notifications")
+        assert (
+            'WEB_CLIENT event="reconnected" ip="192.168.1.50" path=/api/notifications'
+            in caplog.text
+        )
+
+    def test_left(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_web_client_left")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            web_client_left(logger, ip="192.168.1.50", idle_s=135)
+        assert 'WEB_CLIENT event="disconnected" ip="192.168.1.50" idle_s=135' in caplog.text
+
+
+class TestBindChanged:
+    def test_lan_on(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_bind_lan")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            bind_changed(logger, host="0.0.0.0", lan=True)
+        assert 'BIND_CHANGED host="0.0.0.0" lan=true' in caplog.text
+
+    def test_lan_off(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_bind_loopback")
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            bind_changed(logger, host="127.0.0.1", lan=False)
+        assert 'BIND_CHANGED host="127.0.0.1" lan=false' in caplog.text
