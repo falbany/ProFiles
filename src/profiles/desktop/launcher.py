@@ -70,15 +70,29 @@ def launch_desktop_window(
 
     The background server is stopped whenever the window closes, including
     when startup fails, so no orphaned process is left listening.
+
+    The window always opens on a *connectable* URL: when the server is
+    bound to ``0.0.0.0`` (serve the LAN), that address is not routable in
+    a browser, so the window uses the loopback address instead.
     """
     _configure_webview_permissions()
     server = BackgroundServer(config=config, host=host, port=port)
 
     window_title = f"ProFiles - {config.title}" if config.title else "ProFiles"
-    url = f"http://{host}:{server.port}"
+    webview_bind = "127.0.0.1" if host == "0.0.0.0" else host
+    url = f"http://{webview_bind}:{server.port}"
 
     try:
         server.start()
+        if host == "0.0.0.0":
+            from profiles.utils.network import get_local_ip
+
+            print("ProFiles web GUI running at:")
+            print(f"  Local:   http://127.0.0.1:{server.port}")
+            print(f"  Network: http://{get_local_ip()}:{server.port}")
+        else:
+            print("ProFiles web GUI running at:")
+            print(f"  Local:   http://{host}:{server.port}")
         webview.create_window(
             title=window_title,
             url=url,

@@ -65,6 +65,7 @@ Highlights:
 | tests/test_config.py | profiles.config | shim re-exports (ColumnConfiguration, …) |
 | tests/core/… | profiles.core.* | actions, config (models/reader/schema/service/loader/matcher/validator/template/inheritance/yaml_io), environment (system/execution/matcher/render/interactions/message_dialog/workflow), processing (scanner/file_classifier/file_metadata/column_extractor), telemetry (diagnostics/events/metrics) |
 | tests/desktop/test_lifecycle.py | profiles.desktop.lifecycle | port discovery, background server lifecycle |
+| tests/desktop/test_launcher.py | profiles.desktop.launcher | connectable window URL rule, URL banner, window-bound lifecycle |
 | tests/gui/** | profiles.gui.* | **skipped** — deprecated Tkinter frontend (see `tests/gui/conftest.py`) |
 | tests/launch/test_{context,creation,resolution}.py | profiles.launch.* | launch context detection, shortcut creation, resolution |
 | tests/packaging/ | (cross-cutting) | entry-point stub, packaging dependency rules, ProFiles.pyw stub |
