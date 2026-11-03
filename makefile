@@ -28,6 +28,7 @@ install-system: ## Install system-wide (standard mode)
 
 install-system-dev: ## Install system-wide (development mode)
 	@echo "📦 Installing ProFiles system-wide (development mode)..."
+	rm -rf src/profiles.egg-info
 	pip install -e ".[dev]"
 	@echo "✅ Development installation complete!"
 
