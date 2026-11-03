@@ -57,3 +57,16 @@ def test_webview_url_and_single_line_for_loopback_bind(
     out = capsys.readouterr().out
     assert "Local:" in out
     assert "Network:" not in out
+
+
+def test_webview_window_geometry_fits_status_bar(webview_mock: MagicMock) -> None:
+    """The default window is wide enough for the full status bar in one line."""
+    launch_desktop_window(
+        AppConfig(title="t"),
+        port=find_available_port(8000),
+        host=_LOOPBACK_HOST,
+    )
+    kwargs = webview_mock.create_window.call_args.kwargs
+    assert kwargs["width"] == 1200
+    assert kwargs["height"] == 700
+    assert kwargs["min_size"] == (1000, 500)
