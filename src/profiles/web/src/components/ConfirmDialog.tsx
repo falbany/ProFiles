@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { useModalA11y } from "../utils/useModalA11y";
@@ -6,8 +7,8 @@ import { useModalA11y } from "../utils/useModalA11y";
 interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
-  /** Body text; `\n` renders as a line break. */
-  message: string;
+  /** Body content; a plain string renders `\n` as a line break. */
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   /** When true the confirm button uses the danger styling. */
@@ -71,7 +72,9 @@ export function ConfirmDialog({
             {title}
           </h2>
         </div>
-        <p className="mb-5 whitespace-pre-line text-xs text-ink-secondary">{message}</p>
+        <div className="mb-5 whitespace-pre-line text-xs text-ink-secondary">
+          {message}
+        </div>
         <div className="flex justify-end gap-2">
           <button
             ref={cancelRef}

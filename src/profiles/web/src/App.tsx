@@ -47,6 +47,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { CopyableUrl } from "./components/CopyableUrl";
 import { parseBarcodeInput } from "./utils/barcodeScanner";
 import { exportToCsv } from "./utils/exportCsv";
 import { matchFilter } from "./utils/searchSyntax";
@@ -1694,9 +1695,27 @@ export default function App() {
         isOpen={lanPending !== null}
         title={lanPending ? "Enable LAN access?" : "Restrict to this machine?"}
         message={
-          lanPending
-            ? `ProFiles will be reachable by anyone on this network:\nhttp://${systemInfo?.hostname}:${window.location.port}\nhttp://${systemInfo?.ip}:${window.location.port}`
-            : "ProFiles will be reachable only on this machine."
+          lanPending ? (
+            <span className="block">
+              ProFiles will be reachable by anyone on this network:
+              <CopyableUrl
+                url={`http://${systemInfo?.hostname}:${window.location.port}`}
+                label="Copy hostname URL"
+                className="mt-1.5"
+                onCopied={() => showToast("URL copied to clipboard.")}
+                onCopyError={() => showToast("Failed to copy URL.", "error")}
+              />
+              <CopyableUrl
+                url={`http://${systemInfo?.ip}:${window.location.port}`}
+                label="Copy IP URL"
+                className="mt-1.5"
+                onCopied={() => showToast("URL copied to clipboard.")}
+                onCopyError={() => showToast("Failed to copy URL.", "error")}
+              />
+            </span>
+          ) : (
+            "ProFiles will be reachable only on this machine."
+          )
         }
         confirmLabel={lanPending ? "Enable LAN" : "Restrict"}
         onConfirm={async () => {
