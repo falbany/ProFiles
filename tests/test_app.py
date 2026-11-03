@@ -445,6 +445,37 @@ class TestServerOnlyBusyPortResolution:
         assert mock_server_cls.call_count == 1
 
 
+class TestServerOnlyBanner:
+    """The console banner must not advertise LAN URLs on a loopback bind."""
+
+    def test_loopback_bind_prints_local_only(self, mocker, tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+        mock_server_cls = mocker.patch("profiles.desktop.lifecycle.BackgroundServer")
+        mock_server_cls.return_value.is_running = False
+        mock_server_cls.return_value.port = 8088
+        mock_server_cls.return_value.host = "127.0.0.1"
+        app = ProFileApp(config_path=tmp_path / ".profiles", host="127.0.0.1")
+        app._config = mocker.MagicMock()
+        app._run_server_only(port=8088)
+        out = capsys.readouterr().out
+        assert "Local:  http://127.0.0.1:8088" in out
+        assert "Network:" not in out
+        assert "Access from other PCs" not in out
+
+    def test_wildcard_bind_prints_network_url(self, mocker, tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+        mocker.patch("profiles.utils.network.get_local_ip", return_value="192.0.2.7")
+        mock_server_cls = mocker.patch("profiles.desktop.lifecycle.BackgroundServer")
+        mock_server_cls.return_value.is_running = False
+        mock_server_cls.return_value.port = 8088
+        mock_server_cls.return_value.host = "0.0.0.0"
+        app = ProFileApp(config_path=tmp_path / ".profiles", host="0.0.0.0")
+        app._config = mocker.MagicMock()
+        app._run_server_only(port=8088)
+        out = capsys.readouterr().out
+        assert "Local:  http://127.0.0.1:8088" in out
+        assert "Network: http://192.0.2.7:8088" in out
+        assert "Access from other PCs" in out
+
+
 class TestStopPortOwnerCommand:
     """_stop_port_owner_command - the advice embedded in startup errors."""
 
@@ -526,7 +557,7 @@ class TestMain:
             server_only=False,
             no_config_propose=False,
             gui_backend="web",
-            host="0.0.0.0",
+            host="127.0.0.1",
         )
         mock_app.return_value.run.assert_called_once_with(file=None)
 
@@ -555,7 +586,7 @@ class TestMain:
             server_only=False,
             no_config_propose=False,
             gui_backend="web",
-            host="0.0.0.0",
+            host="127.0.0.1",
         )
 
 

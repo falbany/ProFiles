@@ -21,9 +21,10 @@ def test_host_error_rejects_hostname_and_ipv6() -> None:
     assert host_error("::1") is not None
 
 
-def test_default_host_is_lan_wildcard() -> None:
+def test_default_host_is_loopback() -> None:
+    """The app launches loopback-only; LAN is an opt-in via the status bar."""
     app = ProFileApp(headless=False)
-    assert app._host == "0.0.0.0"
+    assert app._host == "127.0.0.1"
 
 
 def test_explicit_loopback_host_is_kept() -> None:
@@ -59,10 +60,10 @@ def test_main_passes_host_argument() -> None:
     assert call.kwargs["host"] == "127.0.0.1"
 
 
-def test_main_default_host_is_wildcard() -> None:
+def test_main_default_host_is_loopback() -> None:
     argv = ["profiles"]
     with patch.object(sys, "argv", argv), patch("profiles.app.ProFileApp") as mock_app:
         main()
     call = mock_app.call_args
     assert call is not None
-    assert call.kwargs["host"] == "0.0.0.0"
+    assert call.kwargs["host"] == "127.0.0.1"

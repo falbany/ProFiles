@@ -115,7 +115,7 @@ class ProFileApp:
         server_only: bool = False,
         no_config_propose: bool = False,
         gui_backend: str = "web",
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
     ) -> None:
         """Initialize the application.
 
@@ -324,12 +324,16 @@ class ProFileApp:
             except ServerStartError as exc:
                 self._report_server_start_failure(fallback_port, exc)
 
-        # Display both local and network URLs
-        local_ip = get_local_ip()
-        print("ProFiles server running at:")
-        print(f"  Local:  http://127.0.0.1:{server.port}")
-        print(f"  Network: http://{local_ip}:{server.port}")
-        print("  Access from other PCs on your network (press Ctrl+C to stop)")
+        # Advertise LAN URLs only when the bind actually exposes them.
+        if (host or self._host) == "0.0.0.0":
+            local_ip = get_local_ip()
+            print("ProFiles server running at:")
+            print(f"  Local:  http://127.0.0.1:{server.port}")
+            print(f"  Network: http://{local_ip}:{server.port}")
+            print("  Access from other PCs on your network (press Ctrl+C to stop)")
+        else:
+            print("ProFiles server running at:")
+            print(f"  Local:  http://{server.host}:{server.port}")
         try:
             while server.is_running:
                 time.sleep(0.5)
@@ -617,16 +621,17 @@ Examples:
   profiles --headless                       Headless: scan & launch all
   profiles --headless file.mttl             Headless: launch specific file
   profiles --init                           Generate default .profiles in CWD
-  profiles --host 127.0.0.1                 Restrict serving to this machine (loopback only)
+  profiles --host 0.0.0.0                   Serve the local network (also: LAN toggle in the status bar)
         """,
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
+        default="127.0.0.1",
         type=str,
         help=(
-            "Bind address for the web server (default: 0.0.0.0, reachable "
-            "from the local network; 127.0.0.1 restricts to this machine)"
+            "Bind address for the web server (default: 127.0.0.1, this "
+            "machine only; 0.0.0.0 serves the local network — also "
+            "toggleable at runtime from the status bar)"
         ),
     )
     parser.add_argument(

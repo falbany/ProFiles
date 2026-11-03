@@ -3,28 +3,34 @@
 **Date:** 2026-11-03
 **Status:** Approved (conversation: design for `--host` approved, then UI toggle
 approved with build order "CLI first, then the pill toggle").
+**Revised 2026-11-03 (same day, after the toggle shipped):** default bind
+flipped from `0.0.0.0` to `127.0.0.1` — see Decisions.
 
 ## Intent
 
-Let any machine on the local network open `http://<hostname>:8088/` right after
-a normal `ProFiles` launch, while keeping a one-flag way to stay loopback-only —
-and let the station operator flip that access at runtime from the web UI.
+Keep a fresh ProFiles launch **loopback-only**; let the station operator expose
+the machine to the local network with one click from the web UI status bar (or
+pre-expose it at launch with `--host 0.0.0.0`), and flip it back just as
+easily.
 
 ## Goals
 
-- `ProFiles` (GUI, default) serves on `0.0.0.0` by default — LAN reachable.
-- `--host` CLI option shared by GUI (desktop window) and `--server-only` mode.
-- `--host 127.0.0.1` restores the old loopback-only behavior.
+- `ProFiles` (GUI and `--server-only`) serves on `127.0.0.1` by default —
+  loopback-only, nothing reachable from the network until the operator opts in.
+- `--host` CLI option shared by GUI (desktop window) and `--server-only` mode;
+  `--host 0.0.0.0` pre-enables LAN serving for headless/automation launches.
 - The PyWebView window always opens on a connectable URL (`127.0.0.1` when the
   bind host is `0.0.0.0`).
-- Console shows `Local:` and `Network:` URLs on GUI launches too.
+- Console shows `Local:` and `Network:` URLs only when the bind actually
+  exposes the network.
 - StatusBar identity pill gains a LAN on/off switch (transient — not persisted
-  across restarts) with a in-app confirmation naming the exposed URLs.
+  across restarts) with an in-app confirmation naming the exposed URLs.
 - Runtime rebind reverts the bind on failure; the app must never end up dead.
 
 ## Non-goals
 
-- No persistence of the runtime LAN choice (restart = launch default).
+- No persistence of the runtime LAN choice (restart = launch default, i.e.
+  loopback-only again).
 - No IPv6 binding and no hostname bind values (socket stays IPv4; see
   `lifecycle.py` `_bind_listener` constraint comment).
 
@@ -36,9 +42,13 @@ and let the station operator flip that access at runtime from the web UI.
 - Toggle state comes from `GET /api/system` (`lan_enabled`), changes via
   `POST /api/system/bind` (`{"lan": bool}`). A confirm dialog mentions the
   exposed hostname/IP URLs. Failure surfaces a toast; state stays unchanged.
-- UI-first caveat acknowledged: a colleague on another machine cannot toggle
-  LAN on a loopback-bound app (they can't open the UI) — that is why the CLI
-  default matters more.
+- **Revision (2026-11-03):** the launch default is `127.0.0.1`, reversing the
+  original "serve `0.0.0.0` by default" decision. Rationale: the status-bar
+  toggle makes LAN exposure a one-click opt-in at runtime, so serving the LAN
+  by default is no longer justified — secure-by-default wins. `--host 0.0.0.0`
+  remains available for headless/automation launches where nobody will click
+  the toggle. The original caveat ("a colleague cannot toggle LAN on a
+  loopback-bound app") is accepted: the operator toggles at the console.
 
 ## Constraints
 
