@@ -42,6 +42,9 @@ type EditorStatus = { kind: "ok" | "error"; text: string } | null;
 /** Toolbar action parked behind the "Replace current edits?" confirmation. */
 type PendingAction = "new" | "revert";
 
+/** Kinds of the async toolbar actions — the dispatch runner's key. */
+type ToolbarActionKind = "new" | "test" | "revert" | "apply";
+
 /**
  * Editor theme built from the app's `data-theme` CSS tokens (index.css
  * `--app-*` variables). Only `var()` references are used — the editor
@@ -127,6 +130,16 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
   const editorViewRef = useRef<EditorView | null>(null);
   /** Text the editor was seeded with — the baseline for the dirty check. */
   const loadedTextRef = useRef<string>("");
+  /**
+   * Monotonic id of the most recent toolbar-action dispatch. Each dispatch
+   * tags its round trip with the id current at dispatch time; a resolution
+   * whose id is no longer current — superseded by a newer action (Test
+   * landing after a New replaced the document) or left over from a closed
+   * session — is dropped before it can setState.
+   */
+  const actionSeqRef = useRef(0);
+  /** In-flight registry: action kind → seq of its live dispatch. A kind already registered rejects duplicate dispatches (double-click Apply fires one request). */
+  const inFlightActionsRef = useRef<Map<ToolbarActionKind, number>>(new Map());
 
   const handleDialogKeyDown = useModalA11y({
     isOpen: open,
@@ -145,6 +158,10 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
       setStatus(null);
       setIssues([]);
       setPendingAction(null);
+      // Invalidate in-flight toolbar actions so a resolution that lands
+      // after close/reopen cannot leak into the next session's state.
+      actionSeqRef.current += 1;
+      inFlightActionsRef.current.clear();
       return;
     }
     let cancelled = false;
@@ -217,49 +234,89 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
   }
 
   /**
+   * Shared dispatch runner for the four async toolbar actions. Two guards,
+   * applied uniformly:
+   * 1. Duplicate dispatch — a kind already in flight (double-click) is
+   *    swallowed synchronously, so exactly one request leaves per click
+   *    burst and `onApplied` fires once per successful Apply.
+   * 2. Stale resolution — every dispatch tags its round trip with the
+   *    monotonic seq; `work` checks it before any setState so results from
+   *    a superseded action or a closed session never render.
+   */
+  const runToolbarAction = useCallback(
+    async (kind: ToolbarActionKind, work: (seq: number) => Promise<void>): Promise<void> => {
+      if (inFlightActionsRef.current.has(kind)) return;
+      const seq = ++actionSeqRef.current;
+      inFlightActionsRef.current.set(kind, seq);
+      try {
+        await work(seq);
+      } finally {
+        // Release the gate only if this dispatch still owns it — a
+        // close+reopen may already have started a newer dispatch.
+        if (inFlightActionsRef.current.get(kind) === seq) {
+          inFlightActionsRef.current.delete(kind);
+        }
+      }
+    },
+    [],
+  );
+
+  /**
    * Replace the editor document with the starter template (New action).
    * The template text becomes the new dirty baseline, so an untouched
    * template is not flagged as unsaved. Only `load` fields that describe
    * the text are updated — the CodeMirror view remounts from it.
    */
-  const loadTemplateIntoEditor = useCallback(async () => {
-    setStatus(null);
-    setIssues([]);
-    try {
-      const template = await fetchConfigTemplate();
-      const content = toEditorText(template.content);
-      loadedTextRef.current = content;
-      setDirty(false);
-      setLoad(
-        (prev): LoadState =>
-          prev.status === "ready"
-            ? {
-                status: "ready",
-                data: { ...prev.data, filename: template.filename, content, config_path: null },
-              }
-            : prev,
-      );
-      setStatus({ kind: "ok", text: "New configuration template loaded." });
-    } catch (err: unknown) {
-      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
-    }
-  }, []);
+  const loadTemplateIntoEditor = useCallback(
+    () =>
+      runToolbarAction("new", async (seq) => {
+        setStatus(null);
+        setIssues([]);
+        try {
+          const template = await fetchConfigTemplate();
+          if (seq !== actionSeqRef.current) return; // superseded — drop stale results
+          const content = toEditorText(template.content);
+          loadedTextRef.current = content;
+          setDirty(false);
+          setLoad(
+            (prev): LoadState =>
+              prev.status === "ready"
+                ? {
+                    status: "ready",
+                    data: { ...prev.data, filename: template.filename, content, config_path: null },
+                  }
+                : prev,
+          );
+          setStatus({ kind: "ok", text: "New configuration template loaded." });
+        } catch (err: unknown) {
+          if (seq !== actionSeqRef.current) return;
+          setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        }
+      }),
+    [runToolbarAction],
+  );
 
   /** Reload the active configuration file from the server (Revert action). */
-  const reloadFromServer = useCallback(async () => {
-    setStatus(null);
-    setIssues([]);
-    try {
-      const data = await fetchConfigContent();
-      const content = toEditorText(data.content);
-      loadedTextRef.current = content;
-      setDirty(false);
-      setLoad({ status: "ready", data: { ...data, content } });
-      setStatus({ kind: "ok", text: "Configuration reloaded from disk." });
-    } catch (err: unknown) {
-      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
-    }
-  }, []);
+  const reloadFromServer = useCallback(
+    () =>
+      runToolbarAction("revert", async (seq) => {
+        setStatus(null);
+        setIssues([]);
+        try {
+          const data = await fetchConfigContent();
+          if (seq !== actionSeqRef.current) return;
+          const content = toEditorText(data.content);
+          loadedTextRef.current = content;
+          setDirty(false);
+          setLoad({ status: "ready", data: { ...data, content } });
+          setStatus({ kind: "ok", text: "Configuration reloaded from disk." });
+        } catch (err: unknown) {
+          if (seq !== actionSeqRef.current) return;
+          setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        }
+      }),
+    [runToolbarAction],
+  );
 
   /** New action: a dirty editor confirms before its edits are discarded. */
   function requestNew() {
@@ -283,40 +340,52 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
    * Test action: validate the current text in memory. A valid result
    * lights the ok banner; issues are listed above the editor verbatim.
    */
-  const runValidation = useCallback(async () => {
-    if (load.status !== "ready") return;
-    try {
-      const result = await validateConfigContent(load.data.filename, currentDocText());
-      setIssues(result.issues);
-      setStatus(
-        result.valid
-          ? { kind: "ok", text: "Configuration is valid." }
-          : {
-              kind: "error",
-              text: `Validation failed with ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}.`,
-            },
-      );
-    } catch (err: unknown) {
-      setIssues([]);
-      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
-    }
-  }, [load]);
+  const runValidation = useCallback(
+    () =>
+      runToolbarAction("test", async (seq) => {
+        if (load.status !== "ready") return;
+        try {
+          const result = await validateConfigContent(load.data.filename, currentDocText());
+          if (seq !== actionSeqRef.current) return; // superseded — drop stale results
+          setIssues(result.issues);
+          setStatus(
+            result.valid
+              ? { kind: "ok", text: "Configuration is valid." }
+              : {
+                  kind: "error",
+                  text: `Validation failed with ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}.`,
+                },
+          );
+        } catch (err: unknown) {
+          if (seq !== actionSeqRef.current) return;
+          setIssues([]);
+          setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        }
+      }),
+    [load, runToolbarAction],
+  );
 
   /**
    * Apply action: trial the current text as the session configuration.
    * Success fires `onApplied` with the applied AppConfigData; a 400
    * rejection surfaces the server's plain-string detail in the banner.
    */
-  const applyContent = useCallback(async () => {
-    if (load.status !== "ready") return;
-    try {
-      const data = await loadConfigContent(load.data.filename, currentDocText());
-      setStatus({ kind: "ok", text: "Configuration applied (session trial)." });
-      onApplied?.(data);
-    } catch (err: unknown) {
-      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
-    }
-  }, [load, onApplied]);
+  const applyContent = useCallback(
+    () =>
+      runToolbarAction("apply", async (seq) => {
+        if (load.status !== "ready") return;
+        try {
+          const data = await loadConfigContent(load.data.filename, currentDocText());
+          if (seq !== actionSeqRef.current) return; // superseded — drop stale results
+          setStatus({ kind: "ok", text: "Configuration applied (session trial)." });
+          onApplied?.(data);
+        } catch (err: unknown) {
+          if (seq !== actionSeqRef.current) return;
+          setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        }
+      }),
+    [load, onApplied, runToolbarAction],
+  );
 
   if (!open) return null;
 

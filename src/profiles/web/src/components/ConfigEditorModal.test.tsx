@@ -11,7 +11,7 @@ import {
   openConfigFile,
   validateConfigContent,
 } from "../api/client";
-import type { AppConfigData, ConfigContentData } from "../api/types";
+import type { AppConfigData, ConfigContentData, ValidationIssue } from "../api/types";
 
 vi.mock("../api/client", () => ({
   fetchConfigContent: vi.fn(),
@@ -355,6 +355,79 @@ describe("ConfigEditorModal", () => {
     expect(banner.textContent).toContain("unknown key 'filters_xyz' at line 4");
     expect(banner.className).toContain("status-danger");
     expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it("test_apply_double_click_dispatches_once", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    // Deferred apply: the first request stays pending across both clicks.
+    let resolveApply!: (value: AppConfigData) => void;
+    loadContentSpy.mockReturnValue(
+      new Promise<AppConfigData>((resolve) => {
+        resolveApply = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    const applyButton = await screen.findByRole("button", { name: /^apply$/i });
+    await user.click(applyButton);
+    // Second click while the first apply is in flight must be swallowed.
+    await user.click(applyButton);
+    expect(loadContentSpy).toHaveBeenCalledTimes(1);
+
+    // The in-flight apply still completes exactly once.
+    resolveApply(makeAppConfig());
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(loadContentSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("editor-status").textContent).toMatch(/applied/i);
+
+    // The gate is released once the action settles — a follow-up works.
+    loadContentSpy.mockResolvedValue(makeAppConfig());
+    await user.click(applyButton);
+    await waitFor(() => expect(loadContentSpy).toHaveBeenCalledTimes(2));
+    expect(onApplied).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_stale_test_resolution_dropped_after_new", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    templateSpy.mockResolvedValue({ content: TEMPLATE_YAML_LF, filename: "starter.profiles" });
+    // Deferred validate: the Test round-trip stays pending on purpose.
+    let resolveValidate!: (value: { valid: boolean; issues: ValidationIssue[] }) => void;
+    validateSpy.mockReturnValue(
+      new Promise((resolve) => {
+        resolveValidate = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderModal();
+
+    // Dirty doc so New routes through the confirm dialog.
+    await editDoc("# edited\n");
+
+    // Test dispatches; its response is still pending…
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+
+    // …when New + confirm dispatch and complete.
+    await user.click(screen.getByRole("button", { name: /^new$/i }));
+    await user.click(screen.getByRole("button", { name: /^replace$/i }));
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(view?.state.doc.toString()).toBe(TEMPLATE_YAML_LF);
+    });
+
+    // The stale Test resolution lands after New completed: it belongs to the
+    // discarded document and must not render its issues over the template.
+    await act(async () => {
+      resolveValidate({
+        valid: false,
+        issues: [{ severity: "error", message: "stale issue from discarded doc" }],
+      });
+    });
+    expect(screen.queryByTestId("editor-issues")).toBeNull();
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.className).toContain("status-success");
+    expect(banner.textContent).toMatch(/template loaded/i);
   });
 
   it("test_revert_reloads_from_server_after_confirm", async () => {
