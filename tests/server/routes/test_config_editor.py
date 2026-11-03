@@ -284,6 +284,36 @@ async def test_save_writes_and_applies_valid_config(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_save_as_rejects_filename_with_path_separators(
+    config_state: ServerState, tmp_path: Path
+) -> None:
+    """Verify save-as refuses filenames that could escape the target directory.
+
+    Given: A session and a target directory
+    When: POST /save-as is called with a filename containing path
+        separators (forward or backslash) or a dot segment
+    Then: 400 naming the filename and no file is created anywhere
+    """
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        for filename in ("sub/../x.profiles", "nested\\x.profiles", "..", ""):
+            response = await client.post(
+                "/api/config/save-as",
+                json={
+                    "content": "defaults:\n  title: X\n",
+                    "filename": filename,
+                    "directory": str(tmp_path),
+                },
+            )
+            assert response.status_code == 400
+            assert filename in response.json()["detail"]
+
+    assert not (tmp_path / "x.profiles").exists()
+    assert not (tmp_path / "sub").exists()
+    assert not (tmp_path / "nested\\x.profiles").exists()
+
+
+@pytest.mark.anyio
 async def test_save_as_rejects_bad_extension(config_state: ServerState, tmp_path: Path) -> None:
     """Verify save-as refuses filenames outside the extension whitelist.
 

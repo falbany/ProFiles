@@ -56,6 +56,19 @@ def _is_config_path(path: Path) -> bool:
     return path.name.endswith(CONFIG_FILE_NAMES)
 
 
+def _is_safe_filename(filename: str) -> bool:
+    """Return True when *filename* is a bare name that cannot escape its directory.
+
+    Hygiene guard for write endpoints: rejects empty names, ``.``/``..``
+    dot segments, and path separators (``/``, ``\\``) so joining the
+    filename onto a user directory can never traverse (cf. the
+    path-traversal fix in issue #28).
+    """
+    if not filename or filename in {".", ".."}:
+        return False
+    return "/" not in filename and "\\" not in filename
+
+
 def _config_response(state: ServerState) -> dict:
     cfg: AppConfig = state.config
     config_path = state.active_config_path()
@@ -398,18 +411,26 @@ async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> d
     Unlike :func:`save_config_endpoint`, save-as is anchored to a
     user-supplied directory and filename, so it works both to copy a
     disk-anchored config and to anchor a session trial onto disk. Gate
-    order: extension whitelist (:data:`SAVE_AS_EXTENSIONS`) →
-    :func:`normalize_user_path` + directory existence →
-    existence/overwrite guard (409 when the target exists without
-    ``overwrite=True``) → :func:`validate_issues` → 400 with the issues
-    list when invalid and not ``force`` → write the file →
-    :func:`_apply_config_from_disk`, so the live configuration is always
-    re-read from what is on disk (which also clears ``session_trial``).
+    order: filename hygiene (:func:`_is_safe_filename` — no separators,
+    dot segments, or empty names) → extension whitelist
+    (:data:`SAVE_AS_EXTENSIONS`) → :func:`normalize_user_path` +
+    directory existence → existence/overwrite guard (409 when the target
+    exists without ``overwrite=True``) → :func:`validate_issues` → 400
+    with the issues list when invalid and not ``force`` → write the file
+    → :func:`_apply_config_from_disk`, so the live configuration is
+    always re-read from what is on disk (which also clears
+    ``session_trial``).
 
     Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``,
     the same shape as ``POST /save``.
     """
     state: ServerState = request.app.state.server_state
+
+    if not _is_safe_filename(payload.filename):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid configuration file name: {payload.filename}",
+        )
 
     if not payload.filename.lower().endswith(SAVE_AS_EXTENSIONS):
         raise HTTPException(
