@@ -254,3 +254,188 @@ describe("gate key hints", () => {
     expect(ack.querySelector("kbd")).toBeTruthy();
   });
 });
+
+describe("copy buttons (#78)", () => {
+  function mockClipboard(): ReturnType<typeof vi.fn> {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    return writeText;
+  }
+
+  it("copies the interactive command text and flips to Copied", async () => {
+    // userEvent.setup() patches navigator.clipboard with its own stub:
+    // install our mock AFTER setup or it is silently replaced (#78 tests).
+    const user = userEvent.setup();
+    const writeText = mockClipboard();
+    renderModal();
+    const copy = await screen.findByRole("button", { name: "Copy content" });
+    await user.click(copy);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("cmd-1"));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
+  it("copies the finished-session command output", async () => {
+    const user = userEvent.setup();
+    const writeText = mockClipboard();
+    startSpy.mockResolvedValue(
+      makeSession({ status: "completed", current_index: 2, last_output: "out-line" }),
+    );
+    renderModal();
+    const copy = await screen.findByRole("button", { name: "Copy content" });
+    await user.click(copy);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("out-line"));
+  });
+
+  it("swallows clipboard failures silently (webview without clipboard API)", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockRejectedValue(new Error("nope")) },
+      configurable: true,
+    });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderModal();
+    const copy = await screen.findByRole("button", { name: "Copy content" });
+    await user.click(copy);
+    // Still labelled Copy: the copy did not happen, and no error UI appears.
+    expect(await screen.findByRole("button", { name: "Copy content" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Copied" })).toBeNull();
+    consoleSpy.mockRestore();
+  });
+});
+
+describe("session-expired recovery (#79)", () => {
+  function goneError(): Error {
+    return Object.assign(new Error("Session not found"), { status: 404 });
+  }
+
+  it("switches to the recovery panel when respond 404s", async () => {
+    const user = userEvent.setup();
+    respondSpy.mockRejectedValue(goneError());
+    renderModal();
+    const exec = await screen.findByRole("button", { name: "Execute Step" });
+    await user.click(exec);
+
+    expect(await screen.findByText(/has expired or ended/i)).toBeTruthy();
+    // Dead footer gates are replaced by recovery actions.
+    expect(screen.queryByRole("button", { name: "Execute Step" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /launch now/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /restart workflow/i })).toBeTruthy();
+    // Raw error kept for diagnostics behind the collapsible.
+    expect(screen.getByText(/Raw error/i)).toBeTruthy();
+    // Sidebar shows the explicit unavailable state.
+    expect(screen.getByText(/Session unavailable/i)).toBeTruthy();
+    expect(screen.queryByText(/Loading steps/i)).toBeNull();
+  });
+
+  it("restart re-issues start with identical props and clears the error", async () => {
+    const user = userEvent.setup();
+    respondSpy.mockRejectedValueOnce(goneError());
+    renderModal();
+    const exec = await screen.findByRole("button", { name: "Execute Step" });
+    await user.click(exec);
+    await screen.findByText(/has expired or ended/i);
+
+    await user.click(screen.getByRole("button", { name: /restart workflow/i }));
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(2));
+    expect(startSpy).toHaveBeenLastCalledWith({
+      directory: "C:/d",
+      filename: "build.mttl",
+      release: "1.0",
+      args: undefined,
+    });
+    // The session is interactive again and the error strip is gone.
+    await screen.findByRole("button", { name: "Execute Step" });
+    expect(screen.queryByText(/has expired or ended/i)).toBeNull();
+  });
+
+  it("non-404 respond errors keep the gates and show the pinned banner", async () => {
+    const user = userEvent.setup();
+    respondSpy.mockRejectedValueOnce(new Error("boom"));
+    renderModal();
+    const exec = await screen.findByRole("button", { name: "Execute Step" });
+    await user.click(exec);
+    expect(await screen.findByText("boom")).toBeTruthy();
+    // Not a session-gone error: gates stay available.
+    expect(screen.getByRole("button", { name: "Execute Step" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /restart workflow/i })).toBeNull();
+  });
+
+  it("start failure shows the pinned banner and an explicit sidebar state", async () => {
+    startSpy.mockRejectedValue(
+      Object.assign(new Error("No matching workflow found for file"), { status: 400 }),
+    );
+    renderModal();
+    expect(await screen.findByText(/No matching workflow/i)).toBeTruthy();
+    expect(screen.getByText(/Session unavailable/i)).toBeTruthy();
+    expect(screen.queryByText(/Loading steps/i)).toBeNull();
+  });
+});
+
+describe("step sidebar semantics (#80)", () => {
+  it("renders a semantic list with visible status words and aria-current", async () => {
+    renderModal();
+    const step1 = await screen.findByRole("button", { name: /#1/ });
+    expect(screen.getByRole("list")).toBeTruthy();
+    // Status is text, not color-only (WCAG 1.4.1): current step is pending.
+    expect(step1.textContent).toContain("pending");
+    expect(screen.getByRole("button", { name: /#0/ }).textContent).toContain("done");
+    expect(step1.getAttribute("aria-current")).toBe("step");
+    expect(screen.getByRole("button", { name: /#0/ }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("uses a roving tabindex and moves selection with arrow keys", async () => {
+    renderModal();
+    const step0 = await screen.findByRole("button", { name: /#0/ });
+    const step1 = screen.getByRole("button", { name: /#1/ });
+    // Single Tab stop: only the inspected row is tabbable.
+    expect(step0.getAttribute("tabindex")).toBe("-1");
+    expect(step1.getAttribute("tabindex")).toBe("0");
+
+    step1.focus();
+    step1.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }),
+    );
+    await waitFor(() => {
+      const nowCurrent = screen.getByRole("button", { name: /#0/ });
+      expect(nowCurrent.getAttribute("aria-current")).toBe("step");
+      expect(document.activeElement).toBe(nowCurrent);
+    });
+  });
+
+  it("footer status hint is a live region", async () => {
+    renderModal();
+    const hint = await screen.findByText(/Action required to proceed/i);
+    expect(hint.getAttribute("aria-live")).toBe("polite");
+  });
+});
+
+describe("keyboard guard residuals (#82)", () => {
+  it("Enter closes the runner when finished and no button holds focus", async () => {
+    const { onClose } = renderModal();
+    const user = userEvent.setup();
+    respondSpy.mockResolvedValue(makeSession({ status: "completed", current_index: 2 }));
+    await user.click(await screen.findByRole("button", { name: "Execute Step" }));
+    await screen.findByRole("button", { name: "Close Runner" });
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    document.body.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("gate keys are ignored while focus is in a text input", async () => {
+    renderModal();
+    await screen.findByRole("button", { name: "Execute Step" });
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "y", bubbles: true, cancelable: true }),
+    );
+    expect(respondSpy).not.toHaveBeenCalled();
+    input.remove();
+  });
+});

@@ -10,6 +10,32 @@ import type {
   WorkflowSessionState,
 } from "./types";
 
+/**
+ * Error carrying the HTTP status so callers can react to specific codes —
+ * e.g. 404 from the workflow session routes means the server-side session
+ * expired or was purged (TTL), and the UI can offer recovery (#79).
+ */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** Build an ApiError from a failed Response, preferring the body's detail. */
+async function apiError(res: Response, fallback: string): Promise<ApiError> {
+  let detail = fallback;
+  try {
+    const body = await res.json();
+    if (body?.detail) detail = body.detail;
+  } catch {
+    // keep the fallback message
+  }
+  return new ApiError(detail, res.status);
+}
+
 /** Fetch UI events recorded after *afterId* (config handoff notifications). */
 export async function fetchNotifications(afterId: number): Promise<{ events: ExternalEvent[] }> {
   const res = await fetch(`/api/notifications?after=${afterId}`);
@@ -325,16 +351,13 @@ export async function startWorkflowSession(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: "Failed to start workflow session" }));
-    throw new Error(errorData.detail || "Failed to start workflow session");
-  }
+  if (!res.ok) throw await apiError(res, "Failed to start workflow session");
   return res.json();
 }
 
 export async function fetchWorkflowSession(sessionId: string): Promise<WorkflowSessionState> {
   const res = await fetch(`/api/workflow/${sessionId}`);
-  if (!res.ok) throw new Error("Failed to fetch workflow session");
+  if (!res.ok) throw await apiError(res, "Failed to fetch workflow session");
   return res.json();
 }
 
@@ -347,13 +370,13 @@ export async function respondWorkflowSession(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action }),
   });
-  if (!res.ok) throw new Error("Failed to respond to workflow prompt");
+  if (!res.ok) throw await apiError(res, "Failed to respond to workflow prompt");
   return res.json();
 }
 
 /** Abort a still-interactive workflow session (modal closed mid-workflow). */
 export async function abortWorkflowSession(sessionId: string): Promise<WorkflowSessionState> {
   const res = await fetch(`/api/workflow/${sessionId}/abort`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to abort workflow session");
+  if (!res.ok) throw await apiError(res, "Failed to abort workflow session");
   return res.json();
 }

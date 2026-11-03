@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
+  Copy,
   FastForward,
   Loader2,
   Rocket,
@@ -60,6 +62,49 @@ function abortIfInteractive(session: WorkflowSessionState | null): void {
   });
 }
 
+/** Visible status words for the sidebar rows (WCAG 1.4.1: not color-only). */
+const STATUS_WORDS: Record<WorkflowStepRecord["status"], string> = {
+  running: "running",
+  completed: "done",
+  skipped: "skipped",
+  failed: "failed",
+  pending: "pending",
+};
+
+/**
+ * Ghost copy button pinned to the top-right of a command/output block
+ * (#78). Same clipboard pattern as the rest of the app: a silent catch,
+ * because some desktop webviews expose no clipboard API (#31).
+ */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard API unavailable in some desktop webviews */
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={copied ? "Copied" : "Copy content"}
+      title={copied ? "Copied!" : "Copy content"}
+      className="absolute right-2 top-2 rounded-md p-1.5 text-ink-muted hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
 export function WorkflowRunnerModal({
   isOpen,
   onClose,
@@ -73,6 +118,10 @@ export function WorkflowRunnerModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  /** Server-side session is gone (404): recovery UI replaces the gates (#79). */
+  const [sessionGone, setSessionGone] = useState(false);
+  /** Bumped by Restart to re-run the start effect with identical props (#79). */
+  const [restartNonce, setRestartNonce] = useState(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   /** Re-entry guard: one in-flight respond per session gate (#83 class). */
   const respondingRef = useRef(false);
@@ -85,6 +134,7 @@ export function WorkflowRunnerModal({
     if (!isOpen || !directory || !filename) {
       setSession(null);
       setError(null);
+      setSessionGone(false);
       setSelectedStepIndex(null);
       closingRef.current = false;
       return;
@@ -93,6 +143,7 @@ export function WorkflowRunnerModal({
     let active = true;
     setLoading(true);
     setError(null);
+    setSessionGone(false);
     setSelectedStepIndex(null);
 
     startWorkflowSession({
@@ -109,8 +160,9 @@ export function WorkflowRunnerModal({
           onFinished?.(s.status, s.final_message || "");
         }
       })
-      .catch((err) => {
+      .catch((err: any) => {
         if (!active) return;
+        if (err?.status === 404) setSessionGone(true);
         setError(err.message || "Failed to start workflow");
         setLoading(false);
       });
@@ -118,7 +170,7 @@ export function WorkflowRunnerModal({
     return () => {
       active = false;
     };
-  }, [isOpen, directory, filename, release, args]);
+  }, [isOpen, directory, filename, release, args, restartNonce]);
 
   const handleRespond = async (action: "yes" | "skip" | "no" | "ack" | "bypass") => {
     // Re-entry guard: a racing double-click or a held key must not answer
@@ -133,7 +185,14 @@ export function WorkflowRunnerModal({
         onFinished?.(next.status, next.final_message || "");
       }
     } catch (err: any) {
-      setError(err.message || "Failed to process workflow response");
+      if (err?.status === 404) {
+        // Server-side session expired (TTL) or unknown id: every further
+        // respond would 404 too — switch to the recovery UI (#79).
+        setSessionGone(true);
+        setError(err.message || "Workflow session on the server has expired.");
+      } else {
+        setError(err.message || "Failed to process workflow response");
+      }
     } finally {
       respondingRef.current = false;
       setLoading(false);
@@ -150,6 +209,27 @@ export function WorkflowRunnerModal({
   respondRef.current = handleRespond;
   const inspectedRef = useRef(selectedStepIndex);
   inspectedRef.current = selectedStepIndex;
+  // Roving tabindex over the step list (#80): the refs let ↑/↓/Home/End move
+  // focus (and selection) without adding a Tab stop per step.
+  const stepListRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const handleStepListKeyDown = (e: ReactKeyboardEvent, idx: number) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault();
+    const count = sessionRef.current?.steps.length ?? 0;
+    if (count === 0) return;
+    const next =
+      e.key === "ArrowDown"
+        ? (idx + 1) % count
+        : e.key === "ArrowUp"
+          ? (idx - 1 + count) % count
+          : e.key === "Home"
+            ? 0
+            : count - 1;
+    setSelectedStepIndex(next);
+    // Focus works on tabIndex=-1 nodes too; the re-render only flips the
+    // attribute on this same element.
+    stepListRefs.current[next]?.focus();
+  };
 
   useEffect(() => {
     // Unmount with a live session (e.g. parent removed the modal): abort.
@@ -165,6 +245,16 @@ export function WorkflowRunnerModal({
     closingRef.current = true;
     abortIfInteractive(sessionRef.current);
     onClose();
+  };
+
+  /** Re-run the workflow from scratch with identical props (#79). */
+  const handleRestart = () => {
+    setSession(null);
+    setError(null);
+    setSessionGone(false);
+    setSelectedStepIndex(null);
+    closingRef.current = false;
+    setRestartNonce((n) => n + 1);
   };
 
   // Focus trap / initial focus / restore (issue #62); initial focus lands on
@@ -193,8 +283,34 @@ export function WorkflowRunnerModal({
       // primary action (yes / ack). Only while the interactive panel is
       // visible, never while a respond is in flight, never with modifiers.
       const s = sessionRef.current;
-      if (!s || isSessionTerminal(s.status) || respondingRef.current) return;
+      if (!s) return;
+      if (isSessionTerminal(s.status)) {
+        // Finished: Enter closes the runner (#82). Native activation usually
+        // covers this (the #81 focus sits on Close), so — same as the gates
+        // below — stay out of the way while a button holds focus.
+        if (
+          e.key === "Enter" &&
+          !e.repeat &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey &&
+          !respondingRef.current &&
+          (e.target as HTMLElement | null)?.tagName !== "BUTTON" &&
+          document.activeElement?.tagName !== "BUTTON"
+        ) {
+          e.preventDefault();
+          handleClose();
+        }
+        return;
+      }
+      if (respondingRef.current) return;
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Never answer a gate while typing into a text field (#82) — none
+      // exist in this modal today, but the guard keeps future inputs safe.
+      const active = e.target as HTMLElement | null;
+      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.isContentEditable) {
+        return;
+      }
       const inspected = inspectedRef.current;
       const interactiveVisible = inspected === null || inspected === s.current_index;
       const primaryAction =
@@ -256,7 +372,10 @@ export function WorkflowRunnerModal({
   // parked in: pre gate → launch now; post gate → the launch already
   // happened, only the remaining post steps are skipped.
   const bypassActive =
-    !!session && !isFinished && (session.status?.startsWith("waiting") ?? false);
+    !!session &&
+    !isFinished &&
+    !sessionGone &&
+    (session.status?.startsWith("waiting") ?? false);
   const bypassInPost =
     (session?.steps[session?.current_index ?? -1]?.phase ?? "pre") === "post";
 
@@ -265,7 +384,8 @@ export function WorkflowRunnerModal({
   // so the command must be surfaced here as well — after the human-readable
   // message, per the message-first ordering.
   const showInteractivePanels =
-    selectedStepIndex === null || selectedStepIndex === session?.current_index;
+    !sessionGone &&
+    (selectedStepIndex === null || selectedStepIndex === session?.current_index);
   const interactiveCommandBox =
     showInteractivePanels &&
     activeStep?.command &&
@@ -274,7 +394,8 @@ export function WorkflowRunnerModal({
       session?.status === "waiting_ask") ? (
       <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
-        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+        <div className="relative rounded-lg border border-line bg-surface-strong p-4 pr-10 font-mono text-xs text-ink leading-relaxed">
+          <CopyButton text={activeStep.command} />
           {activeStep.command}
         </div>
       </div>
@@ -306,7 +427,7 @@ export function WorkflowRunnerModal({
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            {session && !isFinished && (
+            {session && !isFinished && !sessionGone && (
               <button
                 type="button"
                 disabled={!bypassActive || loading}
@@ -340,61 +461,79 @@ export function WorkflowRunnerModal({
               Workflow Steps (Click to inspect)
             </h3>
             {session && session.steps.length > 0 ? (
-              session.steps.map((st, idx) => {
-                const isCurrentExecuting = session.current_index === idx && !isFinished;
-                const isInspected = selectedStepIndex === idx || (selectedStepIndex === null && isCurrentExecuting);
-                return (
-                  <button
-                    key={st.index}
-                    type="button"
-                    onClick={() => setSelectedStepIndex(idx)}
-                    className={`flex items-start text-left gap-2.5 rounded-lg border px-3 py-2.5 transition-colors cursor-pointer w-full ${
-                      isInspected
-                        ? "border-chip-indigo-border bg-chip-indigo-bg shadow-xs ring-1 ring-chip-indigo-border/40"
-                        : "border-line/60 bg-surface/60 hover:bg-elevated/80"
-                    }`}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {st.status === "running" && (
-                        <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />
-                      )}
-                      {st.status === "completed" && (
-                        <CheckCircle2 className="h-4 w-4 text-status-success-text" />
-                      )}
-                      {st.status === "skipped" && (
-                        <FastForward className="h-4 w-4 text-status-warning-text" />
-                      )}
-                      {st.status === "failed" && (
-                        <AlertCircle className="h-4 w-4 text-status-danger-text" />
-                      )}
-                      {st.status === "pending" && (
-                        <div className="h-4 w-4 rounded-full border border-line-strong flex items-center justify-center text-[10px] text-ink-faint font-mono">
-                          {st.index}
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px] font-bold uppercase text-chip-indigo-text">
-                          {st.action}
-                        </span>
-                        <span className="text-[10px] font-mono text-ink-faint">#{st.index}</span>
-                      </div>
-                      <p
-                        className="truncate font-mono text-[11px] text-ink-secondary mt-0.5"
-                        title={st.command}
+              <ul role="list" className="flex flex-col gap-2">
+                {session.steps.map((st, idx) => {
+                  const isCurrentExecuting = session.current_index === idx && !isFinished;
+                  const isInspected = selectedStepIndex === idx || (selectedStepIndex === null && isCurrentExecuting);
+                  const statusWord = STATUS_WORDS[st.status];
+                  return (
+                    <li key={st.index}>
+                      <button
+                        ref={(el) => {
+                          stepListRefs.current[idx] = el;
+                        }}
+                        type="button"
+                        // Roving tabindex (#80): one Tab stop for the whole
+                        // sidebar; ↑/↓/Home/End move between steps.
+                        tabIndex={isInspected ? 0 : -1}
+                        aria-current={isInspected ? "step" : undefined}
+                        onKeyDown={(e) => handleStepListKeyDown(e, idx)}
+                        onClick={() => setSelectedStepIndex(idx)}
+                        className={`flex items-start text-left gap-2.5 rounded-lg border px-3 py-2.5 transition-colors cursor-pointer w-full ${
+                          isInspected
+                            ? "border-chip-indigo-border bg-chip-indigo-bg shadow-xs ring-1 ring-chip-indigo-border/40"
+                            : "border-line/60 bg-surface/60 hover:bg-elevated/80"
+                        }`}
                       >
-                        {st.message ? st.message.split("\n")[0] : st.command}
-                      </p>
-                      {st.note && (
-                        <p className="mt-1 text-[10px] text-ink-faint italic">{st.note}</p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })
+                        <div className="mt-0.5 shrink-0">
+                          {st.status === "running" && (
+                            <Loader2 className="h-4 w-4 animate-spin text-chip-indigo-text" />
+                          )}
+                          {st.status === "completed" && (
+                            <CheckCircle2 className="h-4 w-4 text-status-success-text" />
+                          )}
+                          {st.status === "skipped" && (
+                            <FastForward className="h-4 w-4 text-status-warning-text" />
+                          )}
+                          {st.status === "failed" && (
+                            <AlertCircle className="h-4 w-4 text-status-danger-text" />
+                          )}
+                          {st.status === "pending" && (
+                            <div className="h-4 w-4 rounded-full border border-line-strong flex items-center justify-center text-[10px] text-ink-faint font-mono">
+                              {st.index}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-[11px] font-bold uppercase text-chip-indigo-text">
+                              {st.action}
+                            </span>
+                            <span className="text-[10px] font-mono text-ink-faint">
+                              #{st.index} · {statusWord}
+                            </span>
+                          </div>
+                          <p
+                            className="truncate font-mono text-[11px] text-ink-secondary mt-0.5"
+                            title={st.command}
+                          >
+                            {st.message ? st.message.split("\n")[0] : st.command}
+                          </p>
+                          {st.note && (
+                            <p className="mt-1 text-[10px] text-ink-faint italic">{st.note}</p>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : (
-              <div className="p-4 text-center text-xs text-ink-faint">Loading steps...</div>
+              <div className="p-4 text-center text-xs text-ink-faint">
+                {error || sessionGone
+                  ? "Session unavailable — see the error panel."
+                  : "Loading steps..."}
+              </div>
             )}
           </div>
 
@@ -406,12 +545,6 @@ export function WorkflowRunnerModal({
           <div className="flex-1 flex flex-col bg-app">
             <div className="flex-1 min-h-0 overflow-y-auto p-6">
               <div className="space-y-6">
-              {error && (
-                <div className="flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-text">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
 
               {/* Active / Inspected Step Details */}
               <div className="rounded-xl border border-line bg-surface p-5 shadow-xs space-y-4">
@@ -515,14 +648,18 @@ export function WorkflowRunnerModal({
                       <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
                         Command Output:
                       </p>
-                      <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
-                        {session.last_output}
-                      </pre>
+                      <div className="relative">
+                        <CopyButton text={session.last_output} />
+                        <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
+                          {session.last_output}
+                        </pre>
+                      </div>
                     </div>
                   )}
 
                   {/* Priority 3: General content display for inspected or non-prompting current step */}
-                  {!(isFinished && selectedStepIndex === null) &&
+                  {!sessionGone &&
+                   !(isFinished && selectedStepIndex === null) &&
                    !((selectedStepIndex === null || selectedStepIndex === session?.current_index) && (session?.status === "waiting_notify" || session?.status === "waiting_ask" || session?.status === "waiting_notice")) && (
                     <div className="space-y-4">
                       {activeStep?.message && (
@@ -536,17 +673,27 @@ export function WorkflowRunnerModal({
 
                       <div className="space-y-2">
                         <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Command:</p>
-                        <div className="rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
-                          {activeStep?.command ? activeStep.command : "Waiting..."}
+                        <div className="relative rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink leading-relaxed">
+                          {activeStep?.command ? (
+                            <>
+                              <CopyButton text={activeStep.command} />
+                              <span className="block pr-8">{activeStep.command}</span>
+                            </>
+                          ) : (
+                            "Waiting..."
+                          )}
                         </div>
                       </div>
 
                       {activeStep?.output && (
                         <div className="space-y-2">
                           <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">Output:</p>
-                          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
-                            {activeStep.output}
-                          </pre>
+                          <div className="relative">
+                            <CopyButton text={activeStep.output} />
+                            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-surface-strong p-4 font-mono text-xs text-ink">
+                              {activeStep.output}
+                            </pre>
+                          </div>
                         </div>
                       )}
 
@@ -568,10 +715,61 @@ export function WorkflowRunnerModal({
               </div>
             </div>
 
+            {/* Error / recovery strip: pinned above the footer so errors are
+                visible without scrolling (#75 layout, #79 acceptance). */}
+            {(error || sessionGone) && (
+              <div className="shrink-0 px-6 pt-3">
+                <div className="flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-bg p-3 text-xs text-status-danger-text">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p>
+                      {sessionGone
+                        ? "Workflow session on the server has expired or ended."
+                        : error}
+                    </p>
+                    {sessionGone ? (
+                      <div className="space-y-2">
+                        {error && (
+                          <details className="text-ink-muted">
+                            <summary className="cursor-pointer select-none text-[11px] underline">
+                              Raw error (for bug reports)
+                            </summary>
+                            <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px]">
+                              {error}
+                            </pre>
+                          </details>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRestart}
+                            className="btn btn-primary px-4 py-1.5 text-xs font-semibold"
+                          >
+                            Restart workflow
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleClose}
+                            className="btn rounded-md border-line bg-surface px-4 py-1.5 text-xs"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Bottom Action Area (Ask Callbacks / Dismiss) */}
             <div className="shrink-0 px-6 pt-4 pb-4 border-t border-line flex items-center justify-between bg-app">
-              <div className="text-xs text-ink-muted">
-                {session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
+              {/* Live region (#80): status / prompt transitions are announced
+                  without moving focus. */}
+              <div className="text-xs text-ink-muted" aria-live="polite">
+                {sessionGone
+                  ? "Session unavailable — restart or close above."
+                  : session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
                   ? "Action required to proceed:"
                   : session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index)
                   ? "Acknowledge message to proceed:"
@@ -583,7 +781,7 @@ export function WorkflowRunnerModal({
               </div>
 
               <div className="flex items-center gap-2">
-                {session?.status === "waiting_notice" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
+                {!sessionGone && session?.status === "waiting_notice" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <button
                     type="button"
                     ref={primaryActionRef}
@@ -596,7 +794,7 @@ export function WorkflowRunnerModal({
                   </button>
                 )}
 
-                {session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
+                {!sessionGone && session?.status === "waiting_notify" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <button
                     type="button"
                     ref={primaryActionRef}
@@ -609,7 +807,7 @@ export function WorkflowRunnerModal({
                   </button>
                 )}
 
-                {session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
+                {!sessionGone && session?.status === "waiting_ask" && (selectedStepIndex === null || selectedStepIndex === session.current_index) && (
                   <>
                     <button
                       type="button"
