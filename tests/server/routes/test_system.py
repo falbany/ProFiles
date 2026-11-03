@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from profiles.core.config.models import AppConfig
 from profiles.server.app import create_app
+from profiles.server.routes.system import _rebind_worker
 from profiles.server.state import ServerState
+
+
+def _wait_for(condition, timeout_s: float = 5.0) -> bool:
+    """Poll ``condition`` until truthy or ``timeout_s`` elapsed."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.05)
+    return condition()
 
 
 @pytest.fixture
@@ -77,7 +91,7 @@ async def test_bind_without_server_returns_503(test_state: ServerState) -> None:
 async def test_bind_runs_rebind_on_registered_server(
     test_state: ServerState,
 ) -> None:
-    """lan=True rebinds to 0.0.0.0 and reflects the new state."""
+    """lan=True schedules the rebind and answers before it completes."""
     calls: list[str] = []
 
     class _RecordingServer(_StubServer):
@@ -95,15 +109,62 @@ async def test_bind_runs_rebind_on_registered_server(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/system/bind", json={"lan": True})
         assert response.status_code == 200
-        assert response.json() == {"host": "0.0.0.0", "lan_enabled": True}
-        assert calls == ["0.0.0.0"]
+        # The rebind is asynchronous: the response ships first.
+        assert response.json() == {
+            "host": "0.0.0.0",
+            "lan_enabled": True,
+            "status": "rebinding",
+        }
+        assert _wait_for(lambda: calls == ["0.0.0.0"]), calls
 
 
 @pytest.mark.anyio
-async def test_bind_failure_returns_500_and_state_is_unchanged(
+async def test_bind_worker_logs_bind_changed_on_success(
+    test_state: ServerState, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The rebind worker leaves a BIND_CHANGED line on success."""
+
+    class _OkServer(_StubServer):
+        def rebind(self, host: str) -> None:  # noqa: F811
+            self.host = host
+
+    stub = _OkServer()
+    with caplog.at_level(logging.INFO, logger="profiles"):
+        _rebind_worker(stub, "127.0.0.1")
+
+    assert 'BIND_CHANGED host="127.0.0.1" lan=false' in caplog.text
+
+
+def test_bind_worker_logs_failure_and_no_bind_changed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed rebind logs BIND_CHANGE_FAILED; the server keeps serving."""
+    from profiles.desktop.lifecycle import ServerStartError
+
+    class _FailingServer(_StubServer):
+        def rebind(self, host: str) -> None:  # noqa: F811
+            raise ServerStartError("bind denied")
+
+    stub = _FailingServer()
+    with caplog.at_level(logging.INFO, logger="profiles"):
+        _rebind_worker(stub, "0.0.0.0")
+
+    assert 'BIND_CHANGE_FAILED host="0.0.0.0" error="bind denied"' in caplog.text
+    assert "BIND_CHANGED" not in caplog.text
+    assert stub.host == "127.0.0.1"
+
+
+@pytest.mark.anyio
+async def test_bind_failure_reverts_and_state_stays_unchanged(
     test_state: ServerState,
 ) -> None:
-    """A failed rebind reports the error; the bind state stays on the server."""
+    """A failed rebind is answered optimistically; the state reverts.
+
+    The route cannot know the rebind outcome synchronously (the old server
+    cannot shut down while serving this request), so it answers
+    ``rebinding`` and the revert — done by the lifecycle — is observable
+    through ``GET /api/system``.
+    """
     from profiles.desktop.lifecycle import ServerStartError
 
     class _FailingServer(_StubServer):
@@ -115,7 +176,7 @@ async def test_bind_failure_returns_500_and_state_is_unchanged(
     app.state.background_server = stub
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/system/bind", json={"lan": True})
-        assert response.status_code == 500
-        assert "bind denied" in response.json()["detail"]
+        assert response.status_code == 200
+        assert response.json()["status"] == "rebinding"
         status = await client.get("/api/system")
         assert status.json()["lan_enabled"] is False

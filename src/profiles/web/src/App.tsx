@@ -18,6 +18,7 @@ import {
   reloadConfig,
   exportCsvToDisk,
   setLanEnabled,
+  waitForLanState,
 } from "./api/client";
 import type { AppConfigData, ExternalEvent, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
 import {
@@ -1703,14 +1704,28 @@ export default function App() {
           setLanPending(null);
           try {
             await setLanEnabled(next);
-            const sys = await fetchSystemInfo();
-            setSystemInfo(sys);
             showToast(
               next
-                ? "ProFiles is now reachable on the local network."
-                : "ProFiles is restricted to this machine.",
+                ? "Updating LAN binding…"
+                : "Restricting ProFiles to this machine…",
               "info"
             );
+            // The rebind runs after the response; observe the real outcome.
+            const sys = await waitForLanState(next);
+            if (sys) setSystemInfo(sys);
+            if (sys?.lan_enabled === next) {
+              showToast(
+                next
+                  ? "ProFiles is now reachable on the local network."
+                  : "ProFiles is restricted to this machine.",
+                "info"
+              );
+            } else {
+              showToast(
+                "Failed to update LAN binding — the previous address is still active.",
+                "error"
+              );
+            }
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Failed to update LAN binding";
             showToast(`Failed to update LAN binding: ${msg}`, "error");
