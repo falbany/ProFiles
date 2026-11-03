@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Baseline keyboard focus indicator: every interactive element shows a
+   visible outline on keyboard focus, even raw buttons that carry no
+   explicit focus utilities (WCAG 2.4.7). :where() keeps specificity at
+   zero, so elements that already handle focus locally — the .btn /
+   .focus-ring / focus-visible:ring utilities, which set
+   focus-visible:outline-none — keep their ring and suppress this one.
+   Outline follows border radius in modern browsers. */
+:where(button, [role="button"], input, select, textarea, a, summary, video[tabindex], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-indigo-500, #6366f1);
+  outline-offset: 2px;
+}
+
 :root {
   color-scheme: dark light;
 }
