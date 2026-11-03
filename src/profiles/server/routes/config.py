@@ -44,6 +44,14 @@ class SaveRequest(BaseModel):
     force: bool = False
 
 
+class SaveAsRequest(BaseModel):
+    content: str
+    filename: str
+    directory: str
+    force: bool = False
+    overwrite: bool = False
+
+
 def _is_config_path(path: Path) -> bool:
     return path.name.endswith(CONFIG_FILE_NAMES)
 
@@ -378,6 +386,57 @@ async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
     config_path.write_text(payload.content, encoding="utf-8")
     config = _apply_config_from_disk(state, config_path)
     return {"status": "SAVED", "path": str(config_path), "config": config}
+
+
+SAVE_AS_EXTENSIONS = (".profiles", ".profiles.yaml")
+
+
+@router.post("/save-as")
+async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> dict:
+    """Write editor content to a new config file and apply it.
+
+    Unlike :func:`save_config_endpoint`, save-as is anchored to a
+    user-supplied directory and filename, so it works both to copy a
+    disk-anchored config and to anchor a session trial onto disk. Gate
+    order: extension whitelist (:data:`SAVE_AS_EXTENSIONS`) →
+    :func:`normalize_user_path` + directory existence →
+    existence/overwrite guard (409 when the target exists without
+    ``overwrite=True``) → :func:`validate_issues` → 400 with the issues
+    list when invalid and not ``force`` → write the file →
+    :func:`_apply_config_from_disk`, so the live configuration is always
+    re-read from what is on disk (which also clears ``session_trial``).
+
+    Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``,
+    the same shape as ``POST /save``.
+    """
+    state: ServerState = request.app.state.server_state
+
+    if not payload.filename.lower().endswith(SAVE_AS_EXTENSIONS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not a ProFiles configuration file: {payload.filename}. "
+            f"Allowed extensions: {', '.join(SAVE_AS_EXTENSIONS)}",
+        )
+
+    target_dir = normalize_user_path(payload.directory)
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(status_code=400, detail="Directory does not exist")
+
+    target = target_dir / payload.filename
+    if target.exists() and not payload.overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Configuration already exists at {target}. "
+            "Retry with overwrite=true to replace it.",
+        )
+
+    issues = validate_issues(payload.content, display_name=payload.filename)
+    if issues and not payload.force:
+        raise HTTPException(status_code=400, detail=issues)
+
+    target.write_text(payload.content, encoding="utf-8")
+    config = _apply_config_from_disk(state, target)
+    return {"status": "SAVED", "path": str(target), "config": config}
 
 
 @router.post("/select-directory")

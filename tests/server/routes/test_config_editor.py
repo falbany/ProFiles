@@ -1,4 +1,4 @@
-"""Tests for the config editor endpoints: validate + content + save."""
+"""Tests for the config editor endpoints: validate + content + save + save-as."""
 
 from __future__ import annotations
 
@@ -281,3 +281,198 @@ async def test_save_writes_and_applies_valid_config(tmp_path: Path) -> None:
     assert state.config.title == "Fresh Title"
     assert payload["config"]["title"] == "Fresh Title"
     assert state.session_trial is False
+
+
+@pytest.mark.anyio
+async def test_save_as_rejects_bad_extension(config_state: ServerState, tmp_path: Path) -> None:
+    """Verify save-as refuses filenames outside the extension whitelist.
+
+    Given: A session with any active configuration
+    When: POST /save-as is called with a ``.yml`` filename
+    Then: 400 is returned and no file is created on disk
+    """
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": "defaults:\n  title: X\n",
+                "filename": "config.yml",
+                "directory": str(tmp_path),
+            },
+        )
+
+    assert response.status_code == 400
+    assert not (tmp_path / "config.yml").exists()
+
+
+@pytest.mark.anyio
+async def test_save_as_rejects_existing_target_without_overwrite(tmp_path: Path) -> None:
+    """Pin 409 Conflict: an existing target requires overwrite=True.
+
+    Given: A target config file that already exists on disk
+    When: POST /save-as targets the same path without overwrite
+    Then: 409 is returned naming the path and the file bytes are untouched
+    """
+    target = tmp_path / ".profiles"
+    file_text = 'defaults:\n  title: "Existing"\n'
+    target.write_text(file_text, encoding="utf-8")
+    loaded = ConfigReader(target).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": "defaults:\n  title: Replaced\n",
+                "filename": ".profiles",
+                "directory": str(tmp_path),
+            },
+        )
+
+    assert response.status_code == 409
+    assert str(target) in response.json()["detail"]
+    assert target.read_text(encoding="utf-8") == file_text
+
+
+@pytest.mark.anyio
+async def test_save_as_overwrite_replaces_file(tmp_path: Path) -> None:
+    """Verify overwrite=True replaces an existing target with the new content.
+
+    Given: An existing target config file
+    When: POST /save-as targets it with overwrite=True and valid content
+    Then: 200 SAVED and the file contains the new content verbatim
+    """
+    target = tmp_path / ".profiles"
+    target.write_text('defaults:\n  title: "Old Title"\n', encoding="utf-8")
+    loaded = ConfigReader(target).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    new_text = f"defaults:\n  title: Replaced\n  search_dir: '{tmp_path}'\n"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": new_text,
+                "filename": ".profiles",
+                "directory": str(tmp_path),
+                "overwrite": True,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["path"] == str(target)
+    assert target.read_text(encoding="utf-8") == new_text
+
+
+@pytest.mark.anyio
+async def test_save_as_rejects_invalid_content(tmp_path: Path) -> None:
+    """Verify invalid content answers 400 with the issues list and writes nothing.
+
+    Given: A target path with no existing file
+    When: POST /save-as is called with invalid YAML and no force flag
+    Then: 400 with the issues list and the target file is never created
+    """
+    target = tmp_path / "draft.profiles"
+    state = ServerState(
+        config=AppConfig(title="Session", search_dir=str(tmp_path), extensions=(".txt",)),
+        active_directory=tmp_path,
+    )
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": "defaults: [unclosed",
+                "filename": "draft.profiles",
+                "directory": str(tmp_path),
+            },
+        )
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    assert detail[0]["severity"] == "error"
+    assert detail[0]["message"]
+    assert not target.exists()
+
+
+@pytest.mark.anyio
+async def test_save_as_force_saves_invalid_content(tmp_path: Path) -> None:
+    """Verify force=True writes invalid content to the new path anyway.
+
+    Given: A target path with no existing file
+    When: POST /save-as is called with invalid YAML and force=True
+    Then: 200 SAVED and the file contains the invalid text verbatim
+    """
+    target = tmp_path / "broken.profiles"
+    state = ServerState(
+        config=AppConfig(title="Session", search_dir=str(tmp_path), extensions=(".txt",)),
+        active_directory=tmp_path,
+    )
+    invalid_text = "defaults: [unclosed"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": invalid_text,
+                "filename": "broken.profiles",
+                "directory": str(tmp_path),
+                "force": True,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["path"] == str(target)
+    assert target.read_text(encoding="utf-8") == invalid_text
+    assert "config" in payload
+
+
+@pytest.mark.anyio
+async def test_save_as_applies_new_config(tmp_path: Path) -> None:
+    """Verify a save-as anchors the session to the new file and re-derives state.
+
+    Given: A session anchored to an existing config and a new valid draft
+        whose ``search_dir`` points at a different existing directory
+    When: POST /save-as writes the draft to a fresh target path
+    Then: 200 SAVED, ``state.config_path`` is the target,
+        ``state.active_directory`` is re-derived from the new config, and
+        the session-trial flag is cleared
+    """
+    target = tmp_path / "copy.profiles"
+    scan_dir = tmp_path / "scans"
+    scan_dir.mkdir()
+    old_path = tmp_path / ".profiles"
+    old_path.write_text(f"defaults:\n  title: Old\n  search_dir: '{tmp_path}'\n", encoding="utf-8")
+    state = ServerState(config=ConfigReader(old_path).load(), active_directory=tmp_path)
+    valid_text = f"defaults:\n  title: Saved As Copy\n  search_dir: '{scan_dir}'\n"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": valid_text,
+                "filename": "copy.profiles",
+                "directory": str(tmp_path),
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["path"] == str(target)
+    assert target.read_text(encoding="utf-8") == valid_text
+    assert state.config_path == target
+    assert state.active_directory == scan_dir
+    assert state.session_trial is False
+    assert payload["config"]["title"] == "Saved As Copy"
