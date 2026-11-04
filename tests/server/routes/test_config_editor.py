@@ -78,6 +78,35 @@ async def test_validate_does_not_change_state(config_state: ServerState) -> None
 
 
 @pytest.mark.anyio
+async def test_validate_reports_every_issue_not_just_the_first(
+    config_state: ServerState,
+) -> None:
+    """Verify a draft with several problems gets ALL of them reported.
+
+    Given: content with two unknown top-level keys and a schema violation
+    When: POST /api/config/validate
+    Then: the issues list names every unknown key and the schema error,
+        instead of stopping at the first failure
+    """
+    content = "typo_a: 1\ntypo_b: 2\ndefaults:\n  search_dir: 42\n"
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/validate",
+            json={"content": content, "filename": ".profiles"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["valid"] is False
+    messages = [issue["message"] for issue in payload["issues"]]
+    assert len(payload["issues"]) >= 3
+    assert any("unknown top-level key 'typo_a'" in message for message in messages)
+    assert any("unknown top-level key 'typo_b'" in message for message in messages)
+    assert any(message.startswith("defaults.search_dir:") for message in messages)
+
+
+@pytest.mark.anyio
 async def test_content_returns_active_config_text(tmp_path: Path) -> None:
     """Verify GET /content returns the on-disk text of the active config file."""
     config_path = tmp_path / ".profiles"
@@ -651,7 +680,7 @@ async def test_template_returns_starter_content(config_state: ServerState) -> No
     assert response.status_code == 200
     payload = response.json()
     assert payload["filename"] == ".profiles"
-    assert validate_issues(payload["content"], display_name=".profiles") == []
+    assert validate_issues(payload["content"]) == []
 
 
 @pytest.mark.anyio

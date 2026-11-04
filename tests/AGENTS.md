@@ -56,6 +56,7 @@ tests/
 │   │   ├── test_service.py                   # ← core/config/service.py
 │   │   ├── test_template.py                  # ← core/config/template.py
 │   │   ├── test_validator.py                 # ← core/config/validator.py
+│   │   ├── test_diagnostics.py               # ← core/config/diagnostics.py (rapport multi-erreurs)
 │   │   └── io/
 │   │       └── test_yaml_io.py               # ← core/config/io/yaml_io.py
 │   ├── environment/

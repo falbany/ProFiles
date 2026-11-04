@@ -55,7 +55,8 @@ src/profiles/
 │   │   ├── matcher.py        #   Correspondance config ↔ hostname
 │   │   ├── schema.py         #   Schéma de validation
 │   │   ├── conditions.py     #   Grammaire des conditions if: des hook steps
-│   │   ├── validator.py      #   Validation des valeurs
+│   │   ├── validator.py      #   Validation des valeurs (validate, collect_issues)
+│   │   ├── diagnostics.py    #   collect_config_issues — rapport multi-erreurs éditeur
 │   │   ├── inheritance.py    #   Héritage entre configurations
 │   │   ├── template.py       #   STARTER_CONFIG_TEMPLATE (génération .profiles)
 │   │   └── io/yaml_io.py     #   Lecture/écriture YAML

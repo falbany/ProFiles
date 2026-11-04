@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from profiles.core.config.schema import ConfigError
-from profiles.core.config.validator import validate
+from profiles.core.config.validator import collect_issues, validate
 
 
 class TestValidate:
@@ -43,3 +43,44 @@ class TestValidate:
         with pytest.raises(ConfigError) as exc:
             validate(raw)
         assert exc.value.path == "bogus"
+
+
+class TestCollectIssues:
+    """collect_issues: same checks as validate(), but every problem is
+    reported instead of failing fast at the first one (editor diagnostics)."""
+
+    def test_reports_every_unknown_top_level_key(self) -> None:
+        raw = {"typo_a": 1, "typo_b": 2, "defaults": {}}
+        errors = collect_issues(raw)
+        paths = [error.path for error in errors]
+        assert paths == ["typo_a", "typo_b"]
+
+    def test_reports_unknown_extends_and_cycle_together(self) -> None:
+        raw = {
+            "configs": {
+                "a": {"extends": "b"},
+                "b": {"extends": "a"},
+                "c": {"extends": "missing"},
+            }
+        }
+        errors = collect_issues(raw)
+        messages = [error.message for error in errors]
+        assert len(errors) == 2
+        assert any("unknown config 'missing'" in message for message in messages)
+        assert any("inheritance cycle" in message for message in messages)
+
+    def test_validate_still_raises_the_first_collected_issue(self) -> None:
+        # validate() keeps its fail-fast contract, now implemented on top
+        # of collect_issues (DRY): the first unknown key wins.
+        raw = {"typo_a": 1, "typo_b": 2}
+        with pytest.raises(ConfigError) as exc:
+            validate(raw)
+        assert exc.value.path == "typo_a"
+
+    def test_valid_content_collects_nothing(self) -> None:
+        raw = {
+            "version": 1,
+            "defaults": {"search_dir": "/x"},
+            "configs": {"prod": {"extends": "base"}, "base": {}},
+        }
+        assert collect_issues(raw) == []

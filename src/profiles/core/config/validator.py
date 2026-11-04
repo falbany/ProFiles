@@ -13,23 +13,32 @@ from profiles.core.config.schema import ConfigError
 _KNOWN_TOP_LEVEL = {"version", "defaults", "columns", "hooks", "configs"}
 
 
-def validate(raw: dict) -> None:
-    """Validate the raw YAML mapping semantically.
+def collect_issues(raw: dict) -> list[ConfigError]:
+    """Collect ALL semantic problems in the raw YAML mapping, in order.
+
+    Same checks as :func:`validate` — unknown top-level keys, unknown
+    ``extends`` references, inheritance cycles — but every occurrence is
+    reported instead of failing fast at the first one. Built for editor
+    diagnostics (issue: the validator surfaced only the first error);
+    :func:`validate` keeps its fail-fast contract on top of this.
 
     Args:
         raw: The parsed YAML dict (from :func:`yaml_io.read_yaml`).
 
-    Raises:
-        ConfigError: On unknown top-level keys, unknown ``extends``
-            references, or inheritance cycles.
+    Returns:
+        Every semantic problem found, in document order (unknown keys,
+        then unknown ``extends`` references, then inheritance cycles).
+        ``[]`` when the mapping is clean.
     """
+    errors: list[ConfigError] = []
+
     for key in raw:
         if key not in _KNOWN_TOP_LEVEL:
-            raise ConfigError(key, f"unknown top-level key '{key}'")
+            errors.append(ConfigError(key, f"unknown top-level key '{key}'"))
 
     configs = raw.get("configs") or {}
     if not isinstance(configs, dict):
-        return
+        return errors
 
     for name, cfg in configs.items():
         if not isinstance(cfg, dict):
@@ -38,12 +47,14 @@ def validate(raw: dict) -> None:
         if extends is None:
             continue
         if extends not in configs:
-            raise ConfigError(
-                f"configs.{name}.extends",
-                f"unknown config '{extends}'",
+            errors.append(
+                ConfigError(
+                    f"configs.{name}.extends",
+                    f"unknown config '{extends}'",
+                )
             )
 
-    # Cycle detection via DFS
+    # Cycle detection via DFS; each cycle met along the way is reported.
     visiting: set[str] = set()
     visited: set[str] = set()
 
@@ -51,11 +62,17 @@ def validate(raw: dict) -> None:
         if name in visiting:
             cycle = " -> ".join((*stack, name))
             closed = stack[-1]
-            raise ConfigError(
-                f"configs.{closed}.extends",
-                f"inheritance cycle: {cycle}",
+            errors.append(
+                ConfigError(
+                    f"configs.{closed}.extends",
+                    f"inheritance cycle: {cycle}",
+                )
             )
+            return
         if name in visited:
+            return
+        if not isinstance(configs.get(name), dict):
+            visited.add(name)
             return
         visiting.add(name)
         extends = configs[name].get("extends")
@@ -67,5 +84,25 @@ def validate(raw: dict) -> None:
     for name in configs:
         visit(name, (name,))
 
+    return errors
 
-__all__ = ["validate"]
+
+def validate(raw: dict) -> None:
+    """Validate the raw YAML mapping semantically.
+
+    Fail-fast twin of :func:`collect_issues`: raises the FIRST problem
+    found, preserving the historical load-path contract.
+
+    Args:
+        raw: The parsed YAML dict (from :func:`yaml_io.read_yaml`).
+
+    Raises:
+        ConfigError: On unknown top-level keys, unknown ``extends``
+            references, or inheritance cycles.
+    """
+    errors = collect_issues(raw)
+    if errors:
+        raise errors[0]
+
+
+__all__ = ["collect_issues", "validate"]
