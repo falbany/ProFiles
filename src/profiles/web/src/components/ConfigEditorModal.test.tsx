@@ -1002,6 +1002,46 @@ describe("ConfigEditorModal editor chrome (issues #98/#99)", () => {
     // The editor really lives inside the card.
     expect(card!.querySelector(".cm-editor")).toBeTruthy();
   });
+
+  it("test_syntax_highlighting_is_token_backed_not_the_light_default", async () => {
+    // basicSetup ships the default highlight style — a light-background
+    // palette (#940 browns, #164 teals, #00c dark blues…) that is nearly
+    // unreadable on the dark editor canvas. The editor must configure its
+    // OWN non-fallback highlight style whose colors come from
+    // --app-editor-syntax-* tokens (VSCode Dark+ / Light+ counterparts).
+    renderModal();
+    await readyEditorView();
+
+    // Our highlight style is mounted: its rules reference the syntax
+    // tokens (the default style hardcodes hex colors, never var()).
+    const injectedStyles = Array.from(document.querySelectorAll("style"))
+      .map((node) => node.textContent ?? "")
+      .join("\n");
+    expect(injectedStyles).toContain("var(--app-editor-syntax-key)");
+    expect(injectedStyles).toContain("var(--app-editor-syntax-comment)");
+    expect(injectedStyles).toContain("var(--app-editor-syntax-string)");
+
+    // Static guard: the shipped source configures the non-fallback style.
+    const modalSource = (await import("./ConfigEditorModal.tsx?raw")).default;
+    expect(modalSource).toContain("syntaxHighlighting(yamlHighlightStyle)");
+
+    // The tokens are defined in BOTH theme blocks, like every --app-editor-*
+    // token (issue #98 pattern).
+    const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf8");
+    expect(css).not.toBe("");
+    const darkBlock = css.slice(0, css.indexOf('[data-theme="light"]'));
+    const lightBlock = css.slice(css.indexOf('[data-theme="light"]'));
+    for (const token of [
+      "--app-editor-syntax-comment",
+      "--app-editor-syntax-key",
+      "--app-editor-syntax-string",
+      "--app-editor-syntax-keyword",
+      "--app-editor-syntax-label",
+    ]) {
+      expect(darkBlock).toContain(`${token}:`);
+      expect(lightBlock).toContain(`${token}:`);
+    }
+  });
 });
 
 /**

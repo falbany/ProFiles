@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup, EditorView } from "codemirror";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags as syntaxTags } from "@lezer/highlight";
 import { yaml } from "@codemirror/lang-yaml";
 import {
   AlertTriangle,
@@ -153,6 +155,38 @@ const configEditorTheme = EditorView.theme({
     color: "var(--app-text-primary)",
   },
 });
+
+/**
+ * Syntax palette for the editor (dark-theme readability fix). basicSetup
+ * ships CodeMirror's DEFAULT highlight style — a light-background palette
+ * (dark browns, teals, blues) that is nearly unreadable on the dark
+ * canvas. This NON-fallback style overrides it, mapping the tags the YAML
+ * parser actually emits (@lezer/yaml styleTags) onto the
+ * --app-editor-syntax-* tokens (VSCode Dark+ / Light+ counterparts):
+ * keys, quoted and plain scalars, comments, anchors/aliases, directives
+ * and YAML tags. Punctuation inherits the base text color. Colors come
+ * from var() references, so the palette follows the light/dark switch
+ * like every other editor surface.
+ */
+const yamlHighlightStyle = HighlightStyle.define([
+  { tag: syntaxTags.lineComment, color: "var(--app-editor-syntax-comment)" },
+  {
+    tag: [syntaxTags.propertyName, syntaxTags.definition(syntaxTags.propertyName)],
+    color: "var(--app-editor-syntax-key)",
+  },
+  {
+    tag: [syntaxTags.string, syntaxTags.special(syntaxTags.string)],
+    color: "var(--app-editor-syntax-string)",
+  },
+  // Plain and block scalars carry tags.content — VSCode styles unquoted
+  // YAML values like strings. Keys override it via definition(propertyName).
+  { tag: syntaxTags.content, color: "var(--app-editor-syntax-string)" },
+  {
+    tag: [syntaxTags.keyword, syntaxTags.typeName],
+    color: "var(--app-editor-syntax-keyword)",
+  },
+  { tag: syntaxTags.labelName, color: "var(--app-editor-syntax-label)" },
+]);
 
 /**
  * Normalize fetched content to the LF line endings CodeMirror stores
@@ -362,6 +396,9 @@ export function ConfigEditorModal({
       extensions: [
         basicSetup,
         yaml(),
+        // Non-fallback: overrides basicSetup's defaultHighlightStyle
+        // fallback (light-background palette) with our token-based one.
+        syntaxHighlighting(yamlHighlightStyle),
         configEditorTheme,
         EditorView.updateListener.of((update) => {
           // Cursor tracking for the footer (issue #105): selection moves

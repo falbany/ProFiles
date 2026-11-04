@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from profiles.core.config.diagnostics import collect_config_issues
 from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
@@ -176,27 +177,23 @@ def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
     return _config_response(state)
 
 
-def validate_issues(content: str, display_name: str) -> list[dict[str, str]]:
+def validate_issues(content: str) -> list[dict[str, str]]:
     """Validate configuration *content* in memory without touching live state.
 
-    Parses *content* strictly with :meth:`ConfigReader.from_content` and
-    reports the outcome as a plain issue list, so the YAML editor can
-    validate content that is not applied to the session.
+    Delegates to :func:`collect_config_issues`, which reports EVERY
+    problem in the draft — unknown keys, bad ``extends`` references,
+    cycles, schema violations — so the editor's Problems panel can list
+    them all. Only the first YAML *syntax* error is reported (the parser
+    stops there); until it is fixed there is no tree to validate further.
 
     Args:
         content: Raw YAML configuration content.
-        display_name: Human-readable file name used in error messages.
 
     Returns:
-        ``[]`` when the content parses and validates, otherwise a single
-        ``{"severity": "error", "message": ...}`` dict describing the
-        failure.
+        ``[]`` when the content parses and validates, otherwise
+        ``{"severity": "error", "message": ...}`` dicts, one per problem.
     """
-    try:
-        ConfigReader.from_content(content, display_name=display_name)
-    except ValueError as exc:
-        return [{"severity": "error", "message": str(exc)}]
-    return []
+    return collect_config_issues(content)
 
 
 def has_disk_path(state: ServerState) -> bool:
@@ -360,7 +357,7 @@ async def validate_config_endpoint(payload: ValidateRequest) -> dict:
     Returns ``{"valid": bool, "issues": [...]}`` rather than an HTTP error
     status, so invalid drafts reach the editor as data to display.
     """
-    issues = validate_issues(payload.content, display_name=payload.filename)
+    issues = validate_issues(payload.content)
     return {"valid": not issues, "issues": issues}
 
 
@@ -425,7 +422,7 @@ async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
         )
 
     config_path = state.active_config_path()
-    issues = validate_issues(payload.content, display_name=config_path.name)
+    issues = validate_issues(payload.content)
     if issues and not payload.force:
         raise HTTPException(status_code=400, detail=issues)
 
@@ -484,7 +481,7 @@ async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> d
             "Retry with overwrite=true to replace it.",
         )
 
-    issues = validate_issues(payload.content, display_name=payload.filename)
+    issues = validate_issues(payload.content)
     if issues and not payload.force:
         raise HTTPException(status_code=400, detail=issues)
 
