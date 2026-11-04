@@ -108,6 +108,77 @@ describe("SaveAsDialog", () => {
     await user.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(2));
     expect(onConfirm.mock.calls[1][0].filename).toBe("backup.profiles.yaml");
+
+    // The server whitelist is case-insensitive: an uppercase variant is
+    // accepted and sent verbatim (the server handles its own casing).
+    await user.clear(input);
+    await user.type(input, "BACKUP.PROFILES");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(3));
+    expect(onConfirm.mock.calls[2][0].filename).toBe("BACKUP.PROFILES");
+
+    // An empty stem (bare ".profiles") is rejected client-side…
+    await user.clear(input);
+    await user.type(input, ".profiles");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await screen.findByRole("alert");
+    expect(onConfirm).toHaveBeenCalledTimes(3);
+
+    // …as is a stray space before the extension.
+    await user.clear(input);
+    await user.type(input, "notes .profiles");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await screen.findByRole("alert");
+    expect(onConfirm).toHaveBeenCalledTimes(3);
+  });
+
+  it("test_replace_prompt_only_for_browsed_directory", async () => {
+    browseSpy.mockResolvedValue(makeBrowse());
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog();
+    await screen.findByRole("dialog", { name: /save configuration as/i });
+    await screen.findByRole("button", { name: /machines/i });
+
+    // Type a Location without navigating to it: its contents are unknown,
+    // so the overwrite check must not lean on the browsed listing.
+    await user.clear(screen.getByLabelText(/location/i));
+    await user.type(screen.getByLabelText(/location/i), "/elsewhere");
+    await user.type(screen.getByLabelText(/file name/i), "other.profiles");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // No Replace prompt — and overwrite:false, leaving the server's 409
+    // guard to answer for the unbrowsed directory.
+    expect(screen.queryByRole("dialog", { name: /replace configuration\?/i })).toBeNull();
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+    expect(onConfirm.mock.calls[0][0]).toEqual({
+      filename: "other.profiles",
+      directory: "/elsewhere",
+      overwrite: false,
+    });
+  });
+
+  it("test_save_disabled_while_browse_unavailable", async () => {
+    browseSpy.mockRejectedValue(new Error("Navigation failed"));
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog();
+
+    // Browse failure surfaces as an error state with a retry…
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/navigation failed/i);
+    // …and Save stays disabled even with a well-formed filename, since
+    // there is no listing to name a target directory from.
+    await user.type(screen.getByLabelText(/file name/i), "machine.profiles");
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+
+    // A successful retry restores the listing and re-enables Save.
+    browseSpy.mockResolvedValue(makeBrowse());
+    await user.click(screen.getByRole("button", { name: /retry/i }));
+    await screen.findByRole("button", { name: /machines/i });
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+    expect(onConfirm.mock.calls[0][0].directory).toBe("/home/user/configs");
   });
 
   it("test_overwrite_confirmation", async () => {

@@ -18,15 +18,24 @@ const SAVE_AS_EXTENSIONS = [".profiles", ".profiles.yaml"];
 
 /**
  * Normalize the user-typed filename against the server's extension
- * whitelist: a bare name gets `.profiles` appended; a name already ending
- * in a whitelisted extension is kept verbatim; anything else is rejected.
- * Returns `null` when the name cannot be saved as-is.
+ * whitelist, which is case-insensitive (`name.lower().endswith(...)` in
+ * `routes/config.py`) — mirrored here so e.g. `BACKUP.PROFILES` is
+ * accepted and sent verbatim (the server handles its own casing). A bare
+ * name gets `.profiles` appended; an empty stem (`".profiles"`) or a
+ * stray space before the extension is rejected; anything else is
+ * rejected. Returns `null` when the name cannot be saved as-is.
  */
 function normalizeSaveAsFilename(raw: string): string | null {
   const name = raw.trim();
   if (!name) return null;
-  if (SAVE_AS_EXTENSIONS.some((ext) => name.endsWith(ext))) return name;
-  if (!name.includes(".")) return `${name}.profiles`;
+  const lowered = name.toLowerCase();
+  const matched = SAVE_AS_EXTENSIONS.find((ext) => lowered.endsWith(ext));
+  if (matched !== undefined) {
+    const stem = name.slice(0, name.length - matched.length);
+    if (!stem.trim() || stem !== stem.trimEnd()) return null;
+    return name;
+  }
+  if (!lowered.includes(".")) return `${name}.profiles`;
   return null;
 }
 
@@ -101,7 +110,14 @@ export function SaveAsDialog({ open, onCancel, onConfirm }: SaveAsDialogProps) {
     }
     setFilenameError(null);
     const directory = pathInput.trim() || browseData.current_path;
-    const exists = browseData.items.some((item) => !item.is_dir && item.name === normalized);
+    // The overwrite check is only sound for the directory whose listing is
+    // on screen: a typed-but-not-browsed Location has unknown contents, so
+    // confirming against it could consent to replacing a file that was
+    // never listed. Such targets go through with overwrite:false and the
+    // server's 409 guard answers instead.
+    const browsedHere = pathInput.trim() === browseData.current_path;
+    const exists =
+      browsedHere && browseData.items.some((item) => !item.is_dir && item.name === normalized);
     if (exists) {
       setPendingOverwrite({ filename: normalized, directory });
       return;
@@ -282,7 +298,7 @@ export function SaveAsDialog({ open, onCancel, onConfirm }: SaveAsDialogProps) {
               <button
                 type="button"
                 onClick={handleConfirm}
-                disabled={!filename.trim() || loading}
+                disabled={!filename.trim() || !browseData || loading}
                 title="Save the configuration to the selected folder"
                 className="btn btn-primary min-h-9 rounded-lg px-4 text-sm font-semibold"
               >
