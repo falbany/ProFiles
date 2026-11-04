@@ -907,6 +907,10 @@ describe("ConfigEditorModal live validation (issues #102/#100)", () => {
     });
     // Only the save pre-validation ran — no live cycle behind the gate.
     expect(validateSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
  * Editor chrome tests (issues #98 + #99): the CodeMirror surface must be
  * solid and token-backed (never the frosted modal glass), the gutter must
  * be opaque, and the editor must sit inside a padded bordered card that
