@@ -130,12 +130,17 @@ async def test_content_flags_session_trial_after_live_drop(
     Ruling R4: ``_config_response`` re-records a resolved path into the
     state even for a drop, so trial detection must ride the explicit
     ``ServerState.session_trial`` flag — not path absence.
+
+    The endpoint echoes the applied YAML text (issue #97): an editor
+    reopened after an Apply must show the live in-memory configuration,
+    not an empty body.
     """
+    trial_text = "defaults:\n  title: Dropped\n  extensions:\n    - .mttl\n"
     app = create_app(config_state)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         drop = await client.post(
             "/api/config/load-content",
-            json={"filename": "my.profiles", "content": "defaults:\n  title: Dropped\n"},
+            json={"filename": "my.profiles", "content": trial_text},
         )
         assert drop.status_code == 200
         assert drop.json()["session_trial"] is True
@@ -149,6 +154,43 @@ async def test_content_flags_session_trial_after_live_drop(
     assert payload["session_trial"] is True
     assert payload["config_path"] is None
     assert payload["filename"] == "Dropped"
+    assert payload["content"] == trial_text
+
+
+@pytest.mark.anyio
+async def test_content_returns_disk_text_after_trial_is_anchored(
+    config_state: ServerState, tmp_path: Path
+) -> None:
+    """Verify anchoring the session to disk clears the stored trial text.
+
+    Given: A session holding a session-trial config (applied content)
+    When: POST /load anchors a real disk config file
+    Then: GET /content returns the disk file text with session_trial
+        cleared — the trial content is dropped, never leaked into the
+        disk-anchored response
+    """
+    disk_path = tmp_path / ".profiles"
+    disk_text = 'defaults:\n  title: "On Disk"\n'
+    disk_path.write_text(disk_text, encoding="utf-8")
+
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        drop = await client.post(
+            "/api/config/load-content",
+            json={"filename": "my.profiles", "content": "defaults:\n  title: Dropped\n"},
+        )
+        assert drop.status_code == 200
+
+        load = await client.post("/api/config/load", json={"config_path": str(disk_path)})
+        assert load.status_code == 200
+
+        response = await client.get("/api/config/content")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session_trial"] is False
+    assert payload["config_path"] == str(disk_path)
+    assert payload["content"] == disk_text
 
 
 @pytest.mark.anyio
