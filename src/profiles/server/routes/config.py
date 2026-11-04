@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from profiles.core.config.diagnostics import collect_config_issues
-from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
+from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES, content_hash, write_text_atomic
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
@@ -44,6 +44,13 @@ class ValidateRequest(BaseModel):
 class SaveRequest(BaseModel):
     content: str
     force: bool = False
+    # Staleness guard (issue #116): the content hash the editor loaded
+    # (from GET /content or a previous save response). Optional — a save
+    # without it keeps the legacy no-check behaviour.
+    baseline_hash: str | None = None
+    # When True a baseline mismatch no longer refuses the write: the user
+    # answered the 409 conflict with "overwrite anyway".
+    overwrite_changes: bool = False
 
 
 class SaveAsRequest(BaseModel):
@@ -365,9 +372,13 @@ async def validate_config_endpoint(payload: ValidateRequest) -> dict:
 async def get_config_content(request: Request) -> dict:
     """Return the active configuration file's text for the YAML editor.
 
-    Responds ``{"filename", "content", "config_path", "session_trial"}``.
-    A session trial (config applied from dropped content) answers the
-    text that was applied (``ServerState.trial_content``, issue #97) with
+    Responds ``{"filename", "content", "config_path", "session_trial",
+    "content_hash"}``. ``content_hash`` is the SHA-256 of the served
+    text (issue #116): the editor echoes it back on ``POST /save`` as
+    its baseline so a concurrent external edit is refused with 409
+    instead of silently clobbered. A session trial (config applied from
+    dropped content) answers the text that was applied
+    (``ServerState.trial_content``, issue #97) with
     ``session_trial=True`` and ``config_path=None`` — ``config_path``
     stays ``None`` so the stale CWD-resolved path never leaks, and
     ``filename`` carries the config's display name. A
@@ -375,11 +386,13 @@ async def get_config_content(request: Request) -> dict:
     """
     state: ServerState = request.app.state.server_state
     if not has_disk_path(state):
+        content = state.trial_content or ""
         return {
             "filename": state.config.title or "session-trial",
-            "content": state.trial_content or "",
+            "content": content,
             "config_path": None,
             "session_trial": True,
+            "content_hash": content_hash(content),
         }
 
     config_path = state.active_config_path()
@@ -389,11 +402,13 @@ async def get_config_content(request: Request) -> dict:
             detail=f"Configuration file not found: {config_path}",
         )
 
+    content = config_path.read_text(encoding="utf-8")
     return {
         "filename": config_path.name,
-        "content": config_path.read_text(encoding="utf-8"),
+        "content": content,
         "config_path": str(config_path),
         "session_trial": False,
+        "content_hash": content_hash(content),
     }
 
 
@@ -402,16 +417,26 @@ async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
     """Write editor content to the active config file and apply it.
 
     Gate order: session-trial refusal (:func:`has_disk_path`) →
-    :func:`validate_issues` → 400 with the issues list when invalid and
-    not ``force`` → write the file → :func:`_apply_config_from_disk`, so
-    the live configuration is always re-read from what is on disk.
+    staleness guard → :func:`validate_issues` → 400 with the issues list
+    when invalid and not ``force`` → atomic write (temp file +
+    :func:`os.replace`, issue #116) → :func:`_apply_config_from_disk`,
+    so the live configuration is always re-read from what is on disk.
     ``force=True`` is the escape hatch that lets a broken draft reach the
     disk (it will load as defaults until fixed); without it, bad YAML
     never touches the file.
 
-    Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``;
-    the apply step clears ``session_trial``, anchoring the saved config
-    to its file.
+    The staleness guard (issue #116) fires only when the client sends
+    ``baseline_hash``: when the on-disk file's hash no longer matches —
+    an external edit landed between the editor's load and this Save —
+    the write is refused with **409** instead of silently clobbered;
+    ``overwrite_changes=True`` answers the user's "overwrite anyway"
+    decision and lets the write through. Older callers that send no
+    baseline keep the legacy no-check behaviour.
+
+    Returns ``{"status": "SAVED", "path": str, "config": <config dict>,
+    "content_hash": str}`` — the hash of what was written, the next
+    save's baseline; the apply step clears ``session_trial``, anchoring
+    the saved config to its file.
     """
     state: ServerState = request.app.state.server_state
     if not has_disk_path(state):
@@ -422,13 +447,35 @@ async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
         )
 
     config_path = state.active_config_path()
+
+    if payload.baseline_hash is not None and not payload.overwrite_changes:
+        if not config_path.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Configuration file not found on disk: {config_path}. "
+                "It was deleted or moved since it was loaded.",
+            )
+        on_disk_hash = content_hash(config_path.read_text(encoding="utf-8"))
+        if on_disk_hash != payload.baseline_hash:
+            raise HTTPException(
+                status_code=409,
+                detail="The configuration file changed on disk since it was "
+                "loaded (edited externally?). Saving would overwrite those "
+                "changes.",
+            )
+
     issues = validate_issues(payload.content)
     if issues and not payload.force:
         raise HTTPException(status_code=400, detail=issues)
 
-    config_path.write_text(payload.content, encoding="utf-8")
+    write_text_atomic(config_path, payload.content)
     config = _apply_config_from_disk(state, config_path)
-    return {"status": "SAVED", "path": str(config_path), "config": config}
+    return {
+        "status": "SAVED",
+        "path": str(config_path),
+        "config": config,
+        "content_hash": content_hash(payload.content),
+    }
 
 
 SAVE_AS_EXTENSIONS = (".profiles", ".profiles.yaml")
@@ -446,13 +493,18 @@ async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> d
     (:data:`SAVE_AS_EXTENSIONS`) → :func:`normalize_user_path` +
     directory existence → existence/overwrite guard (409 when the target
     exists without ``overwrite=True``) → :func:`validate_issues` → 400
-    with the issues list when invalid and not ``force`` → write the file
-    → :func:`_apply_config_from_disk`, so the live configuration is
+    with the issues list when invalid and not ``force`` → atomic write
+    (temp file + :func:`os.replace`, issue #116) →
+    :func:`_apply_config_from_disk`, so the live configuration is
     always re-read from what is on disk (which also clears
     ``session_trial``).
 
-    Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``,
-    the same shape as ``POST /save``.
+    No baseline staleness check here (unlike ``POST /save``): the
+    editor's baseline describes the file it loaded, not the save-as
+    target — the existing-target 409 above is the guard for that path.
+
+    Returns ``{"status": "SAVED", "path": str, "config": <config dict>,
+    "content_hash": str}``, the same shape as ``POST /save``.
     """
     state: ServerState = request.app.state.server_state
 
@@ -485,9 +537,14 @@ async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> d
     if issues and not payload.force:
         raise HTTPException(status_code=400, detail=issues)
 
-    target.write_text(payload.content, encoding="utf-8")
+    write_text_atomic(target, payload.content)
     config = _apply_config_from_disk(state, target)
-    return {"status": "SAVED", "path": str(target), "config": config}
+    return {
+        "status": "SAVED",
+        "path": str(target),
+        "config": config,
+        "content_hash": content_hash(payload.content),
+    }
 
 
 @router.post("/select-directory")

@@ -46,6 +46,13 @@ export interface ConfigContentData {
   config_path: string | null;
   /** True when the active config came from a dropped file — Save is refused, use Save As. */
   session_trial: boolean;
+  /**
+   * SHA-256 hex of the served text (issue #116): echoed back on save as
+   * the baseline so an external edit between load and Save 409s instead
+   * of clobbering. Never null from the server; optional keeps older
+   * mocks/servers compatible.
+   */
+  content_hash?: string | null;
 }
 
 export interface BrowseEntry {

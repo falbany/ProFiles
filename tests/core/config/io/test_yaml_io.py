@@ -8,8 +8,10 @@ import pytest
 
 from profiles.core.config.io.yaml_io import (
     _is_unsafe_search_root,
+    content_hash,
     find_config_file,
     read_yaml,
+    write_text_atomic,
     write_value,
 )
 
@@ -58,6 +60,59 @@ class TestWriteValue:
         write_value(conf, "defaults.theme", "dark")
         content = conf.read_text(encoding="utf-8")
         assert "theme: dark" in content
+
+
+class TestWriteTextAtomic:
+    def test_writes_content(self, tmp_path: Path) -> None:
+        conf = tmp_path / ".profiles"
+        write_text_atomic(conf, "version: 1\n")
+        assert conf.read_text(encoding="utf-8") == "version: 1\n"
+
+    def test_overwrites_existing_file(self, tmp_path: Path) -> None:
+        conf = tmp_path / ".profiles"
+        conf.write_text("old\n", encoding="utf-8")
+        write_text_atomic(conf, "new\n")
+        assert conf.read_text(encoding="utf-8") == "new\n"
+
+    def test_leaves_no_temp_files_behind(self, tmp_path: Path) -> None:
+        conf = tmp_path / ".profiles"
+        write_text_atomic(conf, "version: 1\n")
+        assert [p.name for p in tmp_path.iterdir()] == [conf.name]
+
+    def test_no_temp_left_behind_when_replace_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        conf = tmp_path / ".profiles"
+        conf.write_text("original\n", encoding="utf-8")
+
+        def failing_replace(src: object, dst: object) -> None:
+            raise OSError("boom")
+
+        monkeypatch.setattr("profiles.core.config.io.yaml_io.os.replace", failing_replace)
+        with pytest.raises(OSError, match="boom"):
+            write_text_atomic(conf, "new\n")
+        # The target is untouched and no .tmp litter remains.
+        assert conf.read_text(encoding="utf-8") == "original\n"
+        assert [p.name for p in tmp_path.iterdir()] == [conf.name]
+
+    def test_replaces_not_appends(self, tmp_path: Path) -> None:
+        """The write is a replacement: shorter content shrinks the file."""
+        conf = tmp_path / ".profiles"
+        write_text_atomic(conf, "version: 1\nversion: 2\nversion: 3\n")
+        write_text_atomic(conf, "version: 9\n")
+        assert conf.read_text(encoding="utf-8") == "version: 9\n"
+
+
+class TestContentHash:
+    def test_is_sha256_hex_digest(self) -> None:
+        import hashlib
+
+        assert content_hash("version: 1\n") == hashlib.sha256(b"version: 1\n").hexdigest()
+
+    def test_deterministic_and_sensitive(self) -> None:
+        assert content_hash("a\n") == content_hash("a\n")
+        assert content_hash("a\n") != content_hash("b\n")
+        assert content_hash("a\n") != content_hash("a\r\n")
 
 
 class TestFindConfigFile:

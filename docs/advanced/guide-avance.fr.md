@@ -212,13 +212,13 @@ if __name__ == "__main__":
 
 Les interfaces alternatives peuvent réutiliser les endpoints `/api/config` qui alimentent l'éditeur YAML intégré (une ligne chacun ; voir `src/profiles/server/routes/config.py` pour les contrats complets) :
 
-- `GET /api/config/content` — le texte du fichier actif sous `{filename, content, config_path, session_trial}` ; une config d'essai répond un corps vide avec `session_trial=True`, un fichier manquant répond 404.
+- `GET /api/config/content` — le texte du fichier actif sous `{filename, content, config_path, session_trial, content_hash}` ; `content_hash` est le SHA-256 du texte servi, la baseline d'obsolescence à renvoyer à la sauvegarde (issue #116). Une config d'essai répond un corps vide avec `session_trial=True`, un fichier manquant répond 404.
 - `POST /api/config/validate` — valide le contenu en mémoire, jamais appliqué à la session ; répond toujours 200 avec `{valid, issues[]}` (les brouillons invalides reviennent sous forme de données, pas d'erreur HTTP).
 - `POST /api/config/template` — rend le modèle starter en mémoire (rien n'est écrit, aucun changement d'état) ; le même contenu que `--init` pose sur disque.
-- `POST /api/config/save` — écrit le contenu dans le fichier de config actif puis le ré-applique ; refuse une config d'essai (400) puisqu'il n'y a aucun fichier à écraser.
-- `POST /api/config/save-as` — écrit dans un nouveau fichier (liste blanche d'extensions `.profiles` / `.profiles.yaml`, garde d'existence répondant 409 sans `overwrite=true`) et ancre la session dessus.
+- `POST /api/config/save` — écrit le contenu dans le fichier de config actif (de manière atomique, via fichier temporaire + replace) puis le ré-applique ; refuse une config d'essai (400) puisqu'il n'y a aucun fichier à écraser. Avec un `baseline_hash` optionnel, répond **409** quand le fichier sur disque ne correspond plus au hash chargé par le client — une édition externe est refusée au lieu d'être écrasée silencieusement ; `overwrite_changes=true` lève la garde. La réponse porte `content_hash`, la baseline de la prochaine sauvegarde.
+- `POST /api/config/save-as` — écrit dans un nouveau fichier (liste blanche d'extensions `.profiles` / `.profiles.yaml`, garde d'existence répondant 409 sans `overwrite=true`) et ancre la session dessus ; pas de vérification de baseline (la baseline de l'éditeur décrit le fichier chargé, pas la cible du save-as).
 
-Notez la dualité des erreurs sur `save`/`save-as` : un échec de validation répond **400 avec une liste JSON de problèmes** (`[{severity, message}, ...]`), tandis que tout autre refus (save d'une config d'essai, nom de fichier invalide, répertoire inexistant, cible existante en 409) répond avec un `detail` **chaîne simple** — les clients doivent gérer les deux formes. Les endpoints de sauvegarde appliquent aussi le fichier fraîchement écrit à la session : le `config` de la réponse est donc la nouvelle configuration active.
+Notez la dualité des erreurs sur `save`/`save-as` : un échec de validation répond **400 avec une liste JSON de problèmes** (`[{severity, message}, ...]`), tandis que tout autre refus (save d'une config d'essai, nom de fichier invalide, répertoire inexistant, cible existante en 409, baseline obsolète en 409) répond avec un `detail` **chaîne simple** — les clients doivent gérer les deux formes. Les endpoints de sauvegarde appliquent aussi le fichier fraîchement écrit à la session : le `config` de la réponse est donc la nouvelle configuration active.
 
 ---
 

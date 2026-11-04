@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { EditorView } from "codemirror";
 import { ConfigEditorModal } from "./ConfigEditorModal";
 import {
+  ApiError,
   browseDirectory,
   fetchConfigContent,
   fetchConfigTemplate,
@@ -16,18 +17,30 @@ import {
   saveConfigFileAs,
   validateConfigContent,
 } from "../api/client";
-import type { AppConfigData, BrowseResult, ConfigContentData, ValidationIssue } from "../api/types";
+import type {
+  AppConfigData,
+  BrowseResult,
+  ConfigContentData,
+  ValidationIssue,
+} from "../api/types";
+import type { ConfigSaveResult } from "../api/client";
 
-vi.mock("../api/client", () => ({
-  fetchConfigContent: vi.fn(),
-  openConfigFile: vi.fn(),
-  fetchConfigTemplate: vi.fn(),
-  validateConfigContent: vi.fn(),
-  loadConfigContent: vi.fn(),
-  saveConfigFile: vi.fn(),
-  saveConfigFileAs: vi.fn(),
-  browseDirectory: vi.fn(),
-}));
+vi.mock("../api/client", async (importOriginal) => {
+  // Keep the real ApiError: the staleness-conflict flow (issue #116)
+  // branches on `err instanceof ApiError && err.status === 409`.
+  const actual = await importOriginal<typeof import("../api/client")>();
+  return {
+    ...actual,
+    fetchConfigContent: vi.fn(),
+    openConfigFile: vi.fn(),
+    fetchConfigTemplate: vi.fn(),
+    validateConfigContent: vi.fn(),
+    loadConfigContent: vi.fn(),
+    saveConfigFile: vi.fn(),
+    saveConfigFileAs: vi.fn(),
+    browseDirectory: vi.fn(),
+  };
+});
 
 // jsdom gap (not a CodeMirror mock): the view's measurement code calls
 // Range geometry APIs that jsdom does not implement. Empty geometry is
@@ -81,6 +94,11 @@ function makeAppConfig(): AppConfigData {
     column_names: [],
     row_colors: [],
   };
+}
+
+/** Successful save/save-as payload: applied config + written-text hash. */
+function makeSaveResult(config: AppConfigData = makeAppConfig(), contentHash = "written-hash"): ConfigSaveResult {
+  return { config, contentHash };
 }
 
 /** Listing served by /api/fs/browse for the Save As dialog. */
@@ -525,7 +543,7 @@ describe("ConfigEditorModal", () => {
     fetchContentSpy.mockResolvedValue(makeContent());
     validateSpy.mockResolvedValue({ valid: true, issues: [] });
     const savedConfig = makeAppConfig();
-    saveSpy.mockResolvedValue(savedConfig);
+    saveSpy.mockResolvedValue(makeSaveResult(savedConfig));
     const user = userEvent.setup();
     const { onApplied } = renderModal();
 
@@ -535,8 +553,9 @@ describe("ConfigEditorModal", () => {
 
     // The client-side gate validation runs first, on the current doc text…
     await waitFor(() => expect(validateSpy).toHaveBeenCalledWith("machine.profiles", edited));
-    // …then the save endpoint writes it, unforced.
-    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith(edited, false));
+    // …then the save endpoint writes it, unforced, with the staleness
+    // baseline from the load (no content_hash served → null).
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith(edited, false, { baselineHash: null }));
     expect(saveAsSpy).not.toHaveBeenCalled();
 
     // Success surface: ok banner, dirty cleared (baseline = saved text),
@@ -552,7 +571,7 @@ describe("ConfigEditorModal", () => {
     await user.keyboard("{Control>}s");
     await waitFor(() => expect(validateSpy).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(2));
-    expect(saveSpy.mock.calls[1]).toEqual([edited, false]);
+    expect(saveSpy.mock.calls[1]).toEqual([edited, false, { baselineHash: "written-hash" }]);
     expect(onApplied).toHaveBeenCalledTimes(2);
   });
 
@@ -605,7 +624,7 @@ describe("ConfigEditorModal", () => {
       valid: false,
       issues: [{ severity: "error", message: "unknown key 'foo' at line 3" }],
     });
-    saveSpy.mockResolvedValue(makeAppConfig());
+    saveSpy.mockResolvedValue(makeSaveResult());
     const user = userEvent.setup();
     const { onApplied } = renderModal();
 
@@ -616,8 +635,8 @@ describe("ConfigEditorModal", () => {
     // Force is the escape hatch: exactly one save call, with force=true.
     await user.click(screen.getByRole("button", { name: /force save anyway/i }));
     await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(1));
-    expect(saveSpy).toHaveBeenCalledWith(edited, true);
-    expect(saveSpy.mock.calls[0]).toEqual([edited, true]);
+    expect(saveSpy).toHaveBeenCalledWith(edited, true, { baselineHash: null });
+    expect(saveSpy.mock.calls[0]).toEqual([edited, true, { baselineHash: null }]);
 
     // Gate cleared, ok banner, dirty cleared, onApplied fired.
     expect(screen.queryByRole("dialog", { name: /validation issues/i })).toBeNull();
@@ -635,7 +654,7 @@ describe("ConfigEditorModal", () => {
       makeContent({ filename: "session-trial", config_path: null, session_trial: true }),
     );
     validateSpy.mockResolvedValue({ valid: true, issues: [] });
-    saveSpy.mockResolvedValue(makeAppConfig());
+    saveSpy.mockResolvedValue(makeSaveResult());
     const user = userEvent.setup();
     const { onApplied } = renderModal();
 
@@ -658,9 +677,9 @@ describe("ConfigEditorModal", () => {
     fetchContentSpy.mockResolvedValue(makeContent());
     validateSpy.mockResolvedValue({ valid: true, issues: [] });
     // Deferred save: the first request stays pending across both clicks.
-    let resolveSave!: (value: AppConfigData) => void;
+    let resolveSave!: (value: ConfigSaveResult) => void;
     saveSpy.mockReturnValue(
-      new Promise<AppConfigData>((resolve) => {
+      new Promise<ConfigSaveResult>((resolve) => {
         resolveSave = resolve;
       }),
     );
@@ -675,14 +694,14 @@ describe("ConfigEditorModal", () => {
     expect(validateSpy).toHaveBeenCalledTimes(1);
 
     // The in-flight save still completes exactly once.
-    resolveSave(makeAppConfig());
+    resolveSave(makeSaveResult());
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
     expect(saveSpy).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("editor-status").textContent).toMatch(/saved/i);
 
     // The gate is released once the action settles — a follow-up works.
     validateSpy.mockResolvedValue({ valid: true, issues: [] });
-    saveSpy.mockResolvedValue(makeAppConfig());
+    saveSpy.mockResolvedValue(makeSaveResult());
     await user.click(saveButton);
     await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(2));
     expect(onApplied).toHaveBeenCalledTimes(2);
@@ -693,9 +712,9 @@ describe("ConfigEditorModal", () => {
     templateSpy.mockResolvedValue({ content: TEMPLATE_YAML_LF, filename: "starter.profiles" });
     validateSpy.mockResolvedValue({ valid: true, issues: [] });
     // Deferred save: the save round-trip stays pending on purpose.
-    let resolveSave!: (value: AppConfigData) => void;
+    let resolveSave!: (value: ConfigSaveResult) => void;
     saveSpy.mockReturnValue(
-      new Promise<AppConfigData>((resolve) => {
+      new Promise<ConfigSaveResult>((resolve) => {
         resolveSave = resolve;
       }),
     );
@@ -717,7 +736,7 @@ describe("ConfigEditorModal", () => {
     // The stale save resolution lands after New completed: it belongs to the
     // discarded document and must not mark it saved or fire onApplied.
     await act(async () => {
-      resolveSave(makeAppConfig());
+      resolveSave(makeSaveResult());
     });
     expect(onApplied).not.toHaveBeenCalled();
     const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
@@ -733,7 +752,7 @@ describe("ConfigEditorModal", () => {
       valid: false,
       issues: [{ severity: "error", message: "unknown key 'foo' at line 3" }],
     });
-    saveAsSpy.mockResolvedValue(makeAppConfig());
+    saveAsSpy.mockResolvedValue(makeSaveResult());
     browseSpy.mockResolvedValue(makeBrowseResult());
     const user = userEvent.setup();
     const { onApplied } = renderModal();
@@ -772,6 +791,99 @@ describe("ConfigEditorModal", () => {
     expect(screen.queryByRole("status")).toBeNull();
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
     expect(saveSpy).not.toHaveBeenCalled();
+  });
+  it("test_save_409_offers_reload_or_overwrite_and_overwrite_wins", async () => {
+    // The load serves a baseline hash; the file changes on disk before Save.
+    fetchContentSpy.mockResolvedValue(makeContent({ content_hash: "baseline-hash" }));
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    const conflict = new ApiError(
+      "The configuration file changed on disk since it was loaded (edited externally?).",
+      409,
+    );
+    saveSpy.mockRejectedValueOnce(conflict).mockResolvedValueOnce(makeSaveResult());
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    const edited = await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // First save carries the load's baseline; the 409 parks the conflict
+    // dialog instead of clobbering (issue #116).
+    await waitFor(() =>
+      expect(saveSpy).toHaveBeenCalledWith(edited, false, { baselineHash: "baseline-hash" }),
+    );
+    const conflictDialog = await screen.findByRole("dialog", { name: /file changed on disk/i });
+    expect(conflictDialog.textContent).toContain("Overwrite anyway");
+    expect(conflictDialog.textContent).toContain("Reload disk version");
+
+    // "Overwrite anyway" retries the SAME text with overwrite_changes.
+    await user.click(within(conflictDialog).getByRole("button", { name: /overwrite anyway/i }));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(2));
+    expect(saveSpy.mock.calls[1]).toEqual([
+      edited,
+      false,
+      { baselineHash: "baseline-hash", overwriteChanges: true },
+    ]);
+
+    // Success surface: saved banner, onApplied once (the retry is not a
+    // second Apply), conflict dialog gone.
+    const banner = screen.getByTestId("editor-status");
+    expect(banner.textContent).toMatch(/saved/i);
+    expect(onApplied).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: /file changed on disk/i })).toBeNull();
+  });
+
+  it("test_save_409_reload_adopts_disk_version", async () => {
+    // First /content serves the editor's baseline; the second (after the
+    // user picks "Reload disk version") serves the external edits.
+    fetchContentSpy.mockReset();
+    fetchContentSpy
+      .mockResolvedValueOnce(makeContent({ content_hash: "baseline-hash" }))
+      .mockResolvedValueOnce(
+        makeContent({ content: 'defaults:\n  title: "External"\n', content_hash: "external-hash" }),
+      );
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    saveSpy.mockRejectedValueOnce(
+      new ApiError("The configuration file changed on disk since it was loaded.", 409),
+    );
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    const conflictDialog = await screen.findByRole("dialog", { name: /file changed on disk/i });
+
+    // "Reload disk version" re-fetches and the disk text replaces the
+    // editor's document — the external edits are adopted, nothing written.
+    await user.click(within(conflictDialog).getByRole("button", { name: /reload disk version/i }));
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(view?.state.doc.toString()).toBe('defaults:\n  title: "External"\n');
+    });
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(screen.getByTestId("editor-status").textContent).toMatch(/reloaded from disk/i);
+    expect(screen.queryByRole("dialog", { name: /file changed on disk/i })).toBeNull();
+  });
+
+  it("test_save_refreshes_the_staleness_baseline_after_each_save", async () => {
+    // The load's hash guards the first save; the written hash returned by
+    // the first save guards the second (issue #116).
+    fetchContentSpy.mockResolvedValue(makeContent({ content_hash: "baseline-hash" }));
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    saveSpy.mockResolvedValue(makeSaveResult(undefined, "written-hash"));
+    const user = userEvent.setup();
+    const { onApplied } = renderModal();
+
+    const edited = await editDoc("# edited\n");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledWith(edited, false, { baselineHash: "baseline-hash" }));
+
+    await user.keyboard("{Control>}s");
+    await waitFor(() => expect(saveSpy).toHaveBeenCalledTimes(2));
+    expect(saveSpy.mock.calls[1]).toEqual([edited, false, { baselineHash: "written-hash" }]);
+    expect(onApplied).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1288,4 +1400,5 @@ describe("ConfigEditorModal status bar and problems panel (issue #105)", () => {
     await readyEditorView();
     expect(screen.queryByTestId("problems-panel")).toBeNull();
   });
+
 });

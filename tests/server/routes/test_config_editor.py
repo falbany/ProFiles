@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from profiles.core.config.io.yaml_io import content_hash
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
@@ -715,3 +716,250 @@ async def test_template_does_not_change_state(config_state: ServerState) -> None
 
     assert response.status_code == 200
     assert config_state.config is original
+
+
+# ---------------------------------------------------------------------------
+# Staleness guard + content hash (issue #116)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_content_returns_content_hash_of_disk_text(tmp_path: Path) -> None:
+    """Verify GET /content answers the SHA-256 of the served text (issue #116).
+
+    Given: A disk-anchored session with an on-disk config file
+    When: GET /api/config/content
+    Then: content_hash equals the SHA-256 hex digest of the served text
+    """
+    config_path = tmp_path / ".profiles"
+    file_text = 'defaults:\n  title: "On Disk"\n'
+    config_path.write_text(file_text, encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/config/content")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["content_hash"] == content_hash(file_text)
+
+
+@pytest.mark.anyio
+async def test_content_returns_content_hash_for_session_trial(
+    config_state: ServerState,
+) -> None:
+    """The session-trial branch hashes the trial text it serves."""
+    trial_text = "defaults:\n  title: Dropped\n"
+    app = create_app(config_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        drop = await client.post(
+            "/api/config/load-content",
+            json={"filename": "my.profiles", "content": trial_text},
+        )
+        assert drop.status_code == 200
+
+        response = await client.get("/api/config/content")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session_trial"] is True
+    assert payload["content_hash"] == content_hash(trial_text)
+
+
+@pytest.mark.anyio
+async def test_save_with_stale_baseline_returns_409_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """Verify the staleness guard refuses to clobber an external edit (issue #116).
+
+    Given: A disk-anchored session whose file changed on disk after the
+        editor loaded it (external edit), and a save carrying the stale
+        baseline hash
+    When: POST /api/config/save
+    Then: 409 with an explanatory detail, and the on-disk bytes are the
+        external edit — not the editor's text
+    """
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "On Disk"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    stale_baseline = content_hash('defaults:\n  title: "On Disk"\n')
+
+    # The external edit lands between the editor's load and its Save.
+    config_path.write_text('defaults:\n  title: "External Edit"\n', encoding="utf-8")
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={
+                "content": 'defaults:\n  title: "Editor Edit"\n',
+                "baseline_hash": stale_baseline,
+            },
+        )
+
+    assert response.status_code == 409
+    assert "changed on disk" in response.json()["detail"]
+    assert config_path.read_text(encoding="utf-8") == 'defaults:\n  title: "External Edit"\n'
+
+
+@pytest.mark.anyio
+async def test_save_with_matching_baseline_saves_and_returns_new_hash(
+    tmp_path: Path,
+) -> None:
+    """A save whose baseline still matches the disk file goes through.
+
+    Given: A disk-anchored session and a save carrying the current file's
+        hash as baseline
+    When: POST /api/config/save
+    Then: 200 SAVED, the file is written, and the response's
+        content_hash is the hash of the newly written text — the next
+        save's baseline
+    """
+    config_path = tmp_path / ".profiles"
+    current_text = 'defaults:\n  title: "On Disk"\n'
+    config_path.write_text(current_text, encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    new_text = f"defaults:\n  title: Fresh Title\n  search_dir: '{tmp_path}'\n"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={
+                "content": new_text,
+                "baseline_hash": content_hash(current_text),
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert config_path.read_text(encoding="utf-8") == new_text
+    assert payload["content_hash"] == content_hash(new_text)
+
+
+@pytest.mark.anyio
+async def test_save_stale_baseline_with_overwrite_changes_writes_anyway(
+    tmp_path: Path,
+) -> None:
+    """``overwrite_changes=True`` is the 409's "overwrite anyway" answer.
+
+    Given: A stale baseline (the file was edited externally) and a save
+        carrying ``overwrite_changes=True``
+    When: POST /api/config/save
+    Then: 200 SAVED and the editor's text wins on disk
+    """
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "On Disk"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    stale_baseline = content_hash('defaults:\n  title: "On Disk"\n')
+    config_path.write_text('defaults:\n  title: "External Edit"\n', encoding="utf-8")
+
+    editor_text = 'defaults:\n  title: "Editor Edit"\n'
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={
+                "content": editor_text,
+                "baseline_hash": stale_baseline,
+                "overwrite_changes": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "SAVED"
+    assert config_path.read_text(encoding="utf-8") == editor_text
+
+
+@pytest.mark.anyio
+async def test_save_without_baseline_keeps_legacy_no_check_behavior(
+    tmp_path: Path,
+) -> None:
+    """Older callers that send no baseline are never 409'd (issue #116).
+
+    Given: A disk-anchored session whose file changed on disk, and a save
+        with no ``baseline_hash`` field at all
+    When: POST /api/config/save
+    Then: 200 SAVED — the optional field keeps the endpoint backwards
+        compatible
+    """
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "On Disk"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    config_path.write_text('defaults:\n  title: "External Edit"\n', encoding="utf-8")
+
+    editor_text = 'defaults:\n  title: "Editor Edit"\n'
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={"content": editor_text},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "SAVED"
+    assert config_path.read_text(encoding="utf-8") == editor_text
+
+
+@pytest.mark.anyio
+async def test_save_with_baseline_on_missing_file_returns_409(tmp_path: Path) -> None:
+    """A baseline-guarded save on a vanished file is refused, not recreated.
+
+    Given: A session whose recorded config file was deleted on disk, and
+        a save carrying a baseline hash
+    When: POST /api/config/save
+    Then: 409 and the file is still absent afterwards
+    """
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "On Disk"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    baseline = content_hash('defaults:\n  title: "On Disk"\n')
+    config_path.unlink()
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save",
+            json={
+                "content": 'defaults:\n  title: "Editor Edit"\n',
+                "baseline_hash": baseline,
+            },
+        )
+
+    assert response.status_code == 409
+    assert "not found on disk" in response.json()["detail"]
+    assert not config_path.exists()
+
+
+@pytest.mark.anyio
+async def test_save_as_response_carries_content_hash(tmp_path: Path) -> None:
+    """save-as answers the hash of the newly written file (issue #116)."""
+    config_path = tmp_path / ".profiles"
+    config_path.write_text('defaults:\n  title: "On Disk"\n', encoding="utf-8")
+    loaded = ConfigReader(config_path).load()
+    state = ServerState(config=loaded, active_directory=tmp_path)
+    new_text = f"defaults:\n  title: Copied\n  search_dir: '{tmp_path}'\n"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": new_text,
+                "filename": ".profiles.yaml",
+                "directory": str(tmp_path),
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["content_hash"] == content_hash(new_text)

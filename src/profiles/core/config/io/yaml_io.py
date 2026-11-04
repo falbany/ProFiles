@@ -7,7 +7,9 @@ knowledge, no models.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import tempfile
 from collections import deque
 from pathlib import Path
 
@@ -81,6 +83,54 @@ def write_value(path: Path | str, dotted_key: str, value: object) -> None:
 
     with p.open("w", encoding="utf-8") as fh:
         _yaml.dump(data, fh)
+
+
+def write_text_atomic(path: Path | str, content: str) -> None:
+    """Write *content* to *path* atomically (temp file + ``os.replace``).
+
+    A plain ``write_text`` can leave a truncated file behind when the
+    process dies or power is lost mid-write — and the configuration file
+    is the user's only one. The text is written to a temp file created in
+    the *same directory* (so ``os.replace`` stays on one filesystem and
+    remains atomic), flushed to disk, then renamed over the target.
+
+    Args:
+        path: Destination file path.
+        content: Full text to write (UTF-8 encoded).
+    """
+    p = Path(path)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=p.parent,
+        prefix=f"{p.name}.",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, p)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def content_hash(content: str) -> str:
+    """Return the SHA-256 hex digest of *content* (UTF-8 encoded).
+
+    Version marker returned by ``GET /api/config/content`` and compared
+    by ``POST /api/config/save`` against the on-disk file, so an external
+    edit landing between the editor's load and its Save is detected
+    instead of silently clobbered (issue #116).
+
+    Args:
+        content: Text to fingerprint.
+
+    Returns:
+        Lowercase hex digest string.
+    """
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _find_named_file(start: Path, name: str, max_depth: int) -> Path | None:
@@ -170,7 +220,9 @@ __all__ = [
     "CONFIG_FILE_NAMES",
     "FALLBACK_CONFIG_NAMES",
     "PRIMARY_CONFIG_NAME",
+    "content_hash",
     "find_config_file",
     "read_yaml",
+    "write_text_atomic",
     "write_value",
 ]

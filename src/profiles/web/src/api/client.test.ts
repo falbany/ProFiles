@@ -273,21 +273,58 @@ describe("saveConfigFile", () => {
   it("POSTs the content and force flag to /api/config/save and returns the applied config", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
+        JSON.stringify({
+          status: "SAVED",
+          path: "/tmp/.profiles",
+          config: SAMPLE_CONFIG,
+          content_hash: "abc123",
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { config: cfg, contentHash } = await saveConfigFile("title: Fresh From Disk\n", true);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/config/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: "title: Fresh From Disk\n",
+        force: true,
+        baseline_hash: null,
+        overwrite_changes: false,
+      }),
+    });
+    expect(cfg.title).toBe("Fresh From Disk");
+    expect(cfg.config_path).toBe("C:/tmp/.profiles");
+    expect(contentHash).toBe("abc123");
+  });
+
+  it("sends the staleness baseline and overwrite decision when provided (issue #116)", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
         JSON.stringify({ status: "SAVED", path: "/tmp/.profiles", config: SAMPLE_CONFIG }),
         { status: 200 },
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const cfg = await saveConfigFile("title: Fresh From Disk\n", true);
+    await saveConfigFile("title: Fresh From Disk\n", false, {
+      baselineHash: "deadbeef",
+      overwriteChanges: true,
+    });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/config/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "title: Fresh From Disk\n", force: true }),
+      body: JSON.stringify({
+        content: "title: Fresh From Disk\n",
+        force: false,
+        baseline_hash: "deadbeef",
+        overwrite_changes: true,
+      }),
     });
-    expect(cfg.title).toBe("Fresh From Disk");
-    expect(cfg.config_path).toBe("C:/tmp/.profiles");
   });
 
   it("surfaces the plain-string detail for a session-trial refusal", async () => {
@@ -346,13 +383,15 @@ describe("saveConfigFileAs", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const cfg = await saveConfigFileAs({
-      content: "title: Fresh From Disk\n",
-      filename: ".profiles",
-      directory: "/tmp/copy",
-      force: false,
-      overwrite: true,
-    });
+    const cfg = (
+      await saveConfigFileAs({
+        content: "title: Fresh From Disk\n",
+        filename: ".profiles",
+        directory: "/tmp/copy",
+        force: false,
+        overwrite: true,
+      })
+    ).config;
 
     expect(fetchMock).toHaveBeenCalledWith("/api/config/save-as", {
       method: "POST",

@@ -243,20 +243,48 @@ export async function fetchConfigTemplate(): Promise<{ content: string; filename
 }
 
 /**
+ * Result of a successful save/save-as: the applied config plus the hash
+ * of what was written — the next save's staleness baseline (issue #116).
+ */
+export interface ConfigSaveResult {
+  config: AppConfigData;
+  contentHash: string | null;
+}
+
+/** Options of `saveConfigFile` — the staleness-guard contract (issue #116). */
+export interface SaveBaselineOptions {
+  /** Baseline hash from the content/save response the editor loaded. */
+  baselineHash?: string | null;
+  /** True after the user answers the 409 conflict with "overwrite anyway". */
+  overwriteChanges?: boolean;
+}
+
+/**
  * Write editor content to the active configuration file and apply it.
  * Rejects with an ApiError whose `detail` is either a plain message
- * (e.g. a session-trial refusal) or a `ValidationIssue[]` gate list —
- * callers rendering the compliance gate should inspect `detail`.
+ * (e.g. a session-trial refusal), a `ValidationIssue[]` gate list, or a
+ * 409 staleness conflict when the file changed on disk since the
+ * baseline hash was taken (issue #116) — callers rendering the
+ * compliance gate / conflict dialog should inspect `detail` and `status`.
  */
-export async function saveConfigFile(content: string, force: boolean): Promise<AppConfigData> {
+export async function saveConfigFile(
+  content: string,
+  force: boolean,
+  options: SaveBaselineOptions = {},
+): Promise<ConfigSaveResult> {
   const res = await fetch("/api/config/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, force }),
+    body: JSON.stringify({
+      content,
+      force,
+      baseline_hash: options.baselineHash ?? null,
+      overwrite_changes: options.overwriteChanges ?? false,
+    }),
   });
   if (!res.ok) throw await apiError(res, "Failed to save configuration");
-  const payload: { config: AppConfigData } = await res.json();
-  return payload.config;
+  const payload: { config: AppConfigData; content_hash?: string | null } = await res.json();
+  return { config: payload.config, contentHash: payload.content_hash ?? null };
 }
 
 /**
@@ -271,15 +299,15 @@ export async function saveConfigFileAs(params: {
   directory: string;
   force: boolean;
   overwrite: boolean;
-}): Promise<AppConfigData> {
+}): Promise<ConfigSaveResult> {
   const res = await fetch("/api/config/save-as", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
   if (!res.ok) throw await apiError(res, "Failed to save configuration as");
-  const payload: { config: AppConfigData } = await res.json();
-  return payload.config;
+  const payload: { config: AppConfigData; content_hash?: string | null } = await res.json();
+  return { config: payload.config, contentHash: payload.content_hash ?? null };
 }
 
 export async function browseForConfigFiles(path: string): Promise<BrowseResult> {
