@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Literal
 
 from profiles.core.config.conditions import evaluate_hook_condition
-from profiles.core.config.models import WorkflowStep
+from profiles.core.config.models import FailMode, WorkflowStep
 from profiles.core.environment.interactions import confirm_dialog_3way
 from profiles.core.environment.message_dialog import show_notify_dialog
 from profiles.core.telemetry import events
@@ -32,7 +32,8 @@ class WorkflowOutcome(Enum):
 AskCallback = Callable[[str, str | None], Literal["yes", "skip", "no"]]
 NotifyCallback = Callable[[str, bool], None]
 
-FailMode = Literal["warn", "abort", "skip"]
+# FailMode lives in core.config.models (bottom of the dependency graph) and
+# is re-exported here for backward compatibility with existing imports.
 
 
 # Bound for the *combined* stdout+stderr text kept per blocking command step.

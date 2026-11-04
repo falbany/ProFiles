@@ -11,7 +11,7 @@ the on-disk YAML shape only.
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -105,12 +105,16 @@ class HooksConfig(BaseModel):
     @field_validator("entries", mode="before")
     @classmethod
     def _none_to_dict(cls, value: object) -> dict[str, list[WorkflowStepSchema]]:
-        return value or {}
+        # Pydantic validates the item types after this "before" hook runs.
+        if value is None:
+            return {}
+        return cast("dict[str, list[WorkflowStepSchema]]", value)
 
     @model_validator(mode="after")
     def _validate_step_required_fields(self) -> HooksConfig:
         """Enforce per-action required keys, reporting the entry pattern."""
-        # pylint: disable-next=no-member  (pylint infers FieldInfo, not the dict)
+        # (pylint infers FieldInfo, not the dict, for the pydantic field)
+        # pylint: disable-next=no-member
         for pattern, steps in self.entries.items():
             for pos, step in enumerate(steps):
                 if step.action == "notify" and not step.message:

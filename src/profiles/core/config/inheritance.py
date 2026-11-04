@@ -56,41 +56,64 @@ def _resolve_machine(
     else:
         base = None
 
-    def pick(field: str):
+    def pick_str_list(field: str) -> list[str]:
+        """Merge a ``list[str]`` field: local (first, deduped) then inherited."""
         local = getattr(cfg, field)
         inherited = getattr(base, field) if base is not None else None
-        local_set = field in cfg.model_fields_set
-        if field in ("extensions", "filters", "search_exclude_files", "search_exclude_dirs"):
-            if local is None or not local_set:
-                return list(inherited or [])
-            return _merge_str(inherited or [], local)
-        if field == "row_colors":
-            if local is None or not local_set:
-                return list(inherited or [])
-            return _merge_row(inherited or [], local)
-        if local_set:
-            return local
-        return inherited
+        if local is not None and field in cfg.model_fields_set:
+            return _merge_str(list(inherited or []), local)
+        return list(inherited or [])
+
+    def pick_row_colors() -> list[RowColor]:
+        """Merge ``row_colors``: local rules first, then inherited (deduped)."""
+        local = cfg.row_colors
+        inherited = base.row_colors if base is not None else None
+        if local is not None and "row_colors" in cfg.model_fields_set:
+            return _merge_row(list(inherited or []), local)
+        return list(inherited or [])
+
+    def pick_match() -> MatchCriteriaSchema:
+        """Return the local ``match`` block, falling back to the inherited one."""
+        if "match" in cfg.model_fields_set:
+            return cfg.match
+        return base.match if base is not None else MatchCriteriaSchema()
+
+    def pick_scan() -> list[str]:
+        """Return the local ``scan`` list, falling back to the inherited one."""
+        if "scan" in cfg.model_fields_set:
+            return cfg.scan
+        return base.scan if base is not None else []
+
+    max_depth = (
+        cfg.max_search_depth
+        if "max_search_depth" in cfg.model_fields_set
+        else base.max_search_depth
+        if base is not None
+        else None
+    )
+    recursive = (
+        cfg.recursive_search
+        if "recursive_search" in cfg.model_fields_set
+        else base.recursive_search
+        if base is not None
+        else None
+    )
 
     return MachineConfig(
         name=cfg.name,
         extends=cfg.extends,
-        match=pick("match") or MatchCriteriaSchema(),
-        scan=list(pick("scan") or []),
-        extensions=tuple(_merge_str(defaults.extensions, pick("extensions"))),
-        filters=tuple(_merge_str(defaults.filters, pick("filters"))),
-        row_colors=_merge_row(defaults.row_colors, pick("row_colors")),
-        search_exclude_files=tuple(
-            _merge_str(defaults.search_exclude_files, pick("search_exclude_files"))
+        match=pick_match(),
+        scan=pick_scan(),
+        extensions=_merge_str(defaults.extensions, pick_str_list("extensions")),
+        filters=_merge_str(defaults.filters, pick_str_list("filters")),
+        row_colors=_merge_row(defaults.row_colors, pick_row_colors()),
+        search_exclude_files=_merge_str(
+            defaults.search_exclude_files, pick_str_list("search_exclude_files")
         ),
-        max_search_depth=pick("max_search_depth")
-        if pick("max_search_depth") is not None
-        else defaults.max_search_depth,
-        recursive_search=pick("recursive_search")
-        if pick("recursive_search") is not None
-        else defaults.recursive_search,
-        search_exclude_dirs=tuple(
-            _merge_str(defaults.search_exclude_dirs, pick("search_exclude_dirs"))
+        max_search_depth=max_depth if max_depth is not None else defaults.max_search_depth,
+        recursive_search=recursive if recursive is not None else defaults.recursive_search,
+        search_exclude_dirs=_merge_str(
+            defaults.search_exclude_dirs, pick_str_list("search_exclude_dirs")
         ),
     )
 

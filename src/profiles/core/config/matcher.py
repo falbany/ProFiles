@@ -58,7 +58,7 @@ def matches_machine_config(
         return True
     if m.ip and eval_criteria_list(m.ip, ip):
         return True
-    return m.path and eval_criteria_list(m.path, path, is_path=True)
+    return bool(m.path) and eval_criteria_list(m.path, path, is_path=True)
 
 
 def select_active_configuration(

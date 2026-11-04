@@ -8,19 +8,22 @@ import hashlib
 import logging
 from io import BytesIO
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Request
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from profiles.core import actions
-from profiles.core.processing.file_metadata import get_file_metadata
+from profiles.core.processing.file_metadata import FileMetadata, get_file_metadata
 from profiles.core.telemetry.diagnostics import default_log_path
 from profiles.server.state import ServerState
 from profiles.utils.file_utils import open_file_explorer
 from profiles.utils.network import get_username
 from profiles.utils.path_utils import normalize_user_path
+
+if TYPE_CHECKING:
+    from zxingcpp import BarcodeFormat, BarcodeFormats
 
 logger = logging.getLogger("profiles.server.actions")
 
@@ -150,7 +153,7 @@ async def reveal_file(payload: PathRequest) -> dict:
 
 
 @router.post("/metadata")
-async def file_metadata(payload: PathRequest) -> dict:
+async def file_metadata(payload: PathRequest) -> FileMetadata:
     """Return basic metadata for a file."""
     path = normalize_user_path(payload.file_path)
     if not path.exists():
@@ -219,6 +222,7 @@ async def generate_barcode(payload: BarcodeRequest):
     **Payload format (default):** ``dir=<parent>;filter=<filename>;scan=1``
     """
     import qrcode
+    from qrcode import constants
 
     if payload.content:
         qr_content = payload.content
@@ -250,7 +254,7 @@ async def generate_barcode(payload: BarcodeRequest):
 
     qr = qrcode.QRCode(
         version=2,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        error_correction=constants.ERROR_CORRECT_M,
         box_size=10,
         border=4,
     )
@@ -259,7 +263,8 @@ async def generate_barcode(payload: BarcodeRequest):
     img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
 
     buf = BytesIO()
-    img.save(buf, format="PNG")
+    # Positional: BaseImage.save names it ``kind``, PilImage.save ``format``.
+    img.save(buf, "PNG")
     png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
     return {
@@ -295,7 +300,9 @@ def _load_frame_image(image_bytes: bytes) -> Image.Image:
     return frame if frame.mode == "RGB" else frame.convert("RGB")
 
 
-def _resolve_decode_formats(zxingcpp: ModuleType, formats: list[str] | None) -> list[Any] | None:
+def _resolve_decode_formats(
+    zxingcpp: ModuleType, formats: list[str] | None
+) -> BarcodeFormats | None:
     """Map client format names (BarcodeDetector style) to zxing-cpp formats.
 
     Unknown names are skipped; a request naming only unknown formats is
@@ -303,7 +310,7 @@ def _resolve_decode_formats(zxingcpp: ModuleType, formats: list[str] | None) -> 
     """
     if not formats:
         return None
-    parsed = []
+    parsed: list[BarcodeFormat] = []
     for name in formats:
         try:
             parsed.append(zxingcpp.barcode_format_from_str(name))
@@ -311,7 +318,7 @@ def _resolve_decode_formats(zxingcpp: ModuleType, formats: list[str] | None) -> 
             logger.warning("Ignoring unknown barcode format requested: %s", name)
     if not parsed:
         raise HTTPException(status_code=400, detail="No valid barcode formats in request")
-    return parsed
+    return zxingcpp.BarcodeFormats(parsed)
 
 
 @router.post("/barcode/decode")

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import NamedTuple, TypeVar
 
 from profiles.core.config import service as config_service
-from profiles.core.config.models import AppConfig
+from profiles.core.config.models import AppConfig, ColumnConfiguration
 from profiles.core.processing.column_extractor import ColumnExtractor
 from profiles.core.processing.file_classifier import (
     _build_column_extractor,
@@ -195,8 +195,8 @@ def _iter_directory_files(
     exclude_files: Sequence[str] | None,
     config: AppConfig | None,
     recursive_override: bool | None = None,
-) -> Iterator[Path]:
-    """Scan one root directory and yield file paths passing the scan config.
+) -> list[Path]:
+    """Scan one root directory and return file paths passing the scan config.
 
     The extension filter is pushed into the scan: names that cannot pass
     the extension never become Path objects (Task 7). Scan-level errors
@@ -544,7 +544,7 @@ def scan_and_process_dynamic(
     exclude_dirs: Sequence[str] | None = None,
     exclude_files: Sequence[str] | None = None,
     column_names: tuple[str, ...] = ("File",),
-    columns: dict[str, object] | None = None,
+    columns: dict[str, ColumnConfiguration] | None = None,
     log_metrics: bool = False,
     config: AppConfig | None = None,
     recursive_override: bool | None = None,

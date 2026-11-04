@@ -47,7 +47,7 @@ def _configure_webview_permissions() -> None:
         objc.classAddMethod(
             delegate_cls,
             _MEDIA_CAPTURE_SELECTOR,
-            objc.selector(
+            objc.selector(  # pyright: ignore[reportAttributeAccessIssue] — untyped pyobjc
                 request_media_permission,
                 selector=_MEDIA_CAPTURE_SELECTOR,
                 signature=_MEDIA_CAPTURE_TYPESTR,

@@ -58,7 +58,7 @@ def _get_windows_desktop() -> Path | None:
         shgfp_type_current = 0
 
         buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
-        result = ctypes.windll.shell32.SHGetFolderPathW(
+        result = ctypes.windll.shell32.SHGetFolderPathW(  # pyright: ignore[reportAttributeAccessIssue] — Windows-only
             None, csidl_desktop, None, shgfp_type_current, buf
         )
 

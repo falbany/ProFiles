@@ -18,6 +18,11 @@ from profiles.utils.file_utils import DEFAULT_MAX_SEARCH_DEPTH
 
 WorkflowOutputMode = Literal["hide", "show", "fail_only"]
 
+# Behavior when a hook/workflow step fails. Defined here (not in
+# environment/workflow.py) because models is the bottom of the core
+# dependency graph; workflow.py re-exports it.
+FailMode = Literal["warn", "abort", "skip"]
+
 
 @dataclass(frozen=True)
 class WorkflowStep:
@@ -255,7 +260,8 @@ class AppConfig:
             normalised extension (e.g. ``".mttx"``). Each step is a
             :class:`WorkflowStep` (action, command/message, optional ask
             guard).
-        launch_hook_failmode: Behavior when a hook fails (``"warn"``, ...).
+        launch_hook_failmode: Behavior when a hook fails — one of
+            ``"warn"``, ``"abort"``, ``"skip"``.
         launch_hook_timeout: Hook timeout in seconds.
     """
 
@@ -284,7 +290,7 @@ class AppConfig:
     config_path: Path = field(default_factory=lambda: Path.cwd() / PRIMARY_CONFIG_NAME)
     skip_config_prompt: bool = False
     launch_hooks: dict[str, tuple[WorkflowStep, ...]] = field(default_factory=dict)
-    launch_hook_failmode: str = "warn"
+    launch_hook_failmode: FailMode = "warn"
     launch_hook_timeout: int = 30
 
 

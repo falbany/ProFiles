@@ -93,7 +93,9 @@ def create_app(state: ServerState, static_dir: Path | None = None) -> FastAPI:
     """
     app = FastAPI(title="ProFiles API", version="1.0.0", lifespan=_client_watchdog_lifespan)
     app.state.server_state = state
-    app.state.client_last_seen: dict[str, float] = {}
+    # client_id -> monotonic last-seen timestamp (dict[str, float]); attribute
+    # annotations are not a supported statement form, so it's documented here.
+    app.state.client_last_seen = {}
 
     app.add_middleware(
         CORSMiddleware,

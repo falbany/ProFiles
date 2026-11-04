@@ -130,15 +130,15 @@ def install_crash_hook(logger: logging.Logger) -> None:
     previous_hook = sys.excepthook
 
     def _log_crash(
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
         traceback: types.TracebackType | None,
     ) -> None:
         type_name = getattr(exc_type, "__name__", "Unknown")
         uncaught_exception(logger, type_name=str(type_name), error=str(exc_value))
         previous_hook(exc_type, exc_value, traceback)
 
-    sys.excepthook = _log_crash  # type: ignore[assignment]
+    sys.excepthook = _log_crash
 
 
 class LoggerFactory:
