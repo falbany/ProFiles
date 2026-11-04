@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { EditorView } from "codemirror";
 import { ConfigEditorModal } from "./ConfigEditorModal";
 import {
@@ -905,5 +907,78 @@ describe("ConfigEditorModal live validation (issues #102/#100)", () => {
     });
     // Only the save pre-validation ran — no live cycle behind the gate.
     expect(validateSpy).toHaveBeenCalledTimes(1);
+ * Editor chrome tests (issues #98 + #99): the CodeMirror surface must be
+ * solid and token-backed (never the frosted modal glass), the gutter must
+ * be opaque, and the editor must sit inside a padded bordered card that
+ * separates it from the modal chrome.
+ */
+describe("ConfigEditorModal editor chrome (issues #98/#99)", () => {
+  it("test_editor_theme_is_solid_and_token_backed", async () => {
+    renderModal();
+    await readyEditorView();
+
+    // CodeMirror injects the compiled theme as real <style> rules; those
+    // declarations are the honest thing to assert on. Only the stylesheet
+    // of the editor's own theme module is inspected — CodeMirror separately
+    // mounts built-in base-theme styles (which may use transparent) and
+    // they are not this modal's responsibility.
+    const themeModuleStyles = Array.from(document.querySelectorAll("style"))
+      .map((node) => node.textContent ?? "")
+      .filter((cssText) => cssText.includes("--app-editor-bg"))
+      .join("\n");
+
+    // Editor canvas: solid, sourced from the new editor token (issue #98).
+    expect(themeModuleStyles).toMatch(/background-color:\s*var\(--app-editor-bg\)/);
+    // Gutter: opaque background from its own token.
+    expect(themeModuleStyles).toMatch(/background-color:\s*var\(--app-editor-gutter-bg\)/);
+    // Static guard against regression to the old bug (the theme root
+    // painting `transparent` over the frosted modal glass): the shipped
+    // theme object must never set a transparent background. CodeMirror
+    // additionally mounts built-in base-theme <style> rules that may
+    // legitimately use transparent — that is why this is asserted on the
+    // source rather than the merged stylesheet.
+    const modalSource = (await import("./ConfigEditorModal.tsx?raw")).default;
+    expect(modalSource).not.toMatch(/backgroundColor:\s*"transparent"/);
+  });
+
+  it("test_editor_tokens_defined_for_both_themes", async () => {
+    // The index.css token sheet defines the editor tokens in BOTH the
+    // dark and light theme blocks — the same single-attribute flip as
+    // every other --app-* token. (A plain node:fs read: vitest serves
+    // source files through virtual paths, so import.meta URLs cannot be
+    // dereferenced here.)
+    const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf8");
+    expect(css).not.toBe("");
+    const darkBlock = css.slice(0, css.indexOf('[data-theme="light"]'));
+    const lightBlock = css.slice(css.indexOf('[data-theme="light"]'));
+    for (const token of [
+      "--app-editor-bg",
+      "--app-editor-gutter-bg",
+      "--app-editor-active-line",
+      "--app-editor-selection",
+      "--app-editor-border",
+    ]) {
+      expect(darkBlock).toContain(`${token}:`);
+      expect(lightBlock).toContain(`${token}:`);
+    }
+  });
+
+  it("test_editor_sits_inside_padded_bordered_card", async () => {
+    renderModal();
+    const dialog = await screen.findByRole("dialog", { name: /configuration editor/i });
+    await readyEditorView();
+
+    // The bordered card wraps the editor — padding on the body, a
+    // rounded border on the card (issue #99).
+    const card = dialog.querySelector('[data-testid="editor-card"]');
+    expect(card).toBeTruthy();
+    expect(card!.className).toContain("rounded-lg");
+    expect(card!.className).toContain("border");
+    const cardParent = card!.parentElement!;
+    expect(
+      cardParent.className.includes("p-3") || cardParent.className.includes("p-4"),
+    ).toBe(true);
+    // The editor really lives inside the card.
+    expect(card!.querySelector(".cm-editor")).toBeTruthy();
   });
 });
