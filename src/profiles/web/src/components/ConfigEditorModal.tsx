@@ -51,6 +51,9 @@ type PendingAction = "new" | "revert";
 /** Kinds of the async toolbar actions — the dispatch runner's key. */
 type ToolbarActionKind = "new" | "test" | "revert" | "apply" | "save" | "save-as";
 
+/** Debounce window for live validation after the last document change (issue #100). */
+const VALIDATION_DEBOUNCE_MS = 800;
+
 /** Target chosen in the Save As dialog, handed back to the save-as flow. */
 type SaveAsTarget = { filename: string; directory: string; overwrite: boolean };
 
@@ -181,6 +184,25 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
   const actionSeqRef = useRef(0);
   /** In-flight registry: action kind → seq of its live dispatch. A kind already registered rejects duplicate dispatches (double-click Apply fires one request). */
   const inFlightActionsRef = useRef<Map<ToolbarActionKind, number>>(new Map());
+  /** Pending live-validation timer (issue #100); null when idle. */
+  const validationTimerRef = useRef<number | null>(null);
+  /**
+   * Doc text of the most recent validation request. The live cycle is
+   * scheduled only for texts differing from it — coalescing keystrokes
+   * into one request, and no-op revalidation of an unchanged document.
+   */
+  const lastValidatedTextRef = useRef<string | null>(null);
+  /**
+   * True while a blocking dialog (compliance gate / Save As) sits behind
+   * the editor: no auto-validation churn behind a modal. Latest-ref so
+   * the CodeMirror listener closure (mounted once per doc) reads live.
+   */
+  const parkedRef = useRef(false);
+  /** Latest-run indirection for the listener: always dispatches current. */
+  const runValidationRef = useRef<() => void>(() => {});
+  /** Latest ref for the scheduling helper itself (see updateListener). */
+  const scheduleValidationRef = useRef<(text: string) => void>(() => {});
+  parkedRef.current = gate !== null || saveAsPrompt !== null;
 
   const handleDialogKeyDown = useModalA11y({
     isOpen: open,
@@ -201,6 +223,13 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
       setPendingAction(null);
       setGate(null);
       setSaveAsPrompt(null);
+      // Drop any pending live-validation cycle (issue #100): a stale timer
+      // must not fire into a closed session.
+      if (validationTimerRef.current !== null) {
+        clearTimeout(validationTimerRef.current);
+        validationTimerRef.current = null;
+      }
+      lastValidatedTextRef.current = null;
       // Invalidate in-flight toolbar actions so a resolution that lands
       // after close/reopen cannot leak into the next session's state.
       actionSeqRef.current += 1;
@@ -213,6 +242,7 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
         if (cancelled) return;
         const content = toEditorText(data.content);
         loadedTextRef.current = content;
+        lastValidatedTextRef.current = content;
         setLoad({ status: "ready", data: { ...data, content } });
       })
       .catch((err: unknown) => {
@@ -224,6 +254,40 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
       cancelled = true;
     };
   }, [open]);
+
+  /** Drop any pending live-validation cycle. */
+  const cancelPendingValidation = useCallback(() => {
+    if (validationTimerRef.current !== null) {
+      clearTimeout(validationTimerRef.current);
+      validationTimerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Schedule a live validation (issue #100): one deferred cycle
+   * ``VALIDATION_DEBOUNCE_MS`` after the last change. No-ops are elided:
+   * text identical to the last validation (coalesced typing), and the
+   * parked state (no auto-validation churn behind a modal). A cycle
+   * already in flight rejects duplicate dispatches — in that case the
+   * schedule RESCHEDULES instead of disappearing, so the latest text is
+   * still validated after the round trip lands.
+   */
+  const scheduleLiveValidation = useCallback(
+    (text: string) => {
+      if (parkedRef.current) return;
+      if (text === lastValidatedTextRef.current) return;
+      cancelPendingValidation();
+      validationTimerRef.current = window.setTimeout(() => {
+        validationTimerRef.current = null;
+        if (inFlightActionsRef.current.has("test")) {
+          scheduleValidationRef.current(text);
+          return;
+        }
+        runValidationRef.current();
+      }, VALIDATION_DEBOUNCE_MS);
+    },
+    [cancelPendingValidation],
+  );
 
   // Mount the CodeMirror view once the content is on screen; destroy it on
   // close/unmount. Depends on `load` so the host div is guaranteed mounted.
@@ -240,6 +304,12 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             setDirty(isDirty(update.view, loadedTextRef.current));
+            // Feedback is invalidated by the very edit that changed the
+            // document (issue #102): a stale Test/Save banner or issue
+            // list must never outlive the content it described.
+            setStatus(null);
+            setIssues([]);
+            scheduleLiveValidation(update.state.doc.toString());
           }
         }),
       ],
@@ -249,6 +319,9 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
     return () => {
       view.destroy();
       editorViewRef.current = null;
+      // A pending live-validation timer would fire into a destroyed view —
+      // and leak across tests and sessions. Drop it with the mount.
+      cancelPendingValidation();
     };
   }, [open, load]);
 
@@ -387,8 +460,14 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
     () =>
       runToolbarAction("test", async (seq) => {
         if (load.status !== "ready") return;
+        // An explicit Test cancels any pending live cycle (its result
+        // would describe the same document anyway) and records the text
+        // it is asking about, so the debounce skips a no-op repeat.
+        cancelPendingValidation();
+        const text = currentDocText();
+        lastValidatedTextRef.current = text;
         try {
-          const result = await validateConfigContent(load.data.filename, currentDocText());
+          const result = await validateConfigContent(load.data.filename, text);
           if (seq !== actionSeqRef.current) return; // superseded — drop stale results
           setIssues(result.issues);
           setStatus(
@@ -407,6 +486,10 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
       }),
     [load, runToolbarAction],
   );
+
+  /** Latest-run indirections for the CodeMirror listener closures. */
+  runValidationRef.current = () => void runValidation();
+  scheduleValidationRef.current = scheduleLiveValidation;
 
   /**
    * Apply action: trial the current text as the session configuration.

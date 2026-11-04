@@ -755,3 +755,155 @@ describe("ConfigEditorModal", () => {
     expect(saveSpy).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Editor feedback tests (issues #102 + #100): editing must clear stale
+ * Test/validation feedback immediately, and validation must re-run
+ * automatically ~800ms after the user stops typing.
+ */
+describe("ConfigEditorModal live validation (issues #102/#100)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("test_editing_clears_stale_validation_feedback", async () => {
+    validateSpy.mockResolvedValue({ valid: false, issues: [{ severity: "error", message: "boom" }] });
+    const user = userEvent.setup();
+    renderModal();
+
+    const view = await readyEditorView();
+    // Run Test: the banner + issue list describe the pre-edit document.
+    await user.click(screen.getByRole("button", { name: /test/i }));
+    await waitFor(() => expect(screen.getByTestId("editor-status")).toBeTruthy());
+    expect(screen.getByTestId("editor-issues")).toBeTruthy();
+
+    // One keystroke invalidates that feedback — it must vanish immediately.
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+    expect(screen.queryByTestId("editor-status")).toBeNull();
+    expect(screen.queryByTestId("editor-issues")).toBeNull();
+  });
+
+  it("test_live_validation_fires_after_debounce", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    // Freeze time only after the editor is ready: RTL waitFor relies on
+    // real timers while probing the mounted view.
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+    // A pause shorter than the debounce fires nothing.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(799);
+    });
+    expect(validateSpy).not.toHaveBeenCalled();
+
+    // At 800ms after the last change, exactly one validation leaves —
+    // carrying the current document text.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+    expect(validateSpy.mock.calls[0][1]).toContain("# edited\n");
+  });
+
+  it("test_live_validation_coalesces_rapid_typing", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+
+    // Three changes inside the debounce window coalesce into one request.
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "a\n" } });
+      await vi.advanceTimersByTimeAsync(300);
+      view.dispatch({ changes: { from: 1, insert: "b\n" } });
+      await vi.advanceTimersByTimeAsync(300);
+      view.dispatch({ changes: { from: 2, insert: "c\n" } });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+    expect(validateSpy.mock.calls[0][1]).toContain("c\n");
+  });
+
+  it("test_explicit_test_cancels_pending_debounce", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+    // The explicit Test button short-circuits the pending debounce.
+    await act(async () => {
+      screen.getByRole("button", { name: /test/i }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+
+    // The canceled timer must not re-fire later.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("test_live_validation_rechecks_after_in_flight_completes", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    vi.useFakeTimers();
+    let resolveFirst!: (value: { valid: boolean; issues: never[] }) => void;
+    validateSpy.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirst = resolve; }),
+    );
+
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "x\n" } });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1); // in flight
+
+    // A second edit while validation is in flight must not be swallowed —
+    // it re-schedules and re-fires once the round trip lands.
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "y\n" } });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ valid: true, issues: [] });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_live_validation_skipped_while_gate_parked", async () => {
+    // The compliance gate (invalid save confirm) is a blocking modal: no
+    // auto-validation churn behind it.
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [{ severity: "error", message: "boom" }],
+    });
+    const user = userEvent.setup();
+    renderModal();
+    const view = await readyEditorView();
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByRole("dialog", { name: /save with validation issues\?/i })).toBeTruthy();
+
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    // Only the save pre-validation ran — no live cycle behind the gate.
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+  });
+});
