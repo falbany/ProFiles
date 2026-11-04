@@ -30,6 +30,24 @@ export interface AppConfigData {
   row_colors: [string, string][];
 }
 
+/** A validation problem reported by the config editor endpoints. */
+export interface ValidationIssue {
+  severity: "error" | "warning";
+  message: string;
+}
+
+/** Response of `GET /api/config/content` — the YAML editor payload. */
+export interface ConfigContentData {
+  /** Display name of the backing file (config title for a session trial). */
+  filename: string;
+  /** Raw file text; empty for a session trial (config applied from dropped content). */
+  content: string;
+  /** Absolute path of the backing file; null when there is no disk anchor. */
+  config_path: string | null;
+  /** True when the active config came from a dropped file — Save is refused, use Save As. */
+  session_trial: boolean;
+}
+
 export interface BrowseEntry {
   name: string;
   path: string;

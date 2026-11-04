@@ -70,6 +70,7 @@
 - **Déploiement zero-touch** : détection du hostname/IP/chemin pour sélectionner automatiquement les configurations adaptées aux postes multi-stations.
 - **Formatage visuel** : coloration des lignes par règles avec ajustement automatique du contraste.
 - **Repli sans configuration** : des valeurs par défaut sensées permettent une utilisation immédiate sans fichier `.profiles`.
+- **Éditeur YAML de configuration** : modifiez le fichier `.profiles` dans l'application (bouton **Config** de la barre d'état) — New/Test/Revert/Apply/Save/Save As, validation en mémoire, garde-fou avant les enregistrements risqués, et raccourci « Open in OS ».
 
 ## 🚀 Installation
 
@@ -190,7 +191,7 @@ Lance le serveur FastAPI local et ouvre le frontend React dans une fenêtre de b
 
 - **Interface** : le chrome web est bilingue (anglais / français). Utilisez le sélecteur de langue dans la barre de statut pour changer à la volée, ou définissez `language: en` / `language: fr` dans la section `defaults`.
 - **Recherche** : utilisez `+` pour l'inclusion, `-` pour l'exclusion, `OR` pour les alternatives et `"..."` pour les expressions exactes.
-- **Raccourcis clavier** : `Ctrl+F` (champ filtre) · `Ctrl+D` (champ répertoire) · `Ctrl+E` (champ extension) · `F5` (rescan) · `Ctrl+R` (recharger la config + rescan) · `Ctrl+H` (répertoire home) · `Ctrl+Shift+L` (visionneuse de logs) · `Ctrl+,` (ouvrir la config) · `Ctrl+Shift+T` (cycler le thème) · `Ctrl+B` (mode scanner de code-barres) · `Ctrl+Shift+B` (scanner de code-barres caméra) · `Ctrl+T` (timer de rescan auto) · `?` (dialogue des raccourcis).
+- **Raccourcis clavier** : `Ctrl+F` (champ filtre) · `Ctrl+D` (champ répertoire) · `Ctrl+E` (champ extension) · `F5` (rescan) · `Ctrl+R` (recharger la config + rescan) · `Ctrl+H` (répertoire home) · `Ctrl+Shift+L` (visionneuse de logs) · `Ctrl+,` (ouvrir l'éditeur de config) · `Ctrl+Shift+T` (cycler le thème) · `Ctrl+B` (mode scanner de code-barres) · `Ctrl+Shift+B` (scanner de code-barres caméra) · `Ctrl+T` (timer de rescan auto) · `?` (dialogue des raccourcis).
 - **PWA** : le frontend embarque un precache de service worker, la page peut donc être installée dans le navigateur comme une application.
 
 ### Mode Navigateur / PWA (serveurs partagés)

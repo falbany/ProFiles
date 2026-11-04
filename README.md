@@ -69,6 +69,7 @@
 - **Zero-Touch Deployment**: Detects hostname/IP/path to auto-select matching configurations for multi-station setups.
 - **Visual Formatting**: Rules-based row coloring with automatic contrast adjustment.
 - **No-Config Fallback**: Sensible defaults allow immediate use without a `.profiles` file.
+- **YAML Config Editor**: Edit the `.profiles` file in-app (status-bar **Config** button) — New/Test/Revert/Apply/Save/Save As, in-memory validation, a compliance gate before risky saves, and an "Open in OS" shortcut.
 
 ## 🚀 Installation
 
@@ -189,7 +190,7 @@ Launches the local FastAPI server and opens the React frontend in a native PyWeb
 
 - **Interface**: The web chrome is bilingual (English / French). Use the language switcher in the status bar to change on the fly, or set `language: en` / `language: fr` in the `defaults` section.
 - **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives, and `"..."` for exact phrases.
-- **Keyboard shortcuts**: `Ctrl+F` (focus filter) · `Ctrl+D` (focus directory) · `Ctrl+E` (focus extension) · `F5` (rescan) · `Ctrl+R` (reload config + rescan) · `Ctrl+H` (home directory) · `Ctrl+Shift+L` (log viewer) · `Ctrl+,` (open config) · `Ctrl+Shift+T` (cycle theme) · `Ctrl+B` (barcode scanner mode) · `Ctrl+Shift+B` (camera barcode scanner) · `Ctrl+T` (auto-rescan timer) · `?` (shortcuts dialog).
+- **Keyboard shortcuts**: `Ctrl+F` (focus filter) · `Ctrl+D` (focus directory) · `Ctrl+E` (focus extension) · `F5` (rescan) · `Ctrl+R` (reload config + rescan) · `Ctrl+H` (home directory) · `Ctrl+Shift+L` (log viewer) · `Ctrl+,` (open config editor) · `Ctrl+Shift+T` (cycle theme) · `Ctrl+B` (barcode scanner mode) · `Ctrl+Shift+B` (camera barcode scanner) · `Ctrl+T` (auto-rescan timer) · `?` (shortcuts dialog).
 - **PWA**: The frontend ships a service worker precache, so the page can be installed in the browser as an app.
 
 ### Browser / PWA Mode (shared servers)

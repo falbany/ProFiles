@@ -36,6 +36,9 @@ class ServerState:
     config: AppConfig
     active_directory: Path | None = None
     config_path: Path | None = None
+    # True while the active config is an in-memory trial from a
+    # dropped/loaded content payload (no disk anchor).
+    session_trial: bool = False
     # Shared secret verifying handoff requests from a second ProFiles
     # launch (issue #4); None disables the identity/handoff endpoints.
     instance_token: str | None = None

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
+from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.launch.creation import propose_creation
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
@@ -34,8 +35,47 @@ class CreateConfigRequest(BaseModel):
     directory: str
 
 
+class ValidateRequest(BaseModel):
+    content: str
+    filename: str
+
+
+class SaveRequest(BaseModel):
+    content: str
+    force: bool = False
+
+
+class SaveAsRequest(BaseModel):
+    content: str
+    filename: str
+    directory: str
+    force: bool = False
+    overwrite: bool = False
+
+
 def _is_config_path(path: Path) -> bool:
-    return path.name.endswith(CONFIG_FILE_NAMES)
+    """True when *path*'s name matches the documented config whitelist.
+
+    Case-insensitive on purpose: the save-as endpoint accepts
+    ``BACKUP.PROFILES`` (its whitelist checks ``filename.lower()``), so the
+    apply step that re-reads what was just written must accept it too — a
+    case-sensitive comparison here turned a successful save-as into a 400
+    with the file already on disk (branch review, issue #95 wave).
+    """
+    return path.name.lower().endswith(CONFIG_FILE_NAMES)
+
+
+def _is_safe_filename(filename: str) -> bool:
+    """Return True when *filename* is a bare name that cannot escape its directory.
+
+    Hygiene guard for write endpoints: rejects empty names, ``.``/``..``
+    dot segments, and path separators (``/``, ``\\``) so joining the
+    filename onto a user directory can never traverse (cf. the
+    path-traversal fix in issue #28).
+    """
+    if not filename or filename in {".", ".."}:
+        return False
+    return "/" not in filename and "\\" not in filename
 
 
 def _config_response(state: ServerState) -> dict:
@@ -129,9 +169,49 @@ def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
 
     loaded = ConfigReader(config_path).load()
     state.config = loaded
+    state.session_trial = False
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     return _config_response(state)
+
+
+def validate_issues(content: str, display_name: str) -> list[dict[str, str]]:
+    """Validate configuration *content* in memory without touching live state.
+
+    Parses *content* strictly with :meth:`ConfigReader.from_content` and
+    reports the outcome as a plain issue list, so the YAML editor can
+    validate content that is not applied to the session.
+
+    Args:
+        content: Raw YAML configuration content.
+        display_name: Human-readable file name used in error messages.
+
+    Returns:
+        ``[]`` when the content parses and validates, otherwise a single
+        ``{"severity": "error", "message": ...}`` dict describing the
+        failure.
+    """
+    try:
+        ConfigReader.from_content(content, display_name=display_name)
+    except ValueError as exc:
+        return [{"severity": "error", "message": str(exc)}]
+    return []
+
+
+def has_disk_path(state: ServerState) -> bool:
+    """Return True when the active configuration is backed by a recorded file.
+
+    The explicit :attr:`ServerState.session_trial` flag takes precedence
+    over path presence: a configuration applied from dropped content
+    (``POST /load-content``) is a session trial with no disk anchor, even
+    though the shared ``_config_response`` helper re-records a resolved
+    path into the state for every response (existing shared behavior).
+    Save endpoints gate on this helper to refuse writing to a merely
+    CWD-resolved path instead of the trial's source.
+    """
+    return not state.session_trial and (
+        state.config_path is not None or getattr(state.config, "config_path", None) is not None
+    )
 
 
 @router.get("")
@@ -183,6 +263,7 @@ async def load_content_endpoint(payload: LoadContentRequest, request: Request) -
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     state.config = loaded
+    state.session_trial = True
     state.active_directory = _choose_active_directory(loaded, None)
     response = _config_response(state)
     response["session_trial"] = True
@@ -207,9 +288,28 @@ async def create_config_endpoint(payload: CreateConfigRequest, request: Request)
 
     loaded = ConfigReader(target_config).load()
     state.config = loaded
+    state.session_trial = False
     state.config_path = target_config
     state.active_directory = _choose_active_directory(loaded, target_config)
     return _config_response(state)
+
+
+@router.post("/template")
+async def template_config_endpoint(request: Request) -> dict:
+    """Render the starter configuration in memory; nothing written, no state change.
+
+    In-memory render of the same content ``--init``/``propose_creation``
+    writes to disk (the canonical :data:`STARTER_CONFIG_TEMPLATE`), powering
+    the editor's New action. The ``{cwd}`` placeholder — the template's
+    only single-brace placeholder — is substituted with the active
+    directory so the rendered draft scans where the session points.
+    """
+    state: ServerState = request.app.state.server_state
+    cwd = str(state.active_directory) if state.active_directory else str(Path.cwd())
+    return {
+        "content": STARTER_CONFIG_TEMPLATE.format(cwd=cwd),
+        "filename": ".profiles",
+    }
 
 
 @router.post("/reload")
@@ -240,11 +340,151 @@ async def reload_config_endpoint(request: Request) -> dict:
 
     loaded.config_path = config_path
     state.config = loaded
+    state.session_trial = False
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     response = _config_response(state)
     response["reloaded"] = True
     return response
+
+
+@router.post("/validate")
+async def validate_config_endpoint(payload: ValidateRequest) -> dict:
+    """Validate editor content in memory; never applied to the session state.
+
+    Returns ``{"valid": bool, "issues": [...]}`` rather than an HTTP error
+    status, so invalid drafts reach the editor as data to display.
+    """
+    issues = validate_issues(payload.content, display_name=payload.filename)
+    return {"valid": not issues, "issues": issues}
+
+
+@router.get("/content")
+async def get_config_content(request: Request) -> dict:
+    """Return the active configuration file's text for the YAML editor.
+
+    Responds ``{"filename", "content", "config_path", "session_trial"}``.
+    A session trial (config applied from dropped content) answers an
+    empty body flagged ``session_trial=True`` — ``config_path`` stays
+    ``None`` so the stale CWD-resolved path never leaks, and ``filename``
+    carries the config's display name — instead of file text; a
+    recorded-but-missing file answers 404.
+    """
+    state: ServerState = request.app.state.server_state
+    if not has_disk_path(state):
+        return {
+            "filename": state.config.title or "session-trial",
+            "content": "",
+            "config_path": None,
+            "session_trial": True,
+        }
+
+    config_path = state.active_config_path()
+    if not config_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Configuration file not found: {config_path}",
+        )
+
+    return {
+        "filename": config_path.name,
+        "content": config_path.read_text(encoding="utf-8"),
+        "config_path": str(config_path),
+        "session_trial": False,
+    }
+
+
+@router.post("/save")
+async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
+    """Write editor content to the active config file and apply it.
+
+    Gate order: session-trial refusal (:func:`has_disk_path`) →
+    :func:`validate_issues` → 400 with the issues list when invalid and
+    not ``force`` → write the file → :func:`_apply_config_from_disk`, so
+    the live configuration is always re-read from what is on disk.
+    ``force=True`` is the escape hatch that lets a broken draft reach the
+    disk (it will load as defaults until fixed); without it, bad YAML
+    never touches the file.
+
+    Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``;
+    the apply step clears ``session_trial``, anchoring the saved config
+    to its file.
+    """
+    state: ServerState = request.app.state.server_state
+    if not has_disk_path(state):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot save: the active configuration is a session trial "
+            "with no file on disk. Load or create a configuration first.",
+        )
+
+    config_path = state.active_config_path()
+    issues = validate_issues(payload.content, display_name=config_path.name)
+    if issues and not payload.force:
+        raise HTTPException(status_code=400, detail=issues)
+
+    config_path.write_text(payload.content, encoding="utf-8")
+    config = _apply_config_from_disk(state, config_path)
+    return {"status": "SAVED", "path": str(config_path), "config": config}
+
+
+SAVE_AS_EXTENSIONS = (".profiles", ".profiles.yaml")
+
+
+@router.post("/save-as")
+async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> dict:
+    """Write editor content to a new config file and apply it.
+
+    Unlike :func:`save_config_endpoint`, save-as is anchored to a
+    user-supplied directory and filename, so it works both to copy a
+    disk-anchored config and to anchor a session trial onto disk. Gate
+    order: filename hygiene (:func:`_is_safe_filename` — no separators,
+    dot segments, or empty names) → extension whitelist
+    (:data:`SAVE_AS_EXTENSIONS`) → :func:`normalize_user_path` +
+    directory existence → existence/overwrite guard (409 when the target
+    exists without ``overwrite=True``) → :func:`validate_issues` → 400
+    with the issues list when invalid and not ``force`` → write the file
+    → :func:`_apply_config_from_disk`, so the live configuration is
+    always re-read from what is on disk (which also clears
+    ``session_trial``).
+
+    Returns ``{"status": "SAVED", "path": str, "config": <config dict>}``,
+    the same shape as ``POST /save``.
+    """
+    state: ServerState = request.app.state.server_state
+
+    if not _is_safe_filename(payload.filename):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid configuration file name: {payload.filename}",
+        )
+
+    if not payload.filename.lower().endswith(SAVE_AS_EXTENSIONS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not a ProFiles configuration file: {payload.filename}. "
+            f"Allowed extensions: {', '.join(SAVE_AS_EXTENSIONS)}",
+        )
+
+    target_dir = normalize_user_path(payload.directory)
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(status_code=400, detail="Directory does not exist")
+
+    target = target_dir / payload.filename
+    if target.exists() and not payload.overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Configuration already exists at {target}. "
+            "Retry with overwrite=true to replace it.",
+        )
+
+    issues = validate_issues(payload.content, display_name=payload.filename)
+    if issues and not payload.force:
+        raise HTTPException(status_code=400, detail=issues)
+
+    target.write_text(payload.content, encoding="utf-8")
+    config = _apply_config_from_disk(state, target)
+    return {"status": "SAVED", "path": str(target), "config": config}
 
 
 @router.post("/select-directory")

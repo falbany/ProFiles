@@ -220,6 +220,18 @@ if __name__ == "__main__":
     app.run(debug=True)
 ```
 
+### Configuration Editor Endpoints
+
+Alternative front-ends can reuse the `/api/config` endpoints that power the built-in YAML editor (one line each; see `src/profiles/server/routes/config.py` for the full contracts):
+
+- `GET /api/config/content` — the active file's text as `{filename, content, config_path, session_trial}`; a session trial answers an empty body with `session_trial=True`, a missing file answers 404.
+- `POST /api/config/validate` — validate content in memory, never applied to the session; always answers 200 with `{valid, issues[]}` (invalid drafts come back as data, not as an HTTP error).
+- `POST /api/config/template` — render the starter template in memory (nothing written, no state change); the same content `--init` puts on disk.
+- `POST /api/config/save` — write the content to the active config file and re-apply it; refuses a session trial (400) since there is no file to overwrite.
+- `POST /api/config/save-as` — write to a new file (extension whitelist `.profiles` / `.profiles.yaml`, overwrite guard answering 409 without `overwrite=true`) and anchor the session onto it.
+
+Note the error duality on `save`/`save-as`: validation failures answer **400 with a JSON issues list** (`[{severity, message}, ...]`), while every other refusal (session-trial save, bad filename, missing directory, 409 existing target) answers with a **plain string** `detail` — clients must handle both shapes. The save endpoints also apply the freshly written file to the session, so a response's `config` object is the new live configuration.
+
 ---
 
 ## Programmatic API Usage

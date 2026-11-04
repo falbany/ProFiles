@@ -108,7 +108,11 @@ tests/
 │   ├── test_static.py                        # ← server/static.py
 │   └── routes/
 │       ├── test_actions.py                   # ← server/routes/actions.py
-│       ├── test_config.py                    # ← server/routes/config.py (+test_config_load.py)
+│       ├── test_config.py                    # ← server/routes/config.py
+│       │                                     #   (+test_config_load.py, +test_config_editor.py,
+│       │                                     #    +test_config_reload.py supplements)
+│       ├── test_config_editor.py             # ← server/routes/config.py (editor: content/
+│       │                                     #    validate/template/save/save-as regressions)
 │       ├── test_fs.py                        # ← server/routes/fs.py
 │       ├── test_logs.py                      # ← server/routes/logs.py
 │       ├── test_scan.py                      # ← server/routes/scan.py

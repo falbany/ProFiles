@@ -1,39 +1,56 @@
 import type {
   AppConfigData,
   BrowseResult,
+  ConfigContentData,
   ExternalEvent,
   FileMetadata,
   LogLevel,
   LogResponse,
   ScanResultsResponse,
   SystemInfo,
+  ValidationIssue,
   WorkflowSessionState,
 } from "./types";
 
 /**
  * Error carrying the HTTP status so callers can react to specific codes —
  * e.g. 404 from the workflow session routes means the server-side session
- * expired or was purged (TTL), and the UI can offer recovery (#79).
+ * expired or was purged (TTL), and the UI can offer recovery (#79). When
+ * the body's detail is not a plain string (a validation issue list from
+ * the config editor save endpoints), it is preserved verbatim in
+ * `detail` instead of being flattened into the message.
  */
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** Raw body detail when it is not a plain string (e.g. ValidationIssue[]). */
+  detail?: string | ValidationIssue[];
+  constructor(message: string, status: number, detail?: string | ValidationIssue[]) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
 }
 
 /** Build an ApiError from a failed Response, preferring the body's detail. */
 async function apiError(res: Response, fallback: string): Promise<ApiError> {
-  let detail = fallback;
+  let message = fallback;
+  let detail: string | ValidationIssue[] | undefined;
   try {
     const body = await res.json();
-    if (body?.detail) detail = body.detail;
+    if (typeof body?.detail === "string" && body.detail) {
+      message = body.detail;
+      detail = body.detail;
+    } else if (Array.isArray(body?.detail)) {
+      // Heterogeneous 400 detail from the config editor save endpoints: a
+      // validation issue list. Keep the raw array for callers that render
+      // it as data (editor gate modal) instead of flattening it to text.
+      detail = body.detail;
+    }
   } catch {
     // keep the fallback message
   }
-  return new ApiError(detail, res.status);
+  return new ApiError(message, res.status, detail);
 }
 
 /** Fetch UI events recorded after *afterId* (config handoff notifications). */
@@ -191,6 +208,78 @@ export async function createConfigFile(directory: string): Promise<AppConfigData
   });
   if (!res.ok) throw new Error("Failed to create config file");
   return res.json();
+}
+
+/** Fetch the active configuration file's text for the YAML editor (404 when the recorded file vanished). */
+export async function fetchConfigContent(): Promise<ConfigContentData> {
+  const res = await fetch("/api/config/content");
+  if (!res.ok) throw await apiError(res, "Failed to fetch config content");
+  return res.json();
+}
+
+/**
+ * Validate editor content in memory. Invalid content is answered as data
+ * (HTTP 200 with `valid: false` and the issue list), never as an HTTP
+ * error, so drafts can be shown without try/catch.
+ */
+export async function validateConfigContent(
+  filename: string,
+  content: string,
+): Promise<{ valid: boolean; issues: ValidationIssue[] }> {
+  const res = await fetch("/api/config/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename, content }),
+  });
+  if (!res.ok) throw await apiError(res, "Failed to validate config content");
+  return res.json();
+}
+
+/** Generate starter configuration content without touching the session state. */
+export async function fetchConfigTemplate(): Promise<{ content: string; filename: string }> {
+  const res = await fetch("/api/config/template", { method: "POST" });
+  if (!res.ok) throw await apiError(res, "Failed to fetch config template");
+  return res.json();
+}
+
+/**
+ * Write editor content to the active configuration file and apply it.
+ * Rejects with an ApiError whose `detail` is either a plain message
+ * (e.g. a session-trial refusal) or a `ValidationIssue[]` gate list —
+ * callers rendering the compliance gate should inspect `detail`.
+ */
+export async function saveConfigFile(content: string, force: boolean): Promise<AppConfigData> {
+  const res = await fetch("/api/config/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, force }),
+  });
+  if (!res.ok) throw await apiError(res, "Failed to save configuration");
+  const payload: { config: AppConfigData } = await res.json();
+  return payload.config;
+}
+
+/**
+ * Write editor content to a new configuration file and apply it; also
+ * anchors a session trial onto disk. A 409 ApiError means the target
+ * exists and `overwrite` was false; a 400 carries a plain message or a
+ * `ValidationIssue[]` gate list in `detail`.
+ */
+export async function saveConfigFileAs(params: {
+  content: string;
+  filename: string;
+  directory: string;
+  force: boolean;
+  overwrite: boolean;
+}): Promise<AppConfigData> {
+  const res = await fetch("/api/config/save-as", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await apiError(res, "Failed to save configuration as");
+  const payload: { config: AppConfigData } = await res.json();
+  return payload.config;
 }
 
 export async function browseForConfigFiles(path: string): Promise<BrowseResult> {
