@@ -70,6 +70,7 @@
 - **Déploiement zero-touch** : détection du hostname/IP/chemin pour sélectionner automatiquement les configurations adaptées aux postes multi-stations.
 - **Formatage visuel** : coloration des lignes par règles avec ajustement automatique du contraste.
 - **Repli sans configuration** : des valeurs par défaut sensées permettent une utilisation immédiate sans fichier `.profiles`.
+- **Éditeur YAML de configuration** : modifiez le fichier `.profiles` dans l'application (bouton **Config** de la barre d'état) — New/Test/Revert/Apply/Save/Save As, validation en mémoire, garde-fou avant les enregistrements risqués, et raccourci « Open in OS ».
 
 ## 🚀 Installation
 

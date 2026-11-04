@@ -208,6 +208,18 @@ if __name__ == "__main__":
     app.run(debug=True)
 ```
 
+### Endpoints de l'Éditeur de Configuration
+
+Les interfaces alternatives peuvent réutiliser les endpoints `/api/config` qui alimentent l'éditeur YAML intégré (une ligne chacun ; voir `src/profiles/server/routes/config.py` pour les contrats complets) :
+
+- `GET /api/config/content` — le texte du fichier actif sous `{filename, content, config_path, session_trial}` ; une config d'essai répond un corps vide avec `session_trial=True`, un fichier manquant répond 404.
+- `POST /api/config/validate` — valide le contenu en mémoire, jamais appliqué à la session ; répond toujours 200 avec `{valid, issues[]}` (les brouillons invalides reviennent sous forme de données, pas d'erreur HTTP).
+- `POST /api/config/template` — rend le modèle starter en mémoire (rien n'est écrit, aucun changement d'état) ; le même contenu que `--init` pose sur disque.
+- `POST /api/config/save` — écrit le contenu dans le fichier de config actif puis le ré-applique ; refuse une config d'essai (400) puisqu'il n'y a aucun fichier à écraser.
+- `POST /api/config/save-as` — écrit dans un nouveau fichier (liste blanche d'extensions `.profiles` / `.profiles.yaml`, garde d'existence répondant 409 sans `overwrite=true`) et ancre la session dessus.
+
+Notez la dualité des erreurs sur `save`/`save-as` : un échec de validation répond **400 avec une liste JSON de problèmes** (`[{severity, message}, ...]`), tandis que tout autre refus (save d'une config d'essai, nom de fichier invalide, répertoire inexistant, cible existante en 409) répond avec un `detail` **chaîne simple** — les clients doivent gérer les deux formes. Les endpoints de sauvegarde appliquent aussi le fichier fraîchement écrit à la session : le `config` de la réponse est donc la nouvelle configuration active.
+
 ---
 
 ## Utilisation de l'API Programmatique

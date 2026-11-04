@@ -31,7 +31,7 @@ On first launch in interactive mode (web UI in the PyWebView shell or browser), 
 python -m profiles --init
 ```
 
-This command creates a `.profiles` file with default values in the current working directory.
+This command creates a `.profiles` file with default values in the current working directory. The same starter content is also available in the web UI via the configuration editor's **New** button (see [Configuration Editor](#configuration-editor-web-ui)).
 
 ### Method 3: Manual Creation
 
@@ -295,6 +295,50 @@ python -m profiles --headless
 # Regenerate starter configuration file
 python -m profiles --init
 ```
+
+The starter content written by `--init` is also available from the web UI: open the configuration editor (**Config** button in the status bar) and click **New** — see [Configuration Editor](#configuration-editor-web-ui).
+
+---
+
+## Configuration Editor (Web UI)
+
+The web UI includes a built-in **YAML configuration editor** — no external editor required.
+
+### Opening the Editor
+
+Click the **Config** button in the status bar (bottom of the window). The editor opens fullscreen with the active configuration file's content.
+
+> The editor header also carries an **Open in OS** button that hands the file to your system's default editor, if you prefer your own tooling.
+
+### Toolbar
+
+| Button       | Action                                                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **New**      | Load the starter configuration template (the same content `--init` writes to disk) into the editor. Unsaved edits are confirmed first.                |
+| **Test**     | Validate the editor content in memory; any issues are listed without touching the session or the disk.                                               |
+| **Revert**   | Discard edits and reload the file from disk (confirmed first when the editor is dirty).                                                              |
+| **Save**     | Write the editor content to the active configuration file on disk. Hidden while the session runs a trial config with no file behind it.               |
+| **Save As**  | Write the content to a **new** file (see below) — this also anchors the session to that file.                                                        |
+| **Apply**    | Trial the editor content as the **session configuration** — in-memory only, nothing is written to disk.                                               |
+
+Keyboard: `Ctrl/Cmd+S` saves when the file is anchored to disk; otherwise it falls back to **Apply**.
+
+### The Two-Step Model: Apply vs Save
+
+- **Apply** is a *session trial*: the text is parsed and becomes the live configuration immediately (directory, extensions, filters and theme are re-derived), but nothing is written to disk. The trial disappears on restart, and a **Reload** returns to the file on disk.
+- **Save** (and **Save As**) *anchor* the text to a file: the file is written and the session switches to it. What you see in the editor is what the next launch will read.
+
+### Compliance Gate (Save & Save As)
+
+Saving runs a validation first. If issues are found, a dialog lists them and blocks the write until you choose:
+
+- **Go back and fix** — returns to the editor with the issues listed above it;
+- **Force save anyway** — writes the file despite the issues (the file will load with default values until they are fixed).
+
+### Save As
+
+- Allowed extensions: **`.profiles`** and **`.profiles.yaml`** (case-insensitive).
+- If a file with the same name already exists in the chosen directory, a **Replace** confirmation is required before overwriting it.
 
 ---
 
@@ -637,7 +681,7 @@ A: Not currently supported. Use absolute paths or configure per-machine sections
 A: The first matching section (by order in the `configs` dictionary) is used. The catch-all (`match.hostname: ["*"]`) should be last.
 
 **Q: How do I reset to defaults?**  
-A: Delete `.profiles` or run `python -m profiles --init` to regenerate.
+A: Delete `.profiles` or run `python -m profiles --init` to regenerate. The same starter template can also be loaded into the web UI editor with **New**.
 
 ---
 
@@ -655,5 +699,4 @@ A: Delete `.profiles` or run `python -m profiles --init` to regenerate.
 
 - Environment variable substitution
 - Configuration validation tool
-- GUI configuration editor
 - Configuration import/export

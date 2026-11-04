@@ -30,7 +30,7 @@ Au premier lancement en mode interactif (interface web dans la fenêtre PyWebVie
 python -m profiles --init
 ```
 
-Cette commande crée un fichier `.profiles` avec des valeurs par défaut dans le répertoire courant.
+Cette commande crée un fichier `.profiles` avec des valeurs par défaut dans le répertoire courant. Le même contenu starter est également disponible dans l'interface web via le bouton **New** de l'éditeur de configuration (voir [Éditeur de Configuration](#éditeur-de-configuration-interface-web)).
 
 ### Méthode 3 : Création manuelle
 
@@ -293,6 +293,50 @@ python -m profiles --headless
 # Régénérer le fichier de configuration starter
 python -m profiles --init
 ```
+
+Le contenu starter écrit par `--init` est également disponible depuis l'interface web : ouvrez l'éditeur de configuration (bouton **Config** de la barre d'état) et cliquez sur **New** — voir [Éditeur de Configuration](#éditeur-de-configuration-interface-web).
+
+---
+
+## Éditeur de Configuration (Interface Web)
+
+L'interface web intègre un **éditeur YAML de configuration** — plus besoin d'éditeur externe.
+
+### Ouvrir l'éditeur
+
+Cliquez sur le bouton **Config** de la barre d'état (en bas de la fenêtre). L'éditeur s'ouvre en plein écran avec le contenu du fichier de configuration actif.
+
+> L'en-tête de l'éditeur comporte également un bouton **Open in OS** qui ouvre le fichier avec l'éditeur par défaut du système, si vous préférez votre propre outil.
+
+### Barre d'outils
+
+| Bouton      | Action                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **New**     | Charge le modèle de configuration starter (le même contenu que `--init` écrit sur disque) dans l'éditeur. Les modifications non enregistrées sont confirmées au préalable. |
+| **Test**    | Valide le contenu de l'éditeur en mémoire ; les problèmes éventuels sont listés sans toucher à la session ni au disque.                       |
+| **Revert**  | Abandonne les modifications et recharge le fichier depuis le disque (confirmation préalable si l'éditeur contient des modifications).          |
+| **Save**    | Écrit le contenu de l'éditeur dans le fichier de configuration actif sur disque. Masqué tant que la session utilise une config d'essai sans fichier associé. |
+| **Save As** | Écrit le contenu dans un **nouveau** fichier (voir ci-dessous) — cela ancre également la session sur ce fichier.                               |
+| **Apply**   | Teste le contenu de l'éditeur comme **configuration de session** — en mémoire uniquement, rien n'est écrit sur disque.                          |
+
+Raccourci clavier : `Ctrl/Cmd+S` enregistre quand le fichier est ancré sur disque ; sinon il revient à **Apply**.
+
+### Le modèle en deux étapes : Apply vs Save
+
+- **Apply** est un *essai de session* : le texte est analysé et devient immédiatement la configuration active (répertoire, extensions, filtres et thème recalculés), mais rien n'est écrit sur disque. L'essai disparaît au redémarrage, et un **Reload** ramène au fichier présent sur disque.
+- **Save** (et **Save As**) *ancre* le texte à un fichier : le fichier est écrit et la session bascule dessus. Ce que vous voyez dans l'éditeur est ce que le prochain lancement lira.
+
+### Garde-fou de conformité (Save & Save As)
+
+L'enregistrement déclenche d'abord une validation. Si des problèmes sont détectés, un dialogue les liste et bloque l'écriture jusqu'à ce que vous choisissiez :
+
+- **Go back and fix** — retour à l'éditeur avec la liste des problèmes affichée au-dessus ;
+- **Force save anyway** — écrit le fichier malgré les problèmes (il se chargera avec les valeurs par défaut jusqu'à leur correction).
+
+### Save As
+
+- Extensions autorisées : **`.profiles`** et **`.profiles.yaml`** (insensibles à la casse).
+- Si un fichier du même nom existe déjà dans le répertoire choisi, une confirmation **Replace** est exigée avant de l'écraser.
 
 ---
 
@@ -624,7 +668,7 @@ R : Pas actuellement pris en charge. Utilisez des chemins absolus ou configurez 
 R : La première section correspondante (par ordre dans le dictionnaire `configs`) est utilisée. Le piège universel (`match.hostname: ["*"]`) doit être en dernier.
 
 **Q : Comment réinitialiser aux valeurs par défaut ?**  
-R : Supprimez `.profiles` ou exécutez `python -m profiles --init` pour régénérer.
+R : Supprimez `.profiles` ou exécutez `python -m profiles --init` pour régénérer. Le même modèle starter peut aussi être chargé dans l'éditeur de l'interface web avec **New**.
 
 ---
 
@@ -640,5 +684,4 @@ R : Supprimez `.profiles` ou exécutez `python -m profiles --init` pour régén�
 ### Fonctionnalités Planifiées
 - Substitution de variables d'environnement
 - Outil de validation de configuration
-- Éditeur de configuration GUI
 - Import/export de configuration

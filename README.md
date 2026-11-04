@@ -69,6 +69,7 @@
 - **Zero-Touch Deployment**: Detects hostname/IP/path to auto-select matching configurations for multi-station setups.
 - **Visual Formatting**: Rules-based row coloring with automatic contrast adjustment.
 - **No-Config Fallback**: Sensible defaults allow immediate use without a `.profiles` file.
+- **YAML Config Editor**: Edit the `.profiles` file in-app (status-bar **Config** button) — New/Test/Revert/Apply/Save/Save As, in-memory validation, a compliance gate before risky saves, and an "Open in OS" shortcut.
 
 ## 🚀 Installation
 
