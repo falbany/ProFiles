@@ -39,6 +39,12 @@ class ServerState:
     # True while the active config is an in-memory trial from a
     # dropped/loaded content payload (no disk anchor).
     session_trial: bool = False
+    # Raw YAML text behind ``session_trial`` trials (issue #97): the ONLY
+    # record of what was applied, since parsing discards the payload.
+    # GET /content echoes it so a reopened editor shows the live trial
+    # configuration. Cleared by every disk-anchoring path — it belongs to
+    # no real file, so anchoring invalidates it.
+    trial_content: str | None = None
     # Shared secret verifying handoff requests from a second ProFiles
     # launch (issue #4); None disables the identity/handoff endpoints.
     instance_token: str | None = None

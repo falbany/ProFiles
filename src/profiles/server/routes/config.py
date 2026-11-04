@@ -170,6 +170,7 @@ def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
     loaded = ConfigReader(config_path).load()
     state.config = loaded
     state.session_trial = False
+    state.trial_content = None
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     return _config_response(state)
@@ -264,6 +265,9 @@ async def load_content_endpoint(payload: LoadContentRequest, request: Request) -
 
     state.config = loaded
     state.session_trial = True
+    # Remember the raw payload (issue #97): parsing discards it, and it is
+    # the only record GET /content can echo for a path-less trial.
+    state.trial_content = payload.content
     state.active_directory = _choose_active_directory(loaded, None)
     response = _config_response(state)
     response["session_trial"] = True
@@ -341,6 +345,7 @@ async def reload_config_endpoint(request: Request) -> dict:
     loaded.config_path = config_path
     state.config = loaded
     state.session_trial = False
+    state.trial_content = None
     state.config_path = config_path
     state.active_directory = _choose_active_directory(loaded, config_path)
     response = _config_response(state)
@@ -364,17 +369,18 @@ async def get_config_content(request: Request) -> dict:
     """Return the active configuration file's text for the YAML editor.
 
     Responds ``{"filename", "content", "config_path", "session_trial"}``.
-    A session trial (config applied from dropped content) answers an
-    empty body flagged ``session_trial=True`` — ``config_path`` stays
-    ``None`` so the stale CWD-resolved path never leaks, and ``filename``
-    carries the config's display name — instead of file text; a
+    A session trial (config applied from dropped content) answers the
+    text that was applied (``ServerState.trial_content``, issue #97) with
+    ``session_trial=True`` and ``config_path=None`` — ``config_path``
+    stays ``None`` so the stale CWD-resolved path never leaks, and
+    ``filename`` carries the config's display name. A
     recorded-but-missing file answers 404.
     """
     state: ServerState = request.app.state.server_state
     if not has_disk_path(state):
         return {
             "filename": state.config.title or "session-trial",
-            "content": "",
+            "content": state.trial_content or "",
             "config_path": None,
             "session_trial": True,
         }
