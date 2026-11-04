@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { EditorView } from "codemirror";
 import { ConfigEditorModal } from "./ConfigEditorModal";
 import {
@@ -93,17 +95,33 @@ function makeBrowseResult(overrides: Partial<BrowseResult> = {}): BrowseResult {
   };
 }
 
-function renderModal(overrides: { open?: boolean } = {}) {
+function renderModal(
+  overrides: {
+    open?: boolean;
+    /** Issue #101: injected picker-raiser spy. */
+    onLoadConfig?: () => void;
+    /** Issue #101: reload key that must re-run the load-on-open fetch. */
+    reloadKey?: number,
+  } = {},
+) {
   const onClose = vi.fn();
   const onApplied = vi.fn();
-  render(
-    <ConfigEditorModal
-      open={overrides.open ?? true}
-      onClose={onClose}
-      onApplied={onApplied}
-    />,
-  );
-  return { onClose, onApplied };
+  const initialProps = {
+    open: overrides.open ?? true,
+    onClose,
+    onApplied,
+    onLoadConfig: overrides.onLoadConfig,
+    reloadKey: overrides.reloadKey,
+  };
+  const view = render(<ConfigEditorModal {...initialProps} />);
+  return {
+    onClose,
+    onApplied,
+    /** Re-render with changed props (issue #101 reload / open cycling). */
+    rerenderWith: (next: { open?: boolean; reloadKey?: number }) => {
+      view.rerender(<ConfigEditorModal {...initialProps} {...next} />);
+    },
+  };
 }
 
 /**
@@ -159,8 +177,9 @@ describe("ConfigEditorModal", () => {
     // The document is actually drawn into the DOM (first line visible).
     const content = document.querySelector(".cm-content");
     expect(content?.textContent).toContain('release: "1.0"');
-    // Header identifies the backing file.
-    expect(screen.getByText("machine.profiles")).toBeTruthy();
+    // Header identifies the backing file (the footer status bar shows it
+    // too — issue #105 — so scope to the header).
+    expect(within(screen.getByTestId("editor-header")).getByText("machine.profiles")).toBeTruthy();
   });
 
   it("test_dirty_indicator_and_escape_warning", async () => {
@@ -753,5 +772,480 @@ describe("ConfigEditorModal", () => {
     expect(screen.queryByRole("status")).toBeNull();
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
     expect(saveSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Editor feedback tests (issues #102 + #100): editing must clear stale
+ * Test/validation feedback immediately, and validation must re-run
+ * automatically ~800ms after the user stops typing.
+ */
+describe("ConfigEditorModal live validation (issues #102/#100)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("test_editing_clears_stale_validation_feedback", async () => {
+    validateSpy.mockResolvedValue({ valid: false, issues: [{ severity: "error", message: "boom" }] });
+    const user = userEvent.setup();
+    renderModal();
+
+    const view = await readyEditorView();
+    // Run Test: the banner + issue list describe the pre-edit document.
+    await user.click(screen.getByRole("button", { name: /test/i }));
+    await waitFor(() => expect(screen.getByTestId("editor-status")).toBeTruthy());
+    expect(screen.getByTestId("editor-issues")).toBeTruthy();
+
+    // One keystroke invalidates that feedback — it must vanish immediately.
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+    expect(screen.queryByTestId("editor-status")).toBeNull();
+    expect(screen.queryByTestId("editor-issues")).toBeNull();
+  });
+
+  it("test_live_validation_fires_after_debounce", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    // Freeze time only after the editor is ready: RTL waitFor relies on
+    // real timers while probing the mounted view.
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+    // A pause shorter than the debounce fires nothing.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(799);
+    });
+    expect(validateSpy).not.toHaveBeenCalled();
+
+    // At 800ms after the last change, exactly one validation leaves —
+    // carrying the current document text.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+    expect(validateSpy.mock.calls[0][1]).toContain("# edited\n");
+  });
+
+  it("test_live_validation_coalesces_rapid_typing", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+
+    // Three changes inside the debounce window coalesce into one request.
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "a\n" } });
+      await vi.advanceTimersByTimeAsync(300);
+      view.dispatch({ changes: { from: 1, insert: "b\n" } });
+      await vi.advanceTimersByTimeAsync(300);
+      view.dispatch({ changes: { from: 2, insert: "c\n" } });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+    expect(validateSpy.mock.calls[0][1]).toContain("c\n");
+  });
+
+  it("test_explicit_test_cancels_pending_debounce", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+    // The explicit Test button short-circuits the pending debounce.
+    await act(async () => {
+      screen.getByRole("button", { name: /test/i }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+
+    // The canceled timer must not re-fire later.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("test_live_validation_rechecks_after_in_flight_completes", async () => {
+    renderModal();
+    const view = await readyEditorView();
+    vi.useFakeTimers();
+    let resolveFirst!: (value: { valid: boolean; issues: never[] }) => void;
+    validateSpy.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirst = resolve; }),
+    );
+
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "x\n" } });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1); // in flight
+
+    // A second edit while validation is in flight must not be swallowed —
+    // it re-schedules and re-fires once the round trip lands.
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "y\n" } });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ valid: true, issues: [] });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(validateSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("test_live_validation_skipped_while_gate_parked", async () => {
+    // The compliance gate (invalid save confirm) is a blocking modal: no
+    // auto-validation churn behind it.
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [{ severity: "error", message: "boom" }],
+    });
+    const user = userEvent.setup();
+    renderModal();
+    const view = await readyEditorView();
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByRole("dialog", { name: /save with validation issues\?/i })).toBeTruthy();
+
+    vi.useFakeTimers();
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    // Only the save pre-validation ran — no live cycle behind the gate.
+    expect(validateSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Editor chrome tests (issues #98 + #99): the CodeMirror surface must be
+ * solid and token-backed (never the frosted modal glass), the gutter must
+ * be opaque, and the editor must sit inside a padded bordered card that
+ * separates it from the modal chrome.
+ */
+describe("ConfigEditorModal editor chrome (issues #98/#99)", () => {
+  it("test_editor_theme_is_solid_and_token_backed", async () => {
+    renderModal();
+    await readyEditorView();
+
+    // CodeMirror injects the compiled theme as real <style> rules; those
+    // declarations are the honest thing to assert on. Only the stylesheet
+    // of the editor's own theme module is inspected — CodeMirror separately
+    // mounts built-in base-theme styles (which may use transparent) and
+    // they are not this modal's responsibility.
+    const themeModuleStyles = Array.from(document.querySelectorAll("style"))
+      .map((node) => node.textContent ?? "")
+      .filter((cssText) => cssText.includes("--app-editor-bg"))
+      .join("\n");
+
+    // Editor canvas: solid, sourced from the new editor token (issue #98).
+    expect(themeModuleStyles).toMatch(/background-color:\s*var\(--app-editor-bg\)/);
+    // Gutter: opaque background from its own token.
+    expect(themeModuleStyles).toMatch(/background-color:\s*var\(--app-editor-gutter-bg\)/);
+    // Static guard against regression to the old bug (the theme root
+    // painting `transparent` over the frosted modal glass): the shipped
+    // theme object must never set a transparent background. CodeMirror
+    // additionally mounts built-in base-theme <style> rules that may
+    // legitimately use transparent — that is why this is asserted on the
+    // source rather than the merged stylesheet.
+    const modalSource = (await import("./ConfigEditorModal.tsx?raw")).default;
+    expect(modalSource).not.toMatch(/backgroundColor:\s*"transparent"/);
+  });
+
+  it("test_editor_tokens_defined_for_both_themes", async () => {
+    // The index.css token sheet defines the editor tokens in BOTH the
+    // dark and light theme blocks — the same single-attribute flip as
+    // every other --app-* token. (A plain node:fs read: vitest serves
+    // source files through virtual paths, so import.meta URLs cannot be
+    // dereferenced here.)
+    const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf8");
+    expect(css).not.toBe("");
+    const darkBlock = css.slice(0, css.indexOf('[data-theme="light"]'));
+    const lightBlock = css.slice(css.indexOf('[data-theme="light"]'));
+    for (const token of [
+      "--app-editor-bg",
+      "--app-editor-gutter-bg",
+      "--app-editor-active-line",
+      "--app-editor-selection",
+      "--app-editor-border",
+    ]) {
+      expect(darkBlock).toContain(`${token}:`);
+      expect(lightBlock).toContain(`${token}:`);
+    }
+  });
+
+  it("test_editor_sits_inside_padded_bordered_card", async () => {
+    renderModal();
+    const dialog = await screen.findByRole("dialog", { name: /configuration editor/i });
+    await readyEditorView();
+
+    // The bordered card wraps the editor — padding on the body, a
+    // rounded border on the card (issue #99).
+    const card = dialog.querySelector('[data-testid="editor-card"]');
+    expect(card).toBeTruthy();
+    expect(card!.className).toContain("rounded-lg");
+    expect(card!.className).toContain("border");
+    const cardParent = card!.parentElement!;
+    expect(
+      cardParent.className.includes("p-3") || cardParent.className.includes("p-4"),
+    ).toBe(true);
+    // The editor really lives inside the card.
+    expect(card!.querySelector(".cm-editor")).toBeTruthy();
+  });
+});
+
+/**
+ * Header consolidation tests (issue #101): every action lives in the header
+ * bar — the standalone toolbar row is gone — and loading another .profiles
+ * file is raised from inside the editor via the injected `onLoadConfig`.
+ */
+describe("ConfigEditorModal header consolidation (issue #101)", () => {
+  it("test_header_carries_all_actions_and_toolbar_row_is_gone", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    renderModal();
+    const dialog = await screen.findByRole("dialog", { name: /configuration editor/i });
+    await readyEditorView();
+
+    // No second chrome band: the standalone toolbar row is gone.
+    expect(dialog.querySelector('[data-testid="editor-toolbar"]')).toBeNull();
+
+    // All actions — including the unmovable Open in OS / ✕ — live in the
+    // header bar (disk-anchored doc, so Save exists too).
+    const header = within(dialog).getByTestId("editor-header");
+    for (const name of [/^new$/i, /^test$/i, /^revert$/i, /^save$/i, /^save as$/i, /^apply$/i, /open in os/i, /close editor/i]) {
+      expect(within(header).getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  it("test_load_config_file_button_invokes_onLoadConfig", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    const onLoadConfig = vi.fn();
+    renderModal({ onLoadConfig });
+    await readyEditorView();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /load config file/i }));
+    expect(onLoadConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("test_load_config_file_button_absent_without_wiring", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    renderModal(); // no onLoadConfig prop
+    await readyEditorView();
+    expect(screen.queryByRole("button", { name: /load config file/i })).toBeNull();
+  });
+
+  it("test_reload_key_change_reloads_editor_content", async () => {
+    fetchContentSpy.mockResolvedValueOnce(makeContent());
+    const modal = renderModal({ reloadKey: 0 });
+    const view = await readyEditorView();
+    expect(fetchContentSpy).toHaveBeenCalledTimes(1);
+
+    // A different .profiles file was picked outside; the reload key bumps
+    // and the editor must swap to the freshly served content — no stale
+    // text left behind.
+    fetchContentSpy.mockResolvedValueOnce(
+      makeContent({ filename: "other.profiles", content: 'release: "2.0"\nsearch_dir: "E:/other"\n' }),
+    );
+    modal.rerenderWith({ reloadKey: 1 });
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      const reloaded = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement);
+      expect(reloaded?.state.doc.toString()).toBe('release: "2.0"\nsearch_dir: "E:/other"\n');
+    });
+    expect(view.state.doc.toString()).not.toBeNull(); // original view object captured above
+    // The header (and footer) now announce the freshly picked file.
+    expect(within(screen.getByTestId("editor-header")).getByText("other.profiles")).toBeTruthy();
+  });
+});
+
+/**
+ * Status bar + Problems panel tests (issue #105): a thin always-visible
+ * footer (validity chip, unsaved dot, cursor position, format + filename)
+ * and a collapsible right Problems panel that auto-opens on validation
+ * failure. The inline banner block is gone — the footer is THE feedback
+ * surface.
+ */
+describe("ConfigEditorModal status bar and problems panel (issue #105)", () => {
+  it("test_status_bar_present_with_chip_cursor_and_format", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    renderModal();
+    await readyEditorView();
+
+    const footer = screen.getByTestId("editor-footer");
+    // Validity chip exists even before the first validation (unknown state).
+    expect(within(footer).getByTestId("validity-chip")).toBeTruthy();
+    // Cursor position, format and filename decorate the right side.
+    expect(footer.textContent).toMatch(/ln 1, col 1/i);
+    expect(footer.textContent).toMatch(/yaml/i);
+    expect(footer.textContent).toContain("machine.profiles");
+  });
+
+  it("test_cursor_position_tracks_selection", async () => {
+    fetchContentSpy.mockResolvedValue(
+      makeContent({ content: 'release: "1.0"\nsearch_dir: "C:/data"\nrecursive_search: false\ntheme: dark\n' }),
+    );
+    renderModal();
+    const view = await readyEditorView();
+
+    // Put the caret on the last line's first character.
+    const doc = view.state.doc;
+    await act(async () => {
+      view.dispatch({ selection: { anchor: doc.line(4).from } });
+    });
+    const footer = screen.getByTestId("editor-footer");
+    expect(footer.textContent).toMatch(/ln 4, col 1/i);
+  });
+
+  it("test_failed_validation_auto_opens_panel_and_lists_issues", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [
+        { severity: "error", message: "unknown key 'foo' at line 3" },
+        { severity: "warning", message: "search_dir does not exist" },
+      ],
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await readyEditorView();
+
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+
+    // The panel auto-opens on failure: issues listed inside it.
+    const panel = await screen.findByTestId("problems-panel");
+    const list = within(panel).getByTestId("editor-issues");
+    expect(list.textContent).toContain("unknown key 'foo' at line 3");
+    expect(list.textContent).toContain("search_dir does not exist");
+    // The two rows carry their severity styling (error red, warning amber).
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].className).toContain("status-danger");
+    expect(rows[1].className).toContain("chip-amber");
+
+    // The validity chip reads "✗ 2 issues" (danger styling).
+    const chip = within(screen.getByTestId("editor-footer")).getByTestId("validity-chip");
+    expect(chip.textContent).toMatch(/2 issues/i);
+    expect(chip.className).toContain("status-danger");
+  });
+
+  it("test_valid_result_shows_valid_chip", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    const user = userEvent.setup();
+    renderModal();
+    await readyEditorView();
+
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+
+    const chip = await screen.findByTestId("validity-chip");
+    expect(chip.textContent).toMatch(/valid/i);
+    expect(chip.className).toContain("status-success");
+    // No issues list materializes; the panel stays closed.
+    expect(screen.queryByTestId("editor-issues")).toBeNull();
+    expect(screen.queryByTestId("problems-panel")).toBeNull();
+  });
+
+  it("test_chip_reads_validating_while_a_validation_is_in_flight", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    // Deferred validation: the round trip stays pending on purpose.
+    let resolveValidate!: (value: { valid: boolean; issues: ValidationIssue[] }) => void;
+    validateSpy.mockReturnValue(
+      new Promise((resolve) => {
+        resolveValidate = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderModal();
+    await readyEditorView();
+
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    const chip = within(screen.getByTestId("editor-footer")).getByTestId("validity-chip");
+    expect(chip.textContent).toMatch(/validating/i);
+
+    await act(async () => {
+      resolveValidate({ valid: true, issues: [] });
+    });
+    await waitFor(() => expect(chip.textContent).toMatch(/valid/i));
+  });
+
+  it("test_issues_chip_toggles_panel_and_close_button_closes_it", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [{ severity: "error", message: "unknown key 'foo' at line 3" }],
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    expect(await screen.findByTestId("problems-panel")).toBeTruthy();
+
+    // Close button collapses the panel.
+    await user.click(screen.getByRole("button", { name: /close problems/i }));
+    expect(screen.queryByTestId("problems-panel")).toBeNull();
+
+    // The chip re-opens it — toggling from the status bar.
+    await user.click(screen.getByTestId("validity-chip"));
+    expect(screen.getByTestId("problems-panel")).toBeTruthy();
+  });
+
+  it("test_unsaved_dot_lives_in_the_status_bar", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    renderModal();
+    const view = await readyEditorView();
+    await act(async () => {
+      view.dispatch({ changes: { from: 0, insert: "# edited\n" } });
+    });
+
+    const footer = screen.getByTestId("editor-footer");
+    const dot = within(footer).getByRole("status");
+    expect(dot.textContent).toMatch(/unsaved changes/i);
+  });
+
+  it("test_status_message_renders_in_the_footer_no_inline_banner", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({ valid: true, issues: [] });
+    const user = userEvent.setup();
+    renderModal();
+    await readyEditorView();
+
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    const footer = screen.getByTestId("editor-footer");
+    // The old inline banner is gone; the action outcome speaks from the footer.
+    const status = within(footer).getByTestId("editor-status");
+    expect(status.textContent).toMatch(/valid/i);
+    expect(status.className).toContain("status-success");
+  });
+
+  it("test_panel_resets_on_close_and_reopen", async () => {
+    fetchContentSpy.mockResolvedValue(makeContent());
+    validateSpy.mockResolvedValue({
+      valid: false,
+      issues: [{ severity: "error", message: "unknown key 'foo' at line 3" }],
+    });
+    const user = userEvent.setup();
+    const modal = renderModal();
+    await readyEditorView();
+    await user.click(screen.getByRole("button", { name: /^test$/i }));
+    expect(await screen.findByTestId("problems-panel")).toBeTruthy();
+
+    // Close and reopen: the panel must not resurrect the session's state.
+    modal.rerenderWith({ open: false });
+    await waitFor(() => expect(screen.queryByTestId("problems-panel")).toBeNull());
+    modal.rerenderWith({ open: true });
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(2));
+    await readyEditorView();
+    expect(screen.queryByTestId("problems-panel")).toBeNull();
   });
 });

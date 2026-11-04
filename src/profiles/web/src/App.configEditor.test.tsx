@@ -17,6 +17,7 @@ import { EditorView } from "codemirror";
  */
 import App from "./App";
 import {
+  browseForConfigFiles,
   executeScan,
   fetchConfig,
   fetchConfigContent,
@@ -24,9 +25,10 @@ import {
   fetchScanResults,
   fetchSystemInfo,
   loadConfigContent,
+  loadConfigFile,
   openConfigFile,
 } from "./api/client";
-import type { AppConfigData, ConfigContentData, ScanResultsResponse, SystemInfo } from "./api/types";
+import type { AppConfigData, BrowseResult, ConfigContentData, ScanResultsResponse, SystemInfo } from "./api/types";
 
 vi.mock("./api/client", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -38,6 +40,8 @@ vi.mock("./api/client", async (importOriginal) => ({
   fetchConfigContent: vi.fn(),
   loadConfigContent: vi.fn(),
   openConfigFile: vi.fn(),
+  browseForConfigFiles: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 // `__APP_VERSION__` is injected by vite.config's `define` at build time;
@@ -53,6 +57,18 @@ const executeScanSpy = vi.mocked(executeScan);
 const fetchContentSpy = vi.mocked(fetchConfigContent);
 const loadContentSpy = vi.mocked(loadConfigContent);
 const openInOSSpy = vi.mocked(openConfigFile);
+const browseSpy = vi.mocked(browseForConfigFiles);
+const loadFileSpy = vi.mocked(loadConfigFile);
+
+/** Listing served by /api/fs/browse (include_hidden) inside the config picker. */
+function makeBrowseResult(overrides: Partial<BrowseResult> = {}): BrowseResult {
+  return {
+    current_path: "C:/configs",
+    parent_path: "C:/",
+    items: [],
+    ...overrides,
+  };
+}
 
 // jsdom gaps (same treatment as ConfigEditorModal.test.tsx):
 // - CodeMirror's measurement code calls Range geometry APIs jsdom lacks.
@@ -220,5 +236,48 @@ describe("App config editor integration", () => {
       expect(editor.querySelector(".cm-editor")).toBeTruthy();
     });
     expect(openInOSSpy).not.toHaveBeenCalled();
+  });
+
+  it("test_editor_load_config_opens_picker_above_editor_and_pick_reloads_content", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+
+    // Open the in-app editor first.
+    await user.click(screen.getByRole("button", { name: /^config$/i }));
+    const editor = await screen.findByRole("dialog", { name: /configuration editor/i });
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(editor.querySelector(".cm-editor")).toBeTruthy());
+
+    // "Load config file…" raises the picker from INSIDE the editor (issue
+    // #101); the editor stays mounted underneath.
+    browseSpy.mockResolvedValue(
+      makeBrowseResult({ items: [{ name: "other.profiles", path: "C:/configs/other.profiles", is_dir: false, is_config: true }] }),
+    );
+    loadFileSpy.mockResolvedValue(
+      makeAppConfig({ config_path: "C:/configs/other.profiles", title: "other" }),
+    );
+    // After the pick, the editor's reload fetch serves the OTHER file.
+    fetchContentSpy.mockResolvedValueOnce(
+      makeContent({ filename: "other.profiles", content: 'release: "2.0"\nsearch_dir: "E:/other"\n', config_path: "C:/configs/other.profiles" }),
+    );
+    await user.click(within(editor).getByRole("button", { name: /load config file/i }));
+
+    const picker = await screen.findByRole("dialog", { name: /load configuration/i });
+    // The picker must stack ABOVE the editor: same explicit z-scale, so the
+    // DOM order decides (later sibling paints on top).
+    expect(editor.compareDocumentPosition(picker as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Pick the other config and confirm: onLoaded fires, the picker closes,
+    // and the editor reloads its content for the new file.
+    await user.click(await screen.findByRole("button", { name: /other\.profiles/i }));
+    await user.click(screen.getByRole("button", { name: /^load configuration$/i }));
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(2));
+    // The editor swapped to the freshly served file (header + footer both
+    // carry the name — check the header).
+    await waitFor(() =>
+      expect(within(editor).getByTestId("editor-header").textContent).toContain("other.profiles"),
+    );
   });
 });

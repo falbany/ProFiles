@@ -104,6 +104,13 @@ export default function App() {
   // "Config" button. The old OS-launch behavior moved into the editor's
   // header ("Open in OS").
   const [showConfigEditor, setShowConfigEditor] = useState<boolean>(false);
+  /**
+   * Bumped when the config picker loads a different .profiles file (issue
+   * #101): an editor left open underneath re-runs its load-on-open fetch
+   * so it swaps to the freshly picked content. Apply/Save do NOT bump it —
+   * they already drive the editor through onApplied.
+   */
+  const [editorReloadKey, setEditorReloadKey] = useState<number>(0);
   const [showPropertiesModal, setShowPropertiesModal] = useState<boolean>(false);
   // File awaiting delete confirmation (in-app dialog — window.confirm is a
   // no-op inside the desktop webviews, issue #31).
@@ -1500,7 +1507,7 @@ export default function App() {
           recursive={recursive}
           onDisableRecursive={handleDisableRecursive}
           onOpenDirectory={handleOpenActiveDirectory}
-          onOpenConfig={() => setShowConfigPicker(true)}
+          onLoadConfig={() => setShowConfigPicker(true)}
           filterText={filterText}
           onClearFilter={handleClearFilter}
           columnHeaders={config?.column_headers || []}
@@ -1557,35 +1564,45 @@ export default function App() {
         // this button used to perform now lives in the editor's header
         // ("Open in OS"); the modal's onApplied drives handleConfigLoaded,
         // the same refresh path as LoadConfigModal and the drag/drop trial.
+        // Config LOADING no longer lives here (issue #101): the editor's
+        // "Load config file…" raises the picker from inside the editor.
         onOpenConfig={() => setShowConfigEditor(true)}
-        onLoadConfig={() => setShowConfigPicker(true)}
         onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
         onExport={handleExport}
         exportDisabled={files.length === 0 || scanning}
         language={language}
         onLanguageChange={setLanguage}
-        activeConfigName={config?.config_path ? config.config_path.split(/[\\/]/).pop() || config.config_path : undefined}
         lanEnabled={systemInfo?.lan_enabled ?? null}
         onToggleLan={toggleLan}
       />
       </div>
 
-      {/* Config Picker Modal */}
+      {/* YAML Configuration Editor (issue #95): Apply/Save/Save As hand the
+          fresh AppConfigData to the shared handleConfigLoaded refresh path.
+          Rendered BEFORE the picker so the picker — raised from inside the
+          editor via onLoadConfig (issue #101) — paints on top (same z-scale
+          token; DOM order decides). */}
+      <ConfigEditorModal
+        open={showConfigEditor}
+        onClose={() => setShowConfigEditor(false)}
+        onApplied={handleConfigLoaded}
+        onLoadConfig={() => setShowConfigPicker(true)}
+        reloadKey={editorReloadKey}
+      />
+
+      {/* Config Picker Modal. onLoaded ALSO bumps the editor's reload key
+          so an editor left open underneath re-fetches the freshly picked
+          file instead of keeping stale text (issue #101). */}
       <LoadConfigModal
         isOpen={showConfigPicker}
         activeConfigPath={config?.config_path}
         configExists={config?.config_exists}
         onClose={() => setShowConfigPicker(false)}
-        onLoaded={handleConfigLoaded}
-      />
-
-      {/* YAML Configuration Editor (issue #95): Apply/Save/Save As hand the
-          fresh AppConfigData to the shared handleConfigLoaded refresh path. */}
-      <ConfigEditorModal
-        open={showConfigEditor}
-        onClose={() => setShowConfigEditor(false)}
-        onApplied={handleConfigLoaded}
+        onLoaded={(cfg) => {
+          void handleConfigLoaded(cfg);
+          setEditorReloadKey((key) => key + 1);
+        }}
       />
 
       {/* Dropped configuration files (session-only trial) */}
