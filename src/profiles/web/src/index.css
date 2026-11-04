@@ -58,6 +58,14 @@
   --app-glass-panel-strong: rgb(2 6 23 / 0.88);
   --app-glass-highlight: rgb(255 255 255 / 0.09);
   --app-panel-shadow: 0 24px 60px -12px rgb(2 6 23 / 0.55);
+  /* Editor surface tokens (issue #98): a solid VSCode-style canvas for the
+     YAML editor, visibly distinct from the frosted modal glass. Dark values
+     track VSCode Dark Modern; selection is the app's indigo at low alpha. */
+  --app-editor-bg: #1e1e1e; /* vscode dark editor.background */
+  --app-editor-gutter-bg: #181818; /* slightly darker than the canvas */
+  --app-editor-active-line: #282828; /* vscode dark editor.lineHighlightBackground */
+  --app-editor-selection: rgb(99 102 241 / 0.3); /* indigo-500 @ 30% */
+  --app-editor-border: #34343e; /* hairline edge between canvas, gutter and card */
   color-scheme: dark;
 }
 
@@ -135,6 +143,12 @@
   --app-glass-panel-strong: rgb(248 250 252 / 0.92);
   --app-glass-highlight: rgb(255 255 255 / 0.9);
   --app-panel-shadow: 0 24px 60px -18px rgb(15 23 42 / 0.28);
+  /* Editor surface tokens (issue #98) — light counterparts. */
+  --app-editor-bg: #ffffff;
+  --app-editor-gutter-bg: #f8fafc; /* slate-50 — slightly off the white canvas */
+  --app-editor-active-line: #f1f5f9; /* slate-100 */
+  --app-editor-selection: rgb(99 102 241 / 0.16); /* indigo-500 @ 16% */
+  --app-editor-border: #e2e8f0; /* slate-200 */
   color-scheme: light;
 }
 

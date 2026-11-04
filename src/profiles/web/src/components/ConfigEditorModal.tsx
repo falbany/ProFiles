@@ -66,15 +66,18 @@ type SaveAsPrompt = { resolve: (target: SaveAsTarget | null) => void };
 
 /**
  * Editor theme built from the app's `data-theme` CSS tokens (index.css
- * `--app-*` variables). Only `var()` references are used — the editor
- * follows the light/dark switch automatically, like every other surface.
+ * `--app-editor-*` surface tokens, issue #98). A solid VSCode-style canvas:
+ * opaque editor background and gutter (no transparency over the frosted
+ * modal), token-backed active line, selection, bracket match and panel
+ * colors. Only `var()` references are used — the editor follows the
+ * light/dark switch automatically, like every other surface.
  */
 const configEditorTheme = EditorView.theme({
   "&": {
     height: "100%",
     fontSize: "12.5px",
     color: "var(--app-text-primary)",
-    backgroundColor: "transparent",
+    backgroundColor: "var(--app-editor-bg)",
   },
   ".cm-scroller": {
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
@@ -84,21 +87,30 @@ const configEditorTheme = EditorView.theme({
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--color-indigo-500, #6366f1)" },
   "&.cm-focused": { outline: "none" },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "var(--app-hover)",
+    backgroundColor: "var(--app-editor-selection)",
   },
-  ".cm-activeLine": { backgroundColor: "var(--app-elevated)" },
+  ".cm-activeLine": { backgroundColor: "var(--app-editor-active-line)" },
+  ".cm-matchingBracket": {
+    color: "inherit",
+    backgroundColor: "var(--app-editor-selection)",
+    outline: "1px solid var(--app-editor-border)",
+  },
+  ".cm-nonmatchingBracket": {
+    color: "inherit",
+    outline: "1px solid var(--status-danger-border, #fb7185)",
+  },
   ".cm-gutters": {
-    backgroundColor: "transparent",
+    backgroundColor: "var(--app-editor-gutter-bg)",
     color: "var(--app-text-faint)",
     border: "none",
-    borderRight: "1px solid var(--app-border)",
+    borderRight: "1px solid var(--app-editor-border)",
   },
   ".cm-activeLineGutter": {
-    backgroundColor: "var(--app-elevated)",
+    backgroundColor: "var(--app-editor-active-line)",
     color: "var(--app-text-secondary)",
   },
   ".cm-panels": {
-    backgroundColor: "var(--app-glass-panel-strong)",
+    backgroundColor: "var(--app-editor-bg)",
     color: "var(--app-text-primary)",
   },
   ".cm-tooltip": {
@@ -809,21 +821,29 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
             </div>
           )}
 
-          {/* Editor body */}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {load.status === "loading" ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-              </div>
-            ) : load.status === "error" ? (
-              <div className="flex h-full items-center justify-center p-6">
-                <div className="max-w-md rounded-md border border-status-danger-border bg-status-danger-bg p-4 text-center text-xs text-status-danger-text">
-                  {load.message}
+          {/* Editor body — padded, then the bordered card that visually
+              separates the solid editor canvas from the modal chrome
+              (issue #99). Every state renders inside the card so layout
+              does not jump between load, error and ready. */}
+          <div className="min-h-0 flex-1 p-3 sm:p-4">
+            <div
+              data-testid="editor-card"
+              className="h-full overflow-hidden rounded-lg border border-[var(--app-editor-border)] bg-[var(--app-editor-bg)]"
+            >
+              {load.status === "loading" ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
                 </div>
-              </div>
-            ) : (
-              <div ref={editorHostRef} className="h-full" />
-            )}
+              ) : load.status === "error" ? (
+                <div className="flex h-full items-center justify-center p-6">
+                  <div className="max-w-md rounded-md border border-status-danger-border bg-status-danger-bg p-4 text-center text-xs text-status-danger-text">
+                    {load.message}
+                  </div>
+                </div>
+              ) : (
+                <div ref={editorHostRef} className="h-full" />
+              )}
+            </div>
           </div>
         </div>
       </div>
