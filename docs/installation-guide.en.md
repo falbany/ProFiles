@@ -162,7 +162,6 @@ python -m profiles --help
 ### Main Dependencies
 
 - `pywebview` + `fastapi`/`uvicorn` — web GUI backend (default)
-- `sv-ttk`, `darkdetect` — **dev-only** since 2026.8, for the deprecated Tkinter backend
 
 These are declared in `pyproject.toml` and installed automatically with `pip install .`.
 
@@ -266,12 +265,6 @@ python -m profiles --server-only
 
 Runs the FastAPI server without the desktop window — open `http://<host>:8088` from any browser.
 
-### Legacy Tkinter Mode (deprecated)
-
-```bash
-python -m profiles --tkinter
-```
-
 ### Headless Mode (CLI)
 
 ```bash
@@ -289,22 +282,6 @@ python -m profiles --config /path/to/.profiles
 ```bash
 python -m profiles --init
 ```
-
----
-
-## Tkinter Backend (Deprecated)
-
-The original Tkinter frontend is **deprecated** (developer/advanced use
-only) and will be removed in a future release. The web backend
-(pywebview + FastAPI, the default) replaces it.
-
-```bash
-profiles --tkinter   # prints a deprecation banner, then launches Tk GUI
-```
-
-Tk-mode dependencies (`sv-ttk`, `darkdetect`) are dev-only: install with
-`pip install -e ".[dev]"` or `uv sync`. Inside Briefcase bundles the
-Tkinter backend is not available — use the default web GUI.
 
 ---
 
@@ -406,7 +383,7 @@ See [AGENTS.md](../AGENTS.md) for architecture details.
 
 ### Issue: Wizard fails to install dependencies
 
-**Symptoms**: Installation stops with an error about `sv-ttk` or `darkdetect` (legacy Tkinter backend dependencies).
+**Symptoms**: Installation stops with a dependency installation error.
 
 **Diagnosis**:
 - Network connectivity issues
@@ -419,13 +396,13 @@ See [AGENTS.md](../AGENTS.md) for architecture details.
 pip cache purge
 
 # Install dependencies directly
-pip install sv-ttk darkdetect
+pip install -e .
 
 # Run installer again
 python install.py
 
 # Or install with verbose output
-pip install -v sv-ttk darkdetect
+pip install -v -e .
 ```
 
 ### Issue: `profiles` command not found
@@ -488,11 +465,10 @@ sudo pip install -e .
 
 ### Issue: GUI not displaying
 
-**Symptoms**: Application starts but no window appears, or a Tkinter/PyWebView error.
+**Symptoms**: Application starts but no window appears, or a PyWebView error.
 
 **Diagnosis**:
-- The default **web** backend needs PyWebView plus an installed web runtime (Edge WebView2 on Windows) — not Tkinter
-- Tkinter errors only affect the deprecated `--tkinter` backend (common on minimal Linux installs)
+- The **web** backend needs PyWebView plus an installed web runtime (Edge WebView2 on Windows)
 - Display environment not set (Linux remote sessions)
 - X11 forwarding not enabled
 
@@ -500,26 +476,19 @@ sudo pip install -e .
 
 **Windows**: PyWebView uses the Edge WebView2 runtime, bundled with Windows 10/11. Reinstall Python/WebView2 if needed.
 
-**Linux** (only when using `--tkinter`, or headless WebView dependencies for PyWebView):
+**Linux** (PyWebView/WebKit dependencies):
 ```bash
 # Ubuntu/Debian
-sudo apt-get install python3-tk        # legacy Tkinter backend
 sudo apt-get install libwebkit2gtk-4.1-dev   # PyWebView shell
-
-# RHEL/CentOS
-sudo dnf install python3-tkinter
-
-# Arch Linux
-sudo pacman -S python-tkinter
 ```
+
+See the [pywebview installation guide](https://pywebview.readthedocs.io/guide/installation.html) for other distributions.
 
 **Remote SSH**: Prefer `ProFiles --server-only` and a browser on your machine instead of X11 forwarding:
 ```bash
 ssh user@host
 ProFiles --server-only   # then open http://<host>:8088 locally
 ```
-
-**Legacy Tkinter backend**: install python3-tk as shown above, or run `python -m tkinter` to verify Tkinter works.
 
 ### Issue: Configuration file not found
 
@@ -692,14 +661,11 @@ options:
   --config CONFIG  Path to .profiles configuration file (default: auto-search folder tree)
   --headless       Run in headless mode (no GUI)
   --server-only    Run local FastAPI server only (no desktop window, for browser/PWA use)
-  --tkinter        Use Tkinter GUI backend (legacy, deprecated; default is web)
-  --web            Use web GUI backend (default)
   --init           Generate a default .profiles configuration file in the current directory
 
 Examples:
   profiles                              Launch web UI (default; auto-search config)
   profiles --server-only                Run FastAPI server only (browser/PWA access)
-  profiles --tkinter                    Legacy Tkinter interface (deprecated)
   profiles --config /path/to/.profiles  Use explicit config file
   profiles --headless                   Headless: scan & launch all
   profiles --headless file.mttl         Headless: launch specific file
@@ -736,7 +702,6 @@ Examples:
 - **Python**: 3.11+
 - **Web UI (default)**: React + TypeScript + Vite PWA, served by FastAPI (port 8088), desktop shell via PyWebView
 - **Node.js/npm**: Optional — only needed to rebuild the frontend (`python -m profiles.web.build --force`)
-- **Tkinter (deprecated)**: Only required for the legacy `--tkinter` backend (`sv-ttk`, `darkdetect` auto-install with it)
 - **License**: See `LICENCE` file
 
 ---
@@ -775,7 +740,6 @@ profiles/
 │       ├── server/         # FastAPI backend (REST API)
 │       ├── web/            # React + TypeScript + Vite PWA frontend
 │       ├── desktop/        # PyWebView desktop shell & server lifecycle
-│       ├── gui/            # Legacy Tkinter interface (deprecated)
 │       ├── utils/          # Utility functions
 │       ├── app.py          # Application lifecycle
 │       └── config.py       # Configuration

@@ -36,7 +36,6 @@
 - [💻 Usage](#-usage)
   - [Web Mode (default)](#web-mode-default)
   - [Browser / PWA Mode (shared servers)](#browser--pwa-mode-shared-servers)
-  - [Legacy Tkinter Mode (deprecated)](#legacy-tkinter-mode-deprecated)
   - [CLI / Headless Mode (work in progress)](#cli--headless-mode-work-in-progress)
 - [🛠 Configuration](#-configuration)
 - [🏗 Architecture](#-architecture)
@@ -201,14 +200,6 @@ ProFiles --server-only
 
 Runs the FastAPI server **without** the desktop window. Point any browser on the network at `http://<host>:8088` (default port). See the [Network Server Guide](./docs/network-server-guide.en.md) for firewall, hostname and multi-client setup.
 
-### Legacy Tkinter Mode (deprecated)
-
-```bash
-ProFiles --tkinter
-```
-
-The original Tkinter desktop interface is kept for compatibility only and is **deprecated** — new features land exclusively on the web frontend.
-
 ### CLI / Headless Mode (work in progress)
 
 ```bash
@@ -333,9 +324,8 @@ ProFiles/
 │   ├── web/               # React + TypeScript + Vite PWA frontend (src/, dist/, build.py)
 │   ├── desktop/           # PyWebView desktop shell & background server lifecycle
 │   ├── launch/            # Launch-time resolution: *.profiles handoff & config selection
-│   ├── gui/               # Legacy Tkinter presentation layer (deprecated)
 │   ├── utils/             # Stateless helpers (file ops, network, search parser, shortcut)
-│   ├── app.py             # Application lifecycle (web desktop, server-only, Tk, headless)
+│   ├── app.py             # Application lifecycle (web desktop, server-only, headless)
 │   └── config.py          # Convenience re-exports for config API
 ├── docs/                  # User documentation (EN/FR)
 └── tests/                 # Pytest suite

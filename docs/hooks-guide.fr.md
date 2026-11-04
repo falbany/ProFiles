@@ -107,7 +107,6 @@ Affiche un message à l'utilisateur avec support du Markdown.
 
 - **Mode web (par défaut)** : La notification s'affiche dans une modale de workflow du frontend web (la fenêtre de bureau / le navigateur attend la confirmation utilisateur pour les étapes bloquantes)
 - **Mode headless** : Imprime le message formaté sur la sortie standard
-- **Backend Tkinter historique** : Affiche une fenêtre Tkinter avec le texte formaté
 - **Toujours réussi** : Ne peut pas échouer, donc `on_failure` est ignoré
 - **Support Markdown** : Markdown GitHub-flavored (voir [Notifications Riches](#notifications-riches-markdown))
 
@@ -424,10 +423,6 @@ se comportent identiquement.
   leur contenu sans les lignes de marqueurs ``` ; les autres structures de
   bloc (listes, tableaux, citations) restent en lignes littérales
 - Voir `render_text()` dans `src/profiles/core/environment/render.py`
-
-**Backend Tkinter historique** : rend le sous-ensemble historique uniquement
-(titres `#`/`##`/`###`, gras, italique, code en ligne, `\\n`) ; les
-constructions plus riches dégradent en texte plat.
 
 ---
 
@@ -946,13 +941,11 @@ outcome = run_workflow(
 
 - En mode web : La notification s'ouvre dans une modale de workflow du frontend (vérifiez la fenêtre de bureau / l'onglet navigateur)
 - En mode headless : Le message est imprimé sur la sortie standard
-- Backend Tkinter sans Tkinter : fallback automatique vers headless
 
 **Solutions** :
 
 1. En mode web, regardez la modale de workflow dans le frontend (elle attend peut-être votre confirmation)
 2. En mode headless, vérifiez la console pour les messages
-3. Avec `--tkinter`, vérifiez que Tkinter est installé (`python -m tkinter`)
 
 ### Problème : Timeout Fréquent
 

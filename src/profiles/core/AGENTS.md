@@ -7,8 +7,8 @@ Read this before editing any file in `src/profiles/core/`.
 
 ## 🎯 What lives here
 
-The `core/` package contains **all domain logic** — zero GUI / Tkinter
-dependencies, pure stdlib, reusable by GUI, CLI, and any future TUI.
+The `core/` package contains **all domain logic** — zero UI dependencies,
+pure stdlib, reusable by the web frontend, CLI, and any future TUI.
 
 The package is split into SOLID-aligned sub-packages so that each one
 owns a single responsibility:
@@ -54,8 +54,8 @@ owns a single responsibility:
 
 | Rule | Reason |
 | --- | --- |
-| **NO Tkinter imports** | Core must stay reusable from CLI / TUI |
-| **NO imports from `profiles.gui.*`** | Breaks the layered architecture |
+| **NO UI imports** (Tkinter, web, desktop) at module level | Core must stay reusable from CLI / TUI |
+| **NO imports from the presentation layers** (`profiles.web/server/desktop`) | Breaks the layered architecture |
 | **Pure functions where possible** | Testability, referential transparency |
 | **Return typed structures** — never `None` for collections | Callers can iterate without `if x is not None` |
 | **Type hints on every public signature** | Project standard (`py.typed` shipped) |

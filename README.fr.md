@@ -37,7 +37,6 @@
 - [💻 Utilisation](#-utilisation)
   - [Mode Web (par défaut)](#mode-web-par-défaut)
   - [Mode Navigateur / PWA (serveurs partagés)](#mode-navigateur--pwa-serveurs-partagés)
-  - [Mode Tkinter historique (déprécié)](#mode-tkinter-historique-déprécié)
   - [Mode CLI / Headless (en cours de développement)](#mode-cli--headless-en-cours-de-développement)
 - [🛠 Configuration](#-configuration)
 - [🏗 Architecture](#-architecture)
@@ -202,14 +201,6 @@ ProFiles --server-only
 
 Lance le serveur FastAPI **sans** la fenêtre de bureau. Pointez n'importe quel navigateur du réseau vers `http://<hôte>:8088` (port par défaut). Voir le [Guide Serveur Réseau](./docs/network-server-guide.fr.md) pour la configuration firewall, hostname et multi-clients.
 
-### Mode Tkinter historique (déprécié)
-
-```bash
-ProFiles --tkinter
-```
-
-L'interface de bureau Tkinter d'origine est conservée pour compatibilité uniquement et est **dépréciée** — les nouvelles fonctionnalités arrivent exclusivement sur le frontend web.
-
 ### Mode CLI / Headless (en cours de développement)
 
 ```bash
@@ -334,9 +325,8 @@ ProFiles/
 │   ├── web/               # Frontend PWA React + TypeScript + Vite (src/, dist/, build.py)
 │   ├── desktop/           # Shell de bureau PyWebView & cycle de vie du serveur en fond
 │   ├── launch/            # Résolution au lancement : handoff *.profiles & sélection de config
-│   ├── gui/               # Couche de présentation Tkinter historique (dépréciée)
 │   ├── utils/             # Helpers stateless (file ops, network, search parser, shortcut)
-│   ├── app.py             # Cycle de vie applicatif (web desktop, server-only, Tk, headless)
+│   ├── app.py             # Cycle de vie applicatif (web desktop, server-only, headless)
 │   └── config.py          # Ré-exports pratiques pour l'API de configuration
 ├── docs/                  # Documentation utilisateur (EN/FR)
 └── tests/                 # Suite Pytest
