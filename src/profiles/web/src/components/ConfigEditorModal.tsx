@@ -33,6 +33,7 @@ import {
   saveConfigFileAs,
   validateConfigContent,
 } from "../api/client";
+import type { ConfigSaveResult } from "../api/client";
 import type { AppConfigData, ConfigContentData, ValidationIssue } from "../api/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SaveAsDialog } from "./SaveAsDialog";
@@ -99,6 +100,14 @@ type SaveGate = { issues: ValidationIssue[]; resolve: (force: boolean) => void }
 
 /** Save As dialog parked on an in-flight save-as action. */
 type SaveAsPrompt = { resolve: (target: SaveAsTarget | null) => void };
+
+/**
+ * Conflict dialog parked on an in-flight save action (issue #116): the
+ * server answered 409 — the file changed on disk since it was loaded —
+ * and the user must choose between adopting the disk version (resolve(false))
+ * or overwriting it with the editor's text (resolve(true)).
+ */
+type StaleGate = { resolve: (overwrite: boolean) => void };
 
 /**
  * Editor theme built from the app's `data-theme` CSS tokens (index.css
@@ -228,7 +237,11 @@ function describeSaveError(err: unknown): { text: string; issues: ValidationIssu
  * the "Load config file…" entry point that raises the config picker above
  * this modal. Save and Save As run the compliance gate first: the text is
  * validated client-side, and issues block the write behind a "Go back and
- * fix / Force save anyway" prompt. Feedback lives in the footer status bar
+ * fix / Force save anyway" prompt. Save also carries the staleness
+ * baseline (issue #116): a 409 — the file changed on disk since it was
+ * loaded, e.g. via "Open in OS" — parks a "Reload disk version /
+ * Overwrite anyway" conflict dialog before anything is written.
+ * Feedback lives in the footer status bar
  * (validity chip, unsaved dot, action outcome, cursor position) with the
  * collapsible right-hand Problems panel listing validation issues (#105).
  */
@@ -258,12 +271,20 @@ export function ConfigEditorModal({
   const [gate, setGate] = useState<SaveGate | null>(null);
   /** Save As dialog parked on an in-flight save-as action. */
   const [saveAsPrompt, setSaveAsPrompt] = useState<SaveAsPrompt | null>(null);
+  /** Conflict dialog parked on an in-flight save action (issue #116). */
+  const [staleGate, setStaleGate] = useState<StaleGate | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const editorHostRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   /** Text the editor was seeded with — the baseline for the dirty check. */
   const loadedTextRef = useRef<string>("");
+  /**
+   * Hash of the disk text the editor loaded (issue #116) — sent as the
+   * save's baseline so an external edit between load and Save is refused
+   * with 409 instead of clobbered. Refreshed on every load/revert/save.
+   */
+  const baselineHashRef = useRef<string | null>(null);
   /**
    * Monotonic id of the most recent toolbar-action dispatch. Each dispatch
    * tags its round trip with the id current at dispatch time; a resolution
@@ -292,7 +313,7 @@ export function ConfigEditorModal({
   const runValidationRef = useRef<() => void>(() => {});
   /** Latest ref for the scheduling helper itself (see updateListener). */
   const scheduleValidationRef = useRef<(text: string) => void>(() => {});
-  parkedRef.current = gate !== null || saveAsPrompt !== null;
+  parkedRef.current = gate !== null || saveAsPrompt !== null || staleGate !== null;
 
   const handleDialogKeyDown = useModalA11y({
     isOpen: open,
@@ -307,6 +328,7 @@ export function ConfigEditorModal({
   useEffect(() => {
     if (!open) {
       loadedTextRef.current = "";
+      baselineHashRef.current = null;
       editorViewRef.current = null;
       setLoad({ status: "loading" });
       setDirty(false);
@@ -319,6 +341,7 @@ export function ConfigEditorModal({
       setPendingAction(null);
       setGate(null);
       setSaveAsPrompt(null);
+      setStaleGate(null);
       // Drop any pending live-validation cycle (issue #100): a stale timer
       // must not fire into a closed session.
       if (validationTimerRef.current !== null) {
@@ -338,6 +361,7 @@ export function ConfigEditorModal({
         if (cancelled) return;
         const content = toEditorText(data.content);
         loadedTextRef.current = content;
+        baselineHashRef.current = data.content_hash ?? null;
         lastValidatedTextRef.current = content;
         setLoad({ status: "ready", data: { ...data, content } });
       })
@@ -502,6 +526,9 @@ export function ConfigEditorModal({
           if (seq !== actionSeqRef.current) return; // superseded — drop stale results
           const content = toEditorText(template.content);
           loadedTextRef.current = content;
+          // A template is not anchored to disk yet — Save stays hidden and
+          // there is no baseline to defend until the first Save As lands.
+          baselineHashRef.current = null;
           setDirty(false);
           setLoad(
             (prev): LoadState =>
@@ -532,6 +559,8 @@ export function ConfigEditorModal({
           if (seq !== actionSeqRef.current) return;
           const content = toEditorText(data.content);
           loadedTextRef.current = content;
+          // The reloaded disk text is the new staleness baseline too.
+          baselineHashRef.current = data.content_hash ?? null;
           setDirty(false);
           setLoad({ status: "ready", data: { ...data, content } });
           setStatus({ kind: "ok", text: "Configuration reloaded from disk." });
@@ -665,14 +694,36 @@ export function ConfigEditorModal({
   );
 
   /**
+   * Park the staleness conflict dialog on the in-flight save action
+   * (issue #116): resolve(true) = "Overwrite anyway" (keep the editor's
+   * text), resolve(false) = "Reload disk version" (adopt the external
+   * edits, discarding the editor's text).
+   */
+  const awaitStaleDecision = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        setStaleGate({
+          resolve: (overwrite: boolean) => {
+            setStaleGate(null);
+            resolve(overwrite);
+          },
+        });
+      }),
+    [],
+  );
+
+  /**
    * Shared success surface for Save and Save As: the saved text becomes
    * the new dirty baseline, the response's fresh AppConfigData refreshes
    * the header (a Save As re-anchors the file, re-enabling Save) and
-   * drives the same `onApplied` path as Apply.
+   * drives the same `onApplied` path as Apply. `contentHash` — the hash
+   * of what was just written — becomes the next save's staleness
+   * baseline (issue #116).
    */
   const markSaved = useCallback(
-    (data: AppConfigData, savedText: string) => {
+    (data: AppConfigData, savedText: string, contentHash: string | null) => {
       loadedTextRef.current = savedText;
+      baselineHashRef.current = contentHash;
       setDirty(false);
       setIssues([]);
       // The document just became the saved baseline — the previous
@@ -773,7 +824,7 @@ export function ConfigEditorModal({
             const target = await awaitSaveAsTarget();
             if (seq !== actionSeqRef.current) return; // superseded while parked
             if (target === null) return; // cancelled — no save call
-            const data = await saveConfigFileAs({
+            const saved = await saveConfigFileAs({
               content: text,
               filename: target.filename,
               directory: target.directory,
@@ -781,12 +832,37 @@ export function ConfigEditorModal({
               overwrite: target.overwrite,
             });
             if (seq !== actionSeqRef.current) return;
-            markSaved(data, text);
+            markSaved(saved.config, text, saved.contentHash);
             setStatus({ kind: "ok", text: `Configuration saved as ${target.filename}.` });
           } else {
-            const data = await saveConfigFile(text, force);
+            // Staleness guard (issue #116): the save carries the hash of
+            // the disk text the editor loaded; a 409 means the file
+            // changed on disk underneath the editor, and the user picks
+            // between overwriting the external edits and adopting them.
+            let saved: ConfigSaveResult;
+            try {
+              saved = await saveConfigFile(text, force, {
+                baselineHash: baselineHashRef.current,
+              });
+            } catch (err) {
+              if (!(err instanceof ApiError) || err.status !== 409) throw err;
+              const overwrite = await awaitStaleDecision();
+              if (seq !== actionSeqRef.current) return; // superseded while parked
+              if (!overwrite) {
+                // "Reload disk version": adopt the external edits, the
+                // editor's text is discarded by the revert.
+                void reloadFromServer();
+                return;
+              }
+              // "Overwrite anyway": the second request lifts the guard;
+              // a second 409 would mean the file changed AGAIN mid-decision.
+              saved = await saveConfigFile(text, force, {
+                baselineHash: baselineHashRef.current,
+                overwriteChanges: true,
+              });
+            }
             if (seq !== actionSeqRef.current) return;
-            markSaved(data, text);
+            markSaved(saved.config, text, saved.contentHash);
             setStatus({ kind: "ok", text: `Configuration saved to ${filename}.` });
           }
         } catch (err: unknown) {
@@ -794,7 +870,16 @@ export function ConfigEditorModal({
           reportSaveError(err);
         }
       }),
-    [awaitGateDecision, awaitSaveAsTarget, load, markSaved, reportSaveError, runToolbarAction],
+    [
+      awaitGateDecision,
+      awaitSaveAsTarget,
+      awaitStaleDecision,
+      load,
+      markSaved,
+      reportSaveError,
+      reloadFromServer,
+      runToolbarAction,
+    ],
   );
 
   const runSave = useCallback(
@@ -818,7 +903,13 @@ export function ConfigEditorModal({
   const modSHandlerRef = useRef<() => void>(() => {});
   modSHandlerRef.current = () => {
     if (load.status !== "ready") return;
-    if (gate !== null || saveAsPrompt !== null || confirmDiscardOpen || pendingAction !== null) {
+    if (
+      gate !== null ||
+      saveAsPrompt !== null ||
+      staleGate !== null ||
+      confirmDiscardOpen ||
+      pendingAction !== null
+    ) {
       return;
     }
     if (load.data.config_path !== null) void runSave();
@@ -1219,6 +1310,27 @@ export function ConfigEditorModal({
         cancelLabel="Go back and fix"
         onConfirm={() => gate?.resolve(true)}
         onCancel={() => gate?.resolve(false)}
+      />
+
+      {/* Staleness conflict (issue #116): the server answered 409 — the
+          file changed on disk since the editor loaded it. The user picks
+          between overwriting the external edits and adopting them. */}
+      <ConfirmDialog
+        isOpen={staleGate !== null}
+        title="File changed on disk"
+        danger
+        message={
+          "The configuration file was modified outside this editor since it " +
+          "was loaded.\n\n" +
+          "Reload disk version: discard your edits and load the file as it is " +
+          "on disk.\n" +
+          "Overwrite anyway: save your edits and replace the file's current " +
+          "content."
+        }
+        confirmLabel="Overwrite anyway"
+        cancelLabel="Reload disk version"
+        onConfirm={() => staleGate?.resolve(true)}
+        onCancel={() => staleGate?.resolve(false)}
       />
 
       {/* Target selection for Save As; overwrite is confirmed inside. */}
