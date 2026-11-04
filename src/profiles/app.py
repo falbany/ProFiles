@@ -1,7 +1,8 @@
 """ProFiles application entry point.
 
-Supports both GUI mode (interactive) and headless CLI mode (automated).
-In headless mode, files can be launched via command-line arguments.
+Supports interactive mode (web UI in a desktop shell or browser) and
+headless CLI mode (automated). In headless mode, files can be launched
+via command-line arguments.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ import logging
 import platform
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from profiles.core import AppConfig, actions, load_config
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
@@ -31,19 +31,7 @@ from profiles.launch import (
 )
 from profiles.utils.network import get_hostname, get_username
 
-if TYPE_CHECKING:
-    from profiles.gui.main_window import MainWindow
-
 _DEFAULT_PORT = 8088
-
-_TKINTER_DEPRECATION_BANNER = (
-    "⚠  The Tkinter frontend is deprecated (developer/advanced use only) and\n"
-    "   will be removed in a future release. The default web GUI replaces it."
-)
-_TKINTER_UNAVAILABLE_MSG = (
-    "ERROR: The Tkinter frontend requires a full Python installation with Tk\n"
-    "       (tkinter). Use the default web GUI instead: profiles"
-)
 
 
 def host_error(value: str) -> str | None:
@@ -94,11 +82,12 @@ class ProFileApp:
     """ProFiles application orchestrator.
 
     Supports two modes:
-    - GUI mode: Interactive file browser with launch capabilities
+    - Interactive mode: web UI in a PyWebView desktop shell (or browser-only
+      with ``--server-only``)
     - Headless mode: CLI-only for automated file launching
 
     Usage::
-        # GUI mode
+        # Interactive mode (web GUI)
         app = ProFileApp()
         app.run()
 
@@ -114,7 +103,6 @@ class ProFileApp:
         headless: bool = False,
         server_only: bool = False,
         no_config_propose: bool = False,
-        gui_backend: str = "web",
         host: str = "127.0.0.1",
     ) -> None:
         """Initialize the application.
@@ -126,7 +114,6 @@ class ProFileApp:
             headless: Run without GUI (CLI mode).
             server_only: Run only the web server without opening desktop window.
             no_config_propose: Do not offer to create a .profiles at startup.
-            gui_backend: GUI backend to use ('tk' or 'web'). Defaults to 'web'.
             host: Bind address for the web server ('0.0.0.0' serves the LAN).
         """
         self._config_path = Path(config_path) if config_path is not None else None
@@ -134,10 +121,8 @@ class ProFileApp:
         self._headless = headless
         self._server_only = server_only
         self._no_config_propose = no_config_propose
-        self._gui_backend = gui_backend.lower()
         self._host = host
         self._config: AppConfig | None = None
-        self._window: MainWindow | None = None
         self._logger: logging.Logger | None = None
 
     @staticmethod
@@ -241,8 +226,7 @@ class ProFileApp:
         The full lifecycle:
         1. Load configuration (to get verbose level)
         2. Configure logging with the specified verbosity
-        3. Create and display the main window (or run headless)
-        4. Start the Tkinter event loop
+        3. Branch to headless mode, server-only mode, or the web GUI
 
         Args:
             file: File to launch (headless mode only).
@@ -276,15 +260,10 @@ class ProFileApp:
             self._run_server_only()
             return
 
-        # Step 4: Create and run the GUI
-        # (missing-config proposal lives in gui/window_actions.py for the
-        # Tkinter GUI and in the web frontend's config modal + the
-        # /api/config/create endpoint for the web backend.)
-        self._logger.info(f"Selected GUI backend: {self._gui_backend}")
-        if self._gui_backend == "web":
-            self._run_web_gui()
-        else:
-            self._run_gui()
+        # Step 4 (continued): Launch the web GUI in the desktop shell.
+        # (Missing-config proposal lives in the web frontend's config modal
+        # and the /api/config/create endpoint.)
+        self._run_web_gui()
 
     def _run_server_only(self, port: int = _DEFAULT_PORT, host: str | None = None) -> None:
         """Run only the FastAPI background server without opening PyWebView.
@@ -429,43 +408,6 @@ class ProFileApp:
         )
         raise SystemExit(1) from exc
 
-    def _run_gui(self) -> None:
-        """Create and run the GUI.
-
-        Handles GUI creation and error cases (e.g., no display available).
-        tkinter is imported lazily so the web backend and headless mode work
-        on Python distributions without Tk (e.g., Briefcase embeddable bundles).
-
-        Exits:
-            SystemExit(1) if tkinter is unavailable or GUI initialization fails.
-        """
-        try:
-            import tkinter as tk
-
-            from profiles.gui.main_window import MainWindow
-        except ImportError:
-            print(_TKINTER_UNAVAILABLE_MSG, file=sys.stderr)
-            sys.exit(1)
-        try:
-            self._window = MainWindow(config=self._config)
-        except (RuntimeError, tk.TclError) as exc:
-            error_msg = str(exc).lower()
-            if "screen" in error_msg or "display" in error_msg:
-                events.app_gui_failed(
-                    self._logger,
-                    error="running in headless environment. Use --headless for CLI mode.",
-                )
-                print(
-                    "ERROR: No display available. Use 'profiles --headless' for CLI mode.",
-                    file=sys.stderr,
-                )
-            else:
-                events.app_gui_failed(self._logger, error=str(exc))
-                print(f"ERROR: Failed to create GUI: {exc}", file=sys.stderr)
-            sys.exit(1)
-
-        self._window.run()
-
     def run_headless(self, file_path: str | Path | None = None) -> int:
         """Run in headless/CLI mode for automated file launching.
 
@@ -601,9 +543,7 @@ def main() -> None:
     in pyproject.toml.
 
     Usage:
-        profiles                          Launch GUI with web backend (default)
-        profiles --web                    Launch GUI with web backend
-        profiles --tkinter                Launch GUI with Tkinter backend
+        profiles                          Launch the web GUI (default)
         profiles --config path/.profiles  Launch with explicit config
         profiles --headless               Headless: scan & launch all
         profiles --headless file.mttl     Launch specific file
@@ -614,9 +554,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  profiles                                  Launch GUI with web backend (default)
-  profiles --web                            Launch GUI with web backend
-  profiles --tkinter                Deprecated Tkinter GUI (developer use only)
+  profiles                                  Launch the web GUI (default)
   profiles --config /path/to/.profiles      Use explicit config file
   profiles --headless                       Headless: scan & launch all
   profiles --headless file.mttl             Headless: launch specific file
@@ -661,16 +599,6 @@ Examples:
         help="Do not offer to create a .profiles file at startup",
     )
     parser.add_argument(
-        "--tkinter",
-        action="store_true",
-        help="Use Tkinter GUI backend (deprecated; developer use only, will be removed)",
-    )
-    parser.add_argument(
-        "--web",
-        action="store_true",
-        help="Use web GUI backend (default)",
-    )
-    parser.add_argument(
         "file",
         nargs="?",
         default=None,
@@ -687,21 +615,11 @@ Examples:
         init_default_config()
         return
 
-    # Determine GUI backend from arguments
-    if args.tkinter:
-        gui_backend = "tk"
-        print(_TKINTER_DEPRECATION_BANNER)
-    elif args.web:
-        gui_backend = "web"
-    else:
-        gui_backend = "web"  # Default to web
-
     app = ProFileApp(
         config_path=args.config,
         headless=args.headless,
         server_only=args.server_only,
         no_config_propose=args.no_config_propose,
-        gui_backend=gui_backend,
         host=args.host,
     )
     app.run(file=args.file)

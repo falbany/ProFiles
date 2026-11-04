@@ -22,13 +22,14 @@ def test_tk_deps_absent_from_runtime_dependencies() -> None:
     assert "darkdetect" not in deps
 
 
-def test_tk_deps_present_in_both_dev_lists() -> None:
+def test_tk_deps_absent_from_dev_lists() -> None:
+    """The Tkinter GUI is removed (issue #50): sv-ttk/darkdetect are gone from dev lists too."""
     data = _load()
     extras_dev = " ".join(data["project"]["optional-dependencies"]["dev"]).lower()
     groups_dev = " ".join(data["dependency-groups"]["dev"]).lower()
     for where in (extras_dev, groups_dev):
-        assert "sv-ttk" in where
-        assert "darkdetect" in where
+        assert "sv-ttk" not in where
+        assert "darkdetect" not in where
 
 
 def test_dev_dependency_lists_stay_in_sync() -> None:

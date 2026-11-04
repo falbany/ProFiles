@@ -1,9 +1,6 @@
 """Tests for profiles.app — ProFileApp, main(), init_default_config.
 
 Also tests profiles.__init__ package metadata and __main__ entry point.
-
-Tkinter-backend lifecycle tests live under ``tests/gui`` (deprecated
-frontend; skipped there in preparation for removal).
 """
 
 from __future__ import annotations
@@ -16,6 +13,7 @@ import pytest
 
 import profiles
 from profiles.app import ProFileApp, init_default_config, main
+from profiles.core.config.models import AppConfig
 from profiles.core.telemetry.diagnostics import default_log_path
 from profiles.desktop.handoff import HandoffResult
 from profiles.desktop.lifecycle import ServerStartError
@@ -55,7 +53,6 @@ class TestProFileAppInit:
         assert app._log_path == default_log_path()
         assert app._headless is False
         assert app._config is None
-        assert app._window is None
         assert app._logger is None
 
     def test_custom_config_path(self, tmp_path: Path) -> None:
@@ -249,11 +246,7 @@ class TestRunHeadless:
 
 
 class TestRun:
-    """ProFileApp.run — lifecycle orchestration (web/headless branches).
-
-    The deprecated tk-backend branch is covered by
-    ``tests/gui/test_app_tk_lifecycle.py``.
-    """
+    """ProFileApp.run — lifecycle orchestration (web/headless branches)."""
 
     def test_headless_branch_calls_run_headless(self, mocker) -> None:  # type: ignore[no-untyped-def]
         mocker.patch("profiles.app.configure_logger")
@@ -266,6 +259,29 @@ class TestRun:
         with pytest.raises(SystemExit):
             app.run()
         mock_run_headless.assert_called_once()
+
+    def test_run_routes_to_web_gui(self, mocker) -> None:  # type: ignore[no-untyped-def]
+        """The web GUI is the only interactive backend — run() routes to it."""
+        mocker.patch("profiles.app.configure_logger")
+        mock_config = mocker.MagicMock()
+        mock_config.verbose = "INFO"
+        mocker.patch("profiles.app.load_config", return_value=mock_config)
+        mock_run_web_gui = mocker.patch.object(ProFileApp, "_run_web_gui")
+
+        app = ProFileApp()
+        app.run()
+
+        mock_run_web_gui.assert_called_once()
+
+    def test_launch_web_backend_calls_desktop(self, mocker) -> None:  # type: ignore[no-untyped-def]
+        """_run_web_gui opens the PyWebView desktop shell on the default port/host."""
+        mock_launch = mocker.patch("profiles.desktop.launcher.launch_desktop_window")
+
+        app = ProFileApp(headless=False)
+        app._config = AppConfig(title="Test Bench")
+        app._run_web_gui()
+
+        mock_launch.assert_called_once_with(app._config, port=8088, host="127.0.0.1")
 
     def test_web_gui_startup_failure_exits_cleanly(self, mocker, capsys) -> None:  # type: ignore[no-untyped-def]
         """An unresolvable collision exits 1 with an actionable message, no traceback.
@@ -556,7 +572,6 @@ class TestMain:
             headless=True,
             server_only=False,
             no_config_propose=False,
-            gui_backend="web",
             host="127.0.0.1",
         )
         mock_app.return_value.run.assert_called_once_with(file=None)
@@ -585,7 +600,6 @@ class TestMain:
             headless=False,
             server_only=False,
             no_config_propose=False,
-            gui_backend="web",
             host="127.0.0.1",
         )
 
