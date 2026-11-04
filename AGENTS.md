@@ -37,7 +37,7 @@ Ce document définit les standards d'architecture, les principes de conception e
 ## 📁 Structure de l'Application
 
 > **⚠️ Keep in sync with the code** : cet arbre reflète `src/profiles/` au
-> 31/10/2026. Toute création, suppression ou déplacement de module doit mettre
+> 04/11/2026. Toute création, suppression ou déplacement de module doit mettre
 > à jour cette section dans le même commit — ainsi que `tests/AGENTS.md`,
 > qui reflète l'arbre de tests 1:1. Avant d'utiliser un chemin d'import des
 > extraits ci-dessous, vérifiez-le contre `src/profiles/core/__init__.py`
@@ -96,12 +96,6 @@ src/profiles/
 │   ├── lifecycle.py          #   Cycle de vie de l'application
 │   └── instance.py, handoff.py  # Instances multiples, handoff de port
 │
-├── gui/                      # ⚠️ DÉPRÉCIÉ (Tkinter) — suppression prévue (phase 2)
-│   │                         # Ne pas y ajouter de fonctionnalités ; le
-│   │                         # front-end par défaut est web/. Tests skippés.
-│   ├── main_window.py        # Orchestration des widgets
-│   └── ui.py, styles.py, theme.py, i18n.py, controllers/, presentation/
-│
 ├── utils/                    # Fonctions utilitaires pures & stateless
 │   ├── file_utils.py         # scan_directory, launch_file, open_with_default_app
 │   ├── network.py            # hostname, IP, username
@@ -125,7 +119,7 @@ src/profiles/
 **Responsabilité** : Logique métier pure, indépendante de tout framework
 
 **Règles** :
-- ✅ Zéro dépendance vers les couches UI (React/web, desktop, Tkinter, CLI)
+- ✅ Zéro dépendance vers les couches UI (React/web, desktop, CLI)
 - ✅ Fonctions pures où c'est possible
 - ✅ Retourner des structures de données typées (jamais `None` pour les collections)
 - ✅ Documenter toutes les fonctions publiques avec des docstrings
@@ -159,10 +153,7 @@ def merge(base, override):
 ### Couche Présentation
 
 **Couche par défaut** : `profiles.web` (React PWA) + `profiles.server`
-(FastAPI) + `profiles.desktop` (shell PyWebView). Le Tkinter
-`profiles.gui` est **déprécié** (suppression prévue, phase 2) — ne pas y
-ajouter de fonctionnalités ; les extraits ci-dessous ne valent que pour la
-maintenance de la couche legacy.
+(FastAPI) + `profiles.desktop` (shell PyWebView).
 
 **Responsabilité** : Gestion exclusive des objets d'interface et de l'expérience utilisateur
 
@@ -170,7 +161,6 @@ maintenance de la couche legacy.
 - ✅ Tous les objets d'UI sont créés et gérés dans la couche présentation
 - ✅ Déléguer la logique métier à `profiles.core.*`
 - ✅ Gérer uniquement le code de liaison spécifique aux widgets/composants
-- ✅ Utiliser les widgets `ttk` pour un theming cohérent (legacy Tkinter)
 - ✅ Implémenter une gestion d'erreur robuste pour les actions utilisateur
 - ✅ Ne jamais contenir de logique métier directe
 
@@ -212,7 +202,7 @@ def on_scan_button_click(self) -> None:
 - ✅ Fonctions helpers stateless uniquement
 - ✅ Aucune connaissance du domaine applicatif
 - ✅ Aucun effet de bord (fonctions pures)
-- ✅ Agnostiques au framework (pas de Tkinter, pas de CLI libs)
+- ✅ Agnostiques au framework (aucune dépendance UI ou CLI)
 - ✅ Documenter les formats d'entrée/sortie attendus
 
 **Exemple** :
@@ -367,7 +357,7 @@ class LoggerFactory:
         ...
 
 
-# gui/main_window.py - UI only
+# couche présentation - UI only
 class MainWindow:
     """Main application window."""
 
@@ -686,8 +676,8 @@ def test_file_processor():
 
 ### Conformité Architecture
 
-- [ ] **Core layer** n'a pas d'imports UI (Tkinter, FastAPI, React)
-- [ ] **Couche présentation** (web/server/desktop, ou gui legacy) délègue la logique métier à `profiles.core.*`
+- [ ] **Core layer** n'a pas d'imports UI (FastAPI, React)
+- [ ] **Couche présentation** (web/server/desktop) délègue la logique métier à `profiles.core.*`
 - [ ] **Utils layer** est stateless et agnostique au framework
 - [ ] **Imports** suivent les boundaries des couches
 - [ ] **Aucune dépendance circulaire** entre modules
@@ -818,7 +808,7 @@ jobs:
 
 5. **Présenter les résultats** dans le format du front-end (table terminal, panel curses, etc.)
 
-6. **Zéro import d'UI** nécessaire (pas de Tkinter, pas de React)
+6. **Zéro import d'UI** nécessaire (aucun framework d'interface importé)
 
 ---
 

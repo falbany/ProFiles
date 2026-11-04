@@ -108,7 +108,6 @@ Displays a message to the user with Markdown support.
 
 - **Web mode (default)**: The notification appears as a workflow modal in the web frontend (the dialog opens in the desktop shell / browser; blocking steps wait for user confirmation in the UI)
 - **Headless mode**: Prints formatted message to standard output
-- **Legacy Tkinter backend**: Displays a Tkinter window with formatted text
 - **Always succeeds**: Cannot fail, so `on_failure` is ignored
 - **Markdown support**: GitHub-flavored Markdown (see [Rich Notifications](#rich-notifications-markdown))
 
@@ -421,10 +420,6 @@ and multi-line YAML block scalars behave the same.
   without the ``` marker lines; other block structures (lists, tables,
   quotes) stay as literal text lines
 - See `render_text()` in `src/profiles/core/environment/render.py`
-
-**Legacy Tkinter backend**: renders the historical subset only (`#`/`##`/`###`
-headings, bold, italic, inline code, `\\n`); richer constructs degrade to
-plain text.
 
 ---
 
@@ -1008,13 +1003,11 @@ outcome = run_workflow(
 
 - In web mode: The notification opens as a workflow modal in the frontend (check the desktop window / browser tab)
 - In headless mode: Message printed to standard output
-- Legacy Tkinter backend missing Tkinter: automatic fallback to headless
 
 **Solutions**:
 
 1. In web mode, look at the workflow modal in the frontend (it may be awaiting your confirmation)
 2. In headless mode, check console for messages
-3. With `--tkinter`, verify Tkinter is installed (`python -m tkinter`)
 
 ### Problem: Frequent Timeout
 

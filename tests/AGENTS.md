@@ -4,7 +4,7 @@ This file provides context and instructions for AI agents working on the ProFile
 
 ## Project Overview
 
-ProFiles is a desktop + web application: the default frontend is web (React in `src/profiles/web`, FastAPI server in `src/profiles/server`, PyWebView shell in `src/profiles/desktop`). The Tkinter GUI (`src/profiles/gui/`) is **deprecated** — its tests are skipped (see *Test File Organization*) pending removal in phase 2 of the deprecation plan.
+ProFiles is a desktop + web application: the default frontend is web (React in `src/profiles/web`, FastAPI server in `src/profiles/server`, PyWebView shell in `src/profiles/desktop`).
 
 **Key technical constraints:**
 - **Python 3.11+** with `from __future__ import annotations`
@@ -18,8 +18,7 @@ ProFiles is a desktop + web application: the default frontend is web (React in `
 1. **Comprehensive coverage** — the suite gate is 85% (`--cov-fail-under`); aim for 90%+ on every module
 2. **Mock platform‑specific calls** — always mock `os.startfile`, `subprocess.run`, `socket.socket`, etc.
 3. **Test-only dependencies** — pytest, pytest-cov, pytest-mock, plus `httpx` for server-route tests
-4. **No Tkinter mainloop** — GUI tests use widget creation but never call `mainloop()`
-5. **Reset global state** — the `profiles` logger is module‑level; tests must clean up between runs
+4. **Reset global state** — the `profiles` logger is module‑level; tests must clean up between runs
 
 ## Test File Organization
 
@@ -31,12 +30,9 @@ Test files mirror the `src/profiles/` package tree 1:1 — each source module `X
 tests/
 ├── conftest.py                               # os.startfile polyfill (root)
 ├── test_app.py                               # ← app.py
-├── test_app_backend_selection.py             # ← app.py (supplement: --tkinter/web backend routing)
 ├── test_app_host.py                          # ← app.py (supplement: --host CLI option)
 ├── test_app_launch_resolution.py             # ← app.py (supplement: launch config resolution)
 ├── test_app_log_path.py                      # ← app.py (supplement: CWD-independent log path)
-├── test_app_no_tkinter.py                    # ← app.py (supplement: web/headless run with tkinter blocked)
-├── test_app_tk_lifecycle.py                  # ← app.py (supplement: deprecated tk branch — module-skipped)
 ├── test_config.py                            # ← config.py (shim re-exports)
 ├── characterization/                         # cross-cutting golden baseline (see exceptions)
 ├── core/
@@ -82,19 +78,6 @@ tests/
 │   ├── test_lifecycle.py                     # ← desktop/lifecycle.py
 │   ├── test_launcher.py                      # ← desktop/launcher.py
 │   └── test_instance.py                      # ← desktop/instance.py
-├── gui/                                      # DEPRECATED — conftest.py skip-marks everything here
-│   ├── conftest.py                           # skip mark: tkinter deprecation
-│   ├── test_context_menu.py                  # ← gui/context_menu.py
-│   ├── test_i18n.py                          # ← gui/i18n.py
-│   ├── test_main_window.py                   # ← gui/main_window.py
-│   ├── test_main_window_shortcuts.py         # ← gui/main_window.py (supplement: shortcuts dialog)
-│   ├── test_search_bar.py                    # ← gui/search_bar.py
-│   ├── test_status_bar.py                    # ← gui/status_bar.py
-│   ├── test_styles.py                        # ← gui/styles.py
-│   ├── test_theme.py                         # ← gui/theme.py
-│   ├── test_ui.py                            # ← gui/ui.py
-│   ├── controllers/                          # ← gui/controllers/{directory_manager,scan_controller,window_actions}.py
-│   └── presentation/test_row_colors.py       # ← gui/presentation/row_colors.py
 ├── launch/
 │   ├── test_context.py                       # ← launch/context.py
 │   ├── test_creation.py                      # ← launch/creation.py
@@ -139,8 +122,6 @@ tests/
 **Known coverage gaps (mirrored test file does not exist yet):**
 `core/telemetry/log_viewer.py`, `server/state.py` — `server/state.py` is partially exercised through `tests/server/test_app.py`.
 
-**Deprecated Tkinter isolation:** everything under `tests/gui/` is skip-marked by `tests/gui/conftest.py` with a deprecation reason, and `tests/test_app_tk_lifecycle.py` carries the same module-level skip. These files are deleted together with `src/profiles/gui` in phase 2.
-
 ## Writing Tests
 
 ### Style Guide
@@ -173,12 +154,10 @@ class TestFeature:
 | `platform.node()`        | `mocker.patch("platform.node", return_value="...")`   |
 | `getpass.getuser()`      | `mocker.patch("getpass.getuser", return_value="...")` |
 | `logging.handlers`       | Use `tmp_path` for log file, verify file contents     |
-| `tkinter.Tk()`           | Create in fixture, destroy after (only in `tests/gui`) |
 
 ### Common Pitfalls
 
 - **Logger state leakage**: The `profiles` logger is global. Always reset handlers between tests using `logging.getLogger("profiles").handlers.clear()`.
-- **Tkinter tests are skipped**: `tests/gui/**` and `tests/test_app_tk_lifecycle.py` are skip-marked (deprecated frontend). Do not un-skip them; they are removed in phase 2.
 - **Python 3.13 logger reentrancy**: records logged through `Logger.handle` from inside a handler callback are silently dropped (thread-local guard). In-handler telemetry must go through `profiles.core.telemetry.diagnostics.emit_event_through_handlers`.
 - **pytest-qt excepthook capture**: pytest-qt (if installed) fails any test routing an exception through `sys.excepthook`. Tests that deliberately exercise the crash hook carry the `qt_no_exception_capture` marker (registered in `pyproject.toml`).
 - **Platform‑specific paths**: Use `os.sep` or `pathlib.Path` for cross-platform path handling.
@@ -204,7 +183,7 @@ markers = [
 ]
 ```
 
-`.coveragerc` sets `branch = True`, omits `tests/`, `__main__.py` and the deprecated `profiles/gui/` package, and enforces `fail_under = 85`.
+`.coveragerc` sets `branch = True`, omits `tests/` and `__main__.py`, and enforces `fail_under = 85`.
 
 This makes `pytest` discover tests in the `tests/` directory and add both the repo root and `src/` to `sys.path` so imports like `from profiles.config import ...` work without installation.
 
@@ -220,5 +199,4 @@ This makes `pytest` discover tests in the `tests/` directory and add both the re
 ## Conftest Notes
 
 - Root `tests/conftest.py` polyfills `os.startfile` on non-Windows (needed by launch tests across all subdirs) and provides the `sample_config_path` / `empty_config_path` fixtures.
-- `tests/gui/conftest.py` applies the Tkinter-deprecation skip to everything collected under `tests/gui/`.
 - `tests/characterization/` manages its own `fixtures.py` module and golden JSON; it manipulates `sys.path` locally, so avoid importing from it elsewhere.

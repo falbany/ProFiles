@@ -137,9 +137,7 @@ python -m profiles --init
 | Command                                | Description                                    |
 | -------------------------------------- | ---------------------------------------------- |
 | `python -m profiles`                   | Launch the web UI in a PyWebView desktop shell (default) |
-| `python -m profiles --web`             | Same as above (explicit)                       |
 | `python -m profiles --server-only`     | Run the FastAPI server only (browser/PWA use)  |
-| `python -m profiles --tkinter`         | Legacy Tkinter interface (deprecated)          |
 | `python -m profiles --headless`        | Run in CLI mode                                |
 | `python -m profiles --headless FILE`   | Launch specific file (no GUI)                  |
 | `python -m profiles --init`            | Generate configuration file                    |
@@ -158,9 +156,8 @@ ProFiles/
 │   ├── web/                # React + TypeScript + Vite PWA frontend (src/, dist/, build.py)
 │   ├── desktop/            # PyWebView desktop shell & background server lifecycle
 │   ├── launch/             # Launch-time resolution: *.profiles handoff & config selection
-│   ├── gui/                # Legacy Tkinter presentation layer (deprecated)
 │   ├── utils/              # Stateless utility functions
-│   ├── app.py              # Application lifecycle (web desktop, server-only, Tk, headless)
+│   ├── app.py              # Application lifecycle (web desktop, server-only, headless)
 │   └── config.py           # Convenience re-exports for config API
 ├── tests/                  # Unit tests
 ├── docs/                   # This documentation
@@ -200,9 +197,8 @@ For additional support:
 
 - **Python**: 3.11+
 - **Interface**: Web UI (React + TypeScript + Vite PWA) served by FastAPI, desktop shell via PyWebView
-- **Legacy GUI (deprecated)**: Tkinter + [Sun Valley ttk theme](https://github.com/rbdende/Sun-Valley-ttk-theme) (`sv-ttk`) + `darkdetect` — use `--tkinter`, kept for compatibility only
 - **License**: See `LICENCE` file
 
 ---
 
-*Last updated: 2026-10-23*
+*Last updated: 2026-11-04*

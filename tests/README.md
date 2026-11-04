@@ -24,7 +24,7 @@ pytest -v
 
 # Run a specific test file (mirrored paths)
 pytest tests/core/config/test_loader.py -v
-pytest tests/gui/test_main_window.py -v
+pytest tests/desktop/test_launcher.py -v
 pytest tests/utils/test_search_parser.py -v
 
 # Run a specific test class
@@ -32,7 +32,7 @@ pytest tests/core/config/test_loader.py::TestLoadConfig -v
 
 # Run all tests for a source sub-package
 pytest tests/core/config/ -v
-pytest tests/gui/ -v
+pytest tests/desktop/ -v
 pytest tests/utils/ -v
 ```
 
@@ -49,24 +49,23 @@ pytest --cov=profiles --cov-report=html
 pytest --cov=profiles.config -v
 ```
 
-Coverage target: **85%** enforced by `--cov-fail-under` (aim for 90%+ per module); the deprecated `profiles/gui/` package is omitted (see `.coveragerc`).
+Coverage target: **85%** enforced by `--cov-fail-under` (aim for 90%+ per module).
 
 ## Test File Structure
 Test files mirror the `src/profiles/` tree 1:1 — each source module has a matching `test_<module>.py` at the mirrored path, and supplementary files for the same module are named `test_<module>_<topic>.py`. Every test directory is a package (`__init__.py`), mirroring `src/profiles`.
 
-The authoritative layout — full tree, supplements, documented cross-cutting exceptions (`tests/characterization/`, `tests/packaging/`, `tests/server/test_barcode_integration.py`, `test_public_api.py`), known coverage gaps, and the deprecated-Tkinter skip — is maintained in **[AGENTS.md](AGENTS.md) → Test File Organization**.
+The authoritative layout — full tree, supplements, documented cross-cutting exceptions (`tests/characterization/`, `tests/packaging/`, `tests/server/test_barcode_integration.py`, `test_public_api.py`) and known coverage gaps — is maintained in **[AGENTS.md](AGENTS.md) → Test File Organization**.
 
 Highlights:
 
 | File | Source Module | Focus Areas |
 |---|---|---|
 | tests/test_app.py | profiles.app | ProFileApp, main(), init_default_config |
-| tests/test_app_*.py | profiles.app | supplements: backend selection, --host option, launch resolution, log path, no-tkinter run, deprecated tk lifecycle |
+| tests/test_app_*.py | profiles.app | supplements: --host option, launch resolution, log path |
 | tests/test_config.py | profiles.config | shim re-exports (ColumnConfiguration, …) |
 | tests/core/… | profiles.core.* | actions, config (models/reader/schema/service/loader/matcher/validator/template/inheritance/yaml_io), environment (system/execution/matcher/render/interactions/message_dialog/workflow), processing (scanner/file_classifier/file_metadata/column_extractor), telemetry (diagnostics/events/metrics) |
 | tests/desktop/test_lifecycle.py | profiles.desktop.lifecycle | port discovery, background server lifecycle |
 | tests/desktop/test_launcher.py | profiles.desktop.launcher | connectable window URL rule, URL banner, window-bound lifecycle |
-| tests/gui/** | profiles.gui.* | **skipped** — deprecated Tkinter frontend (see `tests/gui/conftest.py`) |
 | tests/launch/test_{context,creation,resolution}.py | profiles.launch.* | launch context detection, shortcut creation, resolution |
 | tests/packaging/ | (cross-cutting) | entry-point stub, packaging dependency rules, ProFiles.pyw stub |
 | tests/server/test_app.py | profiles.server.app | FastAPI factory, client connection telemetry |
@@ -125,7 +124,7 @@ def test_launch_macos(mocker):
 ```
 
 ### Fixtures Reference
-tests/conftest.py provides shared infrastructure auto-inherited by all subdirs: it polyfills `os.startfile` on non-Windows so launch tests can mock it, and provides the `sample_config_path` / `empty_config_path` fixtures. `tests/gui/conftest.py` applies the Tkinter-deprecation skip to everything under `tests/gui/`. Use the built-in `tmp_path` fixture for temporary file setups.
+tests/conftest.py provides shared infrastructure auto-inherited by all subdirs: it polyfills `os.startfile` on non-Windows so launch tests can mock it, and provides the `sample_config_path` / `empty_config_path` fixtures. Use the built-in `tmp_path` fixture for temporary file setups.
 
 ### CI/CD Integration
 ```yaml
