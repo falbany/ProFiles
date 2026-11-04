@@ -12,7 +12,7 @@ from typing import Literal
 def confirm_dialog(
     message: str,
     title: str = "Confirmation",
-    timeout: int | None = None,  # pylint: disable=unused-argument  (reserved)
+    timeout: int | None = None,  # pylint: disable=unused-argument
 ) -> bool:
     """Show a yes/no confirmation dialog.
 
@@ -34,16 +34,17 @@ def confirm_dialog(
     try:
         import tkinter as tk
         from tkinter import messagebox
-
-        root = tk.Tk()
-        root.withdraw()  # Hide main window
-        result = bool(messagebox.askyesno(title, message))
-        root.destroy()
-        return result
     except ImportError:
         pass  # No Tkinter — fall back to headless
-    except tk.TclError:
-        pass  # No display available — fall back to headless
+    else:
+        try:
+            root = tk.Tk()
+            root.withdraw()  # Hide main window
+            result = bool(messagebox.askyesno(title, message))
+            root.destroy()
+            return result
+        except tk.TclError:
+            pass  # No display available — fall back to headless
 
     # Headless mode
     response = input(f"{title}: {message} [y/N]: ").strip().lower()
@@ -94,7 +95,11 @@ def confirm_dialog_3way(
 
     try:
         import tkinter as tk
+    except ImportError:
+        # Fallback to headless if Tkinter is unavailable
+        return _headless_3way_choice(message, title, pre_message)
 
+    try:
         root = tk.Tk()
         root.withdraw()
 
@@ -137,8 +142,8 @@ def confirm_dialog_3way(
         root.wait_window(dialog)
         root.destroy()
         return result[0]
-    except (ImportError, tk.TclError):
-        # Fallback to headless if Tkinter unavailable or no display
+    except tk.TclError:
+        # Fallback to headless if no display is available
         return _headless_3way_choice(message, title, pre_message)
 
 

@@ -116,6 +116,7 @@ def forward_config_to_running_instance(
             return HandoffResult("handed_off")
     except urllib.error.HTTPError as exc:
         # Server rejected the config (invalid/missing file, bad request).
+        detail = ""
         with contextlib.suppress(Exception):
             detail = exc.read().decode("utf-8", errors="replace")[:300]
         return HandoffResult("handoff_failed", f"running instance rejected the config: {detail}")

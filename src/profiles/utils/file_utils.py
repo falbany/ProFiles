@@ -378,7 +378,7 @@ def open_file_explorer(directory: str | Path) -> bool:
         path = Path(directory)
         if path.is_dir():
             if _IS_WINDOWS:
-                os.startfile(str(path))
+                os.startfile(str(path))  # pyright: ignore[reportAttributeAccessIssue] — Windows-only
             elif _IS_MACOS:
                 subprocess.run(["open", str(path)], check=True)
             else:
@@ -404,7 +404,7 @@ def launch_file(file_path: str | Path) -> bool:
             return False
 
         if _IS_WINDOWS:
-            os.startfile(str(path))
+            os.startfile(str(path))  # pyright: ignore[reportAttributeAccessIssue] — Windows-only
         elif _IS_MACOS:
             subprocess.run(["open", str(path)], check=True)
         else:
@@ -432,7 +432,7 @@ def open_with_default_app(file_path: str | Path) -> bool:
         if not path.exists():
             return False
         if _IS_WINDOWS:
-            os.startfile(str(path))
+            os.startfile(str(path))  # pyright: ignore[reportAttributeAccessIssue] — Windows-only
         elif _IS_MACOS:
             subprocess.run(["open", str(path)], check=True)
         else:

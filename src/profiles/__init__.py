@@ -22,10 +22,11 @@ def _resolve_version() -> str:
     """
     # Primary: use importlib.metadata for installed packages. The PEP 621
     # distribution name is "profiles-app"; "profiles" covers legacy
-    # setuptools installs.
-    try:
-        from importlib.metadata import PackageNotFoundError, version
+    # setuptools installs. The import stays function-local (importlib.metadata
+    # is stdlib on every supported Python) to keep ``import profiles`` cheap.
+    from importlib.metadata import PackageNotFoundError, version
 
+    try:
         try:
             return version("profiles-app")
         except PackageNotFoundError:

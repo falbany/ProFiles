@@ -59,6 +59,9 @@ dev = [
     "deptry>=0.22.0",
     "httpx>=0.27.0",
     "briefcase>=0.4.4",
+    # Declared so `pyright src/profiles` can resolve the build-hook import
+    # (web/build_hook.py); also what deptry needs (#43).
+    "hatchling>=1.26",
 ]
 
 [tool.hatch.build.hooks.custom]
@@ -201,6 +204,16 @@ markers = [
     "qt_no_exception_capture: disable pytest-qt exception capture for this test",
 ]
 
+# Type checking gate (issue #69): `pyright src/profiles` must stay clean.
+# Basic mode on purpose — the gate is regression insurance, not strict-mode.
+[tool.pyright]
+include = ["src/profiles"]
+extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+
 [dependency-groups]
 dev = [
     "ruff>=0.1.0",
@@ -213,4 +226,7 @@ dev = [
     "deptry>=0.22.0",
     "httpx>=0.27.0",
     "briefcase>=0.4.4",
+    # Declared so `pyright src/profiles` can resolve the build-hook import
+    # (web/build_hook.py); also what deptry needs (#43).
+    "hatchling>=1.26",
 ]

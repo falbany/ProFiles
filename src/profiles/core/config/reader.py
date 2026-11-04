@@ -16,6 +16,7 @@ from profiles.core.config.models import (
     AppConfig,
     ColumnConfiguration,
     MachineConfiguration,
+    MatchCriteria,
     WorkflowStep,
 )
 from profiles.core.config.schema import AppConfigYaml
@@ -238,15 +239,21 @@ class ConfigReader:
         return [
             MachineConfiguration(
                 name=m.name or name,
-                match=m.match,
-                scan=m.scan,
-                extensions=m.extensions,
-                filters=m.filters,
-                row_colors=tuple((rc.pattern, rc.color) for rc in m.row_colors),
-                search_exclude_files=m.search_exclude_files,
+                match=MatchCriteria(
+                    hostname=tuple(m.match.hostname),
+                    ip=tuple(m.match.ip),
+                    path=tuple(m.match.path),
+                ),
+                scan=tuple(m.scan),
+                # resolve_configs fills these optional schema fields; the
+                # ``or ()`` keeps the declared Optional honest at the seam.
+                extensions=tuple(m.extensions or ()),
+                filters=tuple(m.filters or ()),
+                row_colors=tuple((rc.pattern, rc.color) for rc in m.row_colors or ()),
+                search_exclude_files=tuple(m.search_exclude_files or ()),
                 max_search_depth=m.max_search_depth,
                 recursive_search=m.recursive_search,
-                search_exclude_dirs=m.search_exclude_dirs,
+                search_exclude_dirs=tuple(m.search_exclude_dirs or ()),
             )
             for name, m in resolved.items()
         ]

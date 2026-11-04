@@ -56,7 +56,12 @@ def show_notify_dialog(
 
     try:
         import tkinter as tk
+    except ImportError:
+        # No Tkinter — fall back to headless
+        _print_headless(content, title)
+        return
 
+    try:
         root = tk.Tk()
         root.title(title)
 
@@ -71,8 +76,8 @@ def show_notify_dialog(
         else:
             root.attributes("-topmost", True)
             root.after(3000, root.destroy)  # Auto-close after 3 seconds in non-blocking
-    except (ImportError, tk.TclError):
-        # Fallback to headless
+    except tk.TclError:
+        # No display available — fall back to headless
         _print_headless(content, title)
 
 

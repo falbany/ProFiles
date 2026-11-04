@@ -11,7 +11,7 @@ try:
     HAS_HATCHLING = True
 except ImportError:
     HAS_HATCHLING = False
-    BuildHookInterface = object  # type: ignore
+    BuildHookInterface = object  # type: ignore[assignment, misc]
 
 
 def _needs_rebuild(web_dir: Path, marker_file: Path) -> bool:
@@ -76,7 +76,11 @@ def _run_npm_build(web_dir: Path, npm_path: str) -> bool:
         return False
 
 
-class WebBuildHook(BuildHookInterface):
+# The runtime fallback above unions ``object`` into the base-class binding,
+# so pyright's base-class check is suppressed here. Every environment that
+# actually loads this hook (hatchling build, dev venv since hatchling is a
+# dev dependency) provides the real BuildHookInterface.
+class WebBuildHook(BuildHookInterface):  # pyright: ignore[reportGeneralTypeIssues]
     """Build hook to compile React frontend during installation."""
 
     def initialize(self, version: str, build_data: dict) -> None:

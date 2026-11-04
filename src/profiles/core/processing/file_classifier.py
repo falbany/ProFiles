@@ -10,6 +10,7 @@ import os
 import re
 from pathlib import Path
 
+from profiles.core.config.models import ColumnConfiguration
 from profiles.core.processing.column_extractor import ColumnExtractor
 
 
@@ -99,7 +100,7 @@ def get_file_info(file_path: str | Path, extension: str = "") -> tuple[str, str]
 
 
 def build_column_extractor(
-    columns: object | None,
+    columns: dict[str, ColumnConfiguration] | None,
     column_names: tuple[str, ...],
 ) -> ColumnExtractor:
     """Build a :class:`ColumnExtractor` from config column definitions.
@@ -114,8 +115,8 @@ def build_column_extractor(
     """
     extractor = ColumnExtractor()
 
-    if columns:
-        for col_name, col_config in _iter_columns(columns):
+    if isinstance(columns, dict) and columns:
+        for col_name, col_config in columns.items():
             if col_config.match:  # Only add if a match pattern is defined
                 extractor.add_rule(
                     col_name,
@@ -124,28 +125,17 @@ def build_column_extractor(
                     col_config.priority,
                     col_config.default,
                 )
-    else:
-        # Legacy mode: add default Version rule if Version is in column_names
-        if "Version" in column_names:
-            extractor.add_rule("Version", r"_V(.+)", group=1, priority=10)
+    elif not columns and "Version" in column_names:
+        # Legacy mode (falsy columns: ``None``, ``""``): add the default
+        # Version rule. A truthy non-dict — legacy callers passing garbage —
+        # adds no rule at all (pinned by test_non_dict_columns_ignored).
+        extractor.add_rule("Version", r"_V(.+)", group=1, priority=10)
 
     return extractor
 
 
 # Back-compat private alias (pre-Task 11 name).
 _build_column_extractor = build_column_extractor
-
-
-def _iter_columns(columns: object) -> list[tuple[str, object]]:
-    """Safely iterate over a columns dict, returning ``(name, config)`` pairs.
-
-    Works around the weak ``dict | None`` type by accepting a generic
-    object and extracting items when possible.  Returns an empty list
-    for non-dict values (legacy callers that pass ``""``).
-    """
-    if isinstance(columns, dict):
-        return list(columns.items())
-    return []
 
 
 def _extract_columns_with_defaults(
@@ -177,7 +167,7 @@ def get_file_info_dynamic(
     file_path: str | Path,
     extension: str = "",
     column_names: tuple[str, ...] = ("File", "Version"),
-    columns: object | None = None,
+    columns: dict[str, ColumnConfiguration] | None = None,
 ) -> dict[str, str]:
     """Get file metadata using dynamic column extraction rules.
 

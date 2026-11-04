@@ -208,19 +208,21 @@ def spawn_background_hook(template: str, file_path: Path) -> None:
         ``None``. Output is intentionally discarded.
     """
     args = _build_argv(template, file_path)
-    popen_kwargs: dict[str, object] = {
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-    }
-    if sys.platform == "win32":
-        popen_kwargs["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-        )
-    else:
-        popen_kwargs["start_new_session"] = True
-
     try:
-        subprocess.Popen(args, **popen_kwargs)  # pylint: disable=consider-using-with
+        if sys.platform == "win32":
+            subprocess.Popen(  # pylint: disable=consider-using-with
+                args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+            )
+        else:
+            subprocess.Popen(  # pylint: disable=consider-using-with
+                args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
     except FileNotFoundError:
         # Best-effort: don't crash the caller if the hook binary is missing.
         return
@@ -263,8 +265,21 @@ def run_hooks_for_file(
     if not hooks:
         return HookOutcome.CONTINUE
 
-    synchronous: list[HookSpec] = [hook for hook in hooks if hook.when != "after"]
-    after_hooks: list[HookSpec] = [hook for hook in hooks if hook.when == "after"]
+    # NOTE: launch_hooks carries WorkflowStep objects, but this legacy
+    # HookSpec engine reads the ``when`` field off them — a mismatch left
+    # by the workflow-model migration. The engine's fate (fix, port or
+    # delete) is the dead-code sweep's call (#39); pyright is suppressed
+    # on the mismatch until then.
+    synchronous: list[HookSpec] = [  # pyright: ignore[reportAssignmentType]
+        hook
+        for hook in hooks
+        if hook.when != "after"  # pyright: ignore[reportAttributeAccessIssue]
+    ]
+    after_hooks: list[HookSpec] = [  # pyright: ignore[reportAssignmentType]
+        hook
+        for hook in hooks
+        if hook.when == "after"  # pyright: ignore[reportAttributeAccessIssue]
+    ]
 
     for hook in synchronous:
         if hook.when == "confirm":
