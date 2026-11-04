@@ -509,6 +509,91 @@ async def test_save_as_applies_new_config(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_save_as_uppercase_extension_applies_cleanly(tmp_path: Path) -> None:
+    """Verify an uppercase save-as target is written AND anchors the session.
+
+    Regression (branch review): the save-as whitelist is case-insensitive —
+    ``BACKUP.PROFILES`` passes the extension check and gets written — but
+    ``_is_config_path`` compared case-sensitively, so the apply step then
+    answered 400 "Not a ProFiles configuration file" for the very file the
+    endpoint had just written. The session never anchored, and with
+    ``force=True`` invalid YAML could land on disk while the UI reported
+    failure.
+
+    Given: A session anchored to an existing config and a valid draft
+    When: POST /save-as writes it to ``BACKUP.PROFILES``
+    Then: 200 SAVED, the file exists on disk, ``state.config_path`` is the
+        target and the session-trial flag is cleared
+    """
+    target = tmp_path / "BACKUP.PROFILES"
+    scan_dir = tmp_path / "scans"
+    scan_dir.mkdir()
+    old_path = tmp_path / ".profiles"
+    old_path.write_text(f"defaults:\n  title: Old\n  search_dir: '{tmp_path}'\n", encoding="utf-8")
+    state = ServerState(config=ConfigReader(old_path).load(), active_directory=tmp_path)
+    valid_text = f"defaults:\n  title: Upper Backup\n  search_dir: '{scan_dir}'\n"
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/config/save-as",
+            json={
+                "content": valid_text,
+                "filename": "BACKUP.PROFILES",
+                "directory": str(tmp_path),
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "SAVED"
+    assert payload["path"] == str(target)
+    assert target.exists()
+    assert target.read_text(encoding="utf-8") == valid_text
+    assert state.config_path == target
+    assert state.session_trial is False
+    assert payload["config"]["title"] == "Upper Backup"
+
+
+@pytest.mark.anyio
+async def test_load_accepts_uppercase_config_filename(tmp_path: Path) -> None:
+    """Verify /load accepts a config file named with uppercase extensions.
+
+    Regression (branch review): the same case-sensitive ``_is_config_path``
+    gate backs /load, /create and the save apply step, so a valid
+    ``MACHINE.PROFILES`` on disk was refused even though the documented
+    whitelist (``.profiles`` / ``.profiles.yaml``) is case-insensitive —
+    the save-as endpoint itself accepted such names via ``.lower()``.
+
+    Given: A valid config file saved as ``MACHINE.PROFILES``
+    When: POST /load is called with its path
+    Then: 200, the session swaps to that config and anchors to the file
+        (``session_trial`` cleared)
+    """
+    config_path = tmp_path / "MACHINE.PROFILES"
+    scan_dir = tmp_path / "scans"
+    scan_dir.mkdir()
+    config_path.write_text(
+        f"defaults:\n  title: Upper Machine\n  search_dir: '{scan_dir}'\n",
+        encoding="utf-8",
+    )
+    state = ServerState(
+        config=AppConfig(title="Before", search_dir=str(tmp_path), extensions=(".txt",)),
+        active_directory=tmp_path,
+    )
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/load", json={"config_path": str(config_path)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Upper Machine"
+    assert state.config_path == config_path
+    assert state.session_trial is False
+
+
+@pytest.mark.anyio
 async def test_template_returns_starter_content(config_state: ServerState) -> None:
     """Verify POST /template renders starter content that validates clean.
 

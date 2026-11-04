@@ -54,7 +54,15 @@ class SaveAsRequest(BaseModel):
 
 
 def _is_config_path(path: Path) -> bool:
-    return path.name.endswith(CONFIG_FILE_NAMES)
+    """True when *path*'s name matches the documented config whitelist.
+
+    Case-insensitive on purpose: the save-as endpoint accepts
+    ``BACKUP.PROFILES`` (its whitelist checks ``filename.lower()``), so the
+    apply step that re-reads what was just written must accept it too — a
+    case-sensitive comparison here turned a successful save-as into a 400
+    with the file already on disk (branch review, issue #95 wave).
+    """
+    return path.name.lower().endswith(CONFIG_FILE_NAMES)
 
 
 def _is_safe_filename(filename: str) -> bool:

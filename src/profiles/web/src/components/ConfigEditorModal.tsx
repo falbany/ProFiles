@@ -147,8 +147,9 @@ function describeSaveError(err: unknown): { text: string; issues: ValidationIssu
  * trial). Save and Save As run the compliance gate first: the text is
  * validated client-side, and issues block the write behind a
  * "Go back and fix / Force save anyway" prompt. The header bar carries
- * the "Open in OS" shortcut, which hands the file to the OS default
- * editor via the existing client call.
+ * the "Open in OS" shortcut, which hands the disk-anchored file to the
+ * OS default editor via the existing client call (hidden for a session
+ * trial — there is no file behind it to open).
  */
 export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModalProps) {
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
@@ -664,15 +665,22 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleOpenInOS}
-                title="Open the configuration file with the OS default editor"
-                className="btn inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-secondary hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open in OS
-              </button>
+              {/* Only meaningful for a disk-anchored config: on a session
+                  trial the open-config action would hand the OS the
+                  CWD-resolved fallback — possibly an unrelated pre-existing
+                  .profiles file or a NOT_FOUND — so the shortcut hides, the
+                  same way Save does. */}
+              {diskAnchored && (
+                <button
+                  type="button"
+                  onClick={handleOpenInOS}
+                  title="Open the configuration file with the OS default editor"
+                  className="btn inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-secondary hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open in OS
+                </button>
+              )}
               <button
                 type="button"
                 onClick={requestClose}

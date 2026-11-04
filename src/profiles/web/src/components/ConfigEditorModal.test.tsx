@@ -248,6 +248,27 @@ describe("ConfigEditorModal", () => {
     consoleSpy.mockRestore();
   });
 
+  it("test_open_in_os_visibility_follows_disk_anchor", async () => {
+    // Session trial: nothing on disk backs the editor, and the open-config
+    // action would hand the OS the CWD-resolved fallback — possibly an
+    // unrelated pre-existing .profiles or a NOT_FOUND. Hidden like Save.
+    fetchContentSpy.mockResolvedValue(
+      makeContent({ filename: "session-trial", config_path: null, session_trial: true }),
+    );
+    renderModal();
+    await readyEditorView();
+    expect(screen.queryByRole("button", { name: /open in os/i })).toBeNull();
+    expect(openInOSSpy).not.toHaveBeenCalled();
+    cleanup();
+
+    // Disk-anchored: the shortcut is back.
+    fetchContentSpy.mockResolvedValue(makeContent());
+    renderModal();
+    await readyEditorView();
+    expect(screen.getByRole("button", { name: /open in os/i })).toBeTruthy();
+    expect(openInOSSpy).not.toHaveBeenCalled();
+  });
+
   /** Dispatch a user edit through the real editor transaction seam. */
   async function editDoc(insert: string): Promise<string> {
     const view = await readyEditorView();
@@ -282,7 +303,9 @@ describe("ConfigEditorModal", () => {
     // Dirty cleared (CRLF template text becomes the new baseline).
     expect(screen.queryByRole("status")).toBeNull();
     // Escape now closes immediately — the baseline moved with the template.
-    screen.getByRole("button", { name: /open in os/i }).focus();
+    // (The template is not disk-anchored, so Open in OS is hidden — the
+    // close button is the focus target here.)
+    screen.getByRole("button", { name: /close editor/i }).focus();
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog", { name: /discard changes\?/i })).toBeNull();
