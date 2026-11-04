@@ -7,7 +7,6 @@ import {
   fetchScanResults,
   fetchSystemInfo,
   launchFile,
-  openConfigFile,
   openFolder,
   openLogFile,
   openTerminal,
@@ -1325,10 +1324,12 @@ export default function App() {
         return;
       }
 
-      // Ctrl + ,: Open config
+      // Ctrl + ,: Open the in-app config editor (issue #95) — same entry
+      // point as the status-bar Config button; the OS-launch this shortcut
+      // used to perform lives in the editor header ("Open in OS").
       if (e.ctrlKey && e.key === ",") {
         e.preventDefault();
-        openConfigFile().then((r) => showToast(r.message));
+        setShowConfigEditor(true);
         return;
       }
 

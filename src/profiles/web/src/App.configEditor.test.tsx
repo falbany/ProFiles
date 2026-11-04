@@ -126,6 +126,9 @@ beforeEach(() => {
   systemInfoSpy.mockResolvedValue(makeSystemInfo());
   fetchConfigSpy.mockResolvedValue(makeAppConfig());
   fetchContentSpy.mockResolvedValue(makeContent());
+  // Clean default so a stray OS-launch keeps the output quiet; the tests
+  // below assert it is NOT called.
+  openInOSSpy.mockResolvedValue({ status: "SUCCESS", message: "Opened" });
   // POST /api/config/load-content applies content as a session trial:
   // not anchored to disk, and carrying the freshly derived values the
   // app must pick up (new directory/extension/recursive).
@@ -195,6 +198,27 @@ describe("App config editor integration", () => {
       recursive: true,
     });
     await waitFor(() => expect(scanResultsSpy).toHaveBeenCalled());
+    expect(openInOSSpy).not.toHaveBeenCalled();
+  });
+
+  it("test_ctrl_comma_opens_editor_without_os_launch", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Startup settled: the shortcut handler is active and no modal is open.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+
+    // Ctrl+, must open the in-app editor — the old OS-launch behavior is
+    // gone from the app shell entirely (it lives in the modal header).
+    await user.keyboard("{Control>},{/Control}");
+    const editor = await screen.findByRole("dialog", { name: /configuration editor/i });
+    expect(openInOSSpy).not.toHaveBeenCalled();
+
+    // The editor is fully functional (content fetched, view mounted).
+    await waitFor(() => expect(fetchContentSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(editor.querySelector(".cm-editor")).toBeTruthy();
+    });
     expect(openInOSSpy).not.toHaveBeenCalled();
   });
 });

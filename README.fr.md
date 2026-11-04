@@ -191,7 +191,7 @@ Lance le serveur FastAPI local et ouvre le frontend React dans une fenêtre de b
 
 - **Interface** : le chrome web est bilingue (anglais / français). Utilisez le sélecteur de langue dans la barre de statut pour changer à la volée, ou définissez `language: en` / `language: fr` dans la section `defaults`.
 - **Recherche** : utilisez `+` pour l'inclusion, `-` pour l'exclusion, `OR` pour les alternatives et `"..."` pour les expressions exactes.
-- **Raccourcis clavier** : `Ctrl+F` (champ filtre) · `Ctrl+D` (champ répertoire) · `Ctrl+E` (champ extension) · `F5` (rescan) · `Ctrl+R` (recharger la config + rescan) · `Ctrl+H` (répertoire home) · `Ctrl+Shift+L` (visionneuse de logs) · `Ctrl+,` (ouvrir la config) · `Ctrl+Shift+T` (cycler le thème) · `Ctrl+B` (mode scanner de code-barres) · `Ctrl+Shift+B` (scanner de code-barres caméra) · `Ctrl+T` (timer de rescan auto) · `?` (dialogue des raccourcis).
+- **Raccourcis clavier** : `Ctrl+F` (champ filtre) · `Ctrl+D` (champ répertoire) · `Ctrl+E` (champ extension) · `F5` (rescan) · `Ctrl+R` (recharger la config + rescan) · `Ctrl+H` (répertoire home) · `Ctrl+Shift+L` (visionneuse de logs) · `Ctrl+,` (ouvrir l'éditeur de config) · `Ctrl+Shift+T` (cycler le thème) · `Ctrl+B` (mode scanner de code-barres) · `Ctrl+Shift+B` (scanner de code-barres caméra) · `Ctrl+T` (timer de rescan auto) · `?` (dialogue des raccourcis).
 - **PWA** : le frontend embarque un precache de service worker, la page peut donc être installée dans le navigateur comme une application.
 
 ### Mode Navigateur / PWA (serveurs partagés)
