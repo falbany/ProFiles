@@ -29,6 +29,7 @@ import {
 } from "./utils/configDrop";
 import { resolveSessionTheme } from "./utils/theme";
 import { ActionBar } from "./components/ActionBar";
+import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { DropConfigOverlay } from "./components/DropConfigOverlay";
@@ -100,6 +101,10 @@ export default function App() {
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
   const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
+  // In-app YAML configuration editor (issue #95), opened from the StatusBar
+  // "Config" button. The old OS-launch behavior moved into the editor's
+  // header ("Open in OS").
+  const [showConfigEditor, setShowConfigEditor] = useState<boolean>(false);
   const [showPropertiesModal, setShowPropertiesModal] = useState<boolean>(false);
   // File awaiting delete confirmation (in-app dialog — window.confirm is a
   // no-op inside the desktop webviews, issue #31).
@@ -1547,14 +1552,11 @@ export default function App() {
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
         onOpenLog={() => setShowLogViewer(true)}
-        onOpenConfig={async () => {
-          try {
-            const res = await openConfigFile();
-            showToast(res.message);
-          } catch (err: any) {
-            showToast(`Failed to open config: ${err.message}`, "error");
-          }
-        }}
+        // Repurposed (issue #95): opens the in-app YAML editor. The OS-launch
+        // this button used to perform now lives in the editor's header
+        // ("Open in OS"); the modal's onApplied drives handleConfigLoaded,
+        // the same refresh path as LoadConfigModal and the drag/drop trial.
+        onOpenConfig={() => setShowConfigEditor(true)}
         onLoadConfig={() => setShowConfigPicker(true)}
         onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
@@ -1575,6 +1577,14 @@ export default function App() {
         configExists={config?.config_exists}
         onClose={() => setShowConfigPicker(false)}
         onLoaded={handleConfigLoaded}
+      />
+
+      {/* YAML Configuration Editor (issue #95): Apply/Save/Save As hand the
+          fresh AppConfigData to the shared handleConfigLoaded refresh path. */}
+      <ConfigEditorModal
+        open={showConfigEditor}
+        onClose={() => setShowConfigEditor(false)}
+        onApplied={handleConfigLoaded}
       />
 
       {/* Dropped configuration files (session-only trial) */}
