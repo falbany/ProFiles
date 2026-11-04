@@ -2,11 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { basicSetup, EditorView } from "codemirror";
 import { yaml } from "@codemirror/lang-yaml";
 import {
+  AlertTriangle,
+  Check,
+  CircleDashed,
   CircleDot,
+  CircleX,
   ExternalLink,
   FileCode2,
+  FileCog,
   FilePlus2,
   FlaskConical,
+  Info,
+  Loader2,
   Play,
   RotateCcw,
   Save,
@@ -34,6 +41,19 @@ export interface ConfigEditorModalProps {
   onClose: () => void;
   /** Called after Apply/Save/Save As succeed, with the fresh AppConfigData. */
   onApplied?: (data: AppConfigData) => void;
+  /**
+   * Issue #101: raise the config picker (LoadConfigModal) from inside the
+   * editor — "Load config file…" renders in the header only when wired.
+   * App.tsx opens the picker above this modal and bumps `reloadKey` once
+   * the pick lands.
+   */
+  onLoadConfig?: () => void;
+  /**
+   * Issue #101: bump to re-run the load-on-open fetch after a config was
+   * picked in the (separately mounted) picker, so the editor swaps to the
+   * freshly served content instead of keeping stale text.
+   */
+  reloadKey?: number;
 }
 
 /** Load lifecycle of the configuration text behind the editor. */
@@ -42,8 +62,19 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; data: ConfigContentData };
 
-/** Inline feedback banner shown above the editor after a toolbar action. */
+/** Action outcome, spoken from the footer status bar (issue #105). */
 type EditorStatus = { kind: "ok" | "error"; text: string } | null;
+
+/**
+ * Validity chip state in the footer status bar (issue #105): unknown until
+ * the first validation, "validating" while a round trip is in flight, then
+ * the verdict with the issue count when invalid.
+ */
+type ValidityState =
+  | { kind: "unknown" }
+  | { kind: "validating" }
+  | { kind: "valid" }
+  | { kind: "invalid"; count: number };
 
 /** Toolbar action parked behind the "Replace current edits?" confirmation. */
 type PendingAction = "new" | "revert";
@@ -153,27 +184,40 @@ function describeSaveError(err: unknown): { text: string; issues: ValidationIssu
 }
 
 /**
- * Full-screen YAML configuration editor (issue #95). This shell owns the
- * CodeMirror 6 instance, load-on-open, dirty tracking and the guarded
- * Escape/✕ close. The toolbar carries the content actions — New (starter
- * template), Test (in-memory validation), Revert (reload from disk),
- * Apply (session-trial the current text), Save (write the disk-anchored
- * file) and Save As (write a new file, which also anchors a session
- * trial). Save and Save As run the compliance gate first: the text is
- * validated client-side, and issues block the write behind a
- * "Go back and fix / Force save anyway" prompt. The header bar carries
- * the "Open in OS" shortcut, which hands the disk-anchored file to the
- * OS default editor via the existing client call (hidden for a session
- * trial — there is no file behind it to open).
+ * Full-screen YAML configuration editor (issues #95/#101/#105). This shell
+ * owns the CodeMirror 6 instance, load-on-open, dirty tracking and the
+ * guarded Escape/✕ close. The header bar carries every action — New
+ * (starter template), Test (in-memory validation), Revert (reload from
+ * disk), Save (write the disk-anchored file), Save As (write a new file,
+ * which also anchors a session trial) and the primary Apply (session-trial
+ * the current text) — plus "Open in OS" and, when wired via `onLoadConfig`,
+ * the "Load config file…" entry point that raises the config picker above
+ * this modal. Save and Save As run the compliance gate first: the text is
+ * validated client-side, and issues block the write behind a "Go back and
+ * fix / Force save anyway" prompt. Feedback lives in the footer status bar
+ * (validity chip, unsaved dot, action outcome, cursor position) with the
+ * collapsible right-hand Problems panel listing validation issues (#105).
  */
-export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModalProps) {
+export function ConfigEditorModal({
+  open,
+  onClose,
+  onApplied,
+  onLoadConfig,
+  reloadKey = 0,
+}: ConfigEditorModalProps) {
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [dirty, setDirty] = useState(false);
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
-  /** Banner above the editor — toolbar action outcomes. */
+  /** Action outcome, rendered in the footer status bar. */
   const [status, setStatus] = useState<EditorStatus>(null);
-  /** Validation issues from the Test action and the save gate, listed under the banner. */
+  /** Validation issues from the Test action and the save gate, listed in the Problems panel. */
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  /** Validity chip state (issue #105). */
+  const [validity, setValidity] = useState<ValidityState>({ kind: "unknown" });
+  /** Right-hand Problems panel visibility (issue #105); auto-opens on failure. */
+  const [problemsOpen, setProblemsOpen] = useState(false);
+  /** Cursor position for the footer (1-based line/column), tracked from the editor. */
+  const [cursor, setCursor] = useState({ line: 1, col: 1 });
   /** Action awaiting its "Replace current edits?" confirmation. */
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   /** Compliance gate parked on an in-flight save/save-as action. */
@@ -223,6 +267,9 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
   });
 
   // Load-on-open; reset everything on close so a re-open starts clean.
+  // `reloadKey` (issue #101) re-runs the same fetch while open: after a
+  // config was picked in the picker raised from inside the editor, the
+  // freshly served content must replace the stale document.
   useEffect(() => {
     if (!open) {
       loadedTextRef.current = "";
@@ -232,6 +279,9 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
       setConfirmDiscardOpen(false);
       setStatus(null);
       setIssues([]);
+      setValidity({ kind: "unknown" });
+      setProblemsOpen(false);
+      setCursor({ line: 1, col: 1 });
       setPendingAction(null);
       setGate(null);
       setSaveAsPrompt(null);
@@ -265,7 +315,7 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, reloadKey]);
 
   /** Drop any pending live-validation cycle. */
   const cancelPendingValidation = useCallback(() => {
@@ -314,13 +364,23 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
         yaml(),
         configEditorTheme,
         EditorView.updateListener.of((update) => {
+          // Cursor tracking for the footer (issue #105): selection moves
+          // and edits both reposition the caret.
+          if (update.selectionSet || update.docChanged) {
+            const head = update.state.selection.main.head;
+            const line = update.state.doc.lineAt(head);
+            setCursor({ line: line.number, col: head - line.from + 1 });
+          }
           if (update.docChanged) {
             setDirty(isDirty(update.view, loadedTextRef.current));
             // Feedback is invalidated by the very edit that changed the
-            // document (issue #102): a stale Test/Save banner or issue
-            // list must never outlive the content it described.
+            // document (issue #102): a stale Test/Save banner, issue list
+            // or validity verdict must never outlive the content it
+            // described — the Problems panel closes with them.
             setStatus(null);
             setIssues([]);
+            setValidity({ kind: "unknown" });
+            setProblemsOpen(false);
             scheduleLiveValidation(update.state.doc.toString());
           }
         }),
@@ -466,7 +526,9 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
 
   /**
    * Test action: validate the current text in memory. A valid result
-   * lights the ok banner; issues are listed above the editor verbatim.
+   * lights the ok status in the footer; issues are listed in the Problems
+   * panel, which auto-opens on failure (issue #105). The validity chip
+   * reads "validating…" for the duration of the round trip.
    */
   const runValidation = useCallback(
     () =>
@@ -478,21 +540,26 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
         cancelPendingValidation();
         const text = currentDocText();
         lastValidatedTextRef.current = text;
+        setValidity({ kind: "validating" });
         try {
           const result = await validateConfigContent(load.data.filename, text);
           if (seq !== actionSeqRef.current) return; // superseded — drop stale results
           setIssues(result.issues);
-          setStatus(
-            result.valid
-              ? { kind: "ok", text: "Configuration is valid." }
-              : {
-                  kind: "error",
-                  text: `Validation failed with ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}.`,
-                },
-          );
+          if (result.valid) {
+            setValidity({ kind: "valid" });
+            setStatus({ kind: "ok", text: "Configuration is valid." });
+          } else {
+            setValidity({ kind: "invalid", count: result.issues.length });
+            setProblemsOpen(true);
+            setStatus({
+              kind: "error",
+              text: `Validation failed with ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}.`,
+            });
+          }
         } catch (err: unknown) {
           if (seq !== actionSeqRef.current) return;
           setIssues([]);
+          setValidity({ kind: "unknown" });
           setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) });
         }
       }),
@@ -571,6 +638,10 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
       loadedTextRef.current = savedText;
       setDirty(false);
       setIssues([]);
+      // The document just became the saved baseline — the previous
+      // validation verdict described the pre-save text, so the chip goes
+      // back to unknown (a force-save cleared the listed issues too).
+      setValidity({ kind: "unknown" });
       setGate(null);
       setSaveAsPrompt(null);
       if (data.config_path) {
@@ -612,6 +683,14 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
     setGate(null);
     setSaveAsPrompt(null);
     setIssues(described.issues);
+    if (described.issues.length > 0) {
+      // A validation-list rejection IS a failed validation: same surface
+      // as the Test action — chip verdict + auto-opened Problems panel.
+      setValidity({ kind: "invalid", count: described.issues.length });
+      setProblemsOpen(true);
+    } else {
+      setValidity({ kind: "unknown" });
+    }
     setStatus({ kind: "error", text: described.text });
   }, []);
 
@@ -630,12 +709,17 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
         const text = currentDocText();
         setStatus(null);
         setIssues([]);
+        setValidity({ kind: "validating" });
         try {
           const result = await validateConfigContent(filename, text);
           if (seq !== actionSeqRef.current) return; // superseded — drop stale results
           let force = false;
           if (!result.valid) {
+            setValidity({ kind: "invalid", count: result.issues.length });
             setIssues(result.issues);
+            // Same surface as the Test action: the panel opens behind the
+            // gate so the issues stay listed once it is dismissed.
+            setProblemsOpen(true);
             force = await awaitGateDecision(result.issues);
             if (seq !== actionSeqRef.current) return; // superseded while parked
             if (!force) {
@@ -645,6 +729,8 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
               });
               return;
             }
+          } else {
+            setValidity({ kind: "valid" });
           }
           if (kind === "save-as") {
             const target = await awaitSaveAsTarget();
@@ -743,8 +829,14 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
           className="animate-modal-in flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-frame-line glass-panel"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header bar */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-3">
+          {/* Header bar — every action lives here (issue #101): the content
+              actions, Save As, the primary Apply, the picker-raising "Load
+              config file…" and the unmovable Open in OS / ✕. The standalone
+              toolbar row is gone. */}
+          <div
+            data-testid="editor-header"
+            className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-3"
+          >
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-chip-indigo-bg text-chip-indigo-text">
                 <FileCode2 className="h-4 w-4" />
@@ -760,6 +852,83 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={requestNew}
+                disabled={toolbarDisabled}
+                title="Load the starter configuration template"
+                className="btn btn-secondary px-2.5 py-1.5"
+              >
+                <FilePlus2 className="h-3.5 w-3.5" />
+                New
+              </button>
+              <button
+                type="button"
+                onClick={() => void runValidation()}
+                disabled={toolbarDisabled}
+                title="Validate the editor content in memory"
+                className="btn btn-secondary px-2.5 py-1.5"
+              >
+                <FlaskConical className="h-3.5 w-3.5" />
+                Test
+              </button>
+              <button
+                type="button"
+                onClick={requestRevert}
+                disabled={toolbarDisabled}
+                title="Discard edits and reload the file from disk"
+                className="btn btn-secondary px-2.5 py-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Revert
+              </button>
+              {/* Hidden for a session trial (and after New): nothing on disk
+                  to overwrite — Save As is the way to anchor those. */}
+              {diskAnchored && (
+                <button
+                  type="button"
+                  onClick={() => void runSave()}
+                  disabled={toolbarDisabled}
+                  title="Save to the configuration file on disk (Ctrl/Cmd+S)"
+                  className="btn btn-secondary px-2.5 py-1.5"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Save
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void runSaveAs()}
+                disabled={toolbarDisabled}
+                title="Save the configuration to a new file — also anchors a session trial onto disk"
+                className="btn btn-secondary px-2.5 py-1.5"
+              >
+                <SaveAll className="h-3.5 w-3.5" />
+                Save As
+              </button>
+              <button
+                type="button"
+                onClick={() => void applyContent()}
+                disabled={toolbarDisabled}
+                title="Trial the editor content as the session configuration"
+                className="btn btn-primary px-2.5 py-1.5 font-semibold"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Apply
+              </button>
+              {/* Issue #101: raises the config picker from inside the editor;
+                  rendered only when App wiring provides the entry point. */}
+              {onLoadConfig && (
+                <button
+                  type="button"
+                  onClick={onLoadConfig}
+                  title="Load a different .profiles file"
+                  className="btn btn-secondary px-2.5 py-1.5"
+                >
+                  <FileCog className="h-3.5 w-3.5" />
+                  Load config file…
+                </button>
+              )}
               {/* Only meaningful for a disk-anchored config: on a session
                   trial the open-config action would hand the OS the
                   CWD-resolved fallback — possibly an unrelated pre-existing
@@ -770,7 +939,7 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
                   type="button"
                   onClick={handleOpenInOS}
                   title="Open the configuration file with the OS default editor"
-                  className="btn inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-secondary hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="btn inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-secondary hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                   Open in OS
@@ -787,131 +956,16 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
             </div>
           </div>
 
-          {/* Toolbar — content actions and persistence. */}
-          <div
-            data-testid="editor-toolbar"
-            className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-2"
-          >
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={requestNew}
-                disabled={toolbarDisabled}
-                title="Load the starter configuration template"
-                className="btn btn-secondary px-3 py-1.5"
-              >
-                <FilePlus2 className="h-3.5 w-3.5" />
-                New
-              </button>
-              <button
-                type="button"
-                onClick={() => void runValidation()}
-                disabled={toolbarDisabled}
-                title="Validate the editor content in memory"
-                className="btn btn-secondary px-3 py-1.5"
-              >
-                <FlaskConical className="h-3.5 w-3.5" />
-                Test
-              </button>
-              <button
-                type="button"
-                onClick={requestRevert}
-                disabled={toolbarDisabled}
-                title="Discard edits and reload the file from disk"
-                className="btn btn-secondary px-3 py-1.5"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Revert
-              </button>
-              {/* Hidden for a session trial (and after New): nothing on disk
-                  to overwrite — Save As is the way to anchor those. */}
-              {diskAnchored && (
-                <button
-                  type="button"
-                  onClick={() => void runSave()}
-                  disabled={toolbarDisabled}
-                  title="Save to the configuration file on disk (Ctrl/Cmd+S)"
-                  className="btn btn-secondary px-3 py-1.5"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  Save
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => void runSaveAs()}
-                disabled={toolbarDisabled}
-                title="Save the configuration to a new file — also anchors a session trial onto disk"
-                className="btn btn-secondary px-3 py-1.5"
-              >
-                <SaveAll className="h-3.5 w-3.5" />
-                Save As
-              </button>
-              <button
-                type="button"
-                onClick={() => void applyContent()}
-                disabled={toolbarDisabled}
-                title="Trial the editor content as the session configuration"
-                className="btn btn-primary px-3 py-1.5 font-semibold"
-              >
-                <Play className="h-3.5 w-3.5" />
-                Apply
-              </button>
-            </div>
-            {dirty && (
-              <span
-                role="status"
-                className="inline-flex items-center gap-1 rounded-full border border-chip-amber-border bg-chip-amber-bg px-2 py-0.5 text-[10px] font-bold text-chip-amber-text"
-              >
-                <CircleDot className="h-3 w-3" />
-                Unsaved changes
-              </span>
-            )}
-          </div>
-
-          {/* Inline feedback banner + validation issue list (Test outcome). */}
-          {(status !== null || issues.length > 0) && (
-            <div className="shrink-0 border-b border-line px-5 py-2">
-              {status !== null && (
-                <div
-                  data-testid="editor-status"
-                  aria-live="polite"
-                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
-                    status.kind === "ok"
-                      ? "border-status-success-border bg-status-success-bg text-status-success-text"
-                      : "border-status-danger-border bg-status-danger-bg text-status-danger-text"
-                  }`}
-                >
-                  {status.text}
-                </div>
-              )}
-              {issues.length > 0 && (
-                <ul data-testid="editor-issues" className="mt-1 space-y-1">
-                  {issues.map((issue, index) => (
-                    <li
-                      key={`${issue.severity}-${index}`}
-                      className={`rounded-md border px-3 py-1.5 text-xs ${
-                        issue.severity === "error"
-                          ? "border-status-danger-border bg-status-danger-bg text-status-danger-text"
-                          : "border-chip-amber-border bg-chip-amber-bg text-chip-amber-text"
-                      }`}
-                    >
-                      {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {/* Editor body — padded, then the bordered card that visually
-              separates the solid editor canvas from the modal chrome
-              (issue #99). Every state renders inside the card so layout
-              does not jump between load, error and ready. */}
-          <div className="min-h-0 flex-1 p-3 sm:p-4">
+          {/* Editor body — padded region holding the bordered card that
+              visually separates the solid editor canvas from the modal
+              chrome (issue #99) and, when open, the right-hand Problems
+              panel beside it (the editor shrinks, issue #105). Every state
+              renders inside the card so layout does not jump between load,
+              error and ready. */}
+          <div className="flex min-h-0 flex-1 gap-2 p-3 sm:p-4">
             <div
               data-testid="editor-card"
-              className="h-full overflow-hidden rounded-lg border border-[var(--app-editor-border)] bg-[var(--app-editor-bg)]"
+              className="min-w-0 flex-1 overflow-hidden rounded-lg border border-[var(--app-editor-border)] bg-[var(--app-editor-bg)]"
             >
               {load.status === "loading" ? (
                 <div className="flex h-full items-center justify-center">
@@ -927,7 +981,135 @@ export function ConfigEditorModal({ open, onClose, onApplied }: ConfigEditorModa
                 <div ref={editorHostRef} className="h-full" />
               )}
             </div>
+
+            {/* Problems panel (issue #105): VSCode-style collapsible list of
+                the current ValidationIssues. Auto-opens on validation
+                failure, closes from its own button or the footer chip, and
+                resets with the session on modal close/reopen. */}
+            {load.status === "ready" && problemsOpen && (
+              <aside
+                data-testid="problems-panel"
+                aria-live="polite"
+                className="flex w-[280px] shrink-0 flex-col overflow-hidden rounded-lg border border-line bg-surface"
+              >
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1.5">
+                  <span className="text-xs font-semibold text-ink-secondary">Problems</span>
+                  <button
+                    type="button"
+                    onClick={() => setProblemsOpen(false)}
+                    aria-label="Close problems"
+                    className="rounded-md p-1 text-ink-muted hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                  {issues.length === 0 ? (
+                    <p className="px-2 py-1 text-xs text-ink-faint">No problems detected.</p>
+                  ) : (
+                    <ul data-testid="editor-issues" className="space-y-1">
+                      {issues.map((issue, index) => (
+                        <li
+                          key={`${issue.severity}-${index}`}
+                          tabIndex={0}
+                          className={`flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs ${
+                            issue.severity === "error"
+                              ? "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+                              : issue.severity === "warning"
+                                ? "border-chip-amber-border bg-chip-amber-bg text-chip-amber-text"
+                                : "border-line bg-surface text-ink-secondary"
+                          }`}
+                        >
+                          {issue.severity === "error" ? (
+                            <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          ) : issue.severity === "warning" ? (
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          )}
+                          <span className="min-w-0">{issue.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </aside>
+            )}
           </div>
+
+          {/* Footer status bar (issue #105): the single feedback surface —
+              validity chip (which toggles the Problems panel), unsaved dot,
+              action outcome on the left; cursor position, format and
+              filename on the right. Replaces the old inline banner. */}
+          {load.status === "ready" && (
+            <footer
+              data-testid="editor-footer"
+              className="flex shrink-0 items-center justify-between gap-3 border-t border-line px-5 py-1.5 text-xs"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="validity-chip"
+                  onClick={() => setProblemsOpen((prev) => !prev)}
+                  title="Toggle the problems panel"
+                  aria-pressed={problemsOpen}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    validity.kind === "valid"
+                      ? "border-status-success-border bg-status-success-bg text-status-success-text"
+                      : validity.kind === "invalid"
+                        ? "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+                        : "border-line bg-surface text-ink-muted"
+                  }`}
+                >
+                  {validity.kind === "valid" ? (
+                    <Check className="h-3 w-3" />
+                  ) : validity.kind === "invalid" ? (
+                    <CircleX className="h-3 w-3" />
+                  ) : validity.kind === "validating" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <CircleDashed className="h-3 w-3" />
+                  )}
+                  {validity.kind === "valid"
+                    ? "Valid"
+                    : validity.kind === "invalid"
+                      ? `${validity.count} issue${validity.count === 1 ? "" : "s"}`
+                      : validity.kind === "validating"
+                        ? "Validating…"
+                        : "Not validated"}
+                </button>
+                {dirty && (
+                  <span
+                    role="status"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-chip-amber-border bg-chip-amber-bg px-2 py-0.5 text-[10px] font-bold text-chip-amber-text"
+                  >
+                    <CircleDot className="h-3 w-3" />
+                    Unsaved changes
+                  </span>
+                )}
+                {status !== null && (
+                  <div
+                    data-testid="editor-status"
+                    aria-live="polite"
+                    className={`min-w-0 truncate rounded-md border px-2 py-0.5 font-medium ${
+                      status.kind === "ok"
+                        ? "border-status-success-border bg-status-success-bg text-status-success-text"
+                        : "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+                    }`}
+                  >
+                    {status.text}
+                  </div>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-3 text-ink-muted">
+                <span className="font-mono">
+                  Ln {cursor.line}, Col {cursor.col}
+                </span>
+                <span className="text-ink-faint">YAML</span>
+                <span className="max-w-[220px] truncate font-mono">{filename}</span>
+              </div>
+            </footer>
+          )}
         </div>
       </div>
 

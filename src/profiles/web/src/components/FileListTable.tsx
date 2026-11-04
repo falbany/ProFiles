@@ -179,7 +179,7 @@ interface FileListTableProps {
   /** Open the current directory in the OS file manager. */
   onOpenDirectory?: () => void;
   /** Open the configuration picker (used when no directory is configured). */
-  onOpenConfig?: () => void;
+  onLoadConfig?: () => void;
   filterText: string;
   onClearFilter: () => void;
   /**
@@ -244,7 +244,7 @@ export function FileListTable({
   recursive = false,
   onDisableRecursive,
   onOpenDirectory,
-  onOpenConfig,
+  onLoadConfig,
   filterText,
   onClearFilter,
   prefilterNote,
@@ -531,12 +531,12 @@ export function FileListTable({
                 <Loader2 className="h-5 w-5 animate-spin text-chip-indigo-text motion-reduce:animate-none" />
                 <span>Scanning files...</span>
               </div>
-            ) : !activeDirectory.trim() && onOpenConfig ? (
+            ) : !activeDirectory.trim() && onLoadConfig ? (
               <div className="flex flex-col items-center gap-3">
                 <span>Select a directory first.</span>
                 <button
                   type="button"
-                  onClick={onOpenConfig}
+                  onClick={onLoadConfig}
                   className={emptyActionButtonClass}
                 >
                   Choose configuration

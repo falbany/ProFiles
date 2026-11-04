@@ -38,6 +38,13 @@ describe("StatusBar LAN toggle", () => {
     expect(onToggleLan).toHaveBeenCalledWith(true);
   });
 
+  it("does not offer config loading any more (issue #101)", () => {
+    // "Load config…" moved into the config editor's header; the StatusBar
+    // must not carry a loading entry point (or the prop that fed it).
+    render(<StatusBar {...baseProps()} />);
+    expect(screen.queryByText(/load config/i)).toBeNull();
+  });
+
   it("reflects the enabled state via aria-pressed", () => {
     render(<StatusBar {...baseProps()} lanEnabled={true} onToggleLan={vi.fn()} />);
     expect(screen.getByRole("button", { name: /lan/i })).toHaveAttribute(

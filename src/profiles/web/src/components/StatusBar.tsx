@@ -1,5 +1,5 @@
 import Tooltip from "./Tooltip";
-import { Activity, Download, FileCog, FileText, Globe, Keyboard, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { Activity, Download, FileText, Globe, Keyboard, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
@@ -11,7 +11,6 @@ interface StatusBarProps {
   onToggleTheme: () => void;
   onOpenLog: () => void;
   onOpenConfig: () => void;
-  onLoadConfig?: () => void;
   onShowShortcuts: () => void;
   onReloadConfig?: () => void;
   /** Export the current results as CSV; the button renders only when set. */
@@ -20,7 +19,6 @@ interface StatusBarProps {
   exportDisabled?: boolean;
   language?: Language;
   onLanguageChange?: (lang: Language) => void;
-  activeConfigName?: string;
   /** Current bind state from /api/system; null while unknown. */
   lanEnabled?: boolean | null;
   /** Request a bind change; renders the LAN switch only when set. */
@@ -34,14 +32,12 @@ export function StatusBar({
   onToggleTheme,
   onOpenLog,
   onOpenConfig,
-  onLoadConfig,
   onShowShortcuts,
   onReloadConfig,
   onExport,
   exportDisabled = false,
   language = "en",
   onLanguageChange,
-  activeConfigName,
   lanEnabled,
   onToggleLan,
 }: StatusBarProps) {
@@ -193,21 +189,8 @@ export function StatusBar({
           </div>
         )}
 
-        {/* Load Config Button */}
-        {onLoadConfig && (
-          <Tooltip text={activeConfigName ? `Load a different .profiles file (active: ${activeConfigName})` : "Load a .profiles file"} block={false}>
-          <button
-            onClick={onLoadConfig}
-            className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
-          >
-            <FileCog className="h-3 w-3" />
-            <span>Load config…</span>
-          </button>
-          </Tooltip>
-        )}
-
         {/* Config Button */}
-        <Tooltip text="Open configuration file" block={false}>
+        <Tooltip text="Open the configuration editor" block={false}>
         <button
           onClick={onOpenConfig}
 
