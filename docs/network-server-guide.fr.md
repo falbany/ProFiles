@@ -1,6 +1,6 @@
 # Guide: Serveur Réseau ProFiles
 
-**Version** : 1.0  
+**Version** : 1.1  
 **Date** : 2026-10-15  
 **Fonctionnalité** : Partage réseau local - Accès depuis d'autres PC
 
@@ -107,6 +107,65 @@ L'interface ProFiles s'affiche exactement comme sur le PC hôte :
 - ✅ **Configuration** : Chargez des configurations personnalisées
 
 **Important** : Les fichiers sont lancés sur le **PC hôte**, pas sur le PC client.
+
+---
+
+## 📷 Lecture des codes-barres par caméra depuis les clients LAN (contexte sécurisé)
+
+Le **lecteur de codes-barres par caméra** (`Ctrl+Shift+B` dans l'interface web)
+utilise l'API `getUserMedia` du navigateur, qui ne fonctionne que dans un
+**contexte sécurisé** :
+
+- ✅ `http://localhost:8088` sur le **PC hôte** — fonctionne directement.
+- ❌ `http://192.168.x.x:8088` depuis un **client LAN** — le HTTP simple n'est
+  pas un contexte sécurisé, le navigateur bloque donc l'accès à la caméra
+  (la modale affiche une erreur caméra/permission alors que la caméra
+  fonctionne parfaitement).
+
+### Option A — Autoriser l'origine non sécurisée (navigateurs Chromium, desktop uniquement)
+
+Si vous ne pouvez pas installer de certificat sur chaque client, ajoutez
+l'origine ProFiles à la liste des origines « sécurisées » des navigateurs
+Chromium :
+
+1. Ouvrez `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+   (`edge://flags/…` sur Edge).
+2. Saisissez l'URL de ProFiles, par ex. `http://192.168.1.100:8088`
+   (séparez par des virgules pour plusieurs origines).
+3. Passez le sélecteur sur **Enabled** puis cliquez sur **Relaunch**.
+
+Le lecteur par caméra fonctionne désormais dans ce navigateur, en HTTP simple.
+
+**Remarques** :
+
+- Le réglage est propre à chaque navigateur et à chaque machine — chaque
+  client doit l'activer lui-même.
+- Firefox et les navigateurs mobiles n'ont **aucun équivalent** : la lecture
+  par caméra depuis un téléphone nécessite l'option B.
+- Conservez le serveur limité au LAN lorsque ce flag est actif (voir
+  [Sécurité](#️-sécurité)).
+
+### Option B — Servir en HTTPS avec un certificat de confiance locale
+
+L'autre voie est TLS avec un certificat réellement approuvé par les clients,
+par ex. avec [mkcert](https://github.com/FiloSottile/mkcert) sur l'hôte :
+
+```bash
+mkcert -install                                 # approuve l'autorité locale sur l'hôte
+mkcert localhost 192.168.1.100 monhote.local    # SANs pour chaque URL client
+```
+
+Démarrez ensuite le serveur avec `--ssl-certfile`/`--ssl-keyfile` (uvicorn
+accepte les deux), ou placez ProFiles derrière un reverse proxy qui termine
+le TLS. Chaque client LAN doit malgré tout importer le `rootCA.pem` de
+mkcert **une fois** — ignorez cette option si vous ne pouvez pas toucher aux
+clients.
+
+### Vérifier la disponibilité de la caméra
+
+Dans la console du navigateur client, vérifiez que `window.isSecureContext`
+vaut `true` ; s'il vaut `false`, la caméra ne sera jamais disponible,
+indépendamment des permissions du site.
 
 ---
 
@@ -282,7 +341,9 @@ Utiliser mDNS/Bonjour pour que les PC clients trouvent automatiquement le serveu
 
 ### HTTPS (Option D)
 
-Chiffrer les communications avec un certificat SSL.
+Chiffrer les communications avec un certificat SSL. C'est aussi le seul moyen
+d'utiliser le lecteur de codes-barres par caméra depuis un client mobile —
+voir [Lecture des codes-barres par caméra depuis les clients LAN](#-lecture-des-codes-barres-par-caméra-depuis-les-clients-lan-contexte-sécurisé).
 
 ---
 
@@ -294,6 +355,6 @@ Chiffrer les communications avec un certificat SSL.
 
 ---
 
-**Dernière mise à jour** : 2026-10-15  
+**Dernière mise à jour** : 2026-11-06  
 **Auteur** : Équipe ProFiles  
-**Version** : 1.0
+**Version** : 1.1

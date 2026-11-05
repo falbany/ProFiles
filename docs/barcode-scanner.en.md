@@ -191,6 +191,18 @@ The payload format is identical to what the barcode scanner consumes, ensuring f
 
 ---
 
+## Camera-Based Scanning (Web UI)
+
+Besides USB HID scanners, ProFiles can **decode barcodes with the device camera** directly in the browser:
+
+1. Press **`Ctrl+Shift+B`** (or use the camera entry next to the barcode toggle in the SearchBar).
+2. Grant camera access when the browser asks for it.
+3. Present the barcode to the camera — frames are decoded locally via the backend `POST /api/actions/barcode/decode` endpoint (zxing-cpp), and the result is applied like a scanned payload.
+
+> ⚠️ **Secure context required** — browsers only expose the camera API (`getUserMedia`) on `https://…` URLs (or `http://localhost`). If ProFiles is served over plain HTTP on a LAN address, the camera scanner cannot start; see [Network Server Guide → Camera Barcode Scanning from LAN Clients](./network-server-guide.en.md#-camera-barcode-scanning-from-lan-clients-secure-context) for the two workarounds (Chromium flag or HTTPS).
+
+---
+
 ## Accessibility
 
 - The barcode button has an `aria-label` that updates with the toggle state.
@@ -209,3 +221,4 @@ The payload format is identical to what the barcode scanner consumes, ensuring f
 | `~` not expanding to home | Verify the backend's `Path.expanduser()` is available (POSIX systems). |
 | Too few characters captured | Increase the debounce interval in `App.tsx` if scanning very slowly. |
 | Barcode scanned but no scan triggered | Ensure the payload includes `scan=1`. |
+| Camera scanner error on a LAN address | `getUserMedia` requires a secure context (`https://…` or `localhost`). See [Camera-Based Scanning](#camera-based-scanning-web-ui). |

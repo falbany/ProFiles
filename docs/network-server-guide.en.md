@@ -1,6 +1,6 @@
 # Guide: ProFiles Network Server
 
-**Version**: 1.0  
+**Version**: 1.1  
 **Date**: 2026-10-15  
 **Feature**: Local network sharing — access from other PCs
 
@@ -107,6 +107,59 @@ The ProFiles interface appears exactly as it does on the host PC:
 - ✅ **Configuration**: Load custom configurations
 
 **Important**: Files are launched on the **host PC**, not on the client PC.
+
+---
+
+## 📷 Camera Barcode Scanning from LAN Clients (Secure Context)
+
+The **camera barcode scanner** (`Ctrl+Shift+B` in the web UI) uses the
+browser's `getUserMedia` API, which only works in a **secure context**:
+
+- ✅ `http://localhost:8088` on the **host PC** — works out of the box.
+- ❌ `http://192.168.x.x:8088` from a **LAN client** — plain HTTP is not a
+  secure context, so the browser blocks camera access (the modal shows a
+  camera/permission error even though the camera itself is fine).
+
+### Option A — Allow the insecure origin (Chromium browsers, desktop only)
+
+If you cannot install a certificate on every client, whitelist the ProFiles
+origin as "secure" in Chromium-based browsers:
+
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+   (`edge://flags/…` on Edge).
+2. Enter the ProFiles URL, e.g. `http://192.168.1.100:8088`
+   (comma-separated for several origins).
+3. Set the dropdown to **Enabled** and click **Relaunch**.
+
+The camera scanner now works from that browser over plain HTTP.
+
+**Notes**:
+
+- This is per-browser and per-machine — each client must opt in.
+- Firefox and mobile browsers have **no equivalent** flag: camera scanning
+  from a phone requires Option B.
+- Keep the server LAN-only when using this flag (see [Security](#️-security)).
+
+### Option B — Serve HTTPS with a locally-trusted certificate
+
+The other path is TLS with a certificate clients actually trust, e.g. with
+[mkcert](https://github.com/FiloSottile/mkcert) on the host:
+
+```bash
+mkcert -install                                 # trust the local CA on the host
+mkcert localhost 192.168.1.100 myhost.local     # SANs for every client URL
+```
+
+Then start the server with `--ssl-certfile`/`--ssl-keyfile` (uvicorn accepts
+both), or put ProFiles behind a reverse proxy that terminates TLS. Each LAN
+client must still import mkcert's `rootCA.pem` **once** — skip this option
+when you cannot touch the clients.
+
+### Verifying camera availability
+
+In the client browser's console, check that `window.isSecureContext` is
+`true`; if it is `false`, the camera will never be available regardless of
+site permissions.
 
 ---
 
@@ -305,7 +358,9 @@ Use mDNS/Bonjour so that client PCs can discover the server automatically.
 
 ### HTTPS (Option D)
 
-Encrypt communications with an SSL certificate.
+Encrypt communications with an SSL certificate. This is also the only way to
+use the camera barcode scanner from mobile clients — see
+[Camera Barcode Scanning from LAN Clients](#-camera-barcode-scanning-from-lan-clients-secure-context).
 
 ---
 
@@ -317,6 +372,6 @@ Encrypt communications with an SSL certificate.
 
 ---
 
-**Last updated**: 2026-10-15  
+**Last updated**: 2026-11-06  
 **Author**: ProFiles Team  
-**Version**: 1.0
+**Version**: 1.1

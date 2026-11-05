@@ -191,6 +191,18 @@ Le format du payload est identique à celui consommé par le lecteur de codes-ba
 
 ---
 
+## Lecture par caméra (interface web)
+
+En complément des scanners USB HID, ProFiles peut **décoder les codes-barres avec la caméra de l'appareil**, directement dans le navigateur :
+
+1. Appuyez sur **`Ctrl+Shift+B`** (ou utilisez l'entrée caméra à côté du bouton code-barres dans la barre de recherche).
+2. Autorisez l'accès à la caméra lorsque le navigateur le demande.
+3. Présentez le code-barres à la caméra — les images sont décodées localement via le point de terminaison backend `POST /api/actions/barcode/decode` (zxing-cpp), et le résultat est appliqué comme un payload scanné.
+
+> ⚠️ **Contexte sécurisé requis** — les navigateurs n'exposent l'API caméra (`getUserMedia`) que sur les URL `https://…` (ou `http://localhost`). Si ProFiles est servi en HTTP simple sur une adresse LAN, le lecteur par caméra ne peut pas démarrer ; voir [Guide Serveur Réseau → Lecture des codes-barres par caméra depuis les clients LAN](./network-server-guide.fr.md#-lecture-des-codes-barres-par-caméra-depuis-les-clients-lan-contexte-sécurisé) pour les deux solutions de contournement (flag Chromium ou HTTPS).
+
+---
+
 ## Accessibilité
 
 - Le bouton code-barres possède une `aria-label` qui se met à jour selon l'état du bouton.
@@ -209,3 +221,4 @@ Le format du payload est identique à celui consommé par le lecteur de codes-ba
 | `~` ne se développe pas en répertoire personnel | Vérifiez que `Path.expanduser()` du backend est disponible (systèmes POSIX). |
 | Trop peu de caractères capturés | Augmentez l'intervalle de débogage dans `App.tsx` si vous scannez très lentement. |
 | Code-barres scanné mais aucun scan déclenché | Vérifiez que le payload inclut `scan=1`. |
+| Erreur du lecteur caméra sur une adresse LAN | `getUserMedia` exige un contexte sécurisé (`https://…` ou `localhost`). Voir [Lecture par caméra](#lecture-par-caméra-interface-web). |
