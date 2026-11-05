@@ -6,10 +6,11 @@ Also tests profiles.__init__ package metadata and __main__ entry point.
 from __future__ import annotations
 
 import sys
-import tomllib
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 import profiles
 from profiles.app import ProFileApp, init_default_config, main
@@ -21,18 +22,39 @@ from profiles.desktop.lifecycle import ServerStartError
 # ── Package metadata (__init__.py) ──────────────────────────────────────────
 
 
-def _canonical_version() -> str:
-    """Return [project].version — the single source of truth."""
-    root = Path(__file__).resolve().parents[1]
-    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    return pyproject["project"]["version"]
+def _vcs_version() -> str | None:
+    """Return the hatch-vcs generated version, or None if not built."""
+    try:
+        from profiles._version import version
+
+        return str(version)
+    except ImportError:
+        return None
 
 
 class TestPackageMetadata:
     """profiles.__init__ exports version, author, license."""
 
     def test_version(self) -> None:
-        assert profiles.__version__ == _canonical_version()
+        vcs = _vcs_version()
+        if vcs is not None:
+            assert profiles.__version__ == vcs
+        assert Version(profiles.__version__)  # valid PEP 440
+
+    def test_version_uses_metadata_when_no_vcs_module(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(sys.modules, "profiles._version", None)
+        monkeypatch.setattr("importlib.metadata.version", lambda dist: "9.9.9-metadata")
+        assert profiles._resolve_version() == "9.9.9-metadata"
+
+    def test_version_last_resort_when_no_vcs_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _missing(dist: str) -> str:
+            raise PackageNotFoundError(dist)
+
+        monkeypatch.setattr("importlib.metadata.version", _missing)
+        monkeypatch.setitem(sys.modules, "profiles._version", None)
+        assert profiles._resolve_version() == "0.0.0-dev"
 
     def test_author(self) -> None:
         assert profiles.__author__ == "Florent ALBANY"

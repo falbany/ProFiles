@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling", "nodeenv>=1.8.0"]
+requires = ["hatchling", "hatch-vcs", "nodeenv>=1.8.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "profiles-app"
-version = "0.11.0-rc.2"
+dynamic = ["version"]
 description = "ProFiles - A modern GUI launcher for production test programs"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -74,9 +74,16 @@ artifacts = ["src/profiles/web/dist"]
 # ============================================
 # Briefcase — native installer config
 # ============================================
-# Note: the app version is deliberately NOT repeated here. Briefcase
-# merges PEP 621 metadata (merge_pep621_config in briefcase.config), so
-# [project].version above is the single source of truth for installers.
+# Note: the app version is deliberately NOT repeated here. The git tag is
+# the single source of truth: hatch-vcs derives the version from it at
+# build time, and Briefcase picks it up via the PEP 621 metadata merge
+# (merge_pep621_config in briefcase.config).
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0-dev"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/profiles/_version.py"
 [tool.briefcase]
 project_name = "ProFiles"
 bundle = "com.github.falbany"
@@ -141,6 +148,7 @@ camera = "ProFiles uses the camera to scan configuration barcodes and QR codes."
 
 [tool.pylint.MASTER]
 init-import = "yes"
+ignore-paths = ["src/profiles/_version.py"]
 max-line-length = 100
 output-format = "colorized"
 reports = false

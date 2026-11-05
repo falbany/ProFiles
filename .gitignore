@@ -84,6 +84,9 @@ wheels/
 src/profiles.dist-info/
 share/python-wheels/
 *.egg-info/
+
+# hatch-vcs generated version module (build-time artifact)
+src/profiles/_version.py
 .installed.cfg
 *.egg
 MANIFEST
