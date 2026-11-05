@@ -41,14 +41,12 @@ class TestPackageMetadata:
             assert profiles.__version__ == vcs
         assert Version(profiles.__version__)  # valid PEP 440
 
-    def test_version_uses_vcs_fallback_when_metadata_missing(
+    def test_version_uses_metadata_when_no_vcs_module(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        def _missing(dist: str) -> str:
-            raise PackageNotFoundError(dist)
-
-        monkeypatch.setattr("importlib.metadata.version", _missing)
-        assert profiles._resolve_version() == _vcs_version()
+        monkeypatch.setitem(sys.modules, "profiles._version", None)
+        monkeypatch.setattr("importlib.metadata.version", lambda dist: "9.9.9-metadata")
+        assert profiles._resolve_version() == "9.9.9-metadata"
 
     def test_version_last_resort_when_no_vcs_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _missing(dist: str) -> str:
