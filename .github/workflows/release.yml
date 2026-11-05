@@ -15,31 +15,19 @@ jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - name: Verify tag is SemVer and matches [project].version
+      - name: Verify tag is SemVer
         env:
           TAG_VERSION: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
           import os
-          import pathlib
           import re
           import sys
-          import tomllib
 
           tag = os.environ["TAG_VERSION"]
           if not re.fullmatch(r"v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", tag):
               sys.exit(f"Tag {tag!r} is not SemVer (expected vMAJOR.MINOR.PATCH[...])")
-
-          data = tomllib.loads(
-              pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
-          )
-          project = data["project"]["version"]
-          version = tag.removeprefix("v")
-          assert version == project, (
-              f"Version mismatch: tag={version!r} pyproject={project!r}"
-          )
-          print(f"Version guard OK: {version}")
+          print(f"Tag guard OK: {tag}")
           PY
 
   windows:
@@ -47,6 +35,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: hatch-vcs derives the version from the tag — a
+          # shallow checkout would silently build a fallback version.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       # Pin the sync interpreter: briefcase embeds the running Python's
       # major.minor into the bundle, and 3.15 (the newest interpreter
@@ -66,6 +58,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: hatch-vcs derives the version from the tag — a
+          # shallow checkout would silently build a fallback version.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --python 3.13 --locked
       # --no-input: CI has no TTY; without it briefcase prompts for a
@@ -83,6 +79,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: hatch-vcs derives the version from the tag — a
+          # shallow checkout would silently build a fallback version.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       # The deb (system) backend requires briefcase to run under the
       # system python3 — pin the sync interpreter to it. Briefcase 0.4.x

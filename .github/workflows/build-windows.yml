@@ -18,6 +18,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: hatch-vcs derives the version from git tags — a
+          # shallow checkout would silently build a fallback version.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --python 3.13 --locked
       # Exercise the same packaging command as release.yml so MSI/WiX
