@@ -6,9 +6,6 @@ and launch files with flexible configuration.
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
-
 __author__ = "Florent ALBANY"
 __license__ = "MIT"
 
@@ -16,9 +13,9 @@ __license__ = "MIT"
 def _resolve_version() -> str:
     """Return the package version.
 
-    Source of truth is ``pyproject.toml`` at the repo root. We first try
-    ``importlib.metadata`` for installed packages, then fall back to parsing
-    ``pyproject.toml`` for editable installs or development environments.
+    Resolution order: installed package metadata (dist-info), the
+    hatch-vcs generated ``profiles._version`` module (editable/dev
+    builds), then a development sentinel for git-less source trees.
     """
     # Primary: use importlib.metadata for installed packages. The PEP 621
     # distribution name is "profiles-app"; "profiles" covers legacy
@@ -31,26 +28,17 @@ def _resolve_version() -> str:
             return version("profiles-app")
         except PackageNotFoundError:
             return version("profiles")
-    except PackageNotFoundError:
-        # Package not installed via pip, fall back to pyproject.toml
-        pass
     except Exception:
-        # Any other error (permissions, corrupted install, etc.)
+        # Not installed via pip, or metadata unreadable (permissions,
+        # corrupted install, etc.) — fall through to the vcs module.
         pass
 
-    # Fallback: parse pyproject.toml for editable installs
-    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    if pyproject.exists():
-        match = re.search(
-            r'^version\s*=\s*"([^"]+)"',
-            pyproject.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        )
-        if match:
-            return match.group(1)
-
-    # Last resort: return a development version string
-    return "0.0.0-dev"
+    # Fallback: version module generated at build time by hatch-vcs
+    try:
+        from profiles._version import version as vcs_version
+    except ImportError:
+        return "0.0.0-dev"
+    return str(vcs_version)
 
 
 __version__ = _resolve_version()

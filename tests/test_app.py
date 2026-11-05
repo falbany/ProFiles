@@ -6,6 +6,7 @@ Also tests profiles.__init__ package metadata and __main__ entry point.
 from __future__ import annotations
 
 import sys
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,23 @@ class TestPackageMetadata:
         if vcs is not None:
             assert profiles.__version__ == vcs
         assert Version(profiles.__version__)  # valid PEP 440
+
+    def test_version_uses_vcs_fallback_when_metadata_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _missing(dist: str) -> str:
+            raise PackageNotFoundError(dist)
+
+        monkeypatch.setattr("importlib.metadata.version", _missing)
+        assert profiles._resolve_version() == _vcs_version()
+
+    def test_version_last_resort_when_no_vcs_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _missing(dist: str) -> str:
+            raise PackageNotFoundError(dist)
+
+        monkeypatch.setattr("importlib.metadata.version", _missing)
+        monkeypatch.setitem(sys.modules, "profiles._version", None)
+        assert profiles._resolve_version() == "0.0.0-dev"
 
     def test_author(self) -> None:
         assert profiles.__author__ == "Florent ALBANY"
