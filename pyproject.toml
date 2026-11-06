@@ -89,7 +89,7 @@ project_name = "ProFiles"
 bundle = "com.github.falbany"
 url = "https://github.com/falbany/profiles"
 license = "MIT"
-author = "Florent ALBANY"
+author = "Falbany Labs"
 author_email = "florent.albany@gmail.com"
 
 [tool.briefcase.app.profiles]
