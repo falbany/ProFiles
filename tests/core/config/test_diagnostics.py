@@ -69,3 +69,16 @@ def test_all_issues_carry_error_severity() -> None:
     issues = collect_config_issues(content)
     assert issues
     assert all(issue["severity"] == "error" for issue in issues)
+
+
+def test_non_mapping_root_reports_error() -> None:
+    issues_scalar = collect_config_issues("42\n")
+    assert any("root must be a mapping" in i["message"] for i in issues_scalar)
+
+    issues_list = collect_config_issues("- item1\n- item2\n")
+    assert any("root must be a mapping" in i["message"] for i in issues_list)
+
+
+def test_non_hashable_extends_reports_error_without_crash() -> None:
+    issues = collect_config_issues("configs: {a: {extends: [b]}}\n")
+    assert any("configs.a.extends" in i["message"] for i in issues)

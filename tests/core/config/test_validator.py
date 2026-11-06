@@ -84,3 +84,13 @@ class TestCollectIssues:
             "configs": {"prod": {"extends": "base"}, "base": {}},
         }
         assert collect_issues(raw) == []
+
+    def test_non_mapping_root(self) -> None:
+        errors = collect_issues(42)  # type: ignore[arg-type]
+        assert len(errors) == 1
+        assert "root must be a mapping" in errors[0].message
+
+    def test_non_string_extends(self) -> None:
+        raw = {"configs": {"a": {"extends": ["b"]}}}
+        errors = collect_issues(raw)
+        assert any(e.path == "configs.a.extends" for e in errors)

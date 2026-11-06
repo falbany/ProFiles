@@ -39,10 +39,15 @@ def collect_config_issues(text: str) -> list[dict[str, str]]:
         raw = read_yaml_text(text)
     except Exception as exc:  # noqa: BLE001 — any parser failure is report data
         return [{"severity": "error", "message": f"YAML syntax error: {exc}"}]
-    if not raw:
+    if not raw and not isinstance(raw, (int, float, bool)):
         return [{"severity": "error", "message": "configuration file is empty"}]
+    if not isinstance(raw, dict):
+        return [{"severity": "error", "message": "configuration root must be a mapping"}]
 
-    issues = [{"severity": "error", "message": str(error)} for error in collect_issues(raw)]
+    try:
+        issues = [{"severity": "error", "message": str(error)} for error in collect_issues(raw)]
+    except Exception as exc:  # noqa: BLE001
+        issues = [{"severity": "error", "message": f"semantic validation error: {exc}"}]
 
     try:
         AppConfigYaml.model_validate(raw)
@@ -53,6 +58,8 @@ def collect_config_issues(text: str) -> list[dict[str, str]]:
             issues.append(
                 {"severity": "error", "message": f"{location}: {message}" if location else message}
             )
+    except Exception as exc:  # noqa: BLE001
+        issues.append({"severity": "error", "message": f"schema validation error: {exc}"})
     return issues
 
 

@@ -32,9 +32,12 @@ def collect_issues(raw: dict) -> list[ConfigError]:
     """
     errors: list[ConfigError] = []
 
+    if not isinstance(raw, dict):
+        return [ConfigError("", "configuration root must be a mapping")]
+
     for key in raw:
-        if key not in _KNOWN_TOP_LEVEL:
-            errors.append(ConfigError(key, f"unknown top-level key '{key}'"))
+        if not isinstance(key, str) or key not in _KNOWN_TOP_LEVEL:
+            errors.append(ConfigError(str(key), f"unknown top-level key '{key}'"))
 
     configs = raw.get("configs") or {}
     if not isinstance(configs, dict):
@@ -46,7 +49,7 @@ def collect_issues(raw: dict) -> list[ConfigError]:
         extends = cfg.get("extends")
         if extends is None:
             continue
-        if extends not in configs:
+        if not isinstance(extends, str) or extends not in configs:
             errors.append(
                 ConfigError(
                     f"configs.{name}.extends",
@@ -76,13 +79,14 @@ def collect_issues(raw: dict) -> list[ConfigError]:
             return
         visiting.add(name)
         extends = configs[name].get("extends")
-        if extends is not None:
+        if isinstance(extends, str):
             visit(extends, (*stack, name))
         visiting.discard(name)
         visited.add(name)
 
     for name in configs:
-        visit(name, (name,))
+        if isinstance(name, str):
+            visit(name, (name,))
 
     return errors
 
@@ -100,9 +104,9 @@ def validate(raw: dict) -> None:
         ConfigError: On unknown top-level keys, unknown ``extends``
             references, or inheritance cycles.
     """
-    errors = collect_issues(raw)
-    if errors:
-        raise errors[0]
+    issues = collect_issues(raw)
+    if issues:
+        raise issues[0]
 
 
 __all__ = ["collect_issues", "validate"]
