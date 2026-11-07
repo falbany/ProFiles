@@ -382,7 +382,14 @@ export async function launchFile(params: {
   return res.json();
 }
 
-export async function revealFile(filePath: string): Promise<{ success: boolean }> {
+/** Shape returned by the `/api/actions/*` endpoints (ActionResult serialised). */
+export interface ActionResponse {
+  status: string;
+  message: string;
+  path?: string | null;
+}
+
+export async function revealFile(filePath: string): Promise<ActionResponse> {
   const res = await fetch("/api/actions/reveal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
