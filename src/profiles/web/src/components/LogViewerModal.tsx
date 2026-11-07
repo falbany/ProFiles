@@ -66,11 +66,18 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
   /** Kept in a ref so the poll effect can re-read it without re-subscribing. */
   const liveRef = useRef(live);
   const filterRef = useRef<{ level: LogLevel | null; search: string }>({ level, search });
+  /** Monotonic tag per load call — a slow response for a previous filter must
+   *  never overwrite the results of a newer one (issue #139). */
+  const loadSeqRef = useRef(0);
+  /** Armed on close so the debounce effect skips its first run after the
+   *  next open — the initial-fetch effect already loaded those filters. */
+  const skipDebounceRef = useRef(true);
 
   liveRef.current = live;
   filterRef.current = { level, search };
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     const { level: activeLevel, search: activeSearch } = filterRef.current;
     setLoading(true);
     try {
@@ -79,14 +86,18 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
         level: activeLevel,
         search: activeSearch,
       });
+      if (loadSeqRef.current !== seq) return;
       setEntries(data.entries);
       setLogPath(data.path);
       setSizeBytes(data.size_bytes);
       setError(null);
     } catch (err) {
+      if (loadSeqRef.current !== seq) return;
       setError((err as Error)?.message || "Failed to read the log file");
     } finally {
-      setLoading(false);
+      // Only the newest call owns the loading flag — a superseded response
+      // finishing late must not clear the spinner of the in-flight one.
+      if (loadSeqRef.current === seq) setLoading(false);
     }
   }, []);
 
@@ -105,9 +116,19 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
     return () => window.clearInterval(timer);
   }, [isOpen, live, load]);
 
-  // Debounce text filter input instead of firing a request per keystroke.
+  // Debounce text/level filter input instead of firing a request per
+  // keystroke. The first run after opening is skipped — the initial-fetch
+  // effect above already loaded the current filters, so firing here would
+  // double-fetch on every open (issue #139).
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      skipDebounceRef.current = true;
+      return;
+    }
+    if (skipDebounceRef.current) {
+      skipDebounceRef.current = false;
+      return;
+    }
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
   }, [isOpen, level, search, load]);
@@ -429,7 +450,7 @@ export function LogViewerModal({ isOpen, onClose, onOpenExternally }: LogViewerM
 
             <span className="hidden items-center gap-1.5 lg:flex">
               <span className="hidden sm:inline">Ctrl + Shift + L</span>
-              <span>opens externally</span>
+              <span>toggles this viewer</span>
             </span>
           </div>
         </div>
