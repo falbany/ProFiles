@@ -136,6 +136,14 @@ export default function App() {
   const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
   const [barcodeFilePath, setBarcodeFilePath] = useState<string | undefined>(undefined);
 
+  // Verify-hash manual entry — clipboard reads are refused on some webviews,
+  // so the expected hash is typed in instead (issue #141).
+  const [verifyHashPrompt, setVerifyHashPrompt] = useState<{
+    file: ScannedFileItem;
+    algorithm: "md5" | "sha256";
+  } | null>(null);
+  const [verifyHashInput, setVerifyHashInput] = useState<string>("");
+
   // Camera Barcode Scanner & Single match prompt state
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [singleMatchFile, setSingleMatchFile] = useState<ScannedFileItem | null>(null);
@@ -900,16 +908,15 @@ export default function App() {
     }
   };
 
-  const handleVerifyHash = async (file: ScannedFileItem, algorithm: "md5" | "sha256") => {
+  const runHashVerification = async (
+    file: ScannedFileItem,
+    algorithm: "md5" | "sha256",
+    expectedHash: string,
+  ) => {
+    showToast(`Computing ${algorithm.toUpperCase()}...`);
     try {
-      const clipboardText = await navigator.clipboard.readText();
-      if (!clipboardText.trim()) {
-        showToast("Clipboard is empty — copy a hash first, then try again.");
-        return;
-      }
-      showToast(`Computing ${algorithm.toUpperCase()}...`);
       const res = await computeHash(file.path, algorithm);
-      const match = res.hash.toLowerCase() === clipboardText.trim().toLowerCase();
+      const match = res.hash.toLowerCase() === expectedHash.trim().toLowerCase();
       if (match) {
         showToast(`✅  ${algorithm.toUpperCase()} matches!`);
       } else {
@@ -918,6 +925,25 @@ export default function App() {
     } catch (err: any) {
       showToast(`Verification failed: ${err.message}`, "error");
     }
+  };
+
+  const handleVerifyHash = async (file: ScannedFileItem, algorithm: "md5" | "sha256") => {
+    let clipboardText: string;
+    try {
+      clipboardText = await navigator.clipboard.readText();
+    } catch {
+      // Clipboard reads are commonly refused inside the desktop webviews
+      // (WKWebView / WebKitGTK) — fall back to manual entry instead of dying
+      // with an "empty clipboard"-style error (issue #141).
+      setVerifyHashInput("");
+      setVerifyHashPrompt({ file, algorithm });
+      return;
+    }
+    if (!clipboardText.trim()) {
+      showToast("Clipboard is empty — copy a hash first, then try again.");
+      return;
+    }
+    await runHashVerification(file, algorithm, clipboardText);
   };
 
   const handleProperties = (file: ScannedFileItem) => {
@@ -1669,7 +1695,14 @@ export default function App() {
         isOpen={showLogViewer}
         onClose={() => setShowLogViewer(false)}
         onOpenExternally={() => {
-          openLogFile().then((r) => showToast(r.message));
+          openLogFile()
+            .then((r) => showToast(r.message))
+            .catch((err: unknown) =>
+              showToast(
+                err instanceof Error ? err.message : "Failed to open the log file",
+                "error",
+              ),
+            );
         }}
       />
 
@@ -1699,6 +1732,67 @@ export default function App() {
         }}
         initialFilePath={barcodeFilePath}
       />
+
+      {/* Verify-hash manual entry (issue #141) — the clipboard-based path is
+          unavailable inside webviews that refuse clipboard reads. */}
+      {verifyHashPrompt && (
+        <div
+          className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => setVerifyHashPrompt(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="verify-hash-title"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setVerifyHashPrompt(null);
+              }
+            }}
+            onClick={(event) => event.stopPropagation()}
+            className="animate-modal-in w-[440px] max-w-full rounded-2xl border border-frame-line glass-panel p-5"
+          >
+            <h2 id="verify-hash-title" className="mb-1 text-sm font-semibold text-ink">
+              Verify {verifyHashPrompt.algorithm.toUpperCase()}
+            </h2>
+            <p className="mb-3 text-xs text-ink-muted">
+              Clipboard access is unavailable here — paste the expected hash below.
+            </p>
+            <input
+              autoFocus
+              type="text"
+              value={verifyHashInput}
+              onChange={(event) => setVerifyHashInput(event.target.value)}
+              placeholder="Expected hash"
+              aria-label="Expected hash"
+              className="mb-4 w-full rounded-lg border border-line bg-elevated px-3 py-2 font-mono text-xs text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setVerifyHashPrompt(null)}
+                className="min-h-9 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!verifyHashInput.trim()}
+                onClick={() => {
+                  const { file, algorithm } = verifyHashPrompt;
+                  setVerifyHashPrompt(null);
+                  void runHashVerification(file, algorithm, verifyHashInput);
+                }}
+                className="min-h-9 rounded-lg border border-transparent bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                Verify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Camera Barcode Scanner Modal */}
       <CameraBarcodeModal

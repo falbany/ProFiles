@@ -413,7 +413,7 @@ export function FilePropertiesModal({ isOpen, file, onClose, onLaunch }: FilePro
                         </span>
                       )}
                       {metadata.attributes.is_hidden && (
-                        <span className="inline-flex items-center gap-1 rounded-md border border-slate-500/30 bg-slate-600/20 px-2 py-0.5 text-xs text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-line bg-elevated px-2 py-0.5 text-xs text-ink-muted">
                           <EyeOff className="h-3 w-3" /> Hidden
                         </span>
                       )}

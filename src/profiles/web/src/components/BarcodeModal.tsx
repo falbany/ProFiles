@@ -21,11 +21,26 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
   const [pairs, setPairs] = useState<KeyValuePair[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Failure of the *live* regenerate — shown inline without tearing down the editor. */
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  /** Monotonic tag per generate call — a slow response for older content must
+   *  never overwrite the image of a newer edit (issue #140). */
+  const barcodeSeqRef = useRef(0);
+  const barcodeTimerRef = useRef<number | null>(null);
   const handleDialogKeyDown = useModalA11y({ isOpen, onClose, dialogRef: modalRef });
+
+  // Drop a pending debounced generate when the modal closes.
+  useEffect(() => {
+    if (isOpen) return;
+    if (barcodeTimerRef.current !== null) {
+      window.clearTimeout(barcodeTimerRef.current);
+      barcodeTimerRef.current = null;
+    }
+  }, [isOpen]);
 
   // Initialize from file path or content
   useEffect(() => {
@@ -57,32 +72,49 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
     setPairs(newPairs);
   };
 
-  const updateBarcode = async (currentPairs: KeyValuePair[]) => {
+  const generateBarcodeFor = async (content: string) => {
+    const seq = ++barcodeSeqRef.current;
+    try {
+      const res = await generateBarcode({ content });
+      if (barcodeSeqRef.current !== seq) return; // a newer edit superseded this response
+      setBarcodeImage(res.image);
+      setGenerateError(null);
+    } catch (err) {
+      if (barcodeSeqRef.current !== seq) return;
+      setGenerateError(err instanceof Error ? err.message : "Failed to generate the barcode");
+    }
+  };
+
+  const updateBarcode = (currentPairs: KeyValuePair[]) => {
     const content = currentPairs
       .filter(p => p.key.trim())
       .map(p => `${p.key.trim()}=${p.value.trim()}`)
       .join(";");
-    
+
     setRawContent(content);
-    
+
+    if (barcodeTimerRef.current !== null) {
+      window.clearTimeout(barcodeTimerRef.current);
+      barcodeTimerRef.current = null;
+    }
+
     if (!content) {
+      barcodeSeqRef.current += 1; // invalidate any in-flight generate
       setBarcodeImage(null);
+      setGenerateError(null);
       return;
     }
 
-    try {
-      const res = await generateBarcode({ content });
-      setBarcodeImage(res.image);
-    } catch (err: any) {
-      console.error("Failed to re-generate barcode:", err);
-    }
+    // Debounce the round trip: firing per keystroke flooded the server and
+    // let out-of-order responses leave a stale image on screen (issue #140).
+    barcodeTimerRef.current = window.setTimeout(() => void generateBarcodeFor(content), 250);
   };
 
   const handlePairChange = (index: number, field: keyof KeyValuePair, value: string) => {
     const newPairs = [...pairs];
     newPairs[index][field] = value;
     setPairs(newPairs);
-    void updateBarcode(newPairs);
+    updateBarcode(newPairs);
   };
 
   const addPair = () => {
@@ -93,14 +125,14 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
   const removePair = (index: number) => {
     const newPairs = pairs.filter((_, i) => i !== index);
     setPairs(newPairs);
-    void updateBarcode(newPairs);
+    updateBarcode(newPairs);
   };
 
   const addMd5 = () => {
     if (!md5 || pairs.some(p => p.key.toLowerCase() === "md5")) return;
     const newPairs = [...pairs, { key: "md5", value: md5 }];
     setPairs(newPairs);
-    void updateBarcode(newPairs);
+    updateBarcode(newPairs);
   };
 
   const handleSave = async () => {
@@ -218,6 +250,11 @@ export function BarcodeModal({ isOpen, onClose, initialFilePath, md5 }: BarcodeM
               {saveStatus && (
                 <p className="break-all text-center text-[11px] text-ink-muted" role="status">
                   {saveStatus}
+                </p>
+              )}
+              {generateError && (
+                <p role="alert" className="break-all text-center text-[11px] text-status-danger-text">
+                  {generateError}
                 </p>
               )}
             </div>

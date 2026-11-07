@@ -277,6 +277,13 @@ export function ConfigEditorModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const editorHostRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  /**
+   * Coordinates of a mousedown that started on the backdrop itself. A text
+   * selection drag that begins inside the editor and ends on the overlay
+   * must not count as a backdrop click and open the discard dialog
+   * mid-selection (issue #141).
+   */
+  const backdropPressRef = useRef<{ x: number; y: number } | null>(null);
   /** Text the editor was seeded with — the baseline for the dirty check. */
   const loadedTextRef = useRef<string>("");
   /**
@@ -950,7 +957,18 @@ export function ConfigEditorModal({
         aria-modal="true"
         aria-labelledby="config-editor-title"
         onKeyDown={handleDialogKeyDown}
-        onClick={requestClose}
+        onMouseDown={(event) => {
+          backdropPressRef.current =
+            event.target === event.currentTarget ? { x: event.clientX, y: event.clientY } : null;
+        }}
+        onClick={(event) => {
+          const press = backdropPressRef.current;
+          backdropPressRef.current = null;
+          // Close only when the press *and* the release both land on the
+          // backdrop — a selection drag ending here started elsewhere.
+          if (!press || event.target !== event.currentTarget) return;
+          requestClose();
+        }}
         className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
       >
         <div
