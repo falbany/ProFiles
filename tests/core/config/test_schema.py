@@ -72,3 +72,30 @@ class TestAppConfigYaml:
         )
         assert "prod" in cfg.configs
         assert cfg.configs["prod"].match.hostname == ["PC1"]
+
+
+class TestMatchCriteriaSchema:
+    def test_valid_glob_and_regex(self) -> None:
+        schema = MatchCriteriaSchema(
+            hostname=["WORKSTATION-*", "re:^station-\\d+$"],
+            ip=["192.168.1.*"],
+            path=["re:^/data/.*"],
+        )
+        assert len(schema.hostname) == 2
+        assert schema.ip == ["192.168.1.*"]
+        assert schema.path == ["re:^/data/.*"]
+
+    def test_invalid_regex_raises_validation_error(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            MatchCriteriaSchema(hostname=["re:([unclosed"])
+        assert "invalid regex pattern" in str(exc.value)
+        assert "re:([unclosed" in str(exc.value)
+
+    def test_invalid_regex_in_ip_and_path_raises(self) -> None:
+        with pytest.raises(ValidationError) as exc_ip:
+            MatchCriteriaSchema(ip=["re:*bad"])
+        assert "invalid regex pattern" in str(exc_ip.value)
+
+        with pytest.raises(ValidationError) as exc_path:
+            MatchCriteriaSchema(path=["re:[unclosed"])
+        assert "invalid regex pattern" in str(exc_path.value)

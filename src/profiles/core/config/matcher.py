@@ -31,7 +31,10 @@ def match_pattern(pattern: str, value: str, is_path: bool = False) -> bool:
     if pattern.startswith("re:"):
         regex = pattern[3:]
         target = _normalize_path(value) if is_path else value
-        return bool(re.search(regex, target, re.IGNORECASE))
+        try:
+            return bool(re.search(regex, target, re.IGNORECASE))
+        except re.error:
+            return False
 
     if is_path:
         norm_pattern = _normalize_path(pattern)

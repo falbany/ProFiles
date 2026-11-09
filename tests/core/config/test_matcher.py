@@ -10,6 +10,7 @@ def test_match_pattern_glob_and_regex():
     assert match_pattern("WORKSTATION-*", "workstation-1")
     assert match_pattern("re:^192\\.168\\.\\d+\\.\\d+$", "192.168.1.50")
     assert not match_pattern("WORKSTATION-*", "SERVER-1")
+    assert not match_pattern("re:([unclosed", "workstation-1")
 
 
 def test_matches_machine_config_or_logic():

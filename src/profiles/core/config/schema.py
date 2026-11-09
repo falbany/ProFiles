@@ -174,6 +174,18 @@ class MatchCriteriaSchema(BaseModel):
             return [str(item) for item in value]
         return []
 
+    @field_validator("hostname", "ip", "path")
+    @classmethod
+    def _validate_patterns(cls, patterns: list[str]) -> list[str]:
+        for pattern in patterns:
+            if pattern.startswith("re:"):
+                regex = pattern[3:]
+                try:
+                    re.compile(regex)
+                except re.error as exc:
+                    raise ValueError(f"invalid regex pattern '{pattern}': {exc}") from exc
+        return patterns
+
 
 class MachineConfig(BaseModel):
     """A named configuration block in YAML configs dict.

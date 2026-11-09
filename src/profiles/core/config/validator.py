@@ -8,6 +8,8 @@ references to missing configs, and inheritance cycles. Raises
 
 from __future__ import annotations
 
+import re
+
 from profiles.core.config.schema import ConfigError
 
 _KNOWN_TOP_LEVEL = {"version", "defaults", "columns", "hooks", "configs"}
@@ -47,15 +49,41 @@ def collect_issues(raw: dict) -> list[ConfigError]:
         if not isinstance(cfg, dict):
             continue
         extends = cfg.get("extends")
-        if extends is None:
-            continue
-        if not isinstance(extends, str) or extends not in configs:
+        if extends is not None and (not isinstance(extends, str) or extends not in configs):
             errors.append(
                 ConfigError(
                     f"configs.{name}.extends",
                     f"unknown config '{extends}'",
                 )
             )
+
+        match = cfg.get("match")
+        if isinstance(match, dict):
+            for field in ("hostname", "ip", "path"):
+                raw_val = match.get(field)
+                if isinstance(raw_val, str):
+                    if raw_val.startswith("re:"):
+                        try:
+                            re.compile(raw_val[3:])
+                        except re.error as exc:
+                            errors.append(
+                                ConfigError(
+                                    f"configs.{name}.match.{field}",
+                                    f"invalid regex pattern '{raw_val}': {exc}",
+                                )
+                            )
+                elif isinstance(raw_val, list):
+                    for idx, item in enumerate(raw_val):
+                        if isinstance(item, str) and item.startswith("re:"):
+                            try:
+                                re.compile(item[3:])
+                            except re.error as exc:
+                                errors.append(
+                                    ConfigError(
+                                        f"configs.{name}.match.{field}[{idx}]",
+                                        f"invalid regex pattern '{item}': {exc}",
+                                    )
+                                )
 
     # Cycle detection via DFS; each cycle met along the way is reported.
     visiting: set[str] = set()
