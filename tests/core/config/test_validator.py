@@ -94,3 +94,50 @@ class TestCollectIssues:
         raw = {"configs": {"a": {"extends": ["b"]}}}
         errors = collect_issues(raw)
         assert any(e.path == "configs.a.extends" for e in errors)
+
+    def test_invalid_regex_match_pattern_collected(self) -> None:
+        raw = {
+            "configs": {
+                "prod": {
+                    "match": {
+                        "hostname": ["re:([unclosed"],
+                        "ip": ["192.168.1.1"],
+                    }
+                }
+            }
+        }
+        errors = collect_issues(raw)
+        assert len(errors) == 1
+        assert errors[0].path == "configs.prod.match.hostname[0]"
+        assert "invalid regex pattern" in errors[0].message
+        assert "re:([unclosed" in errors[0].message
+
+    def test_invalid_regex_match_pattern_scalar(self) -> None:
+        raw = {
+            "configs": {
+                "prod": {
+                    "match": {
+                        "path": "re:[unclosed",
+                    }
+                }
+            }
+        }
+        errors = collect_issues(raw)
+        assert len(errors) == 1
+        assert errors[0].path == "configs.prod.match.path"
+        assert "invalid regex pattern" in errors[0].message
+
+    def test_validate_invalid_regex_raises(self) -> None:
+        raw = {
+            "configs": {
+                "prod": {
+                    "match": {
+                        "hostname": ["re:([unclosed"],
+                    }
+                }
+            }
+        }
+        with pytest.raises(ConfigError) as exc:
+            validate(raw)
+        assert exc.value.path == "configs.prod.match.hostname[0]"
+        assert "invalid regex pattern" in exc.value.message

@@ -82,3 +82,16 @@ def test_non_mapping_root_reports_error() -> None:
 def test_non_hashable_extends_reports_error_without_crash() -> None:
     issues = collect_config_issues("configs: {a: {extends: [b]}}\n")
     assert any("configs.a.extends" in i["message"] for i in issues)
+
+
+def test_invalid_regex_pattern_reports_issue() -> None:
+    yaml_text = """
+version: 1
+configs:
+  prod:
+    match:
+      hostname: ["re:([unclosed"]
+"""
+    issues = collect_config_issues(yaml_text)
+    assert any("configs.prod.match.hostname" in i["message"] for i in issues)
+    assert any("invalid regex pattern" in i["message"] for i in issues)
