@@ -523,13 +523,11 @@ def init_default_config(dest: Path | None = None) -> Path:
         )
         sys.exit(1)
 
-    from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
+    from profiles.core.actions import ActionStatus, write_starter_config
 
-    body = STARTER_CONFIG_TEMPLATE.format(cwd=str(Path.cwd()))
-    try:
-        target.write_text(body, encoding="utf-8")
-    except OSError as exc:
-        print(f"Error: Could not write configuration file: {exc}", file=sys.stderr)
+    result = write_starter_config(target)
+    if result.status is not ActionStatus.SUCCESS:
+        print(f"Error: Could not write configuration file: {result.message}", file=sys.stderr)
         sys.exit(1)
 
     print(f"Default configuration created: {target}")

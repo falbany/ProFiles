@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from profiles.core.config.io.yaml_io import write_text_atomic
 from profiles.core.config.models import AppConfig, WorkflowStep
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.core.environment.matcher import select_most_specific_pattern
@@ -296,26 +297,29 @@ def launch_selected_file(
 def write_starter_config(
     path: Path,
     *,
+    cwd: Path | str | None = None,
     logger: logging.Logger | None = None,
 ) -> ActionResult:
     """Write the documented starter ``.profiles`` to *path*.
 
     The parent directory must already exist. The template embeds
-    ``str(Path.cwd())`` as the default ``search_dir`` so the GUI's
-    Directory field always has a usable fallback.
+    ``str(Path.cwd())`` (or *cwd* if provided) as the default ``search_dir``
+    so the GUI's Directory field always has a usable fallback.
 
     Args:
         path: Target path for the new ``.profiles`` file.
+        cwd: Optional directory for template substitution (default: CWD).
         logger: Optional logger used to record the write.
 
     Returns:
         ``ActionResult`` describing the outcome.
     """
     target = Path(path)
-    body = STARTER_CONFIG_TEMPLATE.format(cwd=str(Path.cwd()))
+    search_cwd = str(cwd) if cwd is not None else str(Path.cwd())
+    body = STARTER_CONFIG_TEMPLATE.format(cwd=search_cwd)
 
     try:
-        target.write_text(body, encoding="utf-8")
+        write_text_atomic(target, body)
     except OSError as exc:
         if logger is not None:
             events.config_create_failed(logger, error=str(exc))

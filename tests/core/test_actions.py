@@ -218,6 +218,27 @@ class TestWriteStarterConfig:
         assert config.configurations
         assert config.configurations[0].match.hostname == ("*",)
 
+    def test_uses_atomic_write(self, tmp_path: Path, mocker) -> None:
+        """write_starter_config delegates to write_text_atomic for atomicity."""
+        target = tmp_path / ".profiles"
+        mock_atomic = mocker.patch("profiles.core.actions.write_text_atomic")
+
+        result = write_starter_config(target)
+
+        assert result.status is ActionStatus.SUCCESS
+        mock_atomic.assert_called_once()
+        assert mock_atomic.call_args[0][0] == target
+
+    def test_writes_with_custom_cwd(self, tmp_path: Path) -> None:
+        """Custom cwd is embedded in search_dir instead of Path.cwd()."""
+        target = tmp_path / ".profiles"
+        custom_dir = tmp_path / "custom_workdir"
+        result = write_starter_config(target, cwd=custom_dir)
+
+        assert result.status is ActionStatus.SUCCESS
+        body = target.read_text(encoding="utf-8")
+        assert str(custom_dir) in body
+
 
 class TestSaveCsvExport:
     """Tests for save_csv_export()."""

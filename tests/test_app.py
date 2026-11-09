@@ -572,6 +572,24 @@ class TestInitDefaultConfig:
         assert result == tmp_path / ".profiles"
         assert result.exists()
 
+    def test_delegates_to_write_starter_config(self, tmp_path: Path, mocker) -> None:
+        """init_default_config delegates writing to write_starter_config."""
+        from profiles.core.actions import ActionResult, ActionStatus
+
+        target = tmp_path / ".profiles"
+        mock_writer = mocker.patch(
+            "profiles.core.actions.write_starter_config",
+            return_value=ActionResult(
+                status=ActionStatus.SUCCESS,
+                message="written",
+                path=target,
+            ),
+        )
+
+        result = init_default_config(dest=tmp_path)
+        assert result == target
+        mock_writer.assert_called_once_with(target)
+
 
 # ── main() ──────────────────────────────────────────────────────────────────
 
