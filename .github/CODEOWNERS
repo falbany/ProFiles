@@ -1,0 +1,37 @@
+# CODEOWNERS — default reviewer for pull requests.
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# Last matching pattern wins, so global rules come first and overrides after.
+
+# Default: everything
+*                                   @falbany
+
+# Core business logic — strictest review
+/src/profiles/core/                 @falbany
+/src/profiles/launch/               @falbany
+
+# Presentation layers (web / server / desktop)
+/src/profiles/server/               @falbany
+/src/profiles/web/                  @falbany
+/src/profiles/web/dist/             @falbany
+/src/profiles/desktop/              @falbany
+
+# Utilities, entry point, packaging & CI
+/src/profiles/utils/                @falbany
+/src/profiles/app.py                @falbany
+/src/profiles/config.py             @falbany
+/packaging/                         @falbany
+/scripts/                           @falbany
+/.github/                           @falbany
+
+# Tests, docs & project meta
+/tests/                             @falbany
+/docs/                              @falbany
+/AGENTS.md                          @falbany
+/tests/AGENTS.md                    @falbany
+/CONTRIBUTING.md                    @falbany
+/README.md                          @falbany
+/README.fr.md                       @falbany
+/MILESTONES.md                      @falbany
+/CHANGELOG.md                       @falbany
+/makefile                           @falbany
+/pyproject.toml                     @falbany
