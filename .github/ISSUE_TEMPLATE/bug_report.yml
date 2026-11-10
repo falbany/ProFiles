@@ -1,0 +1,87 @@
+name: 🐛 Bug report
+description: Report a problem with ProFiles
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form
+        below — the more precise the reproduction steps, the faster the fix.
+        Sanitize any config/log excerpts before pasting.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise summary of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the behavior. Include a minimal `.profiles.yaml` excerpt if relevant (in a code block).
+      placeholder: |
+        1. Start ProFiles with config `...`
+        2. Click on `...`
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened. Include error messages, stack traces, or log excerpts (in code blocks).
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ProFiles version
+      description: Output of `profiles --version`, or the tag/commit you are running.
+      placeholder: "0.11.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation method
+      options:
+        - Built executable (Briefcase artifact)
+        - GitHub release artifact
+        - "pip install -e . / development install"
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: "Screenshots, logs from the logs/ directory, or any other context."
+    validations:
+      required: false
