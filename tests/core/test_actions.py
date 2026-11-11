@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -64,8 +63,9 @@ class TestOpenConfigFile:
         assert result.status is ActionStatus.NOT_FOUND
         assert "does not exist" in result.message
 
-    def test_success(self, tmp_path: Path) -> None:
+    def test_success(self, tmp_path: Path, mocker) -> None:  # noqa: ANN001
         """An existing file returns SUCCESS."""
+        mocker.patch("profiles.core.actions.open_with_default_app", return_value=True)
         config = tmp_path / ".profiles"
         config.write_text("")
         result = open_config_file(config)
@@ -74,6 +74,7 @@ class TestOpenConfigFile:
 
     def test_logger_records_attempt(self, tmp_path: Path, mocker) -> None:  # noqa: ANN001
         """When a logger is provided, the attempt is recorded."""
+        mocker.patch("profiles.core.actions.open_with_default_app", return_value=True)
         config = tmp_path / ".profiles"
         config.write_text("")
         mock_logger = mocker.MagicMock()
@@ -94,16 +95,18 @@ class TestOpenConfigFile:
 class TestOpenLogFile:
     """Tests for open_log_file()."""
 
-    def test_creates_missing_file(self, tmp_path: Path) -> None:
+    def test_creates_missing_file(self, tmp_path: Path, mocker) -> None:  # noqa: ANN001
         """A non-existent log file is created on demand."""
+        mocker.patch("profiles.core.actions.open_with_default_app", return_value=True)
         log = tmp_path / "sub" / "test.log"
         assert not log.exists()
         result = open_log_file(log)
         assert result.status is ActionStatus.SUCCESS
         assert log.exists()
 
-    def test_success_existing(self, tmp_path: Path) -> None:
+    def test_success_existing(self, tmp_path: Path, mocker) -> None:  # noqa: ANN001
         """An existing log file returns SUCCESS."""
+        mocker.patch("profiles.core.actions.open_with_default_app", return_value=True)
         log = tmp_path / "test.log"
         log.write_text("existing")
         result = open_log_file(log)
@@ -121,6 +124,7 @@ class TestOpenLogFile:
 
     def test_logger_records_attempt(self, tmp_path: Path, mocker) -> None:  # noqa: ANN001
         """When a logger is provided, the attempt is recorded."""
+        mocker.patch("profiles.core.actions.open_with_default_app", return_value=True)
         log = tmp_path / "test.log"
         log.write_text("")
         mock_logger = mocker.MagicMock()
@@ -653,7 +657,11 @@ class TestLaunchSelectedWithArgs:
         f = tmp_path / "doc.pdf"
         f.write_text("x", encoding="utf-8")
         mock_popen = mocker.patch("profiles.utils.file_utils.subprocess.Popen")
-        mocker.patch.object(sys, "platform", "darwin")
+        # ``file_utils`` snapshots ``sys.platform`` into import-time
+        # constants — patch those, not ``sys.platform`` itself (a no-op
+        # on non-macOS hosts, where the constants are already False).
+        mocker.patch.object(file_utils, "_IS_WINDOWS", False)
+        mocker.patch.object(file_utils, "_IS_MACOS", True)
 
         assert actions._launch_with_args(f, "--page 5") is True
 

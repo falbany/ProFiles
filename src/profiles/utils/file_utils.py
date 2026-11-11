@@ -57,8 +57,8 @@ def suffix_of_name(name: str) -> str:
     """Full compound extension of a *name* — the ``Path.suffixes`` rule.
 
     Reproduces ``"".join(Path(name).suffixes)`` exactly (including the
-    empty result for trailing-dot and all-dot names, and the leading-dot
-    handling for dotfiles), without constructing a :class:`Path`.
+    leading-dot handling for dotfiles), without constructing a
+    :class:`Path` on the common path.
 
     Args:
         name: The file name (may include no dots at all).
@@ -67,7 +67,12 @@ def suffix_of_name(name: str) -> str:
         The full compound extension (leading dots included), or ``""``.
     """
     if name.endswith("."):
-        return ""
+        # Trailing-dot / all-dot names are the one input where pathlib's
+        # rule differs across interpreters (3.13 → "" for "report.",
+        # 3.14 → "."); defer to the running pathlib so parity with
+        # ``Path.suffixes`` holds everywhere (see
+        # tests/utils/test_file_utils_suffix_parity.py).
+        return "".join(Path(name).suffixes)
     stem = name.lstrip(".")
     return "".join("." + part for part in stem.split(".")[1:])
 

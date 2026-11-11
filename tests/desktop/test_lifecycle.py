@@ -141,13 +141,18 @@ def test_start_and_rebind_succeed_with_timewait_sockets(tmp_path: Path) -> None:
 
     # Plant a TIME_WAIT socket on the exact address the server will bind:
     # a connection on 127.0.0.1:<port> closed *server-side first*, which is
-    # what uvicorn does during shutdown.
+    # what uvicorn does during shutdown.  The planted sockets set
+    # ``SO_REUSEADDR`` because on Linux a TIME_WAIT socket only yields the
+    # address to a new bind when *that* socket had the option set — and
+    # uvicorn's real sockets do.  (macOS doesn't require this; Linux does.)
     pair_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    pair_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     pair_listener.bind(("127.0.0.1", port))
     pair_listener.listen(1)
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_sock.connect(("127.0.0.1", port))
     conn, _ = pair_listener.accept()
+    conn.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     conn.close()  # server side closes first → server side in TIME_WAIT
     pair_listener.close()
     client_sock.close()
