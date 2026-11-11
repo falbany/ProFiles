@@ -19,6 +19,7 @@
         "darkcolor",
         "darkdetect",
         "deptry",
+        "Docstrings",
         "excepthook",
         "expanduser",
         "failmode",

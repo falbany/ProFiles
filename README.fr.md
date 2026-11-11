@@ -352,6 +352,15 @@ npm install
 npm run build        # tsc + vite build — génère dist/ et rafraîchit le precache PWA
 ```
 
+## 🤝 Contribuer
+
+Les contributions sont les bienvenues ! Consultez [`CONTRIBUTING.md`](./CONTRIBUTING.md) pour
+la mise en place de l'environnement de développement, les standards de qualité et le workflow
+de soumission. Les bugs et demandes de fonctionnalités passent par les
+[modèles d'issue](https://github.com/falbany/ProFiles/issues/new/choose) ; les pull requests
+utilisent la checklist PR (le CI exécute Ruff, Pylint, Pyright et pytest avec une couverture
+≥ 85 %).
+
 ## 📄 Licence & support
 
 - **Auteur** : [Florent ALBANY](https://github.com/falbany)

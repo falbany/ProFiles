@@ -1,0 +1,18 @@
+# Normalize all line endings to LF in the repository and working tree.
+# Kills the recurring CRLF→LF churn in src/profiles/web/dist/ and keeps
+# web builds reproducible for contributors on Windows.
+* text=auto eol=lf
+
+# Binary assets (never touch)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.icns binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.dmg binary
+*.msi binary
+*.deb binary

@@ -351,6 +351,14 @@ npm install
 npm run build        # tsc + vite build — outputs dist/ and refreshes the PWA precache
 ```
 
+## 🤝 Contributing
+
+Contributions are welcome! Please read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the
+development setup, quality standards, and submission workflow. Bug reports and feature
+requests go through the [issue templates](https://github.com/falbany/ProFiles/issues/new/choose);
+pull requests use the PR checklist (CI runs Ruff, Pylint, Pyright, and pytest with
+coverage ≥ 85%).
+
 ## 📄 License & Support
 
 - **Author**: [Florent ALBANY](https://github.com/falbany)
