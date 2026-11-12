@@ -72,16 +72,15 @@ def propose_config_creation() -> bool:
             print(f"Warning: {target} already exists. Creation skipped.")
             return False
 
-        from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
+        from profiles.core.actions import ActionStatus, write_starter_config
 
-        body = STARTER_CONFIG_TEMPLATE.format(cwd=str(Path.cwd()))
-        try:
-            target.write_text(body, encoding="utf-8")
+        result = write_starter_config(target)
+        if result.status is ActionStatus.SUCCESS:
             print(f"\n✓ Default configuration created: {target}")
             print("\nYou can now customize this file to suit your needs.")
             return True
-        except OSError as exc:
-            print(f"\n✗ Error creating configuration file: {exc}", file=sys.stderr)
+        else:
+            print(f"\n✗ Error creating configuration file: {result.message}", file=sys.stderr)
             return False
 
     print("\nContinuing with default settings.")

@@ -135,13 +135,8 @@ class TestProposeConfigCreation:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr("builtins.input", lambda: "y")
 
-        real_write = Path.write_text
-
-        def failing_write(self, *args, **kwargs):  # noqa: ANN001
+        def failing_write(*args, **kwargs):  # noqa: ANN001
             raise OSError("denied")
 
-        monkeypatch.setattr(Path, "write_text", failing_write)
-        try:
-            assert propose_config_creation() is False
-        finally:
-            monkeypatch.setattr(Path, "write_text", real_write)
+        monkeypatch.setattr("profiles.core.actions.write_text_atomic", failing_write)
+        assert propose_config_creation() is False
