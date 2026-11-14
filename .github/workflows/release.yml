@@ -39,7 +39,7 @@ jobs:
           # Full history: hatch-vcs derives the version from the tag — a
           # shallow checkout would silently build a fallback version.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       # Pin the sync interpreter: briefcase embeds the running Python's
       # major.minor into the bundle, and 3.15 (the newest interpreter
       # satisfying requires-python) has no wheels yet for some binary
@@ -62,7 +62,7 @@ jobs:
           # Full history: hatch-vcs derives the version from the tag — a
           # shallow checkout would silently build a fallback version.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync --python 3.13 --locked
       # --no-input: CI has no TTY; without it briefcase prompts for a
       # signing identity and aborts. It auto-selects ad-hoc signing.
@@ -83,7 +83,7 @@ jobs:
           # Full history: hatch-vcs derives the version from the tag — a
           # shallow checkout would silently build a fallback version.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       # The deb (system) backend requires briefcase to run under the
       # system python3 — pin the sync interpreter to it. Briefcase 0.4.x
       # grammar: `linux <output-format>` for appimage/flatpak/system;
