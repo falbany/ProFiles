@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history: hatch-vcs derives the version from git tags — a
           # shallow checkout would silently build a fallback version.
