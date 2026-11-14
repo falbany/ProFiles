@@ -284,7 +284,12 @@ export default function App() {
     params: Parameters<typeof executeScan>[0],
   ) => {
     if (!isCurrentScan(generation)) return false;
-    await executeScan(params, scanAbortRef.current?.signal);
+    const scanRes = await executeScan(params, scanAbortRef.current?.signal);
+    // A 200 with a `warning` (e.g. scanned a missing directory) must not
+    // masquerade as a normal empty list (issue #130).
+    if (scanRes.warning && isCurrentScan(generation)) {
+      showToast(scanRes.warning, "error");
+    }
     if (!isCurrentScan(generation) || !(await loadScanResults(generation))) return false;
     // Fresh authoritative results — selection restarts at the top.
     selectedPathRef.current = null;
@@ -641,13 +646,15 @@ export default function App() {
     [],
   );
 
-  // Directory change handler
-  const handleDirectoryChange = async (newDir: string) => {
+  // Directory change handler. Resolves to true when the directory was
+  // selected and scanned successfully, false otherwise — callers use this
+  // to avoid a success toast after a handled failure (issue #130).
+  const handleDirectoryChange = async (newDir: string): Promise<boolean> => {
     const scanGeneration = beginScan();
     setActiveDirectory(newDir);
     try {
       const directoryConfig = await selectDirectory(newDir);
-      if (!isCurrentScan(scanGeneration)) return;
+      if (!isCurrentScan(scanGeneration)) return false;
       setConfig(directoryConfig);
       const nextExtension = directoryConfig.extensions.includes(activeExtension)
         ? activeExtension
@@ -663,8 +670,10 @@ export default function App() {
         filter_text: nextFilter,
         recursive,
       });
+      return true;
     } catch (err: any) {
       if (isCurrentScan(scanGeneration)) showToast(`Directory change failed: ${err.message}`, "error");
+      return false;
     } finally {
       finishScan(scanGeneration);
     }
@@ -721,6 +730,23 @@ export default function App() {
    */
   const handleRecursiveToggle = (next: boolean) => {
     setRecursive(next);
+    if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
+    pendingAutoRescanRef.current = setTimeout(() => {
+      pendingAutoRescanRef.current = null;
+      void handleScanRef.current();
+    }, AUTO_RESCAN_DEBOUNCE_MS);
+  };
+
+  /**
+   * Extension combobox handler (SearchBar). The server already scanned with
+   * the previous extension, so a change must rescan — the same deferred
+   * auto-rescan as the filter input and recursive checkbox (issue #122).
+   * Rapid changes are race-correct: beginScan (via handleScanRef) cancels
+   * any pending deferred rescan, and the timer reads the latest extension
+   * state.
+   */
+  const handleExtensionChange = (ext: string) => {
+    setActiveExtension(ext);
     if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
     pendingAutoRescanRef.current = setTimeout(() => {
       pendingAutoRescanRef.current = null;
@@ -829,12 +855,10 @@ export default function App() {
   };
 
   const handleScanDirectory = async (directory: string) => {
-    try {
-      await handleDirectoryChange(directory);
-      showToast(`Scanned directory: ${directory}`);
-    } catch (err: any) {
-      showToast(`Error: ${err.message}`, "error");
-    }
+    // handleDirectoryChange already toasts its own failure and never throws;
+    // only claim success when the change + scan went through (issue #130).
+    const ok = await handleDirectoryChange(directory);
+    if (ok) showToast(`Scanned directory: ${directory}`);
   };
 
   const handleFilterFolder = (folder: string) => {
@@ -1069,7 +1093,7 @@ export default function App() {
     if (nextDir) {
       const scanGeneration = beginScan();
       try {
-        await executeScan(
+        const scanRes = await executeScan(
           {
             directory: nextDir,
             extension: nextExt,
@@ -1078,6 +1102,10 @@ export default function App() {
           },
           scanAbortRef.current?.signal,
         );
+        // Surface a 200-with-warning (e.g. missing directory) — issue #130.
+        if (scanRes.warning && isCurrentScan(scanGeneration)) {
+          showToast(scanRes.warning, "error");
+        }
 
         const res = await fetchScanResults({
           offset: 0,
@@ -1499,7 +1527,7 @@ export default function App() {
       <SearchBar
         extensions={config?.extensions || []}
         activeExtension={activeExtension}
-        onExtensionChange={setActiveExtension}
+        onExtensionChange={handleExtensionChange}
         filterOptions={config?.filters || []}
         filterText={filterText}
         onFilterTextChange={handleFilterTextChange}

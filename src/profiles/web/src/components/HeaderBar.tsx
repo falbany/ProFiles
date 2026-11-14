@@ -73,6 +73,9 @@ export function HeaderBar({
             value={activeDirectory}
             options={directories}
             onChange={onDirectoryChange}
+            // Typing a path must not fire a server round-trip per keystroke
+            // (issue #121): commit on Enter / blur / option pick instead.
+            commitOn="deferred"
             onOpenChange={setDirListOpen}
             placeholder="/path/to/directory"
             className="w-full"

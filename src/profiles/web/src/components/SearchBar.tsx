@@ -109,6 +109,9 @@ export function SearchBar({
             value={activeExtension}
             options={extensions}
             onChange={onExtensionChange}
+            // Commit on Enter / blur / option pick instead of per keystroke
+            // (issue #121); App schedules the deferred rescan on commit.
+            commitOn="deferred"
             onOpenChange={setExtListOpen}
             placeholder=".py OR .toml"
             className="w-44"
