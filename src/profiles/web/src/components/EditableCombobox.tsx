@@ -14,6 +14,14 @@ interface EditableComboboxProps {
   optionLabel?: (value: string) => string;
   /** Notified whenever the list unfolds/folds (e.g. to yield overlapping popovers). */
   onOpenChange?: (open: boolean) => void;
+  /**
+   * When the parent is notified of typed edits (issue #121). `"change"`
+   * (default) fires onChange on every keystroke; `"deferred"` keeps each
+   * keystroke local and commits only on Enter (when the list doesn't
+   * consume it), blur, or option selection — so expensive reactions
+   * (server round-trips, rescans) don't run per character.
+   */
+  commitOn?: "change" | "deferred";
 }
 
 export function EditableCombobox({
@@ -27,12 +35,15 @@ export function EditableCombobox({
   inputClassName = "",
   optionLabel = (option) => option,
   onOpenChange,
+  commitOn = "change",
 }: EditableComboboxProps) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
+  // Typed-but-uncommitted text in "deferred" mode; null while not editing.
+  const [draft, setDraft] = useState<string | null>(null);
 
   const filteredOptions = options.filter((option) =>
     optionLabel(option).toLocaleLowerCase().includes(query.toLocaleLowerCase()),
@@ -73,8 +84,14 @@ export function EditableCombobox({
     setIsOpen(true);
   };
 
+  /** Push the typed draft (or a picked option) up to the parent. */
+  const commit = (nextValue: string) => {
+    setDraft(null);
+    onChange(nextValue);
+  };
+
   const selectOption = (option: string) => {
-    onChange(option);
+    commit(option);
     setQuery("");
     setActiveIndex(-1);
     setIsOpen(false);
@@ -99,7 +116,16 @@ export function EditableCombobox({
       setActiveIndex((index) => (index <= 0 ? filteredOptions.length - 1 : index - 1));
     } else if (event.key === "Enter" && isOpen && filteredOptions[activeIndex] !== undefined) {
       event.preventDefault();
+      // The combobox consumed Enter — stop it from reaching the window-level
+      // scan shortcut, which would fire with a stale closure (issue #122).
+      event.stopPropagation();
       selectOption(filteredOptions[activeIndex]);
+    } else if (event.key === "Enter" && commitOn === "deferred" && draft !== null && draft !== value) {
+      // Commit the typed draft; also consumed — the parent's onChange
+      // (directory change / rescan) already handles the reaction.
+      event.preventDefault();
+      event.stopPropagation();
+      commit(draft);
     } else if (event.key === "Escape") {
       setIsOpen(false);
     }
@@ -111,6 +137,10 @@ export function EditableCombobox({
       onBlur={(event) => {
         if (!containerRef.current?.contains(event.relatedTarget as Node | null)) {
           setIsOpen(false);
+          // Leaving the combobox with uncommitted text commits it (issue #121).
+          if (commitOn === "deferred" && draft !== null && draft !== value) {
+            commit(draft);
+          }
         }
       }}
       className={`relative flex min-w-0 ${className}`}
@@ -124,15 +154,21 @@ export function EditableCombobox({
         aria-expanded={isOpen}
         aria-controls={listboxId}
         aria-activedescendant={activeOptionId}
-        value={value}
+        value={commitOn === "deferred" && draft !== null ? draft : value}
         placeholder={placeholder}
         // No expand-on-focus (WAI-ARIA APG): clicking in to edit a value must
         // not pop the list open — ArrowDown, typing or the chevron unfold it.
         onChange={(event) => {
-          onChange(event.target.value);
-          setQuery(event.target.value);
+          const next = event.target.value;
+          setQuery(next);
           setActiveIndex(-1);
           setIsOpen(true);
+          if (commitOn === "deferred") {
+            // Keep the keystroke local; commit on Enter/blur (issue #121).
+            setDraft(next);
+          } else {
+            onChange(next);
+          }
         }}
         onKeyDown={handleKeyDown}
         className={`min-w-0 flex-1 rounded-l-md border border-line bg-elevated px-3 py-1.5 text-ink outline-none transition-colors hover:bg-surface-strong focus:border-indigo-500 ${inputClassName}`}

@@ -151,7 +151,9 @@ export async function selectDirectory(directory: string): Promise<AppConfigData>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ directory }),
   });
-  if (!res.ok) throw new Error("Failed to select directory");
+  // Surface the server's detail ("Directory does not exist") rather than a
+  // generic client message (issue #121).
+  if (!res.ok) throw await apiError(res, "Failed to select directory");
   return res.json();
 }
 
@@ -332,14 +334,17 @@ export async function executeScan(
     recursive: boolean;
   },
   signal?: AbortSignal,
-): Promise<{ count: number; directory: string }> {
+): Promise<{ count: number; directory: string; warning?: string }> {
   const res = await fetch("/api/scan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
     signal,
   });
-  if (!res.ok) throw new Error("Failed to execute scan");
+  // A 200 response may carry a machine-readable `warning` (e.g. "Directory
+  // does not exist") that callers must surface instead of showing a bare
+  // empty list (issue #130).
+  if (!res.ok) throw await apiError(res, "Failed to execute scan");
   return res.json();
 }
 
