@@ -34,7 +34,7 @@ jobs:
     needs: guard
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history: hatch-vcs derives the version from the tag — a
           # shallow checkout would silently build a fallback version.
@@ -57,7 +57,7 @@ jobs:
     needs: guard
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history: hatch-vcs derives the version from the tag — a
           # shallow checkout would silently build a fallback version.
@@ -78,7 +78,7 @@ jobs:
     needs: guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history: hatch-vcs derives the version from the tag — a
           # shallow checkout would silently build a fallback version.
