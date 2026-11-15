@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowRight, ChevronRight, Folder, FolderOpen, Home, Terminal } from "lucide-react";
 import { EditableCombobox } from "./EditableCombobox";
 import Tooltip from "./Tooltip";
+import { shortVersion } from "../utils/version";
 
 interface HeaderBarProps {
   title: string;
@@ -30,6 +31,8 @@ export function HeaderBar({
 }: HeaderBarProps) {
   // Unfolded directory list — the tooltip yields to it (issue #53).
   const [dirListOpen, setDirListOpen] = useState(false);
+  // Full version from hatch-vcs (issue #175) — only the short form is displayed.
+  const fullVersion = release || __APP_VERSION__;
   return (
     <header className="relative z-30 flex flex-wrap items-center gap-3 border-b border-line bg-app/90 px-5 py-2 text-xs backdrop-blur-xl shadow-xs transition-all duration-200">
       <div className="flex shrink-0 items-center gap-3">
@@ -54,7 +57,12 @@ export function HeaderBar({
               )}
             </div>
             <p className="text-[11px] font-medium text-ink-muted tracking-wide mt-0.5">
-              Crafted by <span className="text-ink font-semibold">Florent ALBANY</span> • <span className="font-mono text-chip-indigo-text">v{release || __APP_VERSION__}</span>
+              Crafted by <span className="text-ink font-semibold">Florent ALBANY</span> •{" "}
+              {/* hatch-vcs dev builds carry a long local version (issue #175):
+                  show only the release part, the full string lives in the tooltip. */}
+              <Tooltip text={`v${fullVersion}`} placement="bottom">
+                <span className="font-mono text-chip-indigo-text">v{shortVersion(fullVersion)}</span>
+              </Tooltip>
             </p>
           </div>
         </div>
