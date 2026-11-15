@@ -17,6 +17,10 @@
 
 **ProFiles** s'adapte à tout workflow basé sur des fichiers grâce à une configuration flexible, sans toucher au code. Parcourez des répertoires, filtrez avec des opérateurs de style Google, extrayez des métadonnées depuis les noms de fichiers, et lancez vos fichiers via les associations du système d'exploitation ou des arguments personnalisés. L'interface par défaut est une **web UI** moderne (PWA React) embarquée avec un serveur FastAPI intégré — utilisable comme fenêtre de bureau, dans n'importe quel navigateur du réseau, ou entièrement en mode headless.
 
+<div align="center">
+  <img src="img/screenshot/profiles-screenshot.png" alt="ProFiles web UI — modes clair et sombre" width="900" />
+</div>
+
 <details>
 <summary><b>Sommaire</b></summary>
 
