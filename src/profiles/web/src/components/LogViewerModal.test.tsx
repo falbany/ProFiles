@@ -84,7 +84,9 @@ describe("LogViewerModal", () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
 
     await user.type(screen.getByLabelText("Filter log lines"), "x");
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    // Generous timeout: CI runners juggle 17 workers and the real-timer
+    // 250 ms debounce can slip past the 1 s default.
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
     await screen.findByText("filtered results");
 
     // The stale response for the *initial* filter lands last — it must be
@@ -97,7 +99,9 @@ describe("LogViewerModal", () => {
 
   it("test_shortcut_hint_matches_binding", async () => {
     renderModal();
-    await screen.findByText("fresh");
+    // Generous timeout: on loaded CI runners the initial fetch render can
+    // slip past the 1 s default.
+    await screen.findByText("fresh", {}, { timeout: 3000 });
     // Ctrl+Shift+L toggles the viewer in App — the footer must say so
     // (issue #139), not claim it opens the file externally.
     expect(screen.getByText("toggles this viewer")).toBeTruthy();
