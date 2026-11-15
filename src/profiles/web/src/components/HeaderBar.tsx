@@ -34,8 +34,9 @@ export function HeaderBar({
     <header className="relative z-30 flex flex-wrap items-center gap-3 border-b border-line bg-app/90 px-5 py-2 text-xs backdrop-blur-xl shadow-xs transition-all duration-200">
       <div className="flex shrink-0 items-center gap-3">
         <div className="flex items-center gap-3.5">
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-chip-indigo-bg to-chip-purple-bg text-chip-indigo-text border border-chip-indigo-border shadow-xs">
-            <Terminal className="h-4 w-4" />
+          {/* App logo from img/ (issue #173) — keep the status dot overlay. */}
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-chip-indigo-border shadow-xs">
+            <img src="/profiles-128.png" alt="ProFiles logo" className="h-9 w-9 rounded-xl object-cover" />
             <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-app" />
           </div>
           <div>
