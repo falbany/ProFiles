@@ -46,7 +46,7 @@ jobs:
       # dependencies (e.g. uvloop on macOS).
       - run: uv sync --python 3.13 --locked
       - run: uv run briefcase package windows -p msi --no-input
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-windows
           path: dist/**/*.msi
@@ -67,7 +67,7 @@ jobs:
       # --no-input: CI has no TTY; without it briefcase prompts for a
       # signing identity and aborts. It auto-selects ad-hoc signing.
       - run: uv run briefcase package macos -p dmg --no-input
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-macos
           path: dist/**/*.dmg
@@ -90,7 +90,7 @@ jobs:
       # `-p deb` selects the packaging format within the system backend.
       - run: uv sync --python /usr/bin/python3 --locked
       - run: uv run briefcase package linux system -p deb --no-input
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-linux
           path: dist/**/*.deb

@@ -29,7 +29,7 @@ jobs:
       - run: uv run briefcase package windows -p msi --no-input
       # The MSI is the only artifact: release.yml ships installers only,
       # and briefcase never produces an unpacked bundle under windows/.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ProFiles-windows-msi
           path: dist/**/*.msi
