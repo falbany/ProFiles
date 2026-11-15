@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronRight, Folder, FolderOpen, Home, Terminal } from "lucide-react";
 import { EditableCombobox } from "./EditableCombobox";
 import Tooltip from "./Tooltip";
+import { shortVersion } from "../utils/version";
 
 interface HeaderBarProps {
   title: string;
@@ -30,6 +31,26 @@ export function HeaderBar({
 }: HeaderBarProps) {
   // Unfolded directory list — the tooltip yields to it (issue #53).
   const [dirListOpen, setDirListOpen] = useState(false);
+  // Full version from hatch-vcs (issue #175) — only the short form is displayed.
+  const fullVersion = release || __APP_VERSION__;
+  // Click-to-copy feedback (issue #175): flash "Copied!" in the tooltip.
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  const copyFullVersion = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(fullVersion);
+      setCopied(true);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (permissions, non-secure context): no feedback.
+    }
+  };
+
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+  }, []);
   return (
     <header className="relative z-30 flex flex-wrap items-center gap-3 border-b border-line bg-app/90 px-5 py-2 text-xs backdrop-blur-xl shadow-xs transition-all duration-200">
       <div className="flex shrink-0 items-center gap-3">
@@ -54,7 +75,20 @@ export function HeaderBar({
               )}
             </div>
             <p className="text-[11px] font-medium text-ink-muted tracking-wide mt-0.5">
-              Crafted by <span className="text-ink font-semibold">Florent ALBANY</span> • <span className="font-mono text-chip-indigo-text">v{release || __APP_VERSION__}</span>
+              Crafted by <span className="text-ink font-semibold">Florent ALBANY</span> •{" "}
+              {/* hatch-vcs dev builds carry a long local version (issue #175):
+                  show only the release part, the full string lives in the tooltip;
+                  clicking copies the full version to the clipboard. */}
+              <Tooltip text={copied ? "Copied!" : `v${fullVersion}`} block={false} placement="bottom">
+                <button
+                  type="button"
+                  onClick={() => void copyFullVersion()}
+                  aria-label={`Copy full version ${fullVersion}`}
+                  className="cursor-pointer font-mono text-chip-indigo-text hover:text-chip-indigo-text/80"
+                >
+                  v{shortVersion(fullVersion)}
+                </button>
+              </Tooltip>
             </p>
           </div>
         </div>
