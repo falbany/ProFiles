@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeHash,
-  executeScan,
   fetchConfig,
   fetchNotifications,
-  fetchScanResults,
   fetchSystemInfo,
   launchFile,
   openFolder,
@@ -19,7 +17,7 @@ import {
   setLanEnabled,
   waitForLanState,
 } from "./api/client";
-import type { AppConfigData, ExternalEvent, ScanSort, ScannedFileItem, SystemInfo } from "./api/types";
+import type { AppConfigData, ExternalEvent, ScannedFileItem, SystemInfo } from "./api/types";
 import {
   nextDragState,
   pickConfigFile,
@@ -27,12 +25,14 @@ import {
   type DragTrackerState,
 } from "./utils/configDrop";
 import { resolveSessionTheme } from "./utils/theme";
+import { mergeDirectoryPreference } from "./utils/scanDefaults";
+import { useScanController } from "./hooks/useScanController";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
 import { DropConfigOverlay } from "./components/DropConfigOverlay";
-import { FileListTable, SCAN_PAGE_SIZE } from "./components/FileListTable";
+import { FileListTable } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { InitErrorPanel } from "./components/InitErrorPanel";
 import { SearchBar } from "./components/SearchBar";
@@ -54,8 +54,6 @@ import { matchFilter } from "./utils/searchSyntax";
 
 /** Debounce for the client-side prefilter derivation while typing (lane #1). */
 const PREFILTER_DEBOUNCE_MS = 120;
-/** Debounce for the deferred server auto-rescan after the last filter keystroke. */
-const AUTO_RESCAN_DEBOUNCE_MS = 800;
 /** Poll interval for server-side UI events (config handoff toasts). */
 const NOTIFICATION_POLL_MS = 4000;
 
@@ -71,22 +69,10 @@ export default function App() {
   const [filterText, setFilterText] = useState<string>("");
   const [recursive, setRecursive] = useState<boolean>(true);
 
-  const [files, setFiles] = useState<ScannedFileItem[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
-  const [hasScanned, setHasScanned] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   /** Reason the initial load failed, when it did — drives the retry panel. */
   const [initError, setInitError] = useState<string | null>(null);
   const [initRetrying, setInitRetrying] = useState(false);
-  /** Column the list is ordered by, or `null` for scan order. */
-  const [sort, setSort] = useState<ScanSort | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  const [scanning, setScanning] = useState<boolean>(false);
-  const scanGenerationRef = useRef(0);
-  /** Controller for the current generation's scan fetches; aborted when superseded. */
-  const scanAbortRef = useRef<AbortController | null>(null);
-  /** Timeout id of the deferred server auto-rescan scheduled on filter typing. */
-  const pendingAutoRescanRef = useRef<NodeJS.Timeout | null>(null);
 
   // Bluetooth-free prefilter — the perceptibly-instant client-side list.
   // The query applied to the list lags the input by ~120ms so a burst of
@@ -180,35 +166,28 @@ export default function App() {
     setLanPending(next);
   };
 
-  const beginScan = () => {
-    // Collision rule: any explicit scan (Enter, Scan button, programmatic
-    // filter change, barcode apply…) supersedes a pending deferred
-    // auto-rescan so the two never double-scan.
-    if (pendingAutoRescanRef.current) {
-      clearTimeout(pendingAutoRescanRef.current);
-      pendingAutoRescanRef.current = null;
-    }
-    // Abort superseded in-flight scan fetches from the previous generation.
-    scanAbortRef.current?.abort();
-    scanAbortRef.current = new AbortController();
-    const generation = ++scanGenerationRef.current;
-    setScanning(true);
-    setLoadingMore(false);
-    return generation;
-  };
-
-  const isCurrentScan = (generation: number) => generation === scanGenerationRef.current;
-
-  const finishScan = (generation: number) => {
-    if (isCurrentScan(generation)) setScanning(false);
-  };
-
   /**
    * Path of the currently selected row. Selection is re-anchored by path when
    * the visible (filtered) set changes, so it never silently drifts onto an
    * unrelated file.
    */
   const selectedPathRef = useRef<string | null>(null);
+
+  /**
+   * Scan orchestration (issue #148): list state, the generation protocol,
+   * the deferred server auto-rescan, sort reloads and paging live in the
+   * hook. App keeps the UI-side concerns — toasts (showToast) and selection
+   * (a fresh result set is authoritative, so onFreshResults re-anchors it).
+   */
+  const scan = useScanController({
+    showToast,
+    getScanParams: () => ({ directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive }),
+    onFreshResults: () => {
+      // Reset the selection anchor; a fresh result set is authoritative.
+      selectedPathRef.current = null;
+      setSelectedIndex(0);
+    },
+  });
 
   // Derive the prefilter query from the raw input, debounced ~120ms so a
   // keystroke burst only re-filters the loaded list once.
@@ -226,9 +205,9 @@ export default function App() {
   const visibleFiles = useMemo(
     () =>
       prefilterQuery.trim() === ""
-        ? files
-        : files.filter((f) => matchFilter(f.rel_path, prefilterQuery)),
-    [files, prefilterQuery],
+        ? scan.files
+        : scan.files.filter((f) => matchFilter(f.rel_path, prefilterQuery)),
+    [scan.files, prefilterQuery],
   );
 
   /**
@@ -237,8 +216,8 @@ export default function App() {
    * user at the full server search (Enter).
    */
   const prefilterNote =
-    filterText.trim() && files.length < totalCount
-      ? `Prefiltering loaded results — press Enter to search all ${totalCount}`
+    filterText.trim() && scan.files.length < scan.totalCount
+      ? `Prefiltering loaded results — press Enter to search all ${scan.totalCount}`
       : null;
 
   // Selection reconcile: when a new visible set arrives, follow the previously
@@ -256,78 +235,12 @@ export default function App() {
     setSelectedIndex((prev) => Math.min(prev, Math.max(0, visibleFiles.length - 1)));
   }, [visibleFiles]);
 
-  /**
-   * Fetch the first page of scan results and replace the list.
-   * Paging keeps the JSON payload small (500 rows instead of 25k+).
-   *
-   * @param sortOrder Sort to request; defaults to the current component state.
-   *   Callers that just changed the sort must pass the new value, because the
-   *   state update will not have been applied yet.
-   */
-  const loadScanResults = async (generation: number, sortOrder: ScanSort | null = sort) => {
-    const res = await fetchScanResults({
-      offset: 0,
-      limit: SCAN_PAGE_SIZE,
-      sort_by: sortOrder?.column,
-      sort_dir: sortOrder?.direction,
-      signal: scanAbortRef.current?.signal,
-    });
-    if (!isCurrentScan(generation)) return false;
-    setFiles(res.items);
-    setTotalCount(res.count);
-    setHasScanned(true);
-    return true;
-  };
-
-  const runScan = async (
-    generation: number,
-    params: Parameters<typeof executeScan>[0],
-  ) => {
-    if (!isCurrentScan(generation)) return false;
-    const scanRes = await executeScan(params, scanAbortRef.current?.signal);
-    // A 200 with a `warning` (e.g. scanned a missing directory) must not
-    // masquerade as a normal empty list (issue #130).
-    if (scanRes.warning && isCurrentScan(generation)) {
-      showToast(scanRes.warning, "error");
-    }
-    if (!isCurrentScan(generation) || !(await loadScanResults(generation))) return false;
-    // Fresh authoritative results — selection restarts at the top.
-    selectedPathRef.current = null;
-    setSelectedIndex(0);
-    return true;
-  };
-
-  /** Fetch the next page and append it to the list. */
-  const handleLoadMore = async () => {
-    if (loadingMore || files.length >= totalCount) return;
-    const generation = scanGenerationRef.current;
-    setLoadingMore(true);
-    try {
-      const res = await fetchScanResults({
-        offset: files.length,
-        limit: SCAN_PAGE_SIZE,
-        sort_by: sort?.column,
-        sort_dir: sort?.direction,
-      });
-      if (!isCurrentScan(generation)) return;
-      // Guard against duplicated rows if the cache changed mid-request.
-      const existing = new Set(files.map((f) => f.path || f.filename));
-      setFiles((prev) => [...prev, ...res.items.filter((f) => !existing.has(f.path || f.filename))]);
-      setTotalCount(res.count);
-    } catch {
-      // Paging failure is non-fatal; retry happens on the next scroll attempt.
-      showToast("Couldn't load more results — scroll to try again.", "error");
-    } finally {
-      if (isCurrentScan(generation)) setLoadingMore(false);
-    }
-  };
-
   const handleReloadConfig = async () => {
     if (reloading) return;
     setReloading(true);
     showToast("Reloading configuration...");
 
-    const scanGeneration = beginScan();
+    const scanGeneration = scan.beginScan();
 
     try {
       // 1. Fetch fresh system info (in case hostname/IP changed)
@@ -368,24 +281,24 @@ export default function App() {
 
       // 4. Run fresh scan with the reloaded values
       if (targetDirectory) {
-        await runScan(scanGeneration, {
+        await scan.scanWithGeneration(scanGeneration, {
           directory: targetDirectory,
           extension: nextExtension,
           filter_text: nextFilter,
           recursive: cfg.recursive_search,
-        });
+        }, { errorPrefix: "Failed to reload configuration" });
       }
     } catch (err: any) {
       showToast(`Failed to reload configuration: ${err.message}`, "error");
     } finally {
       setReloading(false);
       // Finish scan if it's still the current generation
-      finishScan(scanGeneration);
+      scan.finishScan(scanGeneration);
     }
   };
 
   const handleConfigLoaded = async (cfg: AppConfigData) => {
-    const scanGeneration = beginScan();
+    const scanGeneration = scan.beginScan();
     setConfig(cfg);
     // Session-only configs apply their theme to the running session but
     // must NOT persist it (no localStorage write — that would leak the
@@ -410,20 +323,14 @@ export default function App() {
       showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
     }
     if (targetDirectory) {
-      try {
-        await runScan(scanGeneration, {
-          directory: targetDirectory,
-          extension: nextExtension,
-          filter_text: nextFilter,
-          recursive: cfg.recursive_search,
-        });
-      } catch (err: any) {
-        showToast(`Scan failed after config load: ${err.message}`, "error");
-      } finally {
-        finishScan(scanGeneration);
-      }
+      await scan.scanWithGeneration(scanGeneration, {
+        directory: targetDirectory,
+        extension: nextExtension,
+        filter_text: nextFilter,
+        recursive: cfg.recursive_search,
+      }, { errorPrefix: "Scan failed after config load" });
     } else {
-      finishScan(scanGeneration);
+      scan.finishScan(scanGeneration);
     }
   };
 
@@ -528,7 +435,7 @@ export default function App() {
   };
 
   const handleDirectoryPicked = async (directory: string) => {
-    const scanGeneration = beginScan();
+    const scanGeneration = scan.beginScan();
     setShowDirPicker(false);
     setActiveDirectory(directory);
     showToast(`Directory selected: ${directory}`);
@@ -540,32 +447,26 @@ export default function App() {
       // Non-fatal: directory is already applied in the UI
       console.error("select-directory failed:", err);
     }
-    if (!isCurrentScan(scanGeneration)) return;
-    const nextExtension = directoryConfig?.extensions.includes(activeExtension)
-      ? activeExtension
-      : (directoryConfig?.extensions[0] ?? activeExtension);
-    const nextFilter = directoryConfig?.filters.includes(filterText)
-      ? filterText
-      : (directoryConfig?.filters[0] ?? filterText);
+    if (!scan.isCurrentScan(scanGeneration)) return;
+    const nextExtension = mergeDirectoryPreference(
+      activeExtension,
+      directoryConfig?.extensions,
+      activeExtension,
+    );
+    const nextFilter = mergeDirectoryPreference(filterText, directoryConfig?.filters, filterText);
     setActiveExtension(nextExtension);
     setFilterText(nextFilter);
     // Scan with the freshly picked directory
-    try {
-      await runScan(scanGeneration, {
-        directory,
-        extension: nextExtension,
-        filter_text: nextFilter,
-        recursive,
-      });
-    } catch (err: any) {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err.message}`, "error");
-    } finally {
-      finishScan(scanGeneration);
-    }
+    await scan.scanWithGeneration(scanGeneration, {
+      directory,
+      extension: nextExtension,
+      filter_text: nextFilter,
+      recursive,
+    }, { errorPrefix: "Scan failed" });
   };
 
   const initializeFromConfig = async (cfg: AppConfigData, scanGeneration: number) => {
-    if (!isCurrentScan(scanGeneration)) return;
+    if (!scan.isCurrentScan(scanGeneration)) return;
     
     // Apply theme from .profiles configuration with highest priority
     // This overrides any localStorage value to ensure config file is the source of truth
@@ -593,27 +494,24 @@ export default function App() {
 
     if (initialDir) {
       try {
-        await runScan(scanGeneration, {
+        await scan.runScan(scanGeneration, {
           directory: initialDir,
           extension: initialExt,
           filter_text: initialFilter,
           recursive: cfg.recursive_search,
         });
       } catch (scanErr: any) {
-        if (isCurrentScan(scanGeneration)) showToast(`Initial scan failed: ${scanErr.message}`, "error");
+        if (scan.isCurrentScan(scanGeneration)) showToast(`Initial scan failed: ${scanErr.message}`, "error");
       }
     }
   };
 
   // Initial load (also re-run by the retry panel when it fails).
   const runInitialLoad = async () => {
-    // Same supersede protocol as beginScan(): a retry must abort any
-    // in-flight scan fetch from the failed load instead of racing it
-    // (issue #34). No spinner/pending-rescan side effects here — the init
-    // panel owns the feedback and no auto-rescan is scheduled yet.
-    scanAbortRef.current?.abort();
-    scanAbortRef.current = new AbortController();
-    const scanGeneration = ++scanGenerationRef.current;
+    // A retry must abort any in-flight scan fetch from the failed load
+    // (issue #34) — claimGeneration, no spinner: the init panel owns the
+    // feedback and no auto-rescan is scheduled yet.
+    const scanGeneration = scan.claimGeneration();
     setInitError(null);
     setInitRetrying(true);
     try {
@@ -634,67 +532,40 @@ export default function App() {
     void runInitialLoad();
   }, []);
 
-  // Teardown: drop any pending deferred rescan and abort in-flight scan fetches.
-  useEffect(
-    () => () => {
-      if (pendingAutoRescanRef.current) {
-        clearTimeout(pendingAutoRescanRef.current);
-        pendingAutoRescanRef.current = null;
-      }
-      scanAbortRef.current?.abort();
-    },
-    [],
-  );
-
   // Directory change handler. Resolves to true when the directory was
   // selected and scanned successfully, false otherwise — callers use this
   // to avoid a success toast after a handled failure (issue #130).
   const handleDirectoryChange = async (newDir: string): Promise<boolean> => {
-    const scanGeneration = beginScan();
+    const scanGeneration = scan.beginScan();
     setActiveDirectory(newDir);
     try {
       const directoryConfig = await selectDirectory(newDir);
-      if (!isCurrentScan(scanGeneration)) return false;
+      if (!scan.isCurrentScan(scanGeneration)) return false;
       setConfig(directoryConfig);
-      const nextExtension = directoryConfig.extensions.includes(activeExtension)
-        ? activeExtension
-        : (directoryConfig.extensions[0] ?? "");
-      const nextFilter = directoryConfig.filters.includes(filterText)
-        ? filterText
-        : (directoryConfig.filters[0] ?? "");
+      const nextExtension = mergeDirectoryPreference(activeExtension, directoryConfig.extensions, "");
+      const nextFilter = mergeDirectoryPreference(filterText, directoryConfig.filters, "");
       setActiveExtension(nextExtension);
       setFilterText(nextFilter);
-      await runScan(scanGeneration, {
+      return (await scan.scanWithGeneration(scanGeneration, {
         directory: newDir,
         extension: nextExtension,
         filter_text: nextFilter,
         recursive,
-      });
-      return true;
+      }, { errorPrefix: "Directory change failed" })).ok;
     } catch (err: any) {
-      if (isCurrentScan(scanGeneration)) showToast(`Directory change failed: ${err.message}`, "error");
+      if (scan.isCurrentScan(scanGeneration)) showToast(`Directory change failed: ${err.message}`, "error");
       return false;
     } finally {
-      finishScan(scanGeneration);
+      scan.finishScan(scanGeneration);
     }
   };
 
   // Run scan
   const handleScan = async () => {
-    if (!activeDirectory) return;
-    const scanGeneration = beginScan();
-    try {
-      await runScan(scanGeneration, {
-        directory: activeDirectory,
-        extension: activeExtension,
-        filter_text: filterText,
-        recursive,
-      });
-    } catch (err: any) {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
-    } finally {
-      finishScan(scanGeneration);
-    }
+    await scan.scanWith(
+      { directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive },
+      { errorPrefix: "Scan failed" },
+    );
   };
 
   // Latest handleScan for deferred callbacks (avoids stale closures above).
@@ -705,90 +576,50 @@ export default function App() {
 
   /**
    * Filter input handler (SearchBar onChange). Applies the text instantly
-   * for the client-side prefilter, and schedules the deferred server
-   * auto-rescan 800ms after the last keystroke. Enter/Scan clicks and
-   * programmatic filter changes cancel the pending rescan from beginScan —
-   * the explicit scan wins.
+   * for the client-side prefilter, then schedules the deferred server
+   * auto-rescan 800ms after the last keystroke.
    */
   const handleFilterTextChange = (text: string) => {
     setFilterText(text);
-    if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
-    pendingAutoRescanRef.current = setTimeout(() => {
-      pendingAutoRescanRef.current = null;
-      void handleScanRef.current();
-    }, AUTO_RESCAN_DEBOUNCE_MS);
+    scan.scheduleDeferredRescan();
   };
 
   /**
    * Recursive checkbox handler (SearchBar). Applies the new value to
    * state, then schedules the same deferred server auto-rescan as the
    * filter input — so toggling the checkbox rescans immediately instead
-   * of waiting for the next explicit scan. Rapid toggles are
-   * race-correct: beginScan cancels any pending deferred rescan, so the
-   * explicit scan always wins, and the timer callback reads the latest
-   * recursive state via handleScanRef.
+   * of waiting for the next explicit scan.
    */
   const handleRecursiveToggle = (next: boolean) => {
     setRecursive(next);
-    if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
-    pendingAutoRescanRef.current = setTimeout(() => {
-      pendingAutoRescanRef.current = null;
-      void handleScanRef.current();
-    }, AUTO_RESCAN_DEBOUNCE_MS);
+    scan.scheduleDeferredRescan();
   };
 
   /**
    * Extension combobox handler (SearchBar). The server already scanned with
    * the previous extension, so a change must rescan — the same deferred
    * auto-rescan as the filter input and recursive checkbox (issue #122).
-   * Rapid changes are race-correct: beginScan (via handleScanRef) cancels
-   * any pending deferred rescan, and the timer reads the latest extension
-   * state.
    */
   const handleExtensionChange = (ext: string) => {
     setActiveExtension(ext);
-    if (pendingAutoRescanRef.current) clearTimeout(pendingAutoRescanRef.current);
-    pendingAutoRescanRef.current = setTimeout(() => {
-      pendingAutoRescanRef.current = null;
-      void handleScanRef.current();
-    }, AUTO_RESCAN_DEBOUNCE_MS);
+    scan.scheduleDeferredRescan();
   };
 
   const handleClearFilter = async () => {
     setFilterText("");
-    if (!activeDirectory) return;
-    const scanGeneration = beginScan();
-    try {
-      await runScan(scanGeneration, {
-        directory: activeDirectory,
-        extension: activeExtension,
-        filter_text: "",
-        recursive,
-      });
-    } catch (err: any) {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
-    } finally {
-      finishScan(scanGeneration);
-    }
+    await scan.scanWith(
+      { directory: activeDirectory, extension: activeExtension, filter_text: "", recursive },
+      { errorPrefix: "Scan failed" },
+    );
   };
 
   /** Re-run the scan with recursive subdirectories turned off (empty-state action). */
   const handleDisableRecursive = async () => {
     setRecursive(false);
-    if (!activeDirectory) return;
-    const scanGeneration = beginScan();
-    try {
-      await runScan(scanGeneration, {
-        directory: activeDirectory,
-        extension: activeExtension,
-        filter_text: filterText,
-        recursive: false,
-      });
-    } catch (err: any) {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err.message}`, "error");
-    } finally {
-      finishScan(scanGeneration);
-    }
+    await scan.scanWith(
+      { directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive: false },
+      { errorPrefix: "Scan failed" },
+    );
   };
 
   // Launch file
@@ -863,28 +694,18 @@ export default function App() {
 
   const handleFilterFolder = (folder: string) => {
     setFilterText(folder);
-    const scanGeneration = beginScan();
-    void runScan(scanGeneration, {
-      directory: activeDirectory,
-      extension: activeExtension,
-      filter_text: folder,
-      recursive,
-    }).catch((err: any) => {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
-    }).finally(() => finishScan(scanGeneration));
+    void scan.scanWith(
+      { directory: activeDirectory, extension: activeExtension, filter_text: folder, recursive },
+      { errorPrefix: "Scan failed" },
+    );
   };
 
   const handleFilterExtension = (ext: string) => {
     setActiveExtension(ext);
-    const scanGeneration = beginScan();
-    void runScan(scanGeneration, {
-      directory: activeDirectory,
-      extension: ext,
-      filter_text: filterText,
-      recursive,
-    }).catch((err: any) => {
-      if (isCurrentScan(scanGeneration)) showToast(`Scan failed: ${err?.message ?? err}`, "error");
-    }).finally(() => finishScan(scanGeneration));
+    void scan.scanWith(
+      { directory: activeDirectory, extension: ext, filter_text: filterText, recursive },
+      { errorPrefix: "Scan failed" },
+    );
   };
 
   const handleCopyPath = async (file: ScannedFileItem, forwardSlash?: boolean) => {
@@ -1053,19 +874,19 @@ export default function App() {
   };
 
   const handleExport = async () => {
-    if (files.length === 0) {
+    if (scan.files.length === 0) {
       showToast("No files to export.");
       return;
     }
     try {
-      const csvContent = exportToCsv(files, config?.column_names || [], config ?? undefined, filterText);
+      const csvContent = exportToCsv(scan.files, config?.column_names || [], config ?? undefined, filterText);
       const filename = `profiles-export-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-")}.csv`;
       // Saved server-side: browser blob downloads navigate to raw CSV inside the desktop webview.
       const result = await exportCsvToDisk(csvContent, filename);
       // Be explicit about scope: this exports the LOADED rows only (issue
       // #35), not the whole backend result set.
       showToast(
-        `Exported ${files.length} loaded row${files.length === 1 ? "" : "s"}` +
+        `Exported ${scan.files.length} loaded row${scan.files.length === 1 ? "" : "s"}` +
         `${filterText ? ` matching "${filterText}"` : ""} — ${result.message}`,
       );
     } catch (err: any) {
@@ -1091,47 +912,17 @@ export default function App() {
     if (vals.recursive !== undefined) setRecursive(vals.recursive);
 
     if (nextDir) {
-      const scanGeneration = beginScan();
-      try {
-        const scanRes = await executeScan(
-          {
-            directory: nextDir,
-            extension: nextExt,
-            filter_text: nextFilter,
-            recursive: nextRecursive,
-          },
-          scanAbortRef.current?.signal,
-        );
-        // Surface a 200-with-warning (e.g. missing directory) — issue #130.
-        if (scanRes.warning && isCurrentScan(scanGeneration)) {
-          showToast(scanRes.warning, "error");
-        }
-
-        const res = await fetchScanResults({
-          offset: 0,
-          limit: SCAN_PAGE_SIZE,
-          sort_by: sort?.column,
-          sort_dir: sort?.direction,
-          signal: scanAbortRef.current?.signal,
-        });
-
-        if (!isCurrentScan(scanGeneration)) return;
-
-        setFiles(res.items);
-        setTotalCount(res.count);
-        setHasScanned(true);
-        // Reset the selection anchor; a fresh result set is authoritative.
-        selectedPathRef.current = null;
-        setSelectedIndex(0);
-
-        if (res.count === 1 && res.items.length === 1) {
-          setSingleMatchFile(res.items[0]);
-        }
-      } catch (err: any) {
-        // Aborted (superseded) camera scans stay silent.
-        if (isCurrentScan(scanGeneration)) showToast(`Scan error: ${err.message}`, "error");
-      } finally {
-        finishScan(scanGeneration);
+      const outcome = await scan.scanWith(
+        {
+          directory: nextDir,
+          extension: nextExt,
+          filter_text: nextFilter,
+          recursive: nextRecursive,
+        },
+        { errorPrefix: "Scan error" },
+      );
+      if (outcome.ok && outcome.firstPage.count === 1 && outcome.firstPage.items.length === 1) {
+        setSingleMatchFile(outcome.firstPage.items[0]);
       }
     }
   };
@@ -1534,7 +1325,7 @@ export default function App() {
         recursive={recursive}
         onRecursiveChange={handleRecursiveToggle}
         onScan={handleScan}
-        scanning={scanning}
+        scanning={scan.scanning}
         barcodeMode={barcodeMode}
         onBarcodeToggle={handleBarcodeToggle}
         onCameraBarcodeClick={() => setShowCameraScanner(true)}
@@ -1551,12 +1342,12 @@ export default function App() {
       ) : (
         <FileListTable
           files={visibleFiles}
-          totalCount={totalCount}
-          rawLoadedCount={files.length}
-          onLoadMore={handleLoadMore}
-          loadingMore={loadingMore}
-          scanning={scanning}
-          hasScanned={hasScanned}
+          totalCount={scan.totalCount}
+          rawLoadedCount={scan.files.length}
+          onLoadMore={scan.handleLoadMore}
+          loadingMore={scan.loadingMore}
+          scanning={scan.scanning}
+          hasScanned={scan.hasScanned}
           activeDirectory={activeDirectory}
           recursive={recursive}
           onDisableRecursive={handleDisableRecursive}
@@ -1577,40 +1368,25 @@ export default function App() {
             setContextMenuPos({ x: e.clientX, y: e.clientY, file });
           }}
           rowColors={config?.row_colors || []}
-          sort={sort}
-          onSortChange={(next) => {
-            setSort(next);
-            // Reset the selection anchor; a re-ordered set is authoritative.
-            selectedPathRef.current = null;
-            setSelectedIndex(0);
-            // A sort is a new authoritative scan: beginScan() aborts any
-            // in-flight scan fetch and cancels a pending deferred
-            // auto-rescan so neither can overwrite the sorted result
-            // out-of-order (issue #34).
-            const generation = beginScan();
-            void loadScanResults(generation, next)
-              .catch((err: any) => {
-                if (isCurrentScan(generation)) showToast(`Sort failed: ${err.message}`, "error");
-              })
-              .finally(() => finishScan(generation));
-          }}
+          sort={scan.sort}
+          onSortChange={scan.applySort}
         />
       )}
 
       <ActionBar
         onExecute={handleExecute}
-        scanning={scanning}
+        scanning={scan.scanning}
         scanningDirectory={activeDirectory}
         hasSelection={visibleFiles.length > 0}
         fileCount={visibleFiles.length}
-        totalCount={totalCount}
+        totalCount={scan.totalCount}
         toastMessage={toastMessage}
         onToastDismiss={dismissToast}
       />
 
       <StatusBar
         systemInfo={systemInfo}
-        fileCount={totalCount}
+        fileCount={scan.totalCount}
         theme={theme}
         onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
         onOpenLog={() => setShowLogViewer(true)}
@@ -1624,7 +1400,7 @@ export default function App() {
         onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
         onExport={handleExport}
-        exportDisabled={files.length === 0 || scanning}
+        exportDisabled={scan.files.length === 0 || scan.scanning}
         language={language}
         onLanguageChange={setLanguage}
         lanEnabled={systemInfo?.lan_enabled ?? null}

@@ -87,7 +87,7 @@ src/profiles/
 │   └── routes/               #   actions, config, fs, instance, logs, scan, system, workflow
 │
 ├── web/                      # Front-end par défaut (React PWA + Vite + TypeScript)
-│   ├── src/                  #   App.tsx, components/, api/, utils/
+│   ├── src/                  #   App.tsx, components/, api/, utils/, hooks/
 │   ├── dist/                 #   Build servi par server/static.py
 │   └── build.py, build_hook.py  # Build intégré au packaging (hook hatch)
 │
