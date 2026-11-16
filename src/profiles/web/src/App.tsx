@@ -27,6 +27,7 @@ import {
   type DragTrackerState,
 } from "./utils/configDrop";
 import { resolveSessionTheme } from "./utils/theme";
+import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -541,12 +542,12 @@ export default function App() {
       console.error("select-directory failed:", err);
     }
     if (!isCurrentScan(scanGeneration)) return;
-    const nextExtension = directoryConfig?.extensions.includes(activeExtension)
-      ? activeExtension
-      : (directoryConfig?.extensions[0] ?? activeExtension);
-    const nextFilter = directoryConfig?.filters.includes(filterText)
-      ? filterText
-      : (directoryConfig?.filters[0] ?? filterText);
+    const nextExtension = mergeDirectoryPreference(
+      activeExtension,
+      directoryConfig?.extensions,
+      activeExtension,
+    );
+    const nextFilter = mergeDirectoryPreference(filterText, directoryConfig?.filters, filterText);
     setActiveExtension(nextExtension);
     setFilterText(nextFilter);
     // Scan with the freshly picked directory
@@ -656,12 +657,8 @@ export default function App() {
       const directoryConfig = await selectDirectory(newDir);
       if (!isCurrentScan(scanGeneration)) return false;
       setConfig(directoryConfig);
-      const nextExtension = directoryConfig.extensions.includes(activeExtension)
-        ? activeExtension
-        : (directoryConfig.extensions[0] ?? "");
-      const nextFilter = directoryConfig.filters.includes(filterText)
-        ? filterText
-        : (directoryConfig.filters[0] ?? "");
+      const nextExtension = mergeDirectoryPreference(activeExtension, directoryConfig.extensions, "");
+      const nextFilter = mergeDirectoryPreference(filterText, directoryConfig.filters, "");
       setActiveExtension(nextExtension);
       setFilterText(nextFilter);
       await runScan(scanGeneration, {
