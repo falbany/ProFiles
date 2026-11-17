@@ -21,6 +21,14 @@ import userEvent from "@testing-library/user-event";
  * its 50 ms rescan, and the camera-detection path with its single-match
  * prompt — ahead of the useBarcodeMode extraction.
  *
+ * PR 5 adds four theme pins: two always-green characterizations of the
+ * persisting paths (init persists the config theme; the status-bar toggle
+ * persists the user's choice) and two RED-before pins for the issue #129
+ * fixes (a stored preference is restored at mount and then overridden by
+ * the config theme; a config_applied trial theme changes the session but
+ * never persists). The RED pins turn green when App.tsx routes its theme
+ * handling through the useTheme hook.
+ *
  * The whole `App` tree is rendered against a fully mocked API client —
  * heavier than a component test, but it pins the actual user-facing wiring
  * (init → scan → results, Scan button → toast) instead of a prop-level
@@ -372,7 +380,9 @@ describe("App scan flow (characterization)", () => {
 
     // The next poll tick delivers a config-handoff event (issue #4), and
     // the config it must re-fetch now describes the second launch's machine.
-    notificationsSpy.mockResolvedValue({
+    // One-shot: this scenario drives exactly one poll tick, so only that
+    // tick may see the event (the default empty mock covers any later poll).
+    notificationsSpy.mockResolvedValueOnce({
       events: [
         {
           id: 1,
@@ -447,8 +457,9 @@ describe("App scan flow (characterization)", () => {
     // holds the status role.
     await screen.findByText("Barcode applied: filter=.py");
     await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(2));
-    // The rescan used the NEW filter (issue #34: handleScanRef reads the
-    // state committed by the barcode apply, not the stale render closure).
+    // The rescan used the NEW filter (issue #34: the barcode hook's depsRef
+    // reads the latest deps at fire time — the same guarantee the old
+    // handleScanRef read-at-fire gave, now living in useBarcodeMode).
     expect(executeScanSpy.mock.lastCall?.[0]).toEqual({
       directory: "C:/data",
       extension: ".mttl",
@@ -492,5 +503,94 @@ describe("App scan flow (characterization)", () => {
 
     // Exactly one match → the launch-confirmation prompt names the file.
     await screen.findByRole("dialog", { name: "1 file matched: only.mttl" });
+  });
+
+  it("init persists the config theme to localStorage", async () => {
+    fetchConfigSpy.mockResolvedValue(makeAppConfig({ theme: "light" }));
+    render(<App />);
+
+    // Init settled: the config-derived scan already ran once. The storage
+    // write happens at applyTheme call time (before the scan), while the
+    // attribute lands on the next React commit — so storage is asserted
+    // directly and the attribute is poll-waited.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem("profiles-theme")).toBe("light");
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+  });
+
+  it("status bar toggle persists the new theme", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Init settled (the default fixture theme is dark).
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    // The toggle shows the mode it switches to — "Light" while dark. A user
+    // choice is a preference: attribute and storage both flip to light.
+    await user.click(screen.getByRole("button", { name: /light/i }));
+
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(localStorage.getItem("profiles-theme")).toBe("light");
+  });
+
+  it("stored preference is restored at mount and overridden by the config theme after init", async () => {
+    // Seed a stored preference that disagrees with the default fixture's
+    // config theme (dark) — the #129 restore window sits between the two.
+    localStorage.setItem("profiles-theme", "light");
+    render(<App />);
+
+    // At mount, BEFORE init settles, the stored preference is already
+    // applied (RED before the rewire: every mount started dark and the
+    // mount effect even overwrote the stored value with "dark").
+    expect(document.documentElement.dataset.theme).toBe("light");
+
+    // After init settles, the config theme wins both the attribute and the
+    // persisted value — the config stays source of truth AFTER load. The
+    // storage write happens at applyTheme call time (before the scan),
+    // while the attribute lands on the next React commit.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem("profiles-theme")).toBe("dark");
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+  });
+
+  it("config_applied trial theme changes the session but never persists", async () => {
+    // Fake timers drive the 4s notification poll (same treatment as the
+    // config_applied scenario above; `shouldAdvanceTime` keeps RTL's
+    // waitFor polling alive under vitest fake timers).
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<App />);
+
+    // Init settled: the config-derived scan already ran once, and the init
+    // itself only polls from t=4000 — the mocks below are in place first.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    // Init persisted the default fixture's dark theme.
+    expect(localStorage.getItem("profiles-theme")).toBe("dark");
+
+    // The next poll tick delivers a config-handoff event whose config uses
+    // a light theme — a session trial per the handleConfigLoaded contract.
+    notificationsSpy.mockResolvedValueOnce({
+      events: [
+        {
+          id: 1,
+          kind: "config_handoff",
+          message: "Config applied by second launch.",
+          config_applied: true,
+        },
+      ],
+    });
+    fetchConfigSpy.mockResolvedValueOnce(makeAppConfig({ theme: "light" }));
+
+    // One poll tick.
+    act(() => vi.advanceTimersByTime(4000));
+
+    // Poll → event consumed → config re-fetched → handleConfigLoaded
+    // applied the trial: the running session flips to light…
+    await waitFor(() => expect(fetchConfigSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+
+    // …but the stored preference kept the init value (#129: a session
+    // trial must not steal the stored preference).
+    expect(localStorage.getItem("profiles-theme")).toBe("dark");
   });
 });

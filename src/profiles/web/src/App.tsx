@@ -31,6 +31,7 @@ import { useExternalEvents } from "./hooks/useExternalEvents";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { useBarcodeMode } from "./hooks/useBarcodeMode";
+import { useTheme } from "./hooks/useTheme";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -59,7 +60,7 @@ import { matchFilter } from "./utils/searchSyntax";
 const PREFILTER_DEBOUNCE_MS = 120;
 
 export default function App() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const { theme, applyTheme, toggleTheme } = useTheme();
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [config, setConfig] = useState<AppConfigData | null>(null);
   const [activeDirectory, setActiveDirectory] = useState<string>("");
@@ -247,8 +248,9 @@ export default function App() {
       const cfg = await reloadConfig();
       setConfig(cfg);
 
-      // Theme from the freshly loaded config, like handleConfigLoaded does.
-      setTheme(resolveSessionTheme(cfg.theme));
+      // Theme from the freshly loaded config, like handleConfigLoaded does
+      // (a reload trial — #129: it must not persist over the stored pref).
+      applyTheme(resolveSessionTheme(cfg.theme), { persist: false });
 
       // 3. Apply the FRESH values from the response — not the stale
       //    closure state captured before the reload. The server re-derives
@@ -298,7 +300,7 @@ export default function App() {
     // Session-only configs apply their theme to the running session but
     // must NOT persist it (no localStorage write — that would leak the
     // trial into the next session).
-    setTheme(resolveSessionTheme(cfg.theme));
+    applyTheme(resolveSessionTheme(cfg.theme), { persist: false });
     // Loading a config must behave like launching with it: the server
     // re-derived active_directory from the NEW config (the stale directory
     // is never sent back), and the first merged extension/filter is what a
@@ -435,17 +437,11 @@ export default function App() {
   const initializeFromConfig = async (cfg: AppConfigData, scanGeneration: number) => {
     if (!scan.isCurrentScan(scanGeneration)) return;
     
-    // Apply theme from .profiles configuration with highest priority
-    // This overrides any localStorage value to ensure config file is the source of truth
-    const configTheme = cfg.theme === "auto" ? "dark" : (cfg.theme === "light" ? "light" : "dark");
-    setTheme(configTheme);
-    
-    // Persist the config theme to localStorage for future sessions
-    try {
-      localStorage.setItem("profiles-theme", configTheme);
-    } catch {
-      /* storage may be unavailable */
-    }
+    // Apply the theme from the .profiles configuration with highest
+    // priority, persisting it — the config is the source of truth at
+    // startup, so only this path writes localStorage (#129: the reload and
+    // trial paths below apply session-only themes without persisting).
+    applyTheme(resolveSessionTheme(cfg.theme), { persist: true });
     
     setConfig(cfg);
     const initialDir = cfg.active_directory || (cfg.directories.length > 0 ? cfg.directories[0] : "");
@@ -912,21 +908,11 @@ export default function App() {
     onReloadConfig: handleReloadConfig,
     onGoHome: handleGoToHomeDirectory,
     onProperties: handleProperties,
-    onToggleTheme: () => setTheme((prev) => (prev === "dark" ? "light" : "dark")),
+    onToggleTheme: () => toggleTheme({ persist: true }),
     setShowLogViewer, setShowShortcuts, setShowTimerModal,
     setShowConfigEditor, setBarcodeMode, setShowCameraScanner,
     moveSelection,
   });
-
-  // Apply theme attribute + persist preference
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    try {
-      localStorage.setItem("profiles-theme", theme);
-    } catch {
-      /* storage may be unavailable */
-    }
-  }, [theme]);
 
   return (
     <div className="flex h-dvh flex-col bg-elevated/30 p-1 font-sans text-ink transition-colors duration-200 sm:p-1.5">
@@ -1018,7 +1004,7 @@ export default function App() {
         systemInfo={systemInfo}
         fileCount={scan.totalCount}
         theme={theme}
-        onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+        onToggleTheme={() => toggleTheme({ persist: true })}
         onOpenLog={() => setShowLogViewer(true)}
         // Repurposed (issue #95): opens the in-app YAML editor. The OS-launch
         // this button used to perform now lives in the editor's header
