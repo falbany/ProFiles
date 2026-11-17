@@ -5,7 +5,7 @@ import { Check, ChevronRight, Folder, FolderOpen, Home, Loader2, Save } from "lu
 import { browseDirectory } from "../api/client";
 import type { BrowseResult } from "../api/types";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 export interface SaveAsDialogProps {
   open: boolean;

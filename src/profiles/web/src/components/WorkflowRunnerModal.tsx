@@ -15,7 +15,7 @@ import {
   respondWorkflowSession,
   startWorkflowSession,
 } from "../api/client";
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { MarkdownMessage } from "./MarkdownMessage";
 import type { WorkflowSessionState, WorkflowStepRecord } from "../api/types";
 

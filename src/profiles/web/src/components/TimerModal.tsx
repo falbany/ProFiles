@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { Clock, PauseCircle, PlayCircle, Timer, X } from "lucide-react";
 
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 export interface TimerPreset {
   label: string;

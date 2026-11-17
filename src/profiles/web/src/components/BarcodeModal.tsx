@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Copy, Check, Plus, Trash2, Hash, Download } from "lucide-react";
 import { generateBarcode, saveImageToDisk } from "../api/client";
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 interface BarcodeModalProps {
   isOpen: boolean;

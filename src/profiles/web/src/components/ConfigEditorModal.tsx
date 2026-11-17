@@ -37,7 +37,7 @@ import type { ConfigSaveResult } from "../api/client";
 import type { AppConfigData, ConfigContentData, ValidationIssue } from "../api/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SaveAsDialog } from "./SaveAsDialog";
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 export interface ConfigEditorModalProps {
   open: boolean;

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeHash,
   fetchConfig,
-  fetchNotifications,
   fetchSystemInfo,
   launchFile,
   openFolder,
@@ -17,7 +16,7 @@ import {
   setLanEnabled,
   waitForLanState,
 } from "./api/client";
-import type { AppConfigData, ExternalEvent, ScannedFileItem, SystemInfo } from "./api/types";
+import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
 import {
   nextDragState,
   pickConfigFile,
@@ -27,6 +26,9 @@ import {
 import { resolveSessionTheme } from "./utils/theme";
 import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
+import { useToast } from "./hooks/useToast";
+import { useExternalEvents } from "./hooks/useExternalEvents";
+import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -54,8 +56,6 @@ import { matchFilter } from "./utils/searchSyntax";
 
 /** Debounce for the client-side prefilter derivation while typing (lane #1). */
 const PREFILTER_DEBOUNCE_MS = 120;
-/** Poll interval for server-side UI events (config handoff toasts). */
-const NOTIFICATION_POLL_MS = 4000;
 
 // Rows jumped by PageUp/PageDown in the file list (~a viewport of 28px rows).
 const TABLE_PAGE_JUMP = 20;
@@ -81,7 +81,7 @@ export default function App() {
 
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<{ message: string; kind: "info" | "error" } | null>(null);
+  const { toastMessage, showToast, dismissToast } = useToast();
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
@@ -133,33 +133,6 @@ export default function App() {
   // Camera Barcode Scanner & Single match prompt state
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [singleMatchFile, setSingleMatchFile] = useState<ScannedFileItem | null>(null);
-
-  // Timer — periodic rescan interval in seconds (0 = disabled).
-  const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  /**
-   * Show a transient toast above the action bar.
-   *
-   * Info toasts auto-dismiss after 3.5s; error toasts stay a little longer and
-   * carry an inline dismiss button, so they never vanish before being read.
-   */
-  const showToast = (msg: string, kind: "info" | "error" = "info") => {
-    if (!msg) return; // never blank an existing toast with an empty message
-    setToastMessage({ message: msg, kind });
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(
-      () => setToastMessage(null),
-      kind === "error" ? 10000 : 3500,
-    );
-  };
-
-  const dismissToast = () => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(null);
-  };
 
   /** Open the in-app confirmation dialog for a LAN toggle request. */
   const toggleLan = (next: boolean) => {
@@ -357,43 +330,15 @@ export default function App() {
     void handleDroppedConfig(file);
   };
 
-  // Config handoff notifications (issue #4): when a second ProFiles launch
-  // double-clicks a .profiles file, the running instance applies it
-  // server-side and buffers an event. A light poll surfaces the event as a
-  // toast and re-fetches the config + rescans when the event says one was
-  // applied. Refs keep the interval callback reading the latest handlers.
-  const lastEventIdRef = useRef(0);
-  const externalConfigApplyRef = useRef<() => Promise<void>>(async () => {});
-  useEffect(() => {
-    externalConfigApplyRef.current = async () => {
+  // Config handoff notifications (issue #4) — the poll lives in the hook;
+  // App injects the re-apply (fresh config + handleConfigLoaded) and the toast.
+  useExternalEvents({
+    onConfigApplied: async () => {
       const cfg = await fetchConfig();
       await handleConfigLoaded(cfg);
-    };
+    },
+    showToast,
   });
-  useEffect(() => {
-    const poll = async () => {
-      let events: ExternalEvent[] = [];
-      try {
-        const res = await fetchNotifications(lastEventIdRef.current);
-        events = res.events;
-      } catch {
-        return; // server unreachable — retry silently on the next tick
-      }
-      for (const evt of events) {
-        lastEventIdRef.current = Math.max(lastEventIdRef.current, evt.id);
-        if (evt.config_applied) {
-          try {
-            await externalConfigApplyRef.current();
-          } catch {
-            // Re-applying is best-effort; the toast still explains what happened.
-          }
-        }
-        showToast(evt.message);
-      }
-    };
-    const id = setInterval(() => void poll(), NOTIFICATION_POLL_MS);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const hasFiles = (e: DragEvent) =>
@@ -568,10 +513,20 @@ export default function App() {
     );
   };
 
-  // Latest handleScan for deferred callbacks (avoids stale closures above).
+  // Latest handleScan for the timer-modal ticks and the barcode 50 ms paths (avoids stale closures).
   const handleScanRef = useRef(handleScan);
   useEffect(() => {
     handleScanRef.current = handleScan;
+  });
+
+  // Timer — periodic rescan (issue #34): the hook owns the interval state and
+  // the tick effect; every tick runs through handleScanRef so it uses the
+  // CURRENT directory/extension/filter.
+  const { autoRescanInterval, handleTimerSet } = useAutoRescanTimer({
+    scan: () => {
+      void handleScanRef.current();
+    },
+    showToast,
   });
 
   /**
@@ -1034,32 +989,6 @@ export default function App() {
     document.addEventListener("keydown", handleKeydown, true);
     return () => document.removeEventListener("keydown", handleKeydown, true);
   }, [barcodeMode]);
-
-  // Timer — periodic rescan effect. Runs through handleScanRef so every
-  // tick uses the CURRENT directory/extension/filter (issue #34: the
-  // interval previously captured the values from when it was enabled).
-  useEffect(() => {
-    if (autoRescanInterval > 0) {
-      timerRef.current = setInterval(() => {
-        void handleScanRef.current();
-      }, autoRescanInterval * 1000);
-    }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [autoRescanInterval]);
-
-  const handleTimerSet = (intervalSeconds: number) => {
-    setAutoRescanInterval(intervalSeconds);
-    if (intervalSeconds > 0) {
-      showToast(`Auto-rescan every ${intervalSeconds}s.`);
-    } else {
-      showToast("Auto-rescan disabled.");
-    }
-  };
 
   // Keyboard navigation & global shortcuts
   // Any open surface that captures interaction: while one is up the global

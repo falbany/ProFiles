@@ -216,8 +216,14 @@ describe("App scan flow (characterization)", () => {
     // cancels the pending one — the explicit scan wins, the deferred timer
     // adds nothing.
     cleanup();
+    executeScanSpy.mockClear();
+    scanResultsSpy.mockClear();
     render(<App />);
+    // The clears above wipe phase-1 residue, so this gate genuinely waits
+    // for the fresh init scan; the second wait covers its page-1 load, and
+    // the clears below give the explicit-scan window a clean slate.
     await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(scanResultsSpy).toHaveBeenCalledTimes(1));
     executeScanSpy.mockClear();
     scanResultsSpy.mockClear();
 

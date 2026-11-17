@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, X, AlertCircle } from "lucide-react";
 
 import { decodeBarcodeImage } from "../api/client";
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 import {
   DECODE_FORMATS,
   captureVideoFrame,
