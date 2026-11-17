@@ -568,7 +568,7 @@ export default function App() {
     );
   };
 
-  // Latest handleScan for deferred callbacks (avoids stale closures above).
+  // Latest handleScan for the timer-modal ticks and the barcode 50 ms paths (avoids stale closures).
   const handleScanRef = useRef(handleScan);
   useEffect(() => {
     handleScanRef.current = handleScan;

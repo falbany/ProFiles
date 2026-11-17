@@ -149,8 +149,9 @@ export function useScanController(deps: ScanControllerDeps): ScanController {
 
   /**
    * Execute + load for a pre-claimed generation, WITHOUT error handling or
-   * spinner teardown: the init/reload/directory flows call this and own
-   * their catch/finally (they surface errors with their own prefix).
+   * spinner teardown: the init flow calls this and owns its catch
+   * (`Initial scan failed` prefix); no spinner here — the init panel owns
+   * the feedback.
    *
    * @returns Whether the scan produced a fresh authoritative first page.
    */
