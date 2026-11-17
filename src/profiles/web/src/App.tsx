@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeHash,
   fetchConfig,
-  fetchNotifications,
   fetchSystemInfo,
   launchFile,
   openFolder,
@@ -17,7 +16,7 @@ import {
   setLanEnabled,
   waitForLanState,
 } from "./api/client";
-import type { AppConfigData, ExternalEvent, ScannedFileItem, SystemInfo } from "./api/types";
+import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
 import {
   nextDragState,
   pickConfigFile,
@@ -28,6 +27,7 @@ import { resolveSessionTheme } from "./utils/theme";
 import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
 import { useToast } from "./hooks/useToast";
+import { useExternalEvents } from "./hooks/useExternalEvents";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -55,8 +55,6 @@ import { matchFilter } from "./utils/searchSyntax";
 
 /** Debounce for the client-side prefilter derivation while typing (lane #1). */
 const PREFILTER_DEBOUNCE_MS = 120;
-/** Poll interval for server-side UI events (config handoff toasts). */
-const NOTIFICATION_POLL_MS = 4000;
 
 // Rows jumped by PageUp/PageDown in the file list (~a viewport of 28px rows).
 const TABLE_PAGE_JUMP = 20;
@@ -335,43 +333,15 @@ export default function App() {
     void handleDroppedConfig(file);
   };
 
-  // Config handoff notifications (issue #4): when a second ProFiles launch
-  // double-clicks a .profiles file, the running instance applies it
-  // server-side and buffers an event. A light poll surfaces the event as a
-  // toast and re-fetches the config + rescans when the event says one was
-  // applied. Refs keep the interval callback reading the latest handlers.
-  const lastEventIdRef = useRef(0);
-  const externalConfigApplyRef = useRef<() => Promise<void>>(async () => {});
-  useEffect(() => {
-    externalConfigApplyRef.current = async () => {
+  // Config handoff notifications (issue #4) — the poll lives in the hook;
+  // App injects the re-apply (fresh config + handleConfigLoaded) and the toast.
+  useExternalEvents({
+    onConfigApplied: async () => {
       const cfg = await fetchConfig();
       await handleConfigLoaded(cfg);
-    };
+    },
+    showToast,
   });
-  useEffect(() => {
-    const poll = async () => {
-      let events: ExternalEvent[] = [];
-      try {
-        const res = await fetchNotifications(lastEventIdRef.current);
-        events = res.events;
-      } catch {
-        return; // server unreachable — retry silently on the next tick
-      }
-      for (const evt of events) {
-        lastEventIdRef.current = Math.max(lastEventIdRef.current, evt.id);
-        if (evt.config_applied) {
-          try {
-            await externalConfigApplyRef.current();
-          } catch {
-            // Re-applying is best-effort; the toast still explains what happened.
-          }
-        }
-        showToast(evt.message);
-      }
-    };
-    const id = setInterval(() => void poll(), NOTIFICATION_POLL_MS);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const hasFiles = (e: DragEvent) =>
