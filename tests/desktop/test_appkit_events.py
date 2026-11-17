@@ -61,6 +61,10 @@ class TestCaptureOpenDocuments:
     def test_returns_captured_documents_and_uninstalls(
         self, monkeypatch, uninformative_cwd, tmp_path
     ) -> None:
+        # The orchestration under test is platform-agnostic; the darwin
+        # gate is mocked like every other AppKit touchpoint so this runs
+        # on every CI platform.
+        monkeypatch.setattr(sys, "platform", "darwin")
         delivered: list[str] = []
         uninstalled = []
 
@@ -86,6 +90,7 @@ class TestCaptureOpenDocuments:
         finish.assert_called_once()
 
     def test_install_failure_degrades_to_empty(self, monkeypatch, uninformative_cwd) -> None:
+        monkeypatch.setattr(sys, "platform", "darwin")
         monkeypatch.setattr(appkit_events, "_install_odoc_sink", lambda _sink: None)
         pump = MagicMock()
         finish = MagicMock()
@@ -97,6 +102,7 @@ class TestCaptureOpenDocuments:
         finish.assert_not_called()  # nothing was armed, so nothing to launch
 
     def test_uninstall_survives_pump_crash(self, monkeypatch, uninformative_cwd) -> None:
+        monkeypatch.setattr(sys, "platform", "darwin")
         uninstalled = []
         monkeypatch.setattr(
             appkit_events,
