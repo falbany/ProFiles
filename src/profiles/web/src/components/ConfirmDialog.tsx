@@ -2,7 +2,7 @@ import { useRef } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
-import { useModalA11y } from "../utils/useModalA11y";
+import { useModalA11y } from "../hooks/useModalA11y";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
