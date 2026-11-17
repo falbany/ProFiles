@@ -6,6 +6,7 @@ import contextlib
 import os
 import secrets
 import socket
+import sys
 import threading
 import time
 
@@ -96,28 +97,40 @@ class BackgroundServer:
     def _bind_listener(self) -> socket.socket:
         """Create, bind, and pre-listen the server socket.
 
-        ``SO_REUSEADDR`` is required for :meth:`rebind`: uvicorn closes the
-        accepted keep-alive connections server-side during shutdown, and each
-        of those leaves a TIME_WAIT socket pinned to the old address for
-        ~15-30 s on macOS. Without the option the new bind fails with
+        ``SO_REUSEADDR`` is required for :meth:`rebind` on macOS/BSD: uvicorn
+        closes the accepted keep-alive connections server-side during
+        shutdown, and each of those leaves a TIME_WAIT socket pinned to the
+        old address for ~15-30 s. Without the option the new bind fails with
         ``EADDRINUSE`` even though no listener holds the port anymore
         (loopback→LAN rebind was therefore effectively impossible).
 
-        The double-bind hazard this option adds is contained elsewhere:
-        :func:`find_available_port` probes *without* it so port discovery
-        still refuses occupied ports, and a second launch is arbitrated by
-        the instance manifest/port-handoff mechanism (issue #4), never by
-        sharing the listener. ``SO_REUSEPORT`` stays off — that is the
-        option that would let two servers silently share the port. Binding
-        here still surfaces address conflicts synchronously instead of
-        inside the worker thread.
+        On Windows ``SO_REUSEADDR`` must NOT be used: when both sockets set
+        it, a second bind *succeeds* against an active listener, silently
+        defeating the busy-port detection that the issue #4 config-handoff
+        relies on (the second launch would open a window served by the
+        already-running instance instead of forwarding its config).
+        ``SO_EXCLUSIVEADDRUSE`` is the Windows-equivalent guard: it makes
+        this bind fail against any live listener (→ ``ServerStartError`` →
+        handoff), while a TIME_WAIT-only address still rebinds.
+
+        The remaining double-bind hazard of ``SO_REUSEADDR`` (non-Windows)
+        is contained elsewhere: :func:`find_available_port` probes *without*
+        it so port discovery still refuses occupied ports, and a second
+        launch is arbitrated by the instance manifest/port-handoff mechanism
+        (issue #4), never by sharing the listener. ``SO_REUSEPORT`` stays
+        off — that is the option that would let two servers silently share
+        the port. Binding here still surfaces address conflicts
+        synchronously instead of inside the worker thread.
         """
         if self._sock is not None:
             self._sock.close()
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # IPv4 only: all call sites bind ``0.0.0.0`` or ``127.0.0.1``
         # (no IPv6-literal or hostname hosts).
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if sys.platform == "win32":
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((self.host, self.port))
         sock.listen(1)
         self._sock = sock

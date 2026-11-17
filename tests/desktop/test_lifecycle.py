@@ -52,6 +52,26 @@ def test_start_raises_when_port_is_taken() -> None:
         blocker.close()
 
 
+def test_start_raises_against_running_profiles_instance() -> None:
+    """A second launch must fail to bind a port held by a live ProFiles instance.
+
+    Regression test for the issue #4 handoff: on Windows, setting
+    ``SO_REUSEADDR`` on *both* listeners allowed the second launch to
+    double-bind silently, so ``ServerStartError`` never fired and the
+    config handoff to the running instance was never attempted.
+    """
+    first = BackgroundServer(config=AppConfig(title="owner"), port=0)
+    first.start()
+    try:
+        second = BackgroundServer(config=AppConfig(title="second"), port=first.port)
+        with pytest.raises(ServerStartError) as excinfo:
+            second.start()
+        assert str(first.port) in str(excinfo.value)
+        assert not second.is_running
+    finally:
+        first.stop()
+
+
 def test_stop_is_safe_before_start() -> None:
     server = BackgroundServer(config=AppConfig(title="never started"), port=0)
     server.stop()  # must not raise
