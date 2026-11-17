@@ -10,19 +10,12 @@ import {
   revealFile,
   selectDirectory,
   browseDirectory,
-  loadConfigContent,
   reloadConfig,
   exportCsvToDisk,
   setLanEnabled,
   waitForLanState,
 } from "./api/client";
 import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
-import {
-  nextDragState,
-  pickConfigFile,
-  resetDragState,
-  type DragTrackerState,
-} from "./utils/configDrop";
 import { resolveSessionTheme } from "./utils/theme";
 import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
@@ -32,6 +25,7 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { useBarcodeMode } from "./hooks/useBarcodeMode";
 import { useTheme } from "./hooks/useTheme";
+import { useDragDropConfig } from "./hooks/useDragDropConfig";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -332,27 +326,10 @@ export default function App() {
   };
 
   // Dropped configuration files: window-level drag/drop, session-only trial.
-  const [dropOverlayVisible, setDropOverlayVisible] = useState(false);
-  const dragStateRef = useRef<DragTrackerState>(resetDragState());
-  const applyDragState = (state: DragTrackerState) => {
-    dragStateRef.current = state;
-    setDropOverlayVisible(state.overlayVisible);
-  };
-  const dropHandlerRef = useRef<(file: File) => void>(() => {});
-
-  const handleDroppedConfig = async (file: File) => {
-    try {
-      const content = await file.text();
-      const cfg = await loadConfigContent(file.name, content);
-      await handleConfigLoaded(cfg);
-      showToast(`Session config applied: ${file.name}`);
-    } catch (err: any) {
-      showToast(err.message || "Failed to apply dropped configuration", "error");
-    }
-  };
-  dropHandlerRef.current = (file: File) => {
-    void handleDroppedConfig(file);
-  };
+  const { dropOverlayVisible, resetDrop, applyConfigFile } = useDragDropConfig({
+    onConfigLoaded: handleConfigLoaded,
+    showToast,
+  });
 
   // Config handoff notifications (issue #4) — the poll lives in the hook;
   // App injects the re-apply (fresh config + handleConfigLoaded) and the toast.
@@ -363,41 +340,6 @@ export default function App() {
     },
     showToast,
   });
-
-  useEffect(() => {
-    const hasFiles = (e: DragEvent) =>
-      Array.from(e.dataTransfer?.types ?? []).includes("Files");
-    const onDragEnter = (e: DragEvent) => {
-      applyDragState(nextDragState(dragStateRef.current, "enter", hasFiles(e)));
-    };
-    const onDragOver = (e: DragEvent) => {
-      if (hasFiles(e)) e.preventDefault();
-    };
-    const onDragLeave = (e: DragEvent) => {
-      applyDragState(nextDragState(dragStateRef.current, "leave", hasFiles(e)));
-    };
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      applyDragState(resetDragState());
-      const files = Array.from(e.dataTransfer?.files ?? []);
-      const picked = pickConfigFile(files);
-      if (!picked) {
-        if (files.length > 0) showToast("Not a ProFiles configuration file.", "error");
-        return;
-      }
-      dropHandlerRef.current(picked);
-    };
-    window.addEventListener("dragenter", onDragEnter);
-    window.addEventListener("dragover", onDragOver);
-    window.addEventListener("dragleave", onDragLeave);
-    window.addEventListener("drop", onDrop);
-    return () => {
-      window.removeEventListener("dragenter", onDragEnter);
-      window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("dragleave", onDragLeave);
-      window.removeEventListener("drop", onDrop);
-    };
-  }, []);
 
   const handleBrowseDirectory = () => {
     setShowDirPicker(true);
@@ -894,9 +836,7 @@ export default function App() {
     setShowShortcuts(false);
     setShowLogViewer(false);
     setShowTimerModal(false);
-    // Cancelled drags may never fire dragleave (WKWebView) — make
-    // Escape a hard reset for the drop overlay.
-    applyDragState(resetDragState());
+    resetDrop(); // hard reset lives in useDragDropConfig (WKWebView dragleave gap)
   };
   useGlobalShortcuts({
     anyModalOpen, visibleFiles, selectedIndex,
@@ -1054,7 +994,7 @@ export default function App() {
       {/* Dropped configuration files (session-only trial) */}
       <DropConfigOverlay
         visible={dropOverlayVisible}
-        onFileSelected={(file) => dropHandlerRef.current(file)}
+        onFileSelected={applyConfigFile}
       />
 
       {/* Directory Picker Modal */}
