@@ -12,8 +12,6 @@ import {
   browseDirectory,
   reloadConfig,
   exportCsvToDisk,
-  setLanEnabled,
-  waitForLanState,
 } from "./api/client";
 import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
 import { resolveSessionTheme } from "./utils/theme";
@@ -34,6 +32,7 @@ import { DropConfigOverlay } from "./components/DropConfigOverlay";
 import { FileListTable } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { InitErrorPanel } from "./components/InitErrorPanel";
+import { LanConfirmDialog } from "./components/LanConfirmDialog";
 import { SearchBar } from "./components/SearchBar";
 import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
@@ -46,8 +45,8 @@ import { StatusBar } from "./components/StatusBar";
 import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
-import { CopyableUrl } from "./components/CopyableUrl";
 import { exportToCsv } from "./utils/exportCsv";
+import { pathToFileUri } from "./utils/fileUri";
 import { matchFilter } from "./utils/searchSyntax";
 
 /** Debounce for the client-side prefilter derivation while typing (lane #1). */
@@ -654,7 +653,7 @@ export default function App() {
 
   const handleCopyUri = async (file: ScannedFileItem) => {
     try {
-      const uri = new URL("file:///").href + file.path.replace(/\\/g, "/");
+      const uri = pathToFileUri(file.path);
       await navigator.clipboard.writeText(uri);
       showToast("File URI copied to clipboard.");
     } catch (err: any) {
@@ -1173,68 +1172,11 @@ export default function App() {
       />
 
       {/* LAN toggle confirmation */}
-      <ConfirmDialog
-        isOpen={lanPending !== null}
-        title={lanPending ? "Enable LAN access?" : "Restrict to this machine?"}
-        message={
-          lanPending ? (
-            <span className="block">
-              ProFiles will be reachable by anyone on this network:
-              <CopyableUrl
-                url={`http://${systemInfo?.hostname}:${window.location.port}`}
-                label="Copy hostname URL"
-                className="mt-1.5"
-                onCopied={() => showToast("URL copied to clipboard.")}
-                onCopyError={() => showToast("Failed to copy URL.", "error")}
-              />
-              <CopyableUrl
-                url={`http://${systemInfo?.ip}:${window.location.port}`}
-                label="Copy IP URL"
-                className="mt-1.5"
-                onCopied={() => showToast("URL copied to clipboard.")}
-                onCopyError={() => showToast("Failed to copy URL.", "error")}
-              />
-            </span>
-          ) : (
-            "ProFiles will be reachable only on this machine."
-          )
-        }
-        confirmLabel={lanPending ? "Enable LAN" : "Restrict"}
-        onConfirm={async () => {
-          const next = lanPending!;
-          setLanPending(null);
-          try {
-            await setLanEnabled(next);
-            showToast(
-              next
-                ? "Updating LAN binding…"
-                : "Restricting ProFiles to this machine…",
-              "info"
-            );
-            // The rebind runs after the response; observe the real outcome.
-            const sys = await waitForLanState(next);
-            if (sys) setSystemInfo(sys);
-            if (sys?.lan_enabled === next) {
-              showToast(
-                next
-                  ? "ProFiles is now reachable on the local network."
-                  : "ProFiles is restricted to this machine.",
-                "info"
-              );
-            } else {
-              showToast(
-                "Failed to update LAN binding — the previous address is still active.",
-                "error"
-              );
-            }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : "Failed to update LAN binding";
-            showToast(`Failed to update LAN binding: ${msg}`, "error");
-            // Refetch to restore the actual state
-            const sys = await fetchSystemInfo();
-            setSystemInfo(sys);
-          }
-        }}
+      <LanConfirmDialog
+        pending={lanPending}
+        systemInfo={systemInfo}
+        showToast={showToast}
+        onConfirmed={setSystemInfo}
         onCancel={() => setLanPending(null)}
       />
 

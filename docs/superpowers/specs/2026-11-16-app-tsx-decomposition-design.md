@@ -255,11 +255,15 @@ Two preservation rules (builder calls, from the review):
   re-render. (The ref write inside the updater is impure under StrictMode
   double-invoke; the current code does the same — preserved as-is.)
 - **Staleness profile preserved:** action callbacks reach the keydown
-  handler through a latest-ref (the `handleScanRef` pattern), and the
-  effect's dependency list stays limited to the state it genuinely uses —
-  so today's quirks (e.g. the stale `reloading` guard allowing a second
-  Ctrl+R to re-enter mid-reload) survive unchanged rather than being
-  silently fixed mid-refactor.
+  handler through subscription-time capture — the effect assigns
+  `const d = deps` on each (re)subscription and `handleKeyDown` reads
+  `d.*`, with the original 8-item dependency list verbatim — so
+  re-subscription cadence and closure-capture windows match the
+  pre-refactor code (latest-refs apply only to fire-time reads: timer
+  ticks, the barcode 50 ms timeouts), and today's quirks (e.g. the stale
+  `reloading` guard allowing a second Ctrl+R to re-enter mid-reload)
+  survive unchanged rather than being silently fixed mid-refactor.
+  (erratum folded from the PR 3 plan, 2026-11-17)
 
 ### PR 4 — `useBarcodeMode` + barcode decision + camera reuse
 
