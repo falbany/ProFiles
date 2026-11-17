@@ -10,8 +10,10 @@ import userEvent from "@testing-library/user-event";
  * toast, the "Scan failed:" error prefix, the deferred auto-rescan after
  * filter typing (and how an explicit scan cancels it), the directory-change
  * preference merge with its empty-site fallback, the sort-triggered page-1
- * reload, and the silent no-op scan without an active directory — so the
- * scan-controller extraction in later tasks can be verified
+ * reload, the silent no-op scan without an active directory, and the
+ * config-handoff notification poll driving a full config re-apply + rescan
+ * (pinned before the PR 3 global-shortcuts rewire touches `App.tsx`) — so
+ * the scan-controller extraction in later tasks can be verified
  * behavior-preserving. They must stay green throughout the refactor; a red
  * result means the test misread current behavior, not that `App.tsx` changed.
  *
@@ -332,5 +334,59 @@ describe("App scan flow (characterization)", () => {
     // The scan is refused silently — no request, no error toast.
     expect(executeScanSpy).not.toHaveBeenCalled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("config_applied notification re-applies config and rescans", async () => {
+    // Fake timers drive the 4s notification poll (same treatment as the
+    // deferred-rescan scenario above; `shouldAdvanceTime` keeps RTL's
+    // waitFor polling alive under vitest fake timers). No pointer/keyboard
+    // interaction happens here, so no userEvent advanceTimers wiring is set.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<App />);
+
+    // Init settled: the config-derived scan already ran once, and the init
+    // itself only polls from t=4000 — the mocks below are in place first.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+
+    // The next poll tick delivers a config-handoff event (issue #4), and
+    // the config it must re-fetch now describes the second launch's machine.
+    notificationsSpy.mockResolvedValue({
+      events: [
+        {
+          id: 1,
+          kind: "config_handoff",
+          message: "Config applied by second launch.",
+          config_applied: true,
+        },
+      ],
+    });
+    fetchConfigSpy.mockResolvedValueOnce(
+      makeAppConfig({ filters: ["handoff"], extensions: [".yaml"], active_directory: "C:/handoff" }),
+    );
+
+    // One poll tick — which also passes the 3.5s auto-dismiss of the init
+    // "Loaded config: …" info toast, so the status toast visible after this
+    // tick is the event's message, not init residue.
+    act(() => vi.advanceTimersByTime(4000));
+
+    // Poll → event consumed → config re-fetched (init + apply) →
+    // handleConfigLoaded re-applied it → fresh scan with the NEW config's
+    // derived params.
+    await waitFor(() => expect(fetchConfigSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(2));
+
+    // The first tick polls from event id 0 — nothing seen before it.
+    expect(notificationsSpy).toHaveBeenCalledWith(0);
+    expect(executeScanSpy.mock.lastCall?.[0]).toEqual({
+      directory: "C:/handoff",
+      extension: ".yaml",
+      filter_text: "handoff",
+      recursive: false,
+    });
+
+    // The event's message toasts via the action bar's status role.
+    expect((await screen.findByRole("status")).textContent).toContain(
+      "Config applied by second launch.",
+    );
   });
 });

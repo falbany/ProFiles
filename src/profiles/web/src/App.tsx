@@ -28,6 +28,7 @@ import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
 import { useToast } from "./hooks/useToast";
 import { useExternalEvents } from "./hooks/useExternalEvents";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
@@ -56,9 +57,6 @@ import { matchFilter } from "./utils/searchSyntax";
 
 /** Debounce for the client-side prefilter derivation while typing (lane #1). */
 const PREFILTER_DEBOUNCE_MS = 120;
-
-// Rows jumped by PageUp/PageDown in the file list (~a viewport of 28px rows).
-const TABLE_PAGE_JUMP = 20;
 
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -1008,214 +1006,40 @@ export default function App() {
       workflowLaunchParams ||
       Boolean(pendingDeleteFile),
   );
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Allow Esc to close context menu or modals
-      if (e.key === "Escape") {
-        setContextMenuPos(null);
-        setShowShortcuts(false);
-        setShowLogViewer(false);
-        setShowTimerModal(false);
-        // Cancelled drags may never fire dragleave (WKWebView) — make
-        // Escape a hard reset for the drop overlay.
-        applyDragState(resetDragState());
-        return;
-      }
-
-      // Shortcuts are inert while a modal / context menu is open (issue #55).
-      if (anyModalOpen) return;
-
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        document.querySelector<HTMLElement>("[data-testid='file-list']")?.focus();
-        return;
-      }
-
-      // Keys landing on a control that handles them itself (activation,
-      // sort, resize…) must not also drive the file list (issue #55).
-      const target = e.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest("button, a, [role='menuitem'], [role='option'], [role='columnheader'], [role='separator']")
-      ) {
-        return;
-      }
-
-      // If typing in input / select, handle Enter for scan
-      if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
-        if (e.key === "Enter") {
-          handleScan();
-        }
-        return;
-      }
-
-      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
-        const file = visibleFiles[selectedIndex];
-        if (!file) return;
-        e.preventDefault();
-        const row = document.querySelector<HTMLElement>(`[data-row-index="${selectedIndex}"]`);
-        const rect = row?.getBoundingClientRect();
-        setContextMenuPos({
-          x: rect ? rect.left + 24 : 24,
-          y: rect ? rect.top + rect.height / 2 : 24,
-          file,
-        });
-        return;
-      }
-
-      // F5: Refresh
-      if (e.key === "F5") {
-        e.preventDefault();
-        handleScan();
-        return;
-      }
-
-      // Ctrl + R: Reload config & scan
-      if (e.ctrlKey && e.key.toLowerCase() === "r") {
-        e.preventDefault();
-        handleReloadConfig();
-        return;
-      }
-
-      // Ctrl + D: Focus directory
-      if (e.ctrlKey && e.key.toLowerCase() === "d") {
-        e.preventDefault();
-        document.querySelector<HTMLInputElement>("#directory-combobox")?.focus();
-        return;
-      }
-
-      // Ctrl + E: Focus extension
-      if (e.ctrlKey && e.key.toLowerCase() === "e") {
-        e.preventDefault();
-        document.querySelector<HTMLInputElement>("#extension-combobox")?.focus();
-        return;
-      }
-
-      // Ctrl + F: Focus filter
-      if (e.ctrlKey && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        document.querySelector<HTMLInputElement>("#filter-combobox")?.focus();
-        return;
-      }
-
-      // Ctrl + Shift + L: Open the log viewer
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        setShowLogViewer((prev) => !prev);
-        return;
-      }
-
-      // Ctrl + ,: Open the in-app config editor (issue #95) — same entry
-      // point as the status-bar Config button; the OS-launch this shortcut
-      // used to perform lives in the editor header ("Open in OS").
-      if (e.ctrlKey && e.key === ",") {
-        e.preventDefault();
-        setShowConfigEditor(true);
-        return;
-      }
-
-      // Ctrl + Shift + T: Cycle theme
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
-        e.preventDefault();
-        setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-        return;
-      }
-
-      // Ctrl + B: Toggle barcode scanner mode
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        setBarcodeMode((prev) => !prev);
-        return;
-      }
-
-      // Ctrl + Shift + B: Open camera barcode scanner
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        setShowCameraScanner((prev) => !prev);
-        return;
-      }
-
-      // Ctrl + T: Open timer modal
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "t") {
-        e.preventDefault();
-        setShowTimerModal(true);
-        return;
-      }
-
-      // Ctrl + H: Go to home directory
-      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "h") {
-        e.preventDefault();
-        void handleGoToHomeDirectory();
-        return;
-      }
-
-      // ? or Ctrl + /: Show shortcuts
-      if (e.key === "?" || (e.ctrlKey && e.key === "/")) {
-        e.preventDefault();
-        setShowShortcuts((prev) => !prev);
-        return;
-      }
-
-      // P: Open file properties (when a file is selected)
-      if (e.key.toLowerCase() === "p" && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const file = visibleFiles[selectedIndex];
-        if (file) {
-          e.preventDefault();
-          handleProperties(file);
-        }
-        return;
-      }
-
-      // Table navigation — indexed over the VISIBLE (filtered) rows.
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.min(prev + 1, Math.max(0, visibleFiles.length - 1));
-          selectedPathRef.current = visibleFiles[next]?.path ?? null;
-          return next;
-        });
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.max(prev - 1, 0);
-          selectedPathRef.current = visibleFiles[next]?.path ?? null;
-          return next;
-        });
-      } else if (e.key === "Home") {
-        e.preventDefault();
-        setSelectedIndex((prev) => {
-          selectedPathRef.current = visibleFiles[0]?.path ?? null;
-          return prev === 0 ? prev : 0;
-        });
-      } else if (e.key === "End") {
-        e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.max(0, visibleFiles.length - 1);
-          selectedPathRef.current = visibleFiles[next]?.path ?? null;
-          return prev === next ? prev : next;
-        });
-      } else if (e.key === "PageUp") {
-        e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.max(prev - TABLE_PAGE_JUMP, 0);
-          selectedPathRef.current = visibleFiles[next]?.path ?? null;
-          return next;
-        });
-      } else if (e.key === "PageDown") {
-        e.preventDefault();
-        setSelectedIndex((prev) => {
-          const next = Math.min(prev + TABLE_PAGE_JUMP, Math.max(0, visibleFiles.length - 1));
-          selectedPathRef.current = visibleFiles[next]?.path ?? null;
-          return next;
-        });
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        handleExecute();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [anyModalOpen, visibleFiles, selectedIndex, activeDirectory, activeExtension, filterText, recursive, barcodeMode]);
+  // Plain function (builder call): the file uses no useCallback precedent, and
+  // the hook captures deps at subscription time, so moveSelection's per-render
+  // identity is harmless — do NOT memoize.
+  const moveSelection = (compute: (currentIndex: number, visibleCount: number) => number) => {
+    setSelectedIndex((prev) => {
+      const next = compute(prev, visibleFiles.length);
+      selectedPathRef.current = visibleFiles[next]?.path ?? null;
+      return next;
+    });
+  };
+  const onEscape = () => {
+    setContextMenuPos(null);
+    setShowShortcuts(false);
+    setShowLogViewer(false);
+    setShowTimerModal(false);
+    // Cancelled drags may never fire dragleave (WKWebView) — make
+    // Escape a hard reset for the drop overlay.
+    applyDragState(resetDragState());
+  };
+  useGlobalShortcuts({
+    anyModalOpen, visibleFiles, selectedIndex,
+    activeDirectory, activeExtension, filterText, recursive, barcodeMode,
+    onEscape,
+    onContextMenu: setContextMenuPos,
+    onExecute: handleExecute,
+    onScan: handleScan,
+    onReloadConfig: handleReloadConfig,
+    onGoHome: handleGoToHomeDirectory,
+    onProperties: handleProperties,
+    onToggleTheme: () => setTheme((prev) => (prev === "dark" ? "light" : "dark")),
+    setShowLogViewer, setShowShortcuts, setShowTimerModal,
+    setShowConfigEditor, setBarcodeMode, setShowCameraScanner,
+    moveSelection,
+  });
 
   // Apply theme attribute + persist preference
   useEffect(() => {
