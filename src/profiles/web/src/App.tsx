@@ -28,6 +28,7 @@ import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
 import { useToast } from "./hooks/useToast";
 import { useExternalEvents } from "./hooks/useExternalEvents";
+import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -132,10 +133,6 @@ export default function App() {
   // Camera Barcode Scanner & Single match prompt state
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [singleMatchFile, setSingleMatchFile] = useState<ScannedFileItem | null>(null);
-
-  // Timer — periodic rescan interval in seconds (0 = disabled).
-  const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   /** Open the in-app confirmation dialog for a LAN toggle request. */
   const toggleLan = (next: boolean) => {
@@ -520,6 +517,16 @@ export default function App() {
   const handleScanRef = useRef(handleScan);
   useEffect(() => {
     handleScanRef.current = handleScan;
+  });
+
+  // Timer — periodic rescan (issue #34): the hook owns the interval state and
+  // the tick effect; every tick runs through handleScanRef so it uses the
+  // CURRENT directory/extension/filter.
+  const { autoRescanInterval, handleTimerSet } = useAutoRescanTimer({
+    scan: () => {
+      void handleScanRef.current();
+    },
+    showToast,
   });
 
   /**
@@ -982,32 +989,6 @@ export default function App() {
     document.addEventListener("keydown", handleKeydown, true);
     return () => document.removeEventListener("keydown", handleKeydown, true);
   }, [barcodeMode]);
-
-  // Timer — periodic rescan effect. Runs through handleScanRef so every
-  // tick uses the CURRENT directory/extension/filter (issue #34: the
-  // interval previously captured the values from when it was enabled).
-  useEffect(() => {
-    if (autoRescanInterval > 0) {
-      timerRef.current = setInterval(() => {
-        void handleScanRef.current();
-      }, autoRescanInterval * 1000);
-    }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [autoRescanInterval]);
-
-  const handleTimerSet = (intervalSeconds: number) => {
-    setAutoRescanInterval(intervalSeconds);
-    if (intervalSeconds > 0) {
-      showToast(`Auto-rescan every ${intervalSeconds}s.`);
-    } else {
-      showToast("Auto-rescan disabled.");
-    }
-  };
 
   // Keyboard navigation & global shortcuts
   // Any open surface that captures interaction: while one is up the global
