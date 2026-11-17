@@ -180,8 +180,12 @@ describe("useDragDropConfig", () => {
     deps.onConfigLoaded = firstApply;
     const { rerender } = renderHook(() => useDragDropConfig(deps));
     dragEnterWindow(["Files"]);
-    // App re-rendered with a fresh closure identity (its per-render deps).
-    deps.onConfigLoaded = secondApply;
+    // App re-rendered with a fresh deps BAG — a new object identity holding
+    // the new closure (its per-render deps literal). Replacing the bag
+    // (not mutating it in place) is what pins the render-scope
+    // dropHandlerRef reassignment: a mount-time capture of the bag would
+    // still read firstApply and fail this test.
+    deps = { ...deps, onConfigLoaded: secondApply };
     rerender();
     await dropWindow([new File(["content"], "machine.profiles")]);
     expect(secondApply).toHaveBeenCalledTimes(1);
