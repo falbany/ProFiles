@@ -27,6 +27,7 @@ import {
 import { resolveSessionTheme } from "./utils/theme";
 import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
+import { useToast } from "./hooks/useToast";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -81,7 +82,7 @@ export default function App() {
 
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<{ message: string; kind: "info" | "error" } | null>(null);
+  const { toastMessage, showToast, dismissToast } = useToast();
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
@@ -137,29 +138,6 @@ export default function App() {
   // Timer — periodic rescan interval in seconds (0 = disabled).
   const [autoRescanInterval, setAutoRescanInterval] = useState<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  /**
-   * Show a transient toast above the action bar.
-   *
-   * Info toasts auto-dismiss after 3.5s; error toasts stay a little longer and
-   * carry an inline dismiss button, so they never vanish before being read.
-   */
-  const showToast = (msg: string, kind: "info" | "error" = "info") => {
-    if (!msg) return; // never blank an existing toast with an empty message
-    setToastMessage({ message: msg, kind });
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(
-      () => setToastMessage(null),
-      kind === "error" ? 10000 : 3500,
-    );
-  };
-
-  const dismissToast = () => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(null);
-  };
 
   /** Open the in-app confirmation dialog for a LAN toggle request. */
   const toggleLan = (next: boolean) => {
