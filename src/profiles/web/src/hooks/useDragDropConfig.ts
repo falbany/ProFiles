@@ -37,6 +37,10 @@ import {
  * Escape seam: App's `onEscape` calls `resetDrop()` — a hard reset that
  * hides the overlay AND zeroes the tracker depth, because cancelled drags
  * may never fire dragleave (WKWebView).
+ *
+ * Pick seam (additive): `applyConfigFile` serves DropConfigOverlay's
+ * click-to-pick path (App `onFileSelected`); window drops keep their
+ * latest-ref routing through the render-scope reassignment.
  */
 export function useDragDropConfig(deps: {
   onConfigLoaded: (cfg: AppConfigData) => Promise<void>;
@@ -44,6 +48,7 @@ export function useDragDropConfig(deps: {
 }): {
   dropOverlayVisible: boolean;
   resetDrop: () => void;
+  applyConfigFile: (file: File) => void;
 } {
   // Dropped configuration files: window-level drag/drop, session-only trial.
   const [dropOverlayVisible, setDropOverlayVisible] = useState(false);
@@ -110,5 +115,12 @@ export function useDragDropConfig(deps: {
     applyDragState(resetDragState());
   };
 
-  return { dropOverlayVisible, resetDrop };
+  // Additive seam for DropConfigOverlay's click-to-pick path (App's
+  // onFileSelected): the same body the render-scope dropHandlerRef
+  // reassignment holds — window drops keep their latest-ref routing.
+  const applyConfigFile = (file: File) => {
+    void handleDroppedConfig(file);
+  };
+
+  return { dropOverlayVisible, resetDrop, applyConfigFile };
 }

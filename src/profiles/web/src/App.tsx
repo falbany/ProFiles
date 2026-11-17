@@ -10,7 +10,6 @@ import {
   revealFile,
   selectDirectory,
   browseDirectory,
-  loadConfigContent,
   reloadConfig,
   exportCsvToDisk,
   setLanEnabled,
@@ -327,26 +326,10 @@ export default function App() {
   };
 
   // Dropped configuration files: window-level drag/drop, session-only trial.
-  const { dropOverlayVisible, resetDrop } = useDragDropConfig({
+  const { dropOverlayVisible, resetDrop, applyConfigFile } = useDragDropConfig({
     onConfigLoaded: handleConfigLoaded,
     showToast,
   });
-  // The overlay's click-to-pick fallback (a11y; recovery for a WKWebView
-  // drag that never fires dragleave) still routes through App because the
-  // hook exposes only the overlay visibility and the Escape hard-reset —
-  // its window-drop apply path is not exposed yet, so this mirrors that
-  // path verbatim (DRY debt: fold back into the hook when it returns an
-  // apply-file seam).
-  const handleConfigFilePicked = async (file: File) => {
-    try {
-      const content = await file.text();
-      const cfg = await loadConfigContent(file.name, content);
-      await handleConfigLoaded(cfg);
-      showToast(`Session config applied: ${file.name}`);
-    } catch (err: any) {
-      showToast(err.message || "Failed to apply dropped configuration", "error");
-    }
-  };
 
   // Config handoff notifications (issue #4) — the poll lives in the hook;
   // App injects the re-apply (fresh config + handleConfigLoaded) and the toast.
@@ -1011,7 +994,7 @@ export default function App() {
       {/* Dropped configuration files (session-only trial) */}
       <DropConfigOverlay
         visible={dropOverlayVisible}
-        onFileSelected={handleConfigFilePicked}
+        onFileSelected={applyConfigFile}
       />
 
       {/* Directory Picker Modal */}

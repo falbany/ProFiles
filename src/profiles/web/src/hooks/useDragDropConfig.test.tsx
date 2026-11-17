@@ -209,6 +209,25 @@ describe("useDragDropConfig", () => {
     expect(result.current.dropOverlayVisible).toBe(false);
   });
 
+  it("applyConfigFile applies a picked file without any drag events", async () => {
+    const fixture = makeConfig();
+    loadConfigContentSpy.mockResolvedValue(fixture);
+    const { result } = renderHook(() => useDragDropConfig(deps));
+    // No drag events were fired: the overlay must stay down throughout.
+    expect(result.current.dropOverlayVisible).toBe(false);
+    await act(async () => {
+      result.current.applyConfigFile(new File(["content"], "machine.profiles"));
+    });
+    await act(async () => {});
+    expect(result.current.dropOverlayVisible).toBe(false);
+    expect(loadConfigContentSpy).toHaveBeenCalledTimes(1);
+    expect(loadConfigContentSpy).toHaveBeenCalledWith("machine.profiles", "content");
+    expect(deps.onConfigLoaded).toHaveBeenCalledTimes(1);
+    expect(deps.onConfigLoaded).toHaveBeenCalledWith(fixture);
+    expect(deps.showToast).toHaveBeenCalledTimes(1);
+    expect(deps.showToast).toHaveBeenCalledWith("Session config applied: machine.profiles");
+  });
+
   it("unmount removes the window listeners", async () => {
     const { unmount } = renderHook(() => useDragDropConfig(deps));
     unmount();
