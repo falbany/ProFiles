@@ -2,10 +2,13 @@
  * Build a `file:` URI from a local filesystem path.
  *
  * Replaces the previous `new URL("file:///").href + path.replace(/\\/g, "/")`
- * construction (App.tsx copy-uri action): that produced invalid URIs for UNC
- * paths (`file:///\\server/share/...`) and left spaces, non-ASCII and `#`/`?`
- * unencoded. Here a UNC path (`\\host\share\...` or `//host/share/...`)
- * becomes `file://host/share/...`, everything else becomes
+ * construction (App.tsx copy-uri action): because backslashes were normalized
+ * before concatenation, a UNC path (`\\server\share\a.txt`) produced
+ * `file://///server/share/a.txt` (five leading slashes) and a POSIX path
+ * (`/home/u/a.txt`) produced `file:////home/u/a.txt` (four) — both invalid —
+ * and spaces, non-ASCII and `#`/`?` were left unencoded. Here a UNC path
+ * (`\\host\share\...` or `//host/share/...`) becomes
+ * `file://host/share/...`, everything else becomes
  * `file:///` + the path with forward slashes, and path data is
  * percent-encoded (UTF-8) while `/` separators stay intact.
  *
