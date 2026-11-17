@@ -432,9 +432,10 @@ describe("App scan flow (characterization)", () => {
     for (const ch of "filter=.py") {
       fireEvent.keyDown(document.body, { key: ch });
     }
-    // NOTE: this terminating Enter ALSO reaches the global-shortcuts listener
-    // (`onExecute`) — a pre-existing no-op on the empty list. The wedge path
-    // does not (and must not) swallow it; do not assert it away.
+    // NOTE (issue #187): the wedge path consumes this Enter (preventDefault
+    // + stopPropagation), so it no longer reaches the global-shortcuts
+    // listener's `onExecute` branch — fixed from the pre-#187 behavior
+    // where a consumed Enter also executed the selected file.
     fireEvent.keyDown(document.body, { key: "Enter" });
 
     // The parsed key=value pair applies and the rescan runs after the

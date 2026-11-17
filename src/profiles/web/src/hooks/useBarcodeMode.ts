@@ -37,11 +37,20 @@ export interface BarcodeModeDeps {
  * just-applied values, not this render's (issue #34).
  *
  * Preserved quirks — do NOT "fix" (behavior-preserving extraction):
- * - no stopPropagation anywhere in the keydown handler;
  * - the empty-buffer Enter returns BEFORE e.preventDefault();
  * - the 50 ms timeouts are fire-and-forget (no cleanup on unmount);
  * - the mode stays ON when `barcodeShouldScan` is false (`scan=0`-only
  *   and unknown-key barcodes apply nothing and leave the listener armed).
+ *
+ * Superseded quirk (behavior change sanctioned by issue #187): the handler
+ * originally never called stopPropagation, so wedge-consumed keydowns also
+ * reached the global-shortcuts window listener — a typed "p" opened
+ * Properties, "?" opened the shortcuts modal, and the terminating Enter
+ * executed the selected file. Wedge-CONSUMED keys (printable accumulation;
+ * Enter with a non-empty buffer) now stopPropagation. Escape and the
+ * empty-buffer Enter still propagate DELIBERATELY: Escape keeps closing
+ * open surfaces while cancelling the mode, and an empty-buffer Enter keeps
+ * the manual execute shortcut.
  */
 export function useBarcodeMode(deps: BarcodeModeDeps): {
   barcodeMode: boolean;
@@ -154,6 +163,11 @@ export function useBarcodeMode(deps: BarcodeModeDeps): {
         }
 
         e.preventDefault();
+        // This Enter is the scanner's terminator — the wedge path consumed
+        // it, so it must not ALSO reach the global-shortcuts window listener
+        // (its Enter branch would execute the selected file mid-scan,
+        // issue #187).
+        e.stopPropagation();
         barcodeBufferRef.current = "";
 
         const result = parseBarcodeInput(raw);
@@ -184,7 +198,11 @@ export function useBarcodeMode(deps: BarcodeModeDeps): {
         barcodeBufferRef.current = "";
         d.showToast("Barcode mode cancelled.");
       } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // Accumulate printable characters
+        // Accumulate printable characters. Isolate the wedge stream from
+        // the global shortcuts: a scanner (or blind-typed) payload
+        // containing "p" must not open Properties, nor "?" the shortcuts
+        // modal (issue #187).
+        e.stopPropagation();
         barcodeBufferRef.current += e.key;
       }
     };

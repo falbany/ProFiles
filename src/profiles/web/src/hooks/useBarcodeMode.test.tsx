@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
-import { act, cleanup, fireEvent, renderHook } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 
 /**
  * Unit tests for the `useBarcodeMode` hook (issue #148, PR 4) — the barcode
@@ -22,6 +22,8 @@ import { act, cleanup, fireEvent, renderHook } from "@testing-library/react";
  */
 import { useBarcodeMode } from "./useBarcodeMode";
 import type { BarcodeModeDeps } from "./useBarcodeMode";
+import { useGlobalShortcuts } from "./useGlobalShortcuts";
+import type { GlobalShortcutsDeps } from "./useGlobalShortcuts";
 import type { ScanParams, ScanOutcome } from "./useScanController";
 import type { ScannedFileItem } from "../api/types";
 
@@ -86,7 +88,7 @@ function typeWedge(text: string): void {
 /** Keydown on document.body; returns false when the handler called preventDefault. */
 function pressKey(
   key: string,
-  mods: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {},
+  mods: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean } = {},
 ): boolean {
   return fireEvent.keyDown(document.body, { key, ...mods });
 }
@@ -352,5 +354,103 @@ describe("useBarcodeMode", () => {
     });
     expect(deps.scanWith).not.toHaveBeenCalled();
     expect(deps.showToast).not.toHaveBeenCalledWith("Barcode mode cancelled.");
+  });
+});
+
+/**
+ * Cross-hook isolation tests (issue #187): App mounts BOTH the wedge
+ * capture listener (useBarcodeMode, document, capture phase) and the
+ * global-shortcuts listener (useGlobalShortcuts, window, bubble phase).
+ * These fixtures mirror that wiring so the tests can see whether
+ * wedge-consumed keydowns leak into the shortcuts handler.
+ */
+describe("wedge/shortcuts isolation (issue #187)", () => {
+  let capturedBarcode: ReturnType<typeof useBarcodeMode> | null = null;
+
+  function CrosstalkHarness({ b, s }: { b: BarcodeModeDeps; s: GlobalShortcutsDeps }) {
+    capturedBarcode = useBarcodeMode(b);
+    useGlobalShortcuts(s);
+    return null;
+  }
+
+  function makeShortcutsDeps(overrides: Partial<GlobalShortcutsDeps> = {}): GlobalShortcutsDeps {
+    return {
+      anyModalOpen: false,
+      visibleFiles: [makeFile(1)],
+      selectedIndex: 0,
+      activeDirectory: "C:/base",
+      activeExtension: ".mttl",
+      filterText: "",
+      recursive: false,
+      barcodeMode: true,
+      onEscape: vi.fn(),
+      onContextMenu: vi.fn(),
+      onExecute: vi.fn(),
+      onScan: vi.fn(),
+      onReloadConfig: vi.fn(),
+      onGoHome: vi.fn(),
+      onProperties: vi.fn(),
+      onToggleTheme: vi.fn(),
+      setShowLogViewer: vi.fn(),
+      setShowShortcuts: vi.fn(),
+      setShowTimerModal: vi.fn(),
+      setShowConfigEditor: vi.fn(),
+      setBarcodeMode: vi.fn(),
+      setShowCameraScanner: vi.fn(),
+      moveSelection: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it("wedge-consumed keys do not reach the global shortcuts listener", () => {
+    const properties = vi.fn();
+    const execute = vi.fn();
+    const shortcuts = makeShortcutsDeps({ onProperties: properties, onExecute: execute });
+    render(<CrosstalkHarness b={deps} s={shortcuts} />);
+    act(() => {
+      capturedBarcode!.setBarcodeMode(true);
+    });
+
+    // The reported case 1: blind-typed "p" (e.g. in "filter=.pdf") with a
+    // selected file must not open the Properties modal — the wedge buffer
+    // just accumulates the char.
+    fireEvent.keyDown(document.body, { key: "p" });
+    expect(properties).not.toHaveBeenCalled();
+
+    // The reported case 2: the terminating Enter applies the plain filter
+    // but must not ALSO execute the selected file.
+    pressKey("Enter");
+    expect(execute).not.toHaveBeenCalled();
+
+    // The wedge path itself still consumed both keys.
+    expect(deps.setFilterText).toHaveBeenCalledWith("p");
+    expect(deps.showToast).toHaveBeenCalledWith("Barcode filter: p");
+  });
+
+  it("typed '?' does not open the shortcuts modal either", () => {
+    const setShowShortcuts = vi.fn();
+    const shortcuts = makeShortcutsDeps({ setShowShortcuts });
+    render(<CrosstalkHarness b={deps} s={shortcuts} />);
+    act(() => {
+      capturedBarcode!.setBarcodeMode(true);
+    });
+
+    pressKey("?", { shiftKey: true });
+    expect(setShowShortcuts).not.toHaveBeenCalled();
+  });
+
+  it("escape still reaches the global shortcuts on purpose (modal-close preserved)", () => {
+    const onEscape = vi.fn();
+    const shortcuts = makeShortcutsDeps({ onEscape });
+    render(<CrosstalkHarness b={deps} s={shortcuts} />);
+    act(() => {
+      capturedBarcode!.setBarcodeMode(true);
+    });
+
+    pressKey("Escape");
+    // Both consumers fire, as today: the wedge mode cancels AND the
+    // shortcuts close any open surfaces.
+    expect(deps.showToast).toHaveBeenCalledWith("Barcode mode cancelled.");
+    expect(onEscape).toHaveBeenCalledTimes(1);
   });
 });
