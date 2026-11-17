@@ -57,3 +57,58 @@ class TestResolveStartupConfig:
 
         assert resolved == missing
         assert missing_flag is True
+
+
+class TestLaunchSourceRecording:
+    """The context source is remembered for the handoff gate (issue #188)."""
+
+    def test_folder_search_launch_records_cwd_source(self, monkeypatch, tmp_path) -> None:
+        """A launch with no explicit/doc signal is folder-search driven."""
+        monkeypatch.chdir(tmp_path)
+        app = ProFileApp()
+        resolved, _missing = app._resolve_startup_config(None)
+
+        assert resolved is None  # no literal config name in the folder
+        assert app._launch_source == "cwd"
+
+    def test_explicit_flag_records_explicit_source(self, monkeypatch, tmp_path) -> None:
+        explicit = tmp_path / "custom.profiles"
+        explicit.write_text("x")
+
+        app = ProFileApp()
+        app._resolve_startup_config(explicit)
+
+        assert app._launch_source == "explicit"
+
+    def test_headless_launch_skips_odoc_capture(self, monkeypatch, tmp_path, mocker) -> None:
+        """Headless runs never pump the macOS event loop."""
+        capture = mocker.patch("profiles.desktop.appkit_events.capture_open_documents")
+        config = tmp_path / ".profiles"
+        config.write_text("x")
+        monkeypatch.chdir(tmp_path)
+
+        app = ProFileApp(headless=True)
+        app._resolve_startup_config(None)
+
+        capture.assert_not_called()
+
+    def test_odoc_document_drives_resolution(self, monkeypatch, tmp_path, mocker) -> None:
+        """A captured double-clicked document beats the folder search."""
+        monkeypatch.setattr(
+            "profiles.launch.context._finder_working_directory",
+            lambda: None,
+        )
+        monkeypatch.chdir("/")  # GUI-style launch: uninformative CWD
+        clicked = tmp_path / "clicked.profiles"
+        clicked.write_text("x")
+        mocker.patch(
+            "profiles.desktop.appkit_events.capture_open_documents",
+            return_value=(clicked,),
+        )
+
+        app = ProFileApp()
+        resolved, missing = app._resolve_startup_config(None)
+
+        assert resolved == clicked
+        assert missing is False
+        assert app._launch_source == "document"

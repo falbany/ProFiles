@@ -17,7 +17,9 @@ from profiles.launch.context import (
     FALLBACK_CONFIG_SUFFIX,
     FALLBACK_CONFIG_SUFFIXES,
     LaunchContext,
+    cwd_is_uninformative,
     detect_launch_context,
+    with_documents,
     with_explicit_config,
 )
 from profiles.launch.creation import CreationResult, propose_creation
@@ -29,8 +31,10 @@ __all__ = [
     "FALLBACK_CONFIG_SUFFIXES",
     "CreationResult",
     "LaunchContext",
+    "cwd_is_uninformative",
     "detect_launch_context",
     "propose_creation",
     "resolve_config_path",
+    "with_documents",
     "with_explicit_config",
 ]

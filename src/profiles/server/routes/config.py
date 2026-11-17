@@ -156,7 +156,7 @@ def _choose_active_directory(cfg: AppConfig, config_path: Path | None) -> Path:
     return Path.cwd()
 
 
-def _apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
+def apply_config_from_disk(state: ServerState, config_path: Path) -> dict:
     """Validate, load, and apply a config file from disk; return the response.
 
     Shared by the in-app load endpoint and the cross-instance handoff
@@ -231,7 +231,7 @@ async def load_config_endpoint(payload: LoadConfigRequest, request: Request) -> 
     """Load and apply a configuration file from disk."""
     state: ServerState = request.app.state.server_state
     config_path = Path(payload.config_path).expanduser().resolve()
-    return _apply_config_from_disk(state, config_path)
+    return apply_config_from_disk(state, config_path)
 
 
 _ACCEPTED_DROP_SUFFIXES = (
@@ -419,7 +419,7 @@ async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
     Gate order: session-trial refusal (:func:`has_disk_path`) →
     staleness guard → :func:`validate_issues` → 400 with the issues list
     when invalid and not ``force`` → atomic write (temp file +
-    :func:`os.replace`, issue #116) → :func:`_apply_config_from_disk`,
+    :func:`os.replace`, issue #116) → :func:`apply_config_from_disk`,
     so the live configuration is always re-read from what is on disk.
     ``force=True`` is the escape hatch that lets a broken draft reach the
     disk (it will load as defaults until fixed); without it, bad YAML
@@ -469,7 +469,7 @@ async def save_config_endpoint(payload: SaveRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail=issues)
 
     write_text_atomic(config_path, payload.content)
-    config = _apply_config_from_disk(state, config_path)
+    config = apply_config_from_disk(state, config_path)
     return {
         "status": "SAVED",
         "path": str(config_path),
@@ -495,7 +495,7 @@ async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> d
     exists without ``overwrite=True``) → :func:`validate_issues` → 400
     with the issues list when invalid and not ``force`` → atomic write
     (temp file + :func:`os.replace`, issue #116) →
-    :func:`_apply_config_from_disk`, so the live configuration is
+    :func:`apply_config_from_disk`, so the live configuration is
     always re-read from what is on disk (which also clears
     ``session_trial``).
 
@@ -538,7 +538,7 @@ async def save_as_config_endpoint(payload: SaveAsRequest, request: Request) -> d
         raise HTTPException(status_code=400, detail=issues)
 
     write_text_atomic(target, payload.content)
-    config = _apply_config_from_disk(state, target)
+    config = apply_config_from_disk(state, target)
     return {
         "status": "SAVED",
         "path": str(target),

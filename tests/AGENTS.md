@@ -75,9 +75,11 @@ tests/
 │       ├── test_events.py                    # ← core/telemetry/events.py
 │       └── test_metrics.py                   # ← core/telemetry/metrics.py
 ├── desktop/
+│   ├── test_appkit_events.py                 # ← desktop/appkit_events.py
+│   ├── test_handoff.py                       # ← desktop/handoff.py
+│   ├── test_instance.py                      # ← desktop/instance.py
 │   ├── test_lifecycle.py                     # ← desktop/lifecycle.py
-│   ├── test_launcher.py                      # ← desktop/launcher.py
-│   └── test_instance.py                      # ← desktop/instance.py
+│   └── test_launcher.py                      # ← desktop/launcher.py
 ├── launch/
 │   ├── test_context.py                       # ← launch/context.py
 │   ├── test_creation.py                      # ← launch/creation.py

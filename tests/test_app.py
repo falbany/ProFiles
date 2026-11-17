@@ -421,6 +421,44 @@ class TestWebGuiBusyPortResolution:
         mock_forward.assert_not_called()
         assert mock_launch.call_args.kwargs["port"] == 8125
 
+    def test_folder_search_source_is_never_handed_off(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """Issue #188: a cwd/launcher-resolved config must not be forwarded.
+
+        The folder search resolves whatever literal config name it finds
+        first — not necessarily a file the user meant to open — so the
+        honest fallback is a separate instance on a free port instead of
+        silently swapping the running instance's configuration.
+        """
+        mock_launch = mocker.patch(
+            "profiles.desktop.launcher.launch_desktop_window",
+            side_effect=[ServerStartError("busy"), None],
+        )
+        mock_forward = mocker.patch("profiles.desktop.handoff.forward_config_to_running_instance")
+        mocker.patch("profiles.desktop.lifecycle.find_available_port", return_value=8128)
+
+        app = self._app(tmp_path, mocker)
+        app._launch_source = "cwd"  # folder-search resolution (LaunchServices launch)
+        app._run_web_gui(port=8088)
+
+        mock_forward.assert_not_called()
+        assert mock_launch.call_args.kwargs["port"] == 8128
+
+    def test_document_and_explicit_sources_still_hand_off(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        """Documents (--config or a double-clicked file) are forwardable."""
+        for source in ("document", "explicit"):
+            mocker.patch(
+                "profiles.desktop.launcher.launch_desktop_window",
+                side_effect=[ServerStartError("busy"), None],
+            )
+            mock_forward = mocker.patch(
+                "profiles.desktop.handoff.forward_config_to_running_instance",
+                return_value=HandoffResult(status="handed_off"),
+            )
+            app = self._app(tmp_path, mocker)
+            app._launch_source = source
+            app._run_web_gui(port=8088)
+            mock_forward.assert_called_once_with(8088, app._config_path)
+
     def test_nothing_is_ever_killed_automatically(self, mocker, tmp_path) -> None:  # type: ignore[no-untyped-def]
         """The kill hint exists only in the final error path; the busy-port
         resolution itself must not terminate any process."""
