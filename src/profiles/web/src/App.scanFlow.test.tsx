@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 /**
@@ -17,10 +17,19 @@ import userEvent from "@testing-library/user-event";
  * behavior-preserving. They must stay green throughout the refactor; a red
  * result means the test misread current behavior, not that `App.tsx` changed.
  *
+ * PR 4 adds the two barcode pins — the wedge-scanner key=value apply with
+ * its 50 ms rescan, and the camera-detection path with its single-match
+ * prompt — ahead of the useBarcodeMode extraction.
+ *
  * The whole `App` tree is rendered against a fully mocked API client —
  * heavier than a component test, but it pins the actual user-facing wiring
  * (init → scan → results, Scan button → toast) instead of a prop-level
  * approximation. Pattern: App.configEditor.test.tsx.
+ *
+ * The CameraBarcodeModal stub below is the file's first component mock:
+ * the real modal needs getUserMedia/BarcodeDetector, unreachable in jsdom.
+ * The stub honors `isOpen` and renders a detection trigger; it renders null
+ * while closed, so the barcode-free scenarios are unaffected.
  */
 import App from "./App";
 import {
@@ -41,6 +50,19 @@ vi.mock("./api/client", async (importOriginal) => ({
   fetchNotifications: vi.fn(),
   executeScan: vi.fn(),
   selectDirectory: vi.fn(),
+}));
+
+// The camera modal's real body needs getUserMedia + BarcodeDetector, which
+// jsdom cannot provide. The stub honors `isOpen` (null while closed, so the
+// barcode-free scenarios above are unaffected) and exposes a button that
+// delivers a fixed detection payload through `onDetected`.
+vi.mock("./components/CameraBarcodeModal", () => ({
+  CameraBarcodeModal: ({ isOpen, onDetected }: { isOpen: boolean; onDetected: (code: string) => void }) =>
+    isOpen ? (
+      <button type="button" onClick={() => onDetected("filter=cam;ext=.yaml")}>
+        Detect test code
+      </button>
+    ) : null,
 }));
 
 // `__APP_VERSION__` is injected by vite.config's `define` at build time;
@@ -388,5 +410,88 @@ describe("App scan flow (characterization)", () => {
     expect((await screen.findByRole("status")).textContent).toContain(
       "Config applied by second launch.",
     );
+  });
+
+  it("wedge scanner input applies barcode values and rescans after 50 ms", async () => {
+    // Fake timers drive the barcode apply path's 50ms rescan timeout (same
+    // treatment as the deferred-rescan scenario above; `shouldAdvanceTime`
+    // keeps RTL's waitFor polling alive under vitest fake timers).
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<App />);
+
+    // Init settled: the config-derived scan already ran once.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+
+    // USB/wedge scanners type the barcode as keystrokes terminated by Enter.
+    // Enable the capture mode, then "type" the payload on body — a
+    // non-editable target so the document-level capture listener accumulates
+    // it (editable targets are skipped, issue #58), and plain letters hit no
+    // shortcut on the empty list.
+    await user.click(screen.getByRole("button", { name: "Enable barcode mode" }));
+    for (const ch of "filter=.py") {
+      fireEvent.keyDown(document.body, { key: ch });
+    }
+    // NOTE (issue #187): the wedge path consumes this Enter (preventDefault
+    // + stopPropagation), so it no longer reaches the global-shortcuts
+    // listener's `onExecute` branch — fixed from the pre-#187 behavior
+    // where a consumed Enter also executed the selected file.
+    fireEvent.keyDown(document.body, { key: "Enter" });
+
+    // The parsed key=value pair applies and the rescan runs after the
+    // barcode path's 50ms state-commit timeout.
+    act(() => vi.advanceTimersByTime(50));
+
+    // Toast lookup by text, not role: earlier info toasts from this scenario
+    // ("Barcode mode ON…") are still inside their 3.5s auto-dismiss at
+    // t=50ms, so text pins the exact message rather than whichever toast
+    // holds the status role.
+    await screen.findByText("Barcode applied: filter=.py");
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(2));
+    // The rescan used the NEW filter (issue #34: handleScanRef reads the
+    // state committed by the barcode apply, not the stale render closure).
+    expect(executeScanSpy.mock.lastCall?.[0]).toEqual({
+      directory: "C:/data",
+      extension: ".mttl",
+      filter_text: ".py",
+      recursive: false,
+    });
+  });
+
+  it("camera detection applies values and prompts on single match", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Init settled: the config-derived scan already ran once (empty page).
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+
+    // The scan the camera detection triggers will land on exactly one file —
+    // the single-match prompt condition.
+    scanResultsSpy.mockResolvedValue({
+      count: 1,
+      in_progress: false,
+      items: [makeFile("only.mttl")],
+    });
+
+    // Open the camera modal (stubbed at the top of this file: jsdom has no
+    // getUserMedia/BarcodeDetector) and fire its synthetic detection.
+    await user.click(screen.getByRole("button", { name: "Scan barcode with camera" }));
+    await user.click(screen.getByRole("button", { name: "Detect test code" }));
+
+    // Detection closes the modal…
+    expect(screen.queryByText("Detect test code")).not.toBeInTheDocument();
+    // …toasts (by text — same toast-slot reasoning as the wedge scenario)…
+    await screen.findByText("Barcode detected!");
+    // …and rescans with the barcode's parsed values.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(2));
+    expect(executeScanSpy.mock.lastCall?.[0]).toEqual({
+      directory: "C:/data",
+      extension: ".yaml",
+      filter_text: "cam",
+      recursive: false,
+    });
+
+    // Exactly one match → the launch-confirmation prompt names the file.
+    await screen.findByRole("dialog", { name: "1 file matched: only.mttl" });
   });
 });

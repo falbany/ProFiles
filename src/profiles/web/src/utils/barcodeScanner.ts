@@ -20,6 +20,18 @@ export interface BarcodeParseResult {
   isPlainFilter: boolean;
 }
 
+/**
+ * A barcode application triggers a rescan when it asked to (`scan=1`) OR
+ * changed any value — moved verbatim from App.tsx (issue #148 PR 4).
+ */
+export function barcodeShouldScan(values: Partial<BarcodeParsedInput>): boolean {
+  return values.scan === true ||
+    values.filter !== undefined ||
+    values.ext !== undefined ||
+    values.recursive !== undefined ||
+    values.dir !== undefined;
+}
+
 /** Delimiters and keys recognized in the barcode payload. */
 const PAIR_DELIMITER = ";";
 const KEY_VALUE_DELIMITER = "=";

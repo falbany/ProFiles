@@ -30,6 +30,7 @@ import { useToast } from "./hooks/useToast";
 import { useExternalEvents } from "./hooks/useExternalEvents";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
+import { useBarcodeMode } from "./hooks/useBarcodeMode";
 import { ActionBar } from "./components/ActionBar";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
@@ -51,7 +52,6 @@ import { TimerModal } from "./components/TimerModal";
 import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { CopyableUrl } from "./components/CopyableUrl";
-import { parseBarcodeInput } from "./utils/barcodeScanner";
 import { exportToCsv } from "./utils/exportCsv";
 import { matchFilter } from "./utils/searchSyntax";
 
@@ -111,11 +111,6 @@ export default function App() {
     args?: string;
   } | null>(null);
 
-  // Barcode scanner mode — when active, the next Enter-terminated
-  // keypress sequence is captured as barcode input.
-  const [barcodeMode, setBarcodeMode] = useState<boolean>(false);
-  const barcodeBufferRef = useRef<string>("");
-
   // QR code modal — shows a generated QR for sharing a file location.
   const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
   const [barcodeFilePath, setBarcodeFilePath] = useState<string | undefined>(undefined);
@@ -145,6 +140,12 @@ export default function App() {
   const selectedPathRef = useRef<string | null>(null);
 
   /**
+   * Current search-bar state as scan parameters — the single source shared
+   * by the scan controller and the barcode hook (issue #148 PR 4).
+   */
+  const getScanParams = () => ({ directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive });
+
+  /**
    * Scan orchestration (issue #148): list state, the generation protocol,
    * the deferred server auto-rescan, sort reloads and paging live in the
    * hook. App keeps the UI-side concerns — toasts (showToast) and selection
@@ -152,12 +153,35 @@ export default function App() {
    */
   const scan = useScanController({
     showToast,
-    getScanParams: () => ({ directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive }),
+    getScanParams,
     onFreshResults: () => {
       // Reset the selection anchor; a fresh result set is authoritative.
       selectedPathRef.current = null;
       setSelectedIndex(0);
     },
+  });
+
+  /**
+   * Barcode scanner mode (issue #148 PR 4): the mode state + buffer, the
+   * wedge capture listener, the toggle and the camera handler live in the
+   * hook; App supplies the value appliers and keeps the single-match and
+   * camera-modal surfaces.
+   */
+  const {
+    barcodeMode, setBarcodeMode, handleBarcodeToggle, handleCameraDetected,
+  } = useBarcodeMode({
+    showToast,
+    scanWith: scan.scanWith,
+    getScanParams,
+    onApplyValues: (values) => {
+      if (values.filter !== undefined) setFilterText(values.filter);
+      if (values.ext !== undefined) setActiveExtension(values.ext);
+      if (values.recursive !== undefined) setRecursive(values.recursive);
+      if (values.dir !== undefined) setActiveDirectory(values.dir);
+    },
+    onSingleMatch: setSingleMatchFile,
+    onCameraClose: () => setShowCameraScanner(false),
+    setFilterText,
   });
 
   // Derive the prefilter query from the raw input, debounced ~120ms so a
@@ -511,18 +535,12 @@ export default function App() {
     );
   };
 
-  // Latest handleScan for the timer-modal ticks and the barcode 50 ms paths (avoids stale closures).
-  const handleScanRef = useRef(handleScan);
-  useEffect(() => {
-    handleScanRef.current = handleScan;
-  });
-
   // Timer — periodic rescan (issue #34): the hook owns the interval state and
-  // the tick effect; every tick runs through handleScanRef so it uses the
-  // CURRENT directory/extension/filter.
+  // the tick effect; its latest-deps ref keeps this closure current, so every
+  // tick scans with the CURRENT directory/extension/filter.
   const { autoRescanInterval, handleTimerSet } = useAutoRescanTimer({
     scan: () => {
-      void handleScanRef.current();
+      void handleScan();
     },
     showToast,
   });
@@ -846,147 +864,6 @@ export default function App() {
       showToast(`Export failed: ${err.message}`, "error");
     }
   };
-
-  const handleCameraDetected = async (rawCode: string) => {
-    setShowCameraScanner(false);
-    showToast("Barcode detected!");
-
-    const result = parseBarcodeInput(rawCode);
-    const vals = result.values;
-
-    const nextDir = vals.dir !== undefined ? vals.dir : activeDirectory;
-    const nextExt = vals.ext !== undefined ? vals.ext : activeExtension;
-    const nextFilter = vals.filter !== undefined ? vals.filter : filterText;
-    const nextRecursive = vals.recursive !== undefined ? vals.recursive : recursive;
-
-    if (vals.dir !== undefined) setActiveDirectory(vals.dir);
-    if (vals.ext !== undefined) setActiveExtension(vals.ext);
-    if (vals.filter !== undefined) setFilterText(vals.filter);
-    if (vals.recursive !== undefined) setRecursive(vals.recursive);
-
-    if (nextDir) {
-      const outcome = await scan.scanWith(
-        {
-          directory: nextDir,
-          extension: nextExt,
-          filter_text: nextFilter,
-          recursive: nextRecursive,
-        },
-        { errorPrefix: "Scan error" },
-      );
-      if (outcome.ok && outcome.firstPage.count === 1 && outcome.firstPage.items.length === 1) {
-        setSingleMatchFile(outcome.firstPage.items[0]);
-      }
-    }
-  };
-
-  const handleBarcodeToggle = () => {
-    setBarcodeMode((prev) => {
-      const next = !prev;
-      if (next) {
-        barcodeBufferRef.current = "";
-        showToast("Barcode mode ON — scan a barcode now.");
-      } else {
-        barcodeBufferRef.current = "";
-        showToast("Barcode mode OFF.");
-      }
-      return next;
-    });
-  };
-
-  const applyBarcodeValues = (values: Partial<{
-    filter: string;
-    ext: string;
-    recursive: boolean;
-    dir: string;
-    scan: boolean;
-  }>) => {
-    if (values.filter !== undefined) setFilterText(values.filter);
-    if (values.ext !== undefined) setActiveExtension(values.ext);
-    if (values.recursive !== undefined) setRecursive(values.recursive);
-    if (values.dir !== undefined) setActiveDirectory(values.dir);
-
-    // If scan=1 or any value was applied, trigger a rescan
-    const shouldScan = values.scan === true ||
-      values.filter !== undefined ||
-      values.ext !== undefined ||
-      values.recursive !== undefined ||
-      values.dir !== undefined;
-
-    if (shouldScan) {
-      // Disable barcode mode after applying
-      setBarcodeMode(false);
-      barcodeBufferRef.current = "";
-      // Use a short timeout so the state updates above commit before the
-      // scan starts; handleScanRef guarantees the scan reads the NEW
-      // values, not the ones captured by this render (issue #34).
-      setTimeout(() => {
-        void handleScanRef.current();
-      }, 50);
-    }
-  };
-
-  // Barcode scanner input — global keypress listener when barcodeMode is active.
-  // USB/wedge scanners emit keystrokes + Enter; we accumulate until Enter.
-  useEffect(() => {
-    if (!barcodeMode) return;
-
-    const handleKeydown = (e: KeyboardEvent) => {
-      // Keystrokes typed into an editable element belong to that element —
-      // never accumulate them into the wedge buffer or hijack its Enter
-      // (issue #58). A wedge scanner "typing" while an input is focused
-      // lands in the input, which is the correct destination anyway.
-      const target = e.target;
-      const isEditable =
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target instanceof HTMLSelectElement);
-      if (isEditable) return;
-
-      if (e.key === "Enter") {
-        const raw = barcodeBufferRef.current;
-        if (!raw) {
-          barcodeBufferRef.current = "";
-          return;
-        }
-
-        e.preventDefault();
-        barcodeBufferRef.current = "";
-
-        const result = parseBarcodeInput(raw);
-
-        if (result.isPlainFilter) {
-          showToast(`Barcode filter: ${result.values.filter}`);
-          setFilterText(result.values.filter || "");
-          setBarcodeMode(false);
-          // handleScanRef: scan with the just-set filter, not this render's
-          // stale closure (issue #34).
-          setTimeout(() => void handleScanRef.current(), 50);
-        } else {
-          // Parsed key=value pairs — apply all and auto-scan
-          const vals = result.values;
-          const summary = Object.entries(vals)
-            .map(([k, v]) => `${k}=${v}`)
-            .join(", ");
-          showToast(`Barcode applied: ${summary}`);
-          applyBarcodeValues(vals);
-        }
-      } else if (e.key === "Escape") {
-        // Allow user to cancel barcode mode
-        setBarcodeMode(false);
-        barcodeBufferRef.current = "";
-        showToast("Barcode mode cancelled.");
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // Accumulate printable characters
-        barcodeBufferRef.current += e.key;
-      }
-    };
-
-    document.addEventListener("keydown", handleKeydown, true);
-    return () => document.removeEventListener("keydown", handleKeydown, true);
-  }, [barcodeMode]);
 
   // Keyboard navigation & global shortcuts
   // Any open surface that captures interaction: while one is up the global
