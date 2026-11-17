@@ -130,8 +130,11 @@ def _install_odoc_sink(sink: list[str]) -> Callable[[], None] | None:
     launch.
     """
     try:
-        from AppKit import NSAppleEventManager, NSApplication
-        from Foundation import NSObject
+        from AppKit import (  # pyright: ignore[reportMissingImport] — darwin-only
+            NSAppleEventManager,
+            NSApplication,
+        )
+        from Foundation import NSObject  # pyright: ignore[reportMissingImport] — darwin-only
 
         manager = NSAppleEventManager.sharedAppleEventManager()
 
@@ -167,7 +170,7 @@ def _install_odoc_sink(sink: list[str]) -> Callable[[], None] | None:
         # and drop the AE-manager handler. Both best effort: the capture
         # is transient and a failed teardown must not break startup.
         try:
-            from AppKit import NSApplication
+            from AppKit import NSApplication  # pyright: ignore[reportMissingImport] — darwin-only
 
             app = NSApplication.sharedApplication()
             if app.delegate() is collector:
@@ -193,7 +196,7 @@ def _finish_app_launch() -> None:
     to an empty result through the uninstaller check that follows.
     """
     try:
-        from AppKit import NSApplication
+        from AppKit import NSApplication  # pyright: ignore[reportMissingImport] — darwin-only
 
         app = NSApplication.sharedApplication()
         if not app.isRunning():
@@ -314,7 +317,7 @@ def _pump_runloop(deadline: float, received: Sequence[str]) -> None:
     multi-file double-clicks).
     """
     try:
-        from AppKit import (
+        from AppKit import (  # pyright: ignore[reportMissingImport] — darwin-only
             NSAnyEventMask,
             NSApplication,
             NSDate,
