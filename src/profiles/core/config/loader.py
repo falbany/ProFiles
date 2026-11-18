@@ -21,10 +21,11 @@ from profiles.core.config.reader import ConfigReader
 def load_config(config_path: Path | str | None = None) -> AppConfig:
     """Load the application configuration.
 
-    Searches the folder tree for a ``.profiles`` file starting from the
-    working directory. If *config_path* is provided, uses that directly.
-    Falls back to ``.profiles.yaml`` (backward compatibility) when no
-    ``.profiles`` file is found, then to defaults.
+    Searches the folder tree for a configuration file starting from
+    the working directory (canonical ``.profiles`` names first, then any
+    ``*.profiles``-style file, ascending). If *config_path* is provided,
+    uses that directly. Falls back to ``.profiles.yaml`` (backward
+    compatibility) when no ``.profiles`` file is found, then to defaults.
 
     Args:
         config_path: Optional explicit path to the configuration file.

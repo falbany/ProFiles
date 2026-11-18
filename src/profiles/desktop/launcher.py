@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import webview
+from fastapi import HTTPException
 
 from profiles.core.config.models import AppConfig
 from profiles.desktop.lifecycle import BackgroundServer
+from profiles.server.state import ServerState
 
 logger = logging.getLogger("profiles.desktop.launcher")
 
@@ -60,6 +64,45 @@ def _configure_webview_permissions() -> None:
         logger.warning("Could not install WKWebView media-capture auto-grant", exc_info=True)
 
 
+def _make_document_applier(state: ServerState) -> Callable[[Sequence[str]], None]:
+    """Return the odoc callback applying double-clicked configs in-process.
+
+    Shares :func:`apply_config_from_disk` with ``POST /api/instance/handoff``
+    so a double-click landing on the running window is launch-equivalent,
+    and buffers the same UI event the frontend toast poll renders
+    (issue #188). A rejected file degrades to a failure notification —
+    the callback must never raise into the GUI event loop.
+    """
+    from profiles.server.routes.config import apply_config_from_disk
+
+    def apply_documents(paths: Sequence[str]) -> None:
+        for raw in paths:
+            config_path = Path(raw).expanduser().resolve()
+            try:
+                apply_config_from_disk(state, config_path)
+            except HTTPException as exc:
+                state.record_external_event(
+                    kind="config_handoff_failed",
+                    message=f"Could not apply '{config_path.name}': {exc.detail}",
+                    config_applied=False,
+                )
+                continue
+            state.record_external_event(
+                kind="config_handoff",
+                message=f"Configuration '{config_path.name}' applied from the double-clicked document",
+                config_applied=True,
+            )
+
+    return apply_documents
+
+
+def _install_open_document_handler(state: ServerState) -> None:
+    """Route later double-click documents to the running instance (issue #188)."""
+    from profiles.desktop.appkit_events import install_running_doc_handler
+
+    install_running_doc_handler(_make_document_applier(state))
+
+
 def launch_desktop_window(
     config: AppConfig,
     port: int = 8088,
@@ -84,6 +127,7 @@ def launch_desktop_window(
 
     try:
         server.start()
+        _install_open_document_handler(server.state)
         if host == "0.0.0.0":
             from profiles.utils.network import get_local_ip
 

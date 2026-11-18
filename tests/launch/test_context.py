@@ -19,7 +19,9 @@ from profiles.launch.context import (
     FALLBACK_CONFIG_SUFFIXES,
     LaunchContext,
     _documents_from_argv,
+    cwd_is_uninformative,
     detect_launch_context,
+    with_documents,
 )
 
 
@@ -228,3 +230,68 @@ def _call_probe() -> Path | None:
     from profiles.launch.context import _finder_working_directory
 
     return _finder_working_directory()
+
+
+class TestWithDocuments:
+    """Merging odoc-captured documents into the launch context (#188)."""
+
+    def test_empty_documents_returns_context_unchanged(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "profiles.launch.context._finder_working_directory",
+            lambda: None,
+        )
+        ctx = detect_launch_context(["prog"])
+        assert with_documents(ctx, []) is ctx
+
+    def test_merges_captured_documents_and_marks_source(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "profiles.launch.context._finder_working_directory",
+            lambda: None,
+        )
+        doc = tmp_path / "clicked.profiles"
+        ctx = with_documents(detect_launch_context(["prog"]), [str(doc)])
+        assert ctx.document_paths == (doc.resolve(),)
+        assert ctx.source == "document"
+
+    def test_argv_documents_win_over_captured_duplicates(self, tmp_path) -> None:
+        ctx = LaunchContext(
+            document_paths=(Path("/a/argv.profiles"),),
+            working_directory=None,
+            explicit_config=None,
+            source="document",
+        )
+        merged = with_documents(ctx, ["/a/argv.profiles", "/b/odoc.profiles"])
+        assert merged.document_paths == (
+            Path("/a/argv.profiles").resolve(),
+            Path("/b/odoc.profiles").resolve(),
+        )
+
+    def test_relative_documents_resolve_against_cwd(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.chdir(tmp_path)
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=None,
+            explicit_config=None,
+            source="cwd",
+        )
+        merged = with_documents(ctx, ["clicked.profiles"])
+        assert merged.document_paths == ((tmp_path / "clicked.profiles").resolve(),)
+        assert merged.source == "document"
+
+
+class TestCwdIsUninformative:
+    """The GUI-launch CWD heuristic shared by the probe and odoc capture."""
+
+    def test_root_is_uninformative(self) -> None:
+        assert cwd_is_uninformative(Path("/")) is True
+
+    def test_none_is_uninformative(self) -> None:
+        assert cwd_is_uninformative(None) is True
+
+    def test_runtime_prefix_is_uninformative(self) -> None:
+        assert cwd_is_uninformative(Path(sys.prefix) / "sub") is True
+
+    def test_real_working_directory_is_informative(self, tmp_path) -> None:
+        assert cwd_is_uninformative(tmp_path) is False

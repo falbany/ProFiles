@@ -27,6 +27,7 @@ from profiles.core.telemetry.diagnostics import (
 from profiles.launch import (
     detect_launch_context,
     resolve_config_path,
+    with_documents,
     with_explicit_config,
 )
 from profiles.utils.network import get_hostname, get_username
@@ -124,6 +125,14 @@ class ProFileApp:
         self._host = host
         self._config: AppConfig | None = None
         self._logger: logging.Logger | None = None
+        # Launch signal that produced ``_config_path`` ("document",
+        # "explicit", "cwd", "launcher" — see profiles.launch.context).
+        # Defaults to "explicit": a constructor-injected path is handed
+        # over deliberately, so it may be forwarded over a handoff.
+        # Updated by _resolve_startup_config once the real context is
+        # known — a folder-search-resolved launch ("cwd"/"launcher") is
+        # then never forwarded over a handoff (issue #188).
+        self._launch_source = "explicit"
 
     @staticmethod
     def _parse_log_level(verbose: str) -> int:
@@ -167,7 +176,11 @@ class ProFileApp:
         """Return (config_path, config_is_missing).
 
         Uses the launch resolution logic to determine which config file
-        should be used for this launch.
+        should be used for this launch. On macOS a double-clicked
+        document is delivered as an ``odoc`` AppleEvent rather than an
+        argv entry, so it is captured first and merged into the launch
+        context (issue #188). The context source is remembered for the
+        busy-port handoff decision.
 
         Args:
             explicit: Value of --config flag, if any.
@@ -175,8 +188,14 @@ class ProFileApp:
         Returns:
             Tuple of (resolved config path or None, whether it's missing).
         """
-        ctx = detect_launch_context()
+        documents: tuple[Path, ...] = ()
+        if not self._headless:
+            from profiles.desktop.appkit_events import capture_open_documents
+
+            documents = capture_open_documents()
+        ctx = with_documents(detect_launch_context(), documents)
         ctx = with_explicit_config(ctx, explicit)
+        self._launch_source = ctx.source
         resolved = resolve_config_path(ctx)
         is_missing = resolved is not None and not resolved.exists()
         return resolved, is_missing
@@ -374,6 +393,13 @@ class ProFileApp:
 
         config_path = self._config_path
         if config_path is None:
+            return False
+        if self._launch_source not in ("document", "explicit"):
+            # Issue #188 defense-in-depth: a config resolved by folder
+            # search ("cwd"/"launcher" source) is not necessarily the
+            # file the user meant to open — forwarding it would silently
+            # swap the running instance's configuration. Fall back to a
+            # separate instance on a free port instead.
             return False
         result = forward_config_to_running_instance(port, config_path)
         if result.status == "handed_off":

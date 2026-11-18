@@ -27,10 +27,14 @@ STARTER_CONFIG_TEMPLATE = """# ProFiles — Starter Configuration
 # you need — commented blocks below are ready-to-adapt examples.
 #
 # DISCOVERY
-#   ProFiles searches for a file named ".profiles" starting at the current
-#   working directory (CWD) and walking its subdirectories. The first hit
-#   wins. If none is found anywhere, defaults are used (identical to this
-#   starter). An explicit file can be passed with --config (see CLI FLAGS).
+#   ProFiles searches for a configuration file starting at the current
+#   working directory (CWD) and walking its subdirectories. The canonical
+#   names win first (".profiles", then ".profiles.yaml"/".profiles.yml");
+#   when none of them exists anywhere, any "*.profiles"-style file (e.g.
+#   "a.profiles", "b.profiles") is accepted — several matches are sorted
+#   ascending and the first one is launched. If nothing is found at all,
+#   defaults are used (identical to this starter). An explicit file can
+#   be passed with --config (see CLI FLAGS).
 #
 # SYNTAX
 #   * YAML format; all keys are case-insensitive.

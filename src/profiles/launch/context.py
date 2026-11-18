@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -53,12 +54,14 @@ _FINDER_PROBE_TIMEOUT_S = 2.0
 _IS_MACOS = sys.platform == "darwin"
 
 
-def _cwd_is_uninformative(cwd: Path | None) -> bool:
+def cwd_is_uninformative(cwd: Path | None) -> bool:
     """True when *cwd* says nothing about the user's launch location.
 
     GUI-style launches (double-click / Finder) typically inherit
     ``CWD == "/"`` or an idle Python-runtime directory; only then is the
-    Finder probe worth consulting for the real launch folder.
+    Finder probe worth consulting for the real launch folder, and only
+    then is the macOS odoc capture (:mod:`profiles.desktop.appkit_events`)
+    worth its bounded wait.
     """
     if cwd is None or cwd == Path("/"):
         return True
@@ -178,7 +181,7 @@ def detect_launch_context(argv: list[str] | None = None) -> LaunchContext:
     except OSError:
         cwd = None
 
-    probed = _finder_working_directory() if cwd is not None and _cwd_is_uninformative(cwd) else None
+    probed = _finder_working_directory() if cwd is not None and cwd_is_uninformative(cwd) else None
 
     if probed is not None:
         working_directory = probed
@@ -199,6 +202,25 @@ def detect_launch_context(argv: list[str] | None = None) -> LaunchContext:
         explicit_config=None,
         source=source,
     )
+
+
+def with_documents(
+    ctx: LaunchContext,
+    documents: Sequence[Path | str],
+) -> LaunchContext:
+    """Return *ctx* with extra OS-delivered documents merged in.
+
+    macOS hands a double-clicked document over as an ``odoc`` AppleEvent
+    (captured by :mod:`profiles.desktop.appkit_events`) instead of an
+    argv entry; the capture result is merged here. Deduplicated,
+    preserving argv documents first. An empty *documents* returns *ctx*
+    unchanged; a merged document marks the launch as ``"document"``.
+    """
+    extra = tuple(dict.fromkeys(Path(d).expanduser().resolve() for d in documents))
+    if not extra:
+        return ctx
+    merged = tuple(dict.fromkeys((*ctx.document_paths, *extra)))
+    return replace(ctx, document_paths=merged, source="document")
 
 
 def with_explicit_config(
@@ -228,6 +250,8 @@ __all__ = [
     "FALLBACK_CONFIG_SUFFIX",
     "FALLBACK_CONFIG_SUFFIXES",
     "LaunchContext",
+    "cwd_is_uninformative",
     "detect_launch_context",
+    "with_documents",
     "with_explicit_config",
 ]

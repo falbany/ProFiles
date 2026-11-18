@@ -94,6 +94,7 @@ src/profiles/
 ├── desktop/                  # Shell PyWebView (fenêtrage natif)
 │   ├── launcher.py           #   Démarrage serveur + fenêtre
 │   ├── lifecycle.py          #   Cycle de vie de l'application
+│   ├── appkit_events.py      #   Événements odoc macOS (double-clic .profiles, #188)
 │   └── instance.py, handoff.py  # Instances multiples, handoff de port
 │
 ├── utils/                    # Fonctions utilitaires pures & stateless

@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 import profiles
 from profiles.desktop.instance import HANDOFF_TOKEN_HEADER
-from profiles.server.routes.config import LoadConfigRequest, _apply_config_from_disk
+from profiles.server.routes.config import LoadConfigRequest, apply_config_from_disk
 from profiles.server.state import ServerState
 
 router = APIRouter(tags=["instance"])
@@ -62,7 +62,7 @@ async def instance_handoff(payload: LoadConfigRequest, request: Request) -> dict
     state: ServerState = request.app.state.server_state
     _require_handoff_token(state, request)
     config_path = Path(payload.config_path).expanduser().resolve()
-    response = _apply_config_from_disk(state, config_path)
+    response = apply_config_from_disk(state, config_path)
     state.record_external_event(
         kind="config_handoff",
         message=f"Configuration '{config_path.name}' applied by a new ProFiles launch",
