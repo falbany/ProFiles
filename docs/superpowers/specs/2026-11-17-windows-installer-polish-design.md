@@ -132,7 +132,7 @@ The Install Options page is **first-class** — `CustomInstallDirDlg.Next` →
 | Finish page (launch + text + links) | `installer_completion_*` keys | Native |
 | **Add to PATH** | `install_options.add_to_path` + `post_install.bat` (PowerShell registry edit) | **Custom script on native hooks** |
 | PATH cleanup on uninstall | `pre_uninstall.bat` (exact-match removal, both hives) | **Custom script on native hook** |
-| Installer art | Committed 493×312 / 493×58 BMPs, direction A | Assets |
+| Installer art | Committed 493×312 / 493×58 BMPs, native-frame layout | Assets |
 
 ## 6. Detailed Design
 
@@ -189,25 +189,31 @@ Notes:
 - `OPTION_ADD_TO_PATH` is an uppercase (public) MSI property ⇒ overridable on
   the `msiexec` command line.
 
-### 6.2 Installer branding BMPs (direction A)
+### 6.2 Installer branding BMPs (native-frame layout)
 
-Two committed assets derived from existing brand art (one-off generation,
-then versioned like any other asset — **never regenerated at build time**):
+Two committed assets (one-off generation, then versioned like any other
+asset — **never regenerated at build time**). The layout follows the WiX UI
+text positions: the black banner title starts at x≈20 of 493 and dialog body
+text starts at x≈173, so art lives only outside those zones.
 
 | File | Size | Content |
 | --- | --- | --- |
-| `img/installer_background.bmp` | 493×312, 24-bit BMP | Diagonal indigo-violet gradient (~`#635BCC` → `#825ED9`, 125°), white rounded logo mark, "ProFiles" wordmark + tagline "The Highly Configurable, Multi-Purpose File Launcher", translucent pill accents on the right — direct adaptation of `img/ProFiles_banner.png`. WiX overlays the dialog title (top-left) and welcome text (bottom-left) + buttons (bottom-right); keep those zones free of high-contrast detail. |
-| `img/installer_banner.bmp` | 493×58, 24-bit BMP | Same gradient, small logo mark + "ProFiles Setup" wordmark left, faint pills right. WiX overlays the page title (e.g. "Select Installation Folder") — left 60% stays smooth gradient. |
+| `img/installer_background.bmp` | 493×312, 24-bit BMP | 164 px brand panel on the left (indigo-violet gradient + white rounded logo mark); plain white from x=164 for dialog text, links and checkboxes. |
+| `img/installer_banner.bmp` | 493×58, 24-bit BMP | White from x=0–428 for the black page title; brand-gradient block with the white logo mark at x=429–492. |
 
 Generation: one-off Python/PIL script (committed under
 `packaging/windows/generate_bmps.py` for provenance/reproducibility), run
-locally, output committed. A note in `packaging/windows/README.md` records
-provenance and the regeneration command.
+locally, output committed. The script draws both assets at 4× and
+LANCZOS-downsamples them so the mark survives the 370×44 banner display.
+A note in `packaging/windows/README.md` records provenance and the
+regeneration command.
 
-**Open visual checkpoint** (verified on the first CI artifact): the WiX UI
-theme's title/text color over branded art. If the template renders dark text
-over the art, mitigation is to lighten the text zones in the BMPs (not a
-template patch). Decide from the artifact screenshot, not speculation.
+**Visual checkpoint — resolved 2026-11-18:** the first CI artifact confirmed
+that WiX renders the banner title and dialog body text in black. The original
+full-bleed art put the mark/wordmark under that text; the native-frame layout
+above keeps the text zones white instead of patching the template. Full
+rationale: [2026-11-18 installer art native-frame design](2026-11-18-installer-art-native-frame-design.md)
+(supersedes the art direction originally written in this section).
 
 ### 6.3 `packaging/windows/post_install.bat`
 

@@ -46,6 +46,12 @@ uv run python packaging/windows/generate_bmps.py        # regenerate
 uv run python packaging/windows/generate_bmps.py --check  # staleness check
 ```
 
+The art follows WiX's text-safe zones: the banner stays white left of x=429
+(WiX draws the black page title at x≈20) and the background stays white
+right of x=169 (dialog text starts at x≈173). Do not add art back into those
+zones.
+
 Commit any regenerated BMP together with this script (the provenance
 record). Design background:
-`docs/superpowers/specs/2026-11-17-windows-installer-polish-design.md`.
+`docs/superpowers/specs/2026-11-17-windows-installer-polish-design.md`
+and `docs/superpowers/specs/2026-11-18-installer-art-native-frame-design.md`.

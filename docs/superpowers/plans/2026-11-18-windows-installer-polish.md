@@ -74,7 +74,7 @@ git commit -m "chore: enforce CRLF for .bat and binary handling for .bmp" && git
 **Interfaces:**
 - Produces: `img/installer_background.bmp`, `img/installer_banner.bmp` at the exact paths Task 4's pyproject references; test module that Tasks 3–4 extend.
 
-Art (spec §6.2, direction A): background = `img/ProFiles_banner.png` cover-cropped to 493×312 (LANCZOS) — it already carries the gradient, mark, wordmark, tagline and pills. Banner = horizontal gradient sampled from the source's plain area (`#635BCC` → `#825ED9`), white rounded mark (26 px) at x=16, translucent pills right, **no text** (WiX overlays the page title at left).
+Art (spec §6.2, superseded by `2026-11-18-installer-art-native-frame-design.md`): native-frame layout. Background = 164 px brand panel on the left (gradient + white mark), plain white from x=164 for WiX dialog text; banner = white x=0–428 for the black page title, brand block with the white mark at x=429–492. Render at 4× and LANCZOS-downsample; font-free.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -121,12 +121,12 @@ Expected: FAIL (`assert path.is_file()` — BMPs missing)
 
 - [ ] **Step 3: Write `packaging/windows/generate_bmps.py`**
 
-Deterministic Pillow script, stdlib+Pillow only, no font rendering (font-free keeps it reproducible across dev machines). Body sketch: open `img/ProFiles_banner.png`; background = scale-to-cover 493×312 with centre crop, `Image.LANCZOS`, save BMP RGB; banner = per-column horizontal lerp `#635BCC`→`#825ED9`, rounded-rectangle white mark at (16, 16) 26×26 with three 3-px indigo (`#635BCC`) bars (the logo's line motif), two translucent white pills right of x=360, save BMP RGB. `--check` flag exits 1 if outputs missing/stale (used by the next step, not by CI).
+Deterministic Pillow script, stdlib+Pillow only, no font rendering (font-free keeps it reproducible across dev machines). Body sketch: draw both assets at 4× and `Image.LANCZOS`-downsample. Background = 493×312: 164 px vertical gradient panel (`#635BCC`→`#825ED9`) at the left, 56 px white mark at (54, 128) with three indigo bars, rest white. Banner = 493×58: white, 64 px horizontal gradient block at x=429, 34 px mark at (444, 12). Save BMP RGB. `--check` flag exits 1 if outputs missing/stale (used by the next step, not by CI).
 
 - [ ] **Step 4: Generate and verify**
 
 Run: `uv run python packaging/windows/generate_bmps.py && uv run pytest tests/packaging/test_windows_installer_assets.py -v`
-Expected: PASS (2 tests). Eyeball both BMPs via Read (image preview) against the approved mockup direction A.
+Expected: PASS (2 tests). Eyeball both BMPs via Read (image preview) against the approved native-frame mock-up.
 
 - [ ] **Step 5: Update `tests/AGENTS.md`** tree entry for `tests/packaging/test_windows_installer_assets.py` (read the file first; mirror its existing entry style).
 
