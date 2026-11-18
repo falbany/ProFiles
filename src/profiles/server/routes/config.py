@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from profiles.core.config.diagnostics import collect_config_issues
-from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES, content_hash, write_text_atomic
+from profiles.core.config.io.yaml_io import content_hash, is_config_file_name, write_text_atomic
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
@@ -69,9 +69,11 @@ def _is_config_path(path: Path) -> bool:
     ``BACKUP.PROFILES`` (its whitelist checks ``filename.lower()``), so the
     apply step that re-reads what was just written must accept it too — a
     case-sensitive comparison here turned a successful save-as into a 400
-    with the file already on disk (branch review, issue #95 wave).
+    with the file already on disk (branch review, issue #95 wave). The
+    predicate lives in the core so the desktop odoc applier's skip guard
+    (issue #193) stays in lockstep with what this apply step accepts.
     """
-    return path.name.lower().endswith(CONFIG_FILE_NAMES)
+    return is_config_file_name(path.name)
 
 
 def _is_safe_filename(filename: str) -> bool:

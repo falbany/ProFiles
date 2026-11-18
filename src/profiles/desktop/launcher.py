@@ -70,14 +70,24 @@ def _make_document_applier(state: ServerState) -> Callable[[Sequence[str]], None
     Shares :func:`apply_config_from_disk` with ``POST /api/instance/handoff``
     so a double-click landing on the running window is launch-equivalent,
     and buffers the same UI event the frontend toast poll renders
-    (issue #188). A rejected file degrades to a failure notification —
-    the callback must never raise into the GUI event loop.
+    (issue #188). Documents whose name is not a config name are skipped
+    exactly like launch resolution skips them (issue #193): macOS also
+    delivers the opened *folder* — or any non-config document — as an
+    odoc path, and reporting it as a failed config apply produced a
+    spurious failure toast while the launch had already resolved the
+    folder's ``a.profiles``-style config. A rejected config-named file
+    still degrades to a failure notification — the callback must never
+    raise into the GUI event loop.
     """
+    from profiles.core.config.io.yaml_io import is_config_file_name
     from profiles.server.routes.config import apply_config_from_disk
 
     def apply_documents(paths: Sequence[str]) -> None:
         for raw in paths:
             config_path = Path(raw).expanduser().resolve()
+            if not is_config_file_name(config_path.name):
+                logger.debug("Skipping non-config odoc document: %s", config_path)
+                continue
             try:
                 apply_config_from_disk(state, config_path)
             except HTTPException as exc:
