@@ -37,6 +37,7 @@ tests/
 ├── characterization/                         # cross-cutting golden baseline (see exceptions)
 ├── core/
 │   ├── test_actions.py                       # ← core/actions.py
+│   ├── test_paths.py                         # ← core/paths.py (per-user path policy, #191)
 │   ├── config/
 │   │   ├── test_inheritance.py               # ← core/config/inheritance.py
 │   │   ├── test_loader.py                    # ← core/config/loader.py

@@ -15,6 +15,7 @@ owns a single responsibility:
 
 | Sub-package / file       | Responsibility (SRP)                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------ |
+| `paths.py`               | Per-user path policy: `~/.profiles` data dir, config default, uninformative-directory tests (issue #191) |
 | `config/__init__.py`     | Single point of egress for the configuration subsystem (high-level API)              |
 | `config/models.py`       | Pure dataclasses (`AppConfig`, `MachineConfiguration`, `ColumnConfiguration`, `HookSpec`, `WorkflowStep`) |
 | `config/service.py`      | Domain operations over `AppConfig` — find, merge, auto-select directories            |

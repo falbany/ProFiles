@@ -12,18 +12,18 @@
 
 ## Overview
 
-The `.profiles` file is a **YAML-format** configuration file that customizes ProFiles's behavior. This file is searched for starting from the current working directory (CWD) and descending into subdirectories. The first match found is used.
+The `.profiles` file is a **YAML-format** configuration file that customizes ProFiles's behavior. This file is searched for starting from the current working directory (CWD) and descending into subdirectories. The first match found is used. The CWD tree is skipped when the CWD carries no launch information — a Start-Menu/launcher start inherits `System32`, the home folder, or the interpreter/app install directory — and the per-user default `~/.profiles/.profiles` is loaded when it exists instead.
 
 If no `.profiles` file is found:
 
-- In interactive mode (web UI, desktop or browser): ProFiles proposes to create a default configuration file
+- In interactive mode (web UI, desktop or browser): ProFiles proposes to create a default configuration file — in the project folder for a terminal launch, in `~/.profiles` for a launcher-style launch
 - In headless mode: ProFiles uses default values identical to those presented in this document
 
 ## Creating the Configuration File
 
 ### Method 1: Automatic Proposal (Interactive Mode)
 
-On first launch in interactive mode (web UI in the PyWebView shell or browser), if no `.profiles` file is found, ProFiles proposes to create a default configuration file in the current working directory.
+On first launch in interactive mode (web UI in the PyWebView shell or browser), if no `.profiles` file is found, ProFiles proposes to create a default configuration file in the current working directory. When that directory carries no launch information (a Start-Menu shortcut, a launcher with an empty "Start in" field, a Finder/dock launch), the proposal targets `~/.profiles/.profiles` instead — the same folder as `profiles.log` — so nothing is ever written into a system directory, and every later launch loads that per-user default automatically.
 
 ### Method 2: Command Line
 
