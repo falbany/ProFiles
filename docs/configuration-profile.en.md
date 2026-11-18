@@ -12,7 +12,7 @@
 
 ## Overview
 
-The `.profiles` file is a **YAML-format** configuration file that customizes ProFiles's behavior. This file is searched for starting from the current working directory (CWD) and descending into subdirectories. The first match found is used. The CWD tree is skipped when the CWD carries no launch information — a Start-Menu/launcher start inherits `System32`, the home folder, or the interpreter/app install directory — and the per-user default `~/.profiles/.profiles` is loaded when it exists instead.
+The `.profiles` file is a **YAML-format** configuration file that customizes ProFiles's behavior. This file is searched for starting from the current working directory (CWD) and descending into subdirectories. The first match found is used. The CWD tree is skipped when the CWD carries no launch information — a Start-Menu/launcher start inherits `System32`, the home folder, the interpreter/app install directory, or a mounted-volume root (e.g. running the app from a macOS DMG) — and the per-user default `~/.profiles/.profiles` is loaded when it exists instead.
 
 If no `.profiles` file is found:
 

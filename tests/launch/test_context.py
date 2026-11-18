@@ -312,3 +312,52 @@ class TestCwdIsUninformative:
     def test_home_folder_is_uninformative(self, isolated_user_home) -> None:
         """A launcher CWD == home says nothing about a project (#191)."""
         assert cwd_is_uninformative(isolated_user_home) is True
+
+
+class TestProbeResultFiltering:
+    """The Finder probe result must pass the same policy as a CWD (#191).
+
+    The probe mirrors the front Finder window — often the folder the user
+    launched FROM (a mounted DMG volume, /Applications), not their
+    project.  A probe result that is itself uninformative is discarded
+    and the launch falls back to the plain CWD.
+    """
+
+    def test_probe_result_on_mount_point_is_discarded(self, monkeypatch, tmp_path) -> None:
+        """A probe returning a mounted DMG volume falls back to the CWD."""
+        import profiles.core.paths as paths_module
+
+        dmg = tmp_path / "ProFiles 0.12.0b1"
+        dmg.mkdir()
+        monkeypatch.setattr("profiles.launch.context._finder_working_directory", lambda: dmg)
+        real_device_id = paths_module._device_id
+
+        def fake_device_id(path):
+            try:
+                if path.resolve() == dmg.resolve():
+                    return 424242  # separate "volume"
+            except OSError:
+                return None
+            return real_device_id(path)
+
+        monkeypatch.setattr(paths_module, "_device_id", fake_device_id)
+        monkeypatch.chdir("/")  # GUI-style launch: uninformative CWD
+
+        ctx = detect_launch_context(["prog"])
+
+        assert ctx.source == "cwd"
+        assert ctx.working_directory == Path("/")
+
+    def test_probe_result_in_project_folder_is_kept(self, monkeypatch, tmp_path) -> None:
+        """A probe returning a real project folder is still trusted."""
+        monkeypatch.setattr(
+            "profiles.launch.context._finder_working_directory",
+            lambda: tmp_path / "project",
+        )
+        (tmp_path / "project").mkdir()
+        monkeypatch.chdir("/")
+
+        ctx = detect_launch_context(["prog"])
+
+        assert ctx.source == "launcher"
+        assert ctx.working_directory == tmp_path / "project"

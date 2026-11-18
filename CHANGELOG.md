@@ -11,11 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Per-user configuration path policy** (issue #191): launcher-style
   launches (Start Menu, pinned taskbar, `.desktop` entries — any process
-  whose CWD is System32, the home folder, or an install/runtime directory)
-  no longer propose creating `.profiles` in a system directory. The
-  proposal targets `~/.profiles/.profiles` (next to `profiles.log`), every
-  later launch loads that per-user default automatically, terminal/project
-  launches keep their current behavior, and no code path ever proposes an
+  whose CWD is System32, the home folder, an install/runtime directory,
+  or a mounted-volume root such as a macOS DMG) no longer propose
+  creating `.profiles` in a system directory. The proposal targets
+  `~/.profiles/.profiles` (next to `profiles.log`), every later launch
+  loads that per-user default automatically, terminal/project launches
+  keep their current behavior, and no code path ever proposes an
   existing directory as the configuration file. New
   `profiles.core.paths` module is the single source of truth for these
   user-level locations.

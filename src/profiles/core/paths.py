@@ -75,6 +75,51 @@ def find_user_config() -> Path | None:
     return None
 
 
+def _device_id(path: Path) -> int | None:
+    """Return the filesystem device id of *path*, or ``None`` on failure."""
+    try:
+        return path.stat().st_dev
+    except OSError:
+        return None
+
+
+def _is_volume_mount_point(resolved: Path) -> bool:
+    """True when *resolved* (already resolved) is a volume mount point.
+
+    A directory whose device id differs from its parent's is the top of a
+    separate volume — a mounted disk image (DMG install media), a USB
+    stick, a network share.  The top of a volume says nothing about where
+    within it the user actually works (consistent with drive roots being
+    uninformative), so macOS DMG launches reporting the volume root land
+    here (issue #191 follow-up).
+    """
+    device = _device_id(resolved)
+    parent_device = _device_id(resolved.parent)
+    return device is not None and parent_device is not None and device != parent_device
+
+
+def _hosts_running_app(resolved: Path) -> bool:
+    """True when *resolved* contains the running packaged app bundle.
+
+    macOS packages live in ``Something.app/Contents/...``; a directory
+    that *hosts* that bundle (``/Applications``, a portable-apps folder,
+    the DMG folder the user browsed to launch) is a launcher location,
+    not a project.  Dev runs are exempt: a plain-venv interpreter path
+    carries no ``.app/Contents`` component, so a repo hosting ``.venv``
+    stays a legitimate project folder.
+    """
+    try:
+        exe_dir = Path(sys.executable).resolve().parent
+    except OSError:
+        return False
+    if ".app/Contents" not in str(exe_dir):
+        return False
+    try:
+        return exe_dir.is_relative_to(resolved)
+    except OSError:
+        return False
+
+
 def is_uninformative_directory(path: Path | None) -> bool:
     """True when *path* says nothing about the user's launch location.
 
@@ -83,12 +128,15 @@ def is_uninformative_directory(path: Path | None) -> bool:
 
     * ``None`` or an unresolvable path;
     * a filesystem/drive root (``/``, ``C:\\``);
+    * a volume mount point — a mounted disk image (DMG install media), a
+      USB stick, a network share (device id differs from its parent's);
     * the home folder itself (a launcher CWD, and colliding with the
       ``~/.profiles`` data directory);
     * anything inside the Python runtime prefix (idle interpreter
       launches);
-    * anything inside the running executable's directory (packaged-app
-      install root);
+    * anything inside the running executable's directory, or any
+      directory hosting the running packaged app bundle
+      (``Something.app`` on macOS — ``/Applications``, the DMG folder);
     * on Windows-style environments: anything inside
       ``%SystemRoot%``/``%windir%`` (covers ``System32``, ``SysWOW64``)
       or ``%ProgramFiles%``/``%ProgramFiles(x86)%``.  The variables are
@@ -115,6 +163,10 @@ def is_uninformative_directory(path: Path | None) -> bool:
     if resolved.parent == resolved:
         return True
 
+    # Top of a separate mounted volume (DMG, USB, network share).
+    if _is_volume_mount_point(resolved):
+        return True
+
     # Home folder itself (launchers often start there; it also hosts the
     # ~/.profiles data directory, so it can never host a config file).
     try:
@@ -137,6 +189,10 @@ def is_uninformative_directory(path: Path | None) -> bool:
             return True
     except OSError:
         pass
+
+    # A directory hosting the packaged app bundle (macOS .app).
+    if _hosts_running_app(resolved):
+        return True
 
     # Windows system / program locations, via env vars (see docstring).
     for var in ("SystemRoot", "windir", "ProgramFiles", "ProgramFiles(x86)"):
