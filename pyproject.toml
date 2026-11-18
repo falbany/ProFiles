@@ -146,6 +146,45 @@ LSHandlerRank = "Owner"
 [tool.briefcase.app.profiles.permission]
 camera = "ProFiles uses the camera to scan configuration barcodes and QR codes."
 
+# Windows MSI polish (issue #183). Briefcase 0.4.x dropped the MSI reference
+# docs; every option below is verified against the 0.4.7 source and its WiX
+# template — see docs/superpowers/specs/2026-11-17-windows-installer-polish-design.md.
+#
+# system_installer is deliberately UNSET: the wizard then asks per-user vs
+# per-machine at install time ("perUserOrMachine" install scope).
+[tool.briefcase.app.profiles.windows]
+create_desktop_shortcut = true
+# Briefcase resolves these with_suffix(".bmp") against the project root —
+# the committed files must be BMPs (img/installer_*.bmp), sizes are fixed
+# by WiX (493x312 dialog / 493x58 banner) and pinned by tests/packaging.
+installer_background = "img/installer_background"
+installer_banner = "img/installer_banner"
+# Finish page: checked "Launch ProFiles" box + links + completion text.
+installer_completion_launch_app = true
+installer_completion_text = """\
+ProFiles has been installed successfully. Launch it now, or find it in \
+your Start Menu."""
+uninstaller_completion_text = """\
+ProFiles has been removed. Your configurations and logs were left \
+untouched."""
+installer_completion_urls = [
+    { title = "Documentation", url = "https://github.com/falbany/ProFiles#readme" },
+    { title = "What's new", url = "https://github.com/falbany/ProFiles/blob/main/CHANGELOG.md" },
+]
+# PATH convenience: bundled scripts (packaging/windows/) do the registry
+# work — the WiX template's native PATH feature is console-app-only.
+post_install_script = "packaging/windows/post_install.bat"
+pre_uninstall_script = "packaging/windows/pre_uninstall.bat"
+
+# NOTE: singular `install_option`, array of tables, each entry REQUIRES
+# `name`. The plural `install_options` key is absorbed by **kwargs and
+# overwritten in DraftAppConfig — the same trap as `document_type` above.
+[[tool.briefcase.app.profiles.windows.install_option]]
+name = "add_to_path"
+title = "Add ProFiles to PATH"
+description = "Run 'profiles' (including --headless automation) from any terminal."
+default = true
+
 [tool.pylint.MASTER]
 init-import = "yes"
 ignore-paths = ["src/profiles/_version.py"]

@@ -16,3 +16,9 @@
 *.dmg binary
 *.msi binary
 *.deb binary
+
+# Windows batch files need CRLF (cmd.exe has LF edge cases, e.g. around
+# labels); BMPs are binary. Used by packaging/windows/ installer scripts
+# and img/installer_*.bmp — see the installer polish design (issue #183).
+*.bat text eol=crlf
+*.bmp binary

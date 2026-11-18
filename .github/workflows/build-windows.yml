@@ -6,6 +6,7 @@ on:
       - "pyproject.toml"
       - "src/**"
       - "img/**"
+      - "packaging/windows/**"
       - ".github/workflows/build-windows.yml"
   workflow_dispatch:
 

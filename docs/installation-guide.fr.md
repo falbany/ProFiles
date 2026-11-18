@@ -32,6 +32,38 @@ Téléchargez l'installateur de votre plateforme depuis la page
 
 Aucune installation de Python n'est requise.
 
+### Options de l'installateur Windows
+
+L'assistant MSI se parcourt ainsi : **licence → périmètre d'installation →
+dossier → options d'installation → installation**.
+
+- **Périmètre d'installation** — l'assistant demande une installation
+  *par utilisateur* (aucun droit admin, que pour vous) ou *par machine*
+  (tous les utilisateurs, nécessite les privilèges Administrateur locaux).
+- **Ajouter ProFiles au PATH** — cochée par défaut. Permet de lancer
+  `profiles --headless` (et les autres modes CLI) depuis n'importe quel
+  *nouveau* terminal, sans configuration. Décochez-la si vous préférez ne
+  pas modifier le PATH. Une entrée dans le menu Démarrer **et un
+  raccourci bureau** sont toujours créés.
+- **Page de fin** — une case *Launch ProFiles* cochée par défaut, plus des
+  liens vers la [documentation](../README.md) et les
+  [nouveautés](../CHANGELOG.md).
+
+Les installations silencieuses continuent de fonctionner et ajoutent
+ProFiles au PATH par défaut :
+
+```bat
+:: installation silencieuse (PATH inclus par défaut)
+msiexec /i ProFiles-<version>.msi /qn
+
+:: installation silencieuse sans modification du PATH
+msiexec /i ProFiles-<version>.msi /qn OPTION_ADD_TO_PATH=0
+```
+
+La désinstallation (via *Paramètres → Applications* ou `msiexec /x`) retire
+l'entrée de PATH ajoutée par l'installateur ainsi que les deux raccourcis —
+vos configurations `.profiles` et vos journaux restent intacts.
+
 ## Méthode 2 : Installation en une ligne (Développeurs)
 
 Nécessite Python 3.11+.

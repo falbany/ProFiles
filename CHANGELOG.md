@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Windows installer polish**: the MSI now creates a desktop shortcut, asks
+  per-user vs per-machine at install time, and shows a proper finish page
+  ("Launch ProFiles" checkbox plus Documentation / What's new links).
+- **"Add ProFiles to PATH" install option** (checked by default, both
+  scopes): `profiles --headless` works from any new terminal after a
+  default install; the entry is removed on uninstall. Silent installs keep
+  working (`/qn`) and opt out via `msiexec /i ProFiles-<version>.msi /qn
+  OPTION_ADD_TO_PATH=0`.
+- **Branded installer**: the welcome dialog and page banners now use the
+  ProFiles brand art (indigo-violet gradient) instead of the stock WiX look.
+
 ### Changed
 
 - **Loopback-only by default**: the web server now binds `127.0.0.1` on launch
