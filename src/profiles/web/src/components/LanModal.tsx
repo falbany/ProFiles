@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, Wifi, WifiOff, X } from "lucide-react";
+import { ExternalLink, Wifi, WifiOff, X } from "lucide-react";
 
 import {
   fetchSystemInfo,
@@ -36,10 +36,12 @@ type Busy = "enable" | "disable" | null;
  * Layout: the QR of the IP URL sits on the LEFT and is always displayed,
  * even while LAN is disabled (user decision overriding #198's original
  * gating) — it reuses `generateBarcode` / `POST /api/actions/barcode` like
- * the files' "Generate QR Code", no client-side dependency. The right side
- * carries the live status, the "on another device" instruction (while
- * enabled), the copyable hostname + IP URLs and the clickable loopback link
- * (#199). ❌ (header) and Escape close at any time; footer buttons never
+ * the files' "Generate QR Code", no client-side dependency. The header
+ * carries the live status — icon chip (Wifi / WifiOff) plus "LAN Access —
+ * Reachable on this network." / "LAN Access — Restricted to the host
+ * machine." — so the body holds only the addresses: the copyable hostname
+ * + IP URLs and the clickable loopback link (#199), spaced clear of the IP
+ * row. ❌ (header) and Escape close at any time; footer buttons never
  * disappear — the action disables while a rebind is in flight.
  *
  * Closing mid-flow falls back to the toast channel: the async flow keeps
@@ -181,11 +183,24 @@ export function LanModal({
         className="animate-modal-in w-[480px] max-w-full rounded-2xl border border-frame-line glass-panel p-5"
       >
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-chip-indigo-bg text-chip-indigo-text">
-            <Wifi className="h-5 w-5" />
+          <span
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+              liveEnabled
+                ? "bg-status-success-bg text-status-success-text"
+                : "bg-elevated text-ink-muted"
+            }`}
+          >
+            {liveEnabled ? (
+              <Wifi className="h-5 w-5" />
+            ) : (
+              <WifiOff className="h-5 w-5" />
+            )}
           </span>
           <h2 id="lan-modal-title" className="flex-1 text-sm font-semibold text-ink">
-            LAN access
+            LAN Access —{" "}
+            {liveEnabled
+              ? "Reachable on this network."
+              : "Restricted to the host machine."}
           </h2>
           <button
             type="button"
@@ -198,7 +213,7 @@ export function LanModal({
           </button>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex items-start gap-4">
           {/* QR column — always displayed (user decision on PR #200). */}
           <div className="flex w-40 shrink-0 flex-col items-center gap-1.5">
             <div className="h-40 w-40 overflow-hidden rounded-lg border border-line bg-white p-2">
@@ -229,9 +244,10 @@ export function LanModal({
             </p>
           </div>
 
-          {/* Status + addresses column. */}
-          <div className="min-w-0 flex-1 space-y-2 text-xs text-ink-secondary">
-            {busy !== null ? (
+          {/* Addresses column — status lives in the header now; explicit
+              margins keep the loopback row clear of the IP row. */}
+          <div className="min-w-0 flex-1 text-xs text-ink-secondary">
+            {busy !== null && (
               <p className="flex items-center gap-2 text-ink">
                 <span
                   className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent"
@@ -239,38 +255,20 @@ export function LanModal({
                 />
                 Updating the LAN binding…
               </p>
-            ) : failureMessage ? (
+            )}
+            {busy === null && failureMessage && (
               <div
                 role="alert"
                 className="rounded-md border border-status-danger-border bg-status-danger-bg p-2.5 text-status-danger-text"
               >
                 {failureMessage}
               </div>
-            ) : (
-              <p className="flex items-center gap-1.5 text-ink">
-                {liveEnabled ? (
-                  <>
-                    <Check
-                      className="h-3.5 w-3.5 text-status-success-text"
-                      aria-hidden="true"
-                    />
-                    ProFiles is reachable on this network.
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="h-3.5 w-3.5 text-ink-faint" aria-hidden="true" />
-                    ProFiles is restricted to this machine.
-                  </>
-                )}
-              </p>
-            )}
-            {liveEnabled && busy === null && !failureMessage && (
-              <p>On another device on this network, open one of these addresses:</p>
             )}
             {hostnameUrl && (
               <CopyableUrl
                 url={hostnameUrl}
                 label="Copy hostname URL"
+                className="mt-3"
                 onCopied={() => showToast("URL copied to clipboard.")}
                 onCopyError={() => showToast("Failed to copy URL.", "error")}
               />
@@ -279,11 +277,12 @@ export function LanModal({
               <CopyableUrl
                 url={ipUrl}
                 label="Copy IP URL"
+                className="mt-2"
                 onCopied={() => showToast("URL copied to clipboard.")}
                 onCopyError={() => showToast("Failed to copy URL.", "error")}
               />
             )}
-            <span className="flex items-center gap-1.5">
+            <span className="mt-4 flex items-center gap-1.5">
               <ExternalLink className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden="true" />
               <a
                 href={loopbackUrl}

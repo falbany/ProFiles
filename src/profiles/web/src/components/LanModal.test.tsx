@@ -92,8 +92,11 @@ describe("LanModal — visibility & state display", () => {
   it("shows the restricted state with an Enable LAN footer button", () => {
     renderModal({ systemInfo: makeSystemInfo({ lan_enabled: false }) });
 
-    expect(screen.getByText("LAN access")).toBeInTheDocument();
-    expect(screen.getByText(/restricted to this machine/)).toBeInTheDocument();
+    // Status lives in the header now (icon chip + full sentence).
+    expect(
+      screen.getByText("LAN Access — Restricted to the host machine.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ProFiles is restricted/)).toBeNull();
     expect(screen.getByRole("button", { name: "Enable LAN" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
@@ -106,7 +109,13 @@ describe("LanModal — visibility & state display", () => {
   it("shows the enabled state with a Disable LAN footer button", () => {
     renderModal({ systemInfo: makeSystemInfo({ lan_enabled: true }) });
 
-    expect(screen.getByText(/reachable on this network/)).toBeInTheDocument();
+    expect(
+      screen.getByText("LAN Access — Reachable on this network.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ProFiles is reachable/)).toBeNull();
+    // The instruction line was removed (user review): the header + QR speak
+    // for themselves.
+    expect(screen.queryByText(/On another device on this network/)).toBeNull();
     expect(screen.getByRole("button", { name: "Disable LAN" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
@@ -152,7 +161,9 @@ describe("LanModal — enable flow (stays open)", () => {
     await waitFor(() => expect(props.onConfirmed).toHaveBeenCalledWith(sys));
     // App answers onConfirmed by updating systemInfo → the modal reflects it.
     props.rerender(<LanModal {...props} systemInfo={sys} />);
-    expect(screen.getByText(/reachable on this network/)).toBeInTheDocument();
+    expect(
+      screen.getByText("LAN Access — Reachable on this network.")
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disable LAN" })).toBeEnabled();
     // Inline outcome replaces toasts while the modal is open.
     expect(props.showToast).not.toHaveBeenCalled();
@@ -204,7 +215,9 @@ describe("LanModal — disable flow (same UX, issue #197 override)", () => {
     gate.resolve(sys);
     await waitFor(() => expect(props.onConfirmed).toHaveBeenCalledWith(sys));
     props.rerender(<LanModal {...props} systemInfo={sys} />);
-    expect(screen.getByText(/restricted to this machine/)).toBeInTheDocument();
+    expect(
+      screen.getByText("LAN Access — Restricted to the host machine.")
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable LAN" })).toBeEnabled();
     expect(props.showToast).not.toHaveBeenCalled();
   });
