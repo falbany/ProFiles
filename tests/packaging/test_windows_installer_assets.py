@@ -6,11 +6,18 @@ breakages that would otherwise surface only there. See
 docs/superpowers/specs/2026-11-17-windows-installer-polish-design.md.
 """
 
+import tomllib
 from pathlib import Path
 
 from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _windows_config() -> dict:
+    """Load the [tool.briefcase.app.profiles.windows] section."""
+    with open(REPO_ROOT / "pyproject.toml", "rb") as fh:
+        return tomllib.load(fh)["tool"]["briefcase"]["app"]["profiles"]["windows"]
 
 
 def test_background_bmp_dimensions() -> None:
@@ -66,3 +73,42 @@ def test_pre_uninstall_removes_exactly_its_own_entry() -> None:
     assert "ExpandString" in body
     assert "setx" not in body.lower()
     assert "SendMessageTimeout" in body
+
+
+def test_windows_installer_config() -> None:
+    """The briefcase windows section matches the approved design."""
+    cfg = _windows_config()
+
+    # Scope dialog stays the wizard default (perUserOrMachine).
+    assert "system_installer" not in cfg
+    assert cfg["create_desktop_shortcut"] is True
+    assert cfg["installer_background"] == "img/installer_background"
+    assert cfg["installer_banner"] == "img/installer_banner"
+    assert cfg["installer_completion_launch_app"] is True
+    assert cfg["post_install_script"] == "packaging/windows/post_install.bat"
+    assert cfg["pre_uninstall_script"] == "packaging/windows/pre_uninstall.bat"
+
+    urls = cfg["installer_completion_urls"]
+    assert [u["title"] for u in urls] == ["Documentation", "What's new"]
+    assert all(u["url"].startswith("https://github.com/falbany/ProFiles") for u in urls)
+
+    # Singular key, array-of-tables, required `name`. The plural
+    # `install_options` key is silently swallowed by DraftAppConfig.
+    assert "install_options" not in cfg  # the plural trap
+    options = cfg["install_option"]
+    assert len(options) == 1
+    opt = options[0]
+    assert opt["name"] == "add_to_path"
+    assert opt["default"] is True
+    assert opt["title"] == "Add ProFiles to PATH"
+
+
+def test_referenced_installer_files_exist() -> None:
+    """Every file the windows section references must resolve on disk."""
+    cfg = _windows_config()
+
+    for key in ("installer_background", "installer_banner"):
+        # Briefcase resolves with_suffix(".bmp") against the project root.
+        assert (REPO_ROOT / f"{cfg[key]}.bmp").is_file()
+    for key in ("post_install_script", "pre_uninstall_script"):
+        assert (REPO_ROOT / cfg[key]).is_file()
