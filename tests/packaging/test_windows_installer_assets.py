@@ -112,3 +112,30 @@ def test_referenced_installer_files_exist() -> None:
         assert (REPO_ROOT / f"{cfg[key]}.bmp").is_file()
     for key in ("post_install_script", "pre_uninstall_script"):
         assert (REPO_ROOT / cfg[key]).is_file()
+
+
+def test_install_dir_apostrophe_quoting_idiom() -> None:
+    """The cmd→PowerShell substitution must double apostrophes, not strip.
+
+    %INSTALL_DIR:'=''% replaces ' with '' (valid PowerShell literal for
+    dirs like C:\\Users\\O'Brien\\...). The inverted ''=% form strips
+    doubled apostrophes and leaves single ones breaking the PS quoting.
+    """
+    for name in SCRIPTS:
+        body = (REPO_ROOT / "packaging" / "windows" / name).read_text(encoding="utf-8")
+        # Doubling idiom %INSTALL_DIR:'=''% : cmd replaces ' with ''.
+        # The inverted ''=% form strips doubled apostrophes and leaves
+        # single ones breaking the PowerShell quoting.
+        doubling = "%INSTALL_DIR:" + chr(39) + "=" + chr(39) + chr(39) + "%"
+        stripping = "%INSTALL_DIR:" + chr(39) + chr(39) + "=" + "%"
+        assert doubling in body
+        assert stripping not in body
+
+
+def test_registry_contracts_are_pinned() -> None:
+    """Content pins for the HKLM key and the unwritable-hive swallow."""
+    for name in SCRIPTS:
+        body = (REPO_ROOT / "packaging" / "windows" / name).read_text(encoding="utf-8")
+        assert "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" in body
+    pre = (REPO_ROOT / "packaging" / "windows" / "pre_uninstall.bat").read_text(encoding="utf-8")
+    assert "catch{$key=$null}" in pre
