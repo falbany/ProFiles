@@ -169,6 +169,66 @@ class TestFindConfigFile:
         assert find_config_file(start_path=tmp_path) is None
 
 
+class TestFindConfigFileWildcard:
+    """Named configs (``a.profiles`` …) are found when no canonical name
+    exists anywhere in the tree: ascending sort, first file launched
+    (launch-from-folder request, follow-up to issue #188)."""
+
+    def test_named_profiles_file_found(self, tmp_path: Path) -> None:
+        conf = tmp_path / "a.profiles"
+        conf.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == conf
+
+    def test_ascending_sort_picks_first_match(self, tmp_path: Path) -> None:
+        """Several named configs in one folder: alphabetically first wins."""
+        (tmp_path / "b.profiles").write_text("version: 1\n", encoding="utf-8")
+        (tmp_path / "a.profiles").write_text("version: 1\n", encoding="utf-8")
+        (tmp_path / "c.profiles").write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == tmp_path / "a.profiles"
+
+    def test_canonical_yaml_still_beats_named_profiles(self, tmp_path: Path) -> None:
+        """The canonical fallback tier keeps precedence over named configs."""
+        (tmp_path / "a.profiles").write_text("version: 1\n", encoding="utf-8")
+        yaml_conf = tmp_path / ".profiles.yaml"
+        yaml_conf.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == yaml_conf
+
+    def test_canonical_primary_in_subdir_beats_named_at_root(self, tmp_path: Path) -> None:
+        """A canonical .profiles anywhere beats a named config anywhere."""
+        (tmp_path / "z.profiles").write_text("version: 1\n", encoding="utf-8")
+        deep = tmp_path / "sub" / ".profiles"
+        deep.parent.mkdir()
+        deep.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == deep
+
+    def test_named_yaml_variant_found(self, tmp_path: Path) -> None:
+        conf = tmp_path / "backup.profiles.yaml"
+        conf.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == conf
+
+    def test_shallowest_named_config_wins_over_alphabetical(self, tmp_path: Path) -> None:
+        """Tier order comes first: a root-level match beats a deeper
+        alphabetically-earlier one."""
+        (tmp_path / "m.profiles").write_text("version: 1\n", encoding="utf-8")
+        deep = tmp_path / "sub" / "a.profiles"
+        deep.parent.mkdir()
+        deep.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) == tmp_path / "m.profiles"
+
+    def test_non_config_files_are_ignored(self, tmp_path: Path) -> None:
+        (tmp_path / "notes.txt").write_text("nope", encoding="utf-8")
+        (tmp_path / "profiles_backup").write_text("nope", encoding="utf-8")
+        (tmp_path / "a.profiles.txt").write_text("nope", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path) is None
+
+    def test_respects_max_depth(self, tmp_path: Path) -> None:
+        deep = tmp_path / "l1" / "l2" / "l3" / "a.profiles"
+        deep.parent.mkdir(parents=True)
+        deep.write_text("version: 1\n", encoding="utf-8")
+        assert find_config_file(start_path=tmp_path, max_depth=2) is None
+        assert find_config_file(start_path=tmp_path, max_depth=3) == deep
+
+
 class TestFilesystemRootGuard:
     """find_config_file must never walk the filesystem root as a search root.
 

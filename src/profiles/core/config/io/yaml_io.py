@@ -182,15 +182,61 @@ def _is_unsafe_search_root(path: Path) -> bool:
     return resolved.parent == resolved
 
 
+def _find_wildcard_config(start: Path, max_depth: int) -> Path | None:
+    """Breadth-first search for any ``<name>.profiles(…yaml|…yml)`` file.
+
+    Reached only when no canonical name exists anywhere in the tree, so
+    named configurations such as ``a.profiles`` or ``backup.profiles.yaml``
+    are still discovered. All matches are collected, then sorted ascending
+    by ``(depth, name, path)``: the shallowest match wins, ties broken by
+    ascending file name — in the common single-folder case, simply the
+    alphabetically first configuration file.
+
+    Args:
+        start: Resolved directory to start the search from.
+        max_depth: Maximum depth of subdirectories to search.
+
+    Returns:
+        The first matching configuration file path, or ``None``.
+    """
+    candidates: list[tuple[int, str, str]] = []
+    queue: deque[tuple[Path, int]] = deque([(start, 0)])
+    while queue:
+        current, depth = queue.popleft()
+        try:
+            entries = list(os.scandir(current))
+        except OSError:
+            continue
+        children: list[tuple[Path, int]] = []
+        for entry in entries:
+            try:
+                if entry.is_file() and entry.name.endswith(CONFIG_FILE_NAMES):
+                    candidates.append((depth, entry.name, entry.path))
+                elif entry.is_dir(follow_symlinks=False) and depth + 1 <= max_depth:
+                    children.append((Path(entry.path), depth + 1))
+            except OSError:
+                continue
+        queue.extend(children)
+    if not candidates:
+        return None
+    candidates.sort()
+    return Path(candidates[0][2])
+
+
 def find_config_file(
     start_path: Path | None = None,
     max_depth: int = 5,
 ) -> Path | None:
     """Search the subtree of *start_path* for a ProFiles configuration file.
 
-    The primary ``.profiles`` file wins wherever it appears; ``.profiles.yaml``
-    then ``.profiles.yml`` are used as fallbacks only when no ``.profiles``
-    file is found in the tree.
+    The canonical names are searched first, breadth-first: the primary
+    ``.profiles`` file wins wherever it appears; ``.profiles.yaml`` then
+    ``.profiles.yml`` are used as fallbacks only when no ``.profiles`` file
+    is found in the tree. When no canonical name exists anywhere, ANY file
+    whose name ends with one of these suffixes (``a.profiles``,
+    ``backup.profiles.yaml``, …) is accepted: the shallowest match wins,
+    ties broken by ascending file name — in the common single-folder case,
+    the alphabetically first configuration file is launched.
 
     Args:
         start_path: Starting directory (default: current working directory).
@@ -213,7 +259,7 @@ def find_config_file(
         found = _find_named_file(start, name, max_depth)
         if found is not None:
             return found
-    return None
+    return _find_wildcard_config(start, max_depth)
 
 
 __all__ = [
