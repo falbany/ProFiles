@@ -23,6 +23,18 @@ FALLBACK_CONFIG_NAMES: tuple[str, ...] = (".profiles.yaml", ".profiles.yml")
 #: Every accepted configuration file name, primary first.
 CONFIG_FILE_NAMES: tuple[str, ...] = (PRIMARY_CONFIG_NAME, *FALLBACK_CONFIG_NAMES)
 
+
+def is_config_file_name(name: str) -> bool:
+    """True when a file *name* matches the accepted config whitelist.
+
+    Case-insensitive on purpose: the save-as endpoint accepts
+    ``BACKUP.PROFILES`` (issue #95 wave), so every apply-path gate must
+    re-accept what it wrote. Shared by the server's config-name check and
+    the desktop odoc applier's skip guard (issue #193).
+    """
+    return name.lower().endswith(CONFIG_FILE_NAMES)
+
+
 _yaml = YAML()
 _yaml.preserve_quotes = True
 
@@ -268,6 +280,7 @@ __all__ = [
     "PRIMARY_CONFIG_NAME",
     "content_hash",
     "find_config_file",
+    "is_config_file_name",
     "read_yaml",
     "write_text_atomic",
     "write_value",
