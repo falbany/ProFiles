@@ -85,7 +85,8 @@ tests/
 ├── packaging/                                # cross-cutting (no single source module)
 │   ├── test_entry_point.py                   # profiles/__init__ lazy main + Briefcase stub
 │   ├── test_packaging.py                     # pyproject/briefcase dependency rules
-│   └── test_shortcut_launch.py               # ProFiles.pyw launcher stub behavior
+│   ├── test_shortcut_launch.py               # ProFiles.pyw launcher stub behavior
+│   └── test_windows_installer_assets.py      # MSI installer assets/config coherence (issue #183)
 ├── server/
 │   ├── test_app.py                           # ← server/app.py (FastAPI factory + client telemetry)
 │   ├── test_barcode_integration.py           # cross-cutting server integration (exception)
