@@ -179,3 +179,56 @@ class TestStartMenuLaunch:
 
         assert resolved == user_config
         assert missing is False
+
+
+class TestDmgVolumeLaunch:
+    """macOS DMG launches must never propose a config on the volume (#191).
+
+    User report on 0.12.0b1.dev108: launching the app from a mounted DMG
+    proposed creating the configuration in
+    ``/Volumes/ProFiles <version>``.  Two mechanisms are covered here:
+    the Finder probe mirroring the DMG folder, and the volume root being
+    an informative-looking CWD.  Both must end at the per-user path.
+    """
+
+    @pytest.fixture
+    def fake_dmg(self, tmp_path, monkeypatch):
+        """A simulated DMG volume root + GUI-style CWD, hermetically."""
+        import profiles.core.paths as paths_module
+
+        dmg = tmp_path / "ProFiles 0.12.0b1.dev108"
+        dmg.mkdir()
+        real_device_id = paths_module._device_id
+
+        def fake_device_id(path):
+            try:
+                if path.resolve() == dmg.resolve():
+                    return 424242  # separate volume
+            except OSError:
+                return None
+            return real_device_id(path)
+
+        monkeypatch.setattr(paths_module, "_device_id", fake_device_id)
+        monkeypatch.setattr("profiles.launch.context._finder_working_directory", lambda: dmg)
+        monkeypatch.chdir("/")
+        return dmg
+
+    def test_resolution_discards_dmg_and_proposes_user_config(
+        self, fake_dmg, isolated_user_home
+    ) -> None:
+        app = ProFileApp()
+        resolved, missing, launch_default = app._resolve_startup_config(None)
+
+        assert resolved is None  # DMG tree is never searched
+        assert missing is False
+        assert launch_default == isolated_user_home / ".profiles" / ".profiles"
+        assert app._launch_source == "cwd"
+
+    def test_load_configuration_binds_user_path_not_volume(
+        self, fake_dmg, isolated_user_home, mocker
+    ) -> None:
+        app = ProFileApp()
+        config = app._load_configuration(mocker.Mock())
+
+        assert config.config_path == isolated_user_home / ".profiles" / ".profiles"
+        assert not str(config.config_path).startswith("/Volumes/")

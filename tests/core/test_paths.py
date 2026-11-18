@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import profiles.core.paths as paths
 from profiles.core.paths import (
     USER_DATA_DIRNAME,
     default_config_path,
@@ -203,3 +204,90 @@ class TestDefaultSearchDirectory:
     def test_home_cwd_resolves_to_home(self, isolated_user_home: Path) -> None:
         """CWD == home is uninformative: the scan target becomes home."""
         assert default_search_directory(isolated_user_home) == isolated_user_home
+
+
+class TestVolumeMountPoint:
+    """Volume mount points are uninformative (macOS DMG follow-up, #191).
+
+    The device-id comparison is simulated with a monkeypatched
+    ``_device_id`` so the tests stay hermetic on every platform.
+    """
+
+    @staticmethod
+    def _fake_device_for_mount(mount: Path):
+        """Return a _device_id replacement simulating *mount* as a volume.
+
+        The mount and everything under it share the fake device id; the
+        rest of the filesystem reports real ids, so only the mount point
+        itself differs from its parent.
+        """
+        real_device_id = paths._device_id
+        mount_resolved = mount.resolve()
+
+        def fake(path: Path) -> int | None:
+            try:
+                resolved = path.resolve()
+            except OSError:
+                return None
+            if resolved == mount_resolved or resolved.is_relative_to(mount_resolved):
+                return 424242
+            return real_device_id(path)
+
+        return fake
+
+    def test_mounted_volume_root_is_uninformative(self, tmp_path, monkeypatch) -> None:
+        mounted = tmp_path / "ProFiles 0.12.0b1"
+        mounted.mkdir()
+        monkeypatch.setattr(paths, "_device_id", self._fake_device_for_mount(mounted))
+        assert is_uninformative_directory(mounted) is True
+
+    def test_directory_under_mount_point_stays_informative(self, tmp_path, monkeypatch) -> None:
+        """Only the mount point itself is flagged, not its children."""
+        mounted = tmp_path / "USB Drive"
+        project = mounted / "project"
+        project.mkdir(parents=True)
+        monkeypatch.setattr(paths, "_device_id", self._fake_device_for_mount(mounted))
+        assert is_uninformative_directory(project) is False
+
+    def test_same_device_as_parent_is_informative(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(paths, "_device_id", lambda _p: 1)
+        assert is_uninformative_directory(tmp_path) is False
+
+    def test_missing_mount_target_degrades_to_informative(self, tmp_path) -> None:
+        """A non-existent path cannot be stat'd: not treated as a mount."""
+        ghost = tmp_path / "Volumes" / "Gone 1.2.3"
+        assert is_uninformative_directory(ghost) is False
+
+    def test_dmg_root_proposes_user_config(self, tmp_path, isolated_user_home, monkeypatch) -> None:
+        """A DMG volume root never hosts the proposal (#191 user report)."""
+        mounted = tmp_path / "ProFiles 0.12.0b1.dev108"
+        mounted.mkdir()
+        monkeypatch.setattr(paths, "_device_id", self._fake_device_for_mount(mounted))
+        assert default_config_path(mounted) == user_config_path()
+        assert default_search_directory(mounted) == isolated_user_home
+
+
+class TestHostsRunningAppBundle:
+    """A directory hosting the packaged app bundle is a launcher location."""
+
+    def test_directory_hosting_macos_bundle_is_uninformative(self, tmp_path, monkeypatch) -> None:
+        apps_dir = tmp_path / "Applications"
+        bundle_exe = apps_dir / "ProFiles.app" / "Contents" / "MacOS" / "ProFiles"
+        bundle_exe.parent.mkdir(parents=True)
+        monkeypatch.setattr(sys, "executable", str(bundle_exe))
+        assert is_uninformative_directory(apps_dir) is True
+
+    def test_app_bundle_itself_is_uninformative(self, tmp_path, monkeypatch) -> None:
+        apps_dir = tmp_path / "Applications"
+        bundle_exe = apps_dir / "ProFiles.app" / "Contents" / "MacOS" / "ProFiles"
+        bundle_exe.parent.mkdir(parents=True)
+        monkeypatch.setattr(sys, "executable", str(bundle_exe))
+        assert is_uninformative_directory(apps_dir / "ProFiles.app") is True
+
+    def test_dev_venv_inside_project_stays_informative(self, tmp_path, monkeypatch) -> None:
+        """A plain-venv exe (no .app/Contents) must NOT flag its repo."""
+        repo = tmp_path / "repo"
+        venv_exe = repo / ".venv" / "bin" / "python"
+        venv_exe.parent.mkdir(parents=True)
+        monkeypatch.setattr(sys, "executable", str(venv_exe))
+        assert is_uninformative_directory(repo) is False

@@ -12,7 +12,7 @@
 
 ## Vue d'ensemble
 
-Le fichier `.profiles` est un fichier de configuration au format **YAML** qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires. Le premier fichier trouvé est utilisé. La recherche dans l'arborescence du CWD est ignorée lorsque le CWD ne porte aucune information de lancement — un démarrage via le menu Démarrer/ lanceur hérite de `System32`, du dossier personnel ou du répertoire d'installation de l'interpréteur/application — et le défaut par utilisateur `~/.profiles/.profiles` est chargé s'il existe.
+Le fichier `.profiles` est un fichier de configuration au format **YAML** qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires. Le premier fichier trouvé est utilisé. La recherche dans l'arborescence du CWD est ignorée lorsque le CWD ne porte aucune information de lancement — un démarrage via le menu Démarrer/ lanceur hérite de `System32`, du dossier personnel, du répertoire d'installation de l'interpréteur/application ou de la racine d'un volume monté (par ex. l'application lancée depuis une image DMG macOS) — et le défaut par utilisateur `~/.profiles/.profiles` est chargé s'il existe.
 
 Si aucun fichier `.profiles` n'est trouvé :
 - En mode interactif (interface web, bureau ou navigateur) : ProFiles propose de créer un fichier de configuration par défaut — dans le dossier du projet pour un lancement en terminal, dans `~/.profiles` pour un lancement par lanceur
