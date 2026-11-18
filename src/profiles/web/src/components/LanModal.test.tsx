@@ -153,7 +153,8 @@ describe("LanModal — enable flow (stays open)", () => {
 
     // No dialog-closes-first: the modal stays up, flow inside.
     expect(props.onClose).not.toHaveBeenCalled();
-    expect(screen.getByText("Updating the LAN binding…")).toBeInTheDocument();
+    // In-flight progress is announced from the footer's left slot.
+    expect(screen.getByRole("status")).toHaveTextContent("Updating the LAN binding…");
     expect(screen.getByRole("button", { name: "Enable LAN" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
 

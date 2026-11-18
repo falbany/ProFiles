@@ -42,7 +42,8 @@ type Busy = "enable" | "disable" | null;
  * machine." — so the body holds only the addresses: the copyable hostname
  * + IP URLs and the clickable loopback link (#199), spaced clear of the IP
  * row. ❌ (header) and Escape close at any time; footer buttons never
- * disappear — the action disables while a rebind is in flight.
+ * disappear — the action disables while a rebind is in flight, with the
+ * "Updating the LAN binding…" progress on the footer's left.
  *
  * Closing mid-flow falls back to the toast channel: the async flow keeps
  * running and reports via `onConfirmed(sys)` + toasts, so App state stays in
@@ -247,15 +248,6 @@ export function LanModal({
           {/* Addresses column — status lives in the header now; explicit
               margins keep the loopback row clear of the IP row. */}
           <div className="min-w-0 flex-1 text-xs text-ink-secondary">
-            {busy !== null && (
-              <p className="flex items-center gap-2 text-ink">
-                <span
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent"
-                  aria-hidden="true"
-                />
-                Updating the LAN binding…
-              </p>
-            )}
             {busy === null && failureMessage && (
               <div
                 role="alert"
@@ -297,28 +289,43 @@ export function LanModal({
         </div>
 
         {/* Footer buttons never disappear (#197 override): the action flips
-            with the live state and disables while a rebind is in flight. */}
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            ref={cancelRef}
-            type="button"
-            onClick={onClose}
-            className="min-h-9 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void runToggleFlow(!liveEnabled)}
-            className={`min-h-9 rounded-lg border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50 ${
-              liveEnabled
-                ? "border-status-danger-border bg-status-danger-bg/30 text-status-danger-text hover:bg-status-danger-bg/60"
-                : "btn-primary border-transparent bg-indigo-600 text-white hover:bg-indigo-500"
-            }`}
-          >
-            {liveEnabled ? "Disable LAN" : "Enable LAN"}
-          </button>
+            with the live state and disables while a rebind is in flight —
+            the in-flight status sits on the footer's left (user review). */}
+        <div className="mt-4 flex items-center gap-2">
+          {busy !== null && (
+            <p
+              role="status"
+              className="flex min-w-0 items-center gap-2 text-xs text-ink"
+            >
+              <span
+                className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent"
+                aria-hidden="true"
+              />
+              Updating the LAN binding…
+            </p>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button
+              ref={cancelRef}
+              type="button"
+              onClick={onClose}
+              className="min-h-9 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void runToggleFlow(!liveEnabled)}
+              className={`min-h-9 rounded-lg border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+                liveEnabled
+                  ? "border-status-danger-border bg-status-danger-bg/30 text-status-danger-text hover:bg-status-danger-bg/60"
+                  : "btn-primary border-transparent bg-indigo-600 text-white hover:bg-indigo-500"
+              }`}
+            >
+              {liveEnabled ? "Disable LAN" : "Enable LAN"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
