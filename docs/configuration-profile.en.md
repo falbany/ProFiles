@@ -25,6 +25,8 @@ If no `.profiles` file is found:
 
 On first launch in interactive mode (web UI in the PyWebView shell or browser), if no `.profiles` file is found, ProFiles proposes to create a default configuration file in the current working directory. When that directory carries no launch information (a Start-Menu shortcut, a launcher with an empty "Start in" field, a Finder/dock launch), the proposal targets `~/.profiles/.profiles` instead — the same folder as `profiles.log` — so nothing is ever written into a system directory, and every later launch loads that per-user default automatically.
 
+On macOS, Finder and Dock launches inherit no working directory, so ProFiles adopts the **front Finder window's folder** as the launch folder: with a project folder open, the proposal targets that project; with an unrelated but ordinary folder frontmost (for example the one holding the DMG installer), that folder is proposed instead. Close unrelated windows before launching, or click the picker's **Home** button to target `~/.profiles`.
+
 ### Method 2: Command Line
 
 ```bash
