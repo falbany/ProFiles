@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME, find_config_file
+from profiles.core.config.io.yaml_io import find_config_file
 from profiles.core.config.models import AppConfig
+from profiles.core.paths import default_config_path
 from profiles.core.telemetry import events
 
 _MAX_EXTERNAL_EVENTS = 50
@@ -68,12 +69,23 @@ class ServerState:
         Resolution order mirrors launch-time resolution: any explicit
         ``config_path`` recorded after loading, then the path carried by
         the loaded :class:`AppConfig`, then a core search of the CWD
-        subtree, and finally the canonical primary name in the CWD.
+        subtree, and finally :func:`default_config_path` (the per-user
+        ``~/.profiles/.profiles`` for launcher-style launches, the
+        project folder otherwise; issue #191). An existing **directory**
+        is never returned as the config file — the ``CWD == home``
+        collision with the ``~/.profiles`` log directory falls through to
+        :func:`default_config_path` instead.
         """
         config_path = self.config_path or getattr(self.config, "config_path", None)
         if config_path is None:
-            config_path = find_config_file() or Path.cwd() / PRIMARY_CONFIG_NAME
-        return Path(config_path)
+            config_path = find_config_file() or default_config_path()
+        resolved = Path(config_path)
+        try:
+            if resolved.is_dir():
+                return default_config_path()
+        except OSError:
+            pass
+        return resolved
 
     def record_external_event(
         self, kind: str, message: str, *, config_applied: bool = False

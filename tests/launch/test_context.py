@@ -282,7 +282,13 @@ class TestWithDocuments:
 
 
 class TestCwdIsUninformative:
-    """The GUI-launch CWD heuristic shared by the probe and odoc capture."""
+    """The GUI-launch CWD heuristic shared by the probe and odoc capture.
+
+    Delegates to profiles.core.paths.is_uninformative_directory (issue
+    #191), so System32-style and home-folder CWDs are uninformative on
+    every platform — verified here with monkeypatched env vars / homes
+    for portability.
+    """
 
     def test_root_is_uninformative(self) -> None:
         assert cwd_is_uninformative(Path("/")) is True
@@ -295,3 +301,14 @@ class TestCwdIsUninformative:
 
     def test_real_working_directory_is_informative(self, tmp_path) -> None:
         assert cwd_is_uninformative(tmp_path) is False
+
+    def test_system32_is_uninformative(self, isolated_user_home, monkeypatch) -> None:
+        """Start-Menu CWD (%SystemRoot%\\System32) must be discarded (#191)."""
+        monkeypatch.setenv("SystemRoot", str(isolated_user_home / "Windows"))
+        system32 = isolated_user_home / "Windows" / "System32"
+        system32.mkdir(parents=True)
+        assert cwd_is_uninformative(system32) is True
+
+    def test_home_folder_is_uninformative(self, isolated_user_home) -> None:
+        """A launcher CWD == home says nothing about a project (#191)."""
+        assert cwd_is_uninformative(isolated_user_home) is True

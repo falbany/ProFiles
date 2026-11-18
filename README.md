@@ -219,7 +219,7 @@ ProFiles --config "/path/to/.profiles"
 
 ## 🛠 Configuration
 
-ProFiles is driven by a `.profiles` **YAML** file, walking up the filesystem tree to locate it.
+ProFiles is driven by a `.profiles` **YAML** file, walking up the filesystem tree to locate it. Launcher-style starts (Start Menu, dock, `.desktop` entries) skip the tree search and load the per-user default `~/.profiles/.profiles` when it exists; when nothing is found, the creation proposal targets the project folder — or `~/.profiles` for launcher starts — so nothing is ever written into a system directory.
 
 ```yaml
 # ProFiles Configuration — YAML Format

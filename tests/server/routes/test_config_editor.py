@@ -963,3 +963,34 @@ async def test_save_as_response_carries_content_hash(tmp_path: Path) -> None:
     payload = response.json()
     assert payload["status"] == "SAVED"
     assert payload["content_hash"] == content_hash(new_text)
+
+
+@pytest.mark.anyio
+async def test_template_without_active_directory_uses_default_search_directory(
+    tmp_path: Path, isolated_user_home, monkeypatch
+) -> None:
+    """No active directory + launcher-style CWD → scan target is home (#191).
+
+    The template's search_dir fallback must not inherit the process CWD:
+    a Start-Menu launch would otherwise draft a starter scanning System32.
+    """
+    state = ServerState(
+        config=AppConfig(title="Fresh", search_dir="", extensions=(".txt",)),
+        active_directory=None,
+    )
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    system32 = tmp_path / "System32"
+    system32.mkdir()
+    monkeypatch.chdir(system32)
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/template")
+
+    assert response.status_code == 200
+    search_line = next(
+        line
+        for line in response.json()["content"].splitlines()
+        if line.lstrip().startswith("search_dir:")
+    )
+    assert str(isolated_user_home) in search_line

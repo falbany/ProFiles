@@ -47,6 +47,7 @@ Ce document définit les standards d'architecture, les principes de conception e
 src/profiles/
 ├── core/                     # Logique métier — indépendante de toute UI
 │   ├── actions.py            # Actions domaine (lancement, ouverture, ActionResult)
+│   ├── paths.py              # Politique de chemins utilisateur (~/.profiles, CWD non informatifs, #191)
 │   ├── config/               # Sous-système configuration
 │   │   ├── models.py         #   AppConfig, MachineConfiguration, ColumnConfiguration
 │   │   ├── loader.py         #   load_config, propose_config_creation

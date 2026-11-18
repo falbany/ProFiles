@@ -138,3 +138,76 @@ async def test_fs_browse(test_state: ServerState, tmp_path: Path) -> None:
         data = response.json()
         assert "items" in data
         assert any(item["name"] == "programs" and item["is_dir"] for item in data["items"])
+
+
+# ---------------------------------------------------------------------------
+# Per-user config path policy (issue #191)
+# ---------------------------------------------------------------------------
+
+
+class TestActiveConfigPathPolicy:
+    """ServerState.active_config_path fallback rules from issue #191."""
+
+    def test_never_returns_an_existing_directory(self, test_state, tmp_path: Path) -> None:
+        """A directory (the ~/.profiles log-dir collision) is never the config."""
+        collision = tmp_path / ".profiles"
+        collision.mkdir()  # a DIRECTORY named like a config
+        test_state.config_path = collision
+        assert test_state.active_config_path() != collision
+        assert not test_state.active_config_path().is_dir()
+
+    def test_falls_back_to_default_config_path_when_unanchored(
+        self, test_state, tmp_path: Path, isolated_user_home, monkeypatch
+    ) -> None:
+        """No recorded path → default_config_path (CWD-aware, issue #191).
+
+        An informative empty CWD proposes in place; a System32-style CWD
+        proposes the per-user ``~/.profiles/.profiles``.
+        """
+        test_state.config_path = None
+        test_state.config.config_path = None
+
+        empty_cwd = tmp_path / "empty-cwd"
+        empty_cwd.mkdir()
+        monkeypatch.chdir(empty_cwd)
+        assert test_state.active_config_path() == empty_cwd / ".profiles"
+
+        monkeypatch.setenv("SystemRoot", str(tmp_path))
+        system32 = tmp_path / "System32"
+        system32.mkdir()
+        monkeypatch.chdir(system32)
+        assert test_state.active_config_path() == (isolated_user_home / ".profiles" / ".profiles")
+
+    def test_recorded_file_path_is_returned_as_is(self, test_state, tmp_path: Path) -> None:
+        anchored = tmp_path / "sub" / ".profiles"
+        anchored.parent.mkdir()
+        anchored.write_text("version: 1\n", encoding="utf-8")
+        test_state.config_path = anchored
+        assert test_state.active_config_path() == anchored
+
+
+@pytest.mark.anyio
+async def test_get_config_prefills_home_for_uninformative_cwd(
+    tmp_path: Path, isolated_user_home, monkeypatch
+) -> None:
+    """Empty-config first paint never scans System32 (issue #191).
+
+    Given: a defaults-only config with NO candidate directories at all
+    When: GET /api/config runs with a %SystemRoot%\\System32-style CWD
+    Then: the active-directory fallback is the (isolated) home folder
+    """
+    config = AppConfig(title="Fresh Install", search_dir="", extensions=(".mttl",))
+    config.config_path = tmp_path / "nowhere" / ".profiles"
+    state = ServerState(config=config, active_directory=None)
+
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    system32 = tmp_path / "System32"
+    system32.mkdir()
+    monkeypatch.chdir(system32)
+
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/config")
+
+    assert response.status_code == 200
+    assert response.json()["active_directory"] == str(isolated_user_home)
