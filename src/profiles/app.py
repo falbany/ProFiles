@@ -17,6 +17,7 @@ from pathlib import Path
 from profiles.core import AppConfig, actions, load_config
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME
 from profiles.core.environment.system import format_user_host
+from profiles.core.paths import default_config_path
 from profiles.core.processing.scanner import scan_and_process
 from profiles.core.telemetry import events
 from profiles.core.telemetry.diagnostics import (
@@ -172,8 +173,8 @@ class ProFileApp:
     def _resolve_startup_config(
         self,
         explicit: Path | None,
-    ) -> tuple[Path | None, bool]:
-        """Return (config_path, config_is_missing).
+    ) -> tuple[Path | None, bool, Path]:
+        """Return (config_path, config_is_missing, launch_default).
 
         Uses the launch resolution logic to determine which config file
         should be used for this launch. On macOS a double-clicked
@@ -182,11 +183,20 @@ class ProFileApp:
         context (issue #188). The context source is remembered for the
         busy-port handoff decision.
 
+        The third element is the launch-default target from
+        :func:`profiles.core.paths.default_config_path` — where a
+        missing configuration would be proposed (``~/.profiles/.profiles``
+        for launcher-style launches, the project folder for terminal
+        launches; issue #191). The defaults AppConfig carries it when
+        nothing was resolved, so the server and UI pre-fill the right
+        path without any server-specific override.
+
         Args:
             explicit: Value of --config flag, if any.
 
         Returns:
-            Tuple of (resolved config path or None, whether it's missing).
+            Tuple of (resolved config path or None, whether it's missing,
+            default proposal target).
         """
         documents: tuple[Path, ...] = ()
         if not self._headless:
@@ -198,12 +208,15 @@ class ProFileApp:
         self._launch_source = ctx.source
         resolved = resolve_config_path(ctx)
         is_missing = resolved is not None and not resolved.exists()
-        return resolved, is_missing
+        launch_default = default_config_path(ctx.working_directory)
+        return resolved, is_missing, launch_default
 
     def _load_configuration(self, logger: logging.Logger) -> AppConfig:
         """Load the application configuration.
 
         Uses launch-time resolution to determine which config file to use.
+        When nothing resolves, the defaults are bound to the launch-default
+        target (``~/.profiles/.profiles`` for launcher starts, issue #191).
         If no config is found and not in server-only mode, offers to create
         a starter configuration.
 
@@ -217,22 +230,23 @@ class ProFileApp:
             SystemExit(1) if configuration is invalid.
         """
         # Use launch resolution instead of bare self._config_path
-        resolved, is_missing = self._resolve_startup_config(self._config_path)
+        resolved, is_missing, launch_default = self._resolve_startup_config(self._config_path)
 
         if is_missing:
             events.config_invalid(logger, error=f"Config file not found: {resolved}")
             print(f"ERROR: Configuration file not found: {resolved}", file=sys.stderr)
             sys.exit(1)
 
+        effective_path = resolved if resolved is not None else launch_default
         try:
-            config = load_config(resolved)
+            config = load_config(effective_path)
             events.config_loaded(
                 logger,
                 path=str(resolved) if resolved else "auto",
                 mode="launch resolution" if resolved else "auto",
                 release=config.release,
             )
-            self._config_path = resolved  # Update for later use
+            self._config_path = effective_path  # Update for later use
             return config
         except (OSError, ValueError) as exc:
             events.config_invalid(logger, error=str(exc))

@@ -12,17 +12,17 @@
 
 ## Vue d'ensemble
 
-Le fichier `.profiles` est un fichier de configuration au format **YAML** qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires. Le premier fichier trouvé est utilisé.
+Le fichier `.profiles` est un fichier de configuration au format **YAML** qui personnalise le comportement de ProFiles. Ce fichier est recherché en commençant depuis le répertoire courant (CWD) et en descendant dans les sous-répertoires. Le premier fichier trouvé est utilisé. La recherche dans l'arborescence du CWD est ignorée lorsque le CWD ne porte aucune information de lancement — un démarrage via le menu Démarrer/ lanceur hérite de `System32`, du dossier personnel ou du répertoire d'installation de l'interpréteur/application — et le défaut par utilisateur `~/.profiles/.profiles` est chargé s'il existe.
 
 Si aucun fichier `.profiles` n'est trouvé :
-- En mode interactif (interface web, bureau ou navigateur) : ProFiles propose de créer un fichier de configuration par défaut
+- En mode interactif (interface web, bureau ou navigateur) : ProFiles propose de créer un fichier de configuration par défaut — dans le dossier du projet pour un lancement en terminal, dans `~/.profiles` pour un lancement par lanceur
 - En mode headless : ProFiles utilise des valeurs par défaut identiques à celles présentées dans ce document
 
 ## Création du fichier de configuration
 
 ### Méthode 1 : Proposition automatique (mode interactif)
 
-Au premier lancement en mode interactif (interface web dans la fenêtre PyWebView ou dans le navigateur), si aucun fichier `.profiles` n'est trouvé, ProFiles propose de créer un fichier de configuration par défaut dans le répertoire courant.
+Au premier lancement en mode interactif (interface web dans la fenêtre PyWebView ou dans le navigateur), si aucun fichier `.profiles` n'est trouvé, ProFiles propose de créer un fichier de configuration par défaut dans le répertoire courant. Lorsque ce répertoire ne porte aucune information de lancement (raccourci du menu Démarrer, lanceur avec un champ « Démarrer dans » vide, lancement depuis le Finder/dock), la proposition cible `~/.profiles/.profiles` — le même dossier que `profiles.log` — afin de ne jamais écrire dans un répertoire système ; chaque lancement suivant charge automatiquement ce défaut par utilisateur.
 
 ### Méthode 2 : Commande ligne de commande
 

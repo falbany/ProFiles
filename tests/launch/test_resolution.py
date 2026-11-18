@@ -3,9 +3,16 @@
 These tests verify the pure decision logic that chooses which configuration
 file ProFiles should use at startup.  No files are read or written here;
 that is tested in :mod:`test_creation`.
+
+Since issue #191 the resolution also consults the per-user default
+(``~/.profiles/.profiles``) as the final fallback and skips the CWD tree
+search for uninformative directories — the user home is isolated through
+the ``isolated_user_home`` fixture wherever that fallback is in play.
 """
 
 from __future__ import annotations
+
+import pytest
 
 from profiles.launch.context import LaunchContext
 from profiles.launch.resolution import resolve_config_path
@@ -76,8 +83,8 @@ class TestResolveConfigPath:
         result = resolve_config_path(ctx)
         assert result == deep
 
-    def test_no_match_returns_none(self, tmp_path) -> None:
-        """When nothing is found, resolve_config_path returns None."""
+    def test_no_match_returns_none(self, tmp_path, isolated_user_home) -> None:
+        """When nothing is found anywhere, resolve_config_path returns None."""
         ctx = LaunchContext(
             document_paths=(),
             working_directory=tmp_path,
@@ -157,3 +164,108 @@ class TestResolveConfigPath:
             source="cwd",
         )
         assert resolve_config_path(ctx) == yaml_conf
+
+
+class TestPerUserConfigFallback:
+    """The per-user default (~/.profiles/.profiles) as final fallback (#191)."""
+
+    def test_empty_tree_falls_back_to_user_config(self, tmp_path, isolated_user_home) -> None:
+        """Matrix row 6: no project config, user config exists → it wins."""
+        user_config = isolated_user_home / ".profiles" / ".profiles"
+        user_config.parent.mkdir(parents=True)
+        user_config.write_text("defaults:\n  theme: dark\n")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=tmp_path,
+            explicit_config=None,
+            source="cwd",
+        )
+        assert resolve_config_path(ctx) == user_config
+
+    def test_project_config_beats_user_config(self, tmp_path, isolated_user_home) -> None:
+        """A project config in the CWD tree still wins over the user one."""
+        user_config = isolated_user_home / ".profiles" / ".profiles"
+        user_config.parent.mkdir(parents=True)
+        user_config.write_text("x")
+
+        project_config = tmp_path / ".profiles"
+        project_config.write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=tmp_path,
+            explicit_config=None,
+            source="cwd",
+        )
+        assert resolve_config_path(ctx) == project_config
+
+    def test_uninformative_cwd_skips_tree_search(
+        self, tmp_path, isolated_user_home, monkeypatch
+    ) -> None:
+        """A System32-style CWD is never walked for configs (#191)."""
+        monkeypatch.setenv("SystemRoot", str(tmp_path))
+        system32 = tmp_path / "System32"
+        system32.mkdir()
+        # A config inside the "system" tree must NOT be discovered.
+        (system32 / ".profiles").write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=system32,
+            explicit_config=None,
+            source="cwd",
+        )
+        assert resolve_config_path(ctx) is None
+
+    def test_uninformative_cwd_with_user_config_falls_back(
+        self, tmp_path, isolated_user_home, monkeypatch
+    ) -> None:
+        """Matrix row 4: launcher start, user config exists → loaded."""
+        monkeypatch.setenv("SystemRoot", str(tmp_path))
+        system32 = tmp_path / "System32"
+        system32.mkdir()
+
+        user_config = isolated_user_home / ".profiles" / ".profiles"
+        user_config.parent.mkdir(parents=True)
+        user_config.write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=system32,
+            explicit_config=None,
+            source="cwd",
+        )
+        assert resolve_config_path(ctx) == user_config
+
+    def test_yaml_user_config_is_found(self, tmp_path, isolated_user_home) -> None:
+        """The legacy .profiles.yaml name also works as the user default."""
+        user_config = isolated_user_home / ".profiles" / ".profiles.yaml"
+        user_config.parent.mkdir(parents=True)
+        user_config.write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(),
+            working_directory=tmp_path,
+            explicit_config=None,
+            source="cwd",
+        )
+        assert resolve_config_path(ctx) == user_config
+
+    @pytest.mark.parametrize("winner", ["explicit", "document"])
+    def test_explicit_and_document_still_win(self, tmp_path, isolated_user_home, winner) -> None:
+        """Explicit flags and opened documents outrank the user default."""
+        user_config = isolated_user_home / ".profiles" / ".profiles"
+        user_config.parent.mkdir(parents=True)
+        user_config.write_text("x")
+
+        winning = tmp_path / "winner.profiles"
+        winning.write_text("x")
+
+        ctx = LaunchContext(
+            document_paths=(winning,) if winner == "document" else (),
+            working_directory=tmp_path,
+            explicit_config=winning if winner == "explicit" else None,
+            source=winner,
+        )
+        assert resolve_config_path(ctx) == winning

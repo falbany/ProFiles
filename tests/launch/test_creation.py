@@ -84,3 +84,53 @@ class TestProposeCreation:
         # Should raise AttributeError if we try to modify
         with pytest.raises(AttributeError):
             result.status = "SKIPPED"  # type: ignore
+
+
+class TestStarterSearchDir:
+    """The starter's search_dir template placeholder (issue #191)."""
+
+    @staticmethod
+    def _starter_search_dir(config_path: Path) -> str:
+        """Extract the search_dir value from a written starter file."""
+        for line in config_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("search_dir:"):
+                return stripped.split(":", 1)[1].strip().strip("'\"")
+        raise AssertionError("starter has no search_dir line")
+
+    def test_project_target_scans_itself(self, tmp_path, monkeypatch) -> None:
+        """A project-directory creation scans the project folder."""
+        monkeypatch.chdir(tmp_path)
+        result = propose_creation(tmp_path)
+
+        assert result.status == "CREATED"
+        assert self._starter_search_dir(result.path) == str(tmp_path)
+
+    def test_explicit_search_dir_is_used(self, tmp_path) -> None:
+        """An explicit search_dir lands in the template verbatim."""
+        scan_dir = tmp_path / "programs"
+        scan_dir.mkdir()
+        result = propose_creation(tmp_path, search_dir=scan_dir)
+
+        assert result.status == "CREATED"
+        assert self._starter_search_dir(result.path) == str(scan_dir)
+
+    def test_user_data_dir_target_scans_home(
+        self, tmp_path, isolated_user_home, monkeypatch
+    ) -> None:
+        """Creating in ~/.profiles scans the home, not the data dir (#191).
+
+        The data folder only holds logs and configs, so scanning it is
+        useless; with an uninformative CWD (Start-Menu style) the scan
+        target falls back to the home folder itself.
+        """
+        monkeypatch.setenv("SystemRoot", str(tmp_path))
+        system32 = tmp_path / "System32"
+        system32.mkdir()
+        monkeypatch.chdir(system32)
+
+        data_dir = isolated_user_home / ".profiles"
+        result = propose_creation(data_dir)
+
+        assert result.status == "CREATED"
+        assert self._starter_search_dir(result.path) == str(isolated_user_home)

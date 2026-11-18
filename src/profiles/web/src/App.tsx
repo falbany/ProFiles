@@ -37,6 +37,7 @@ import { SearchBar } from "./components/SearchBar";
 import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
+import type { ConfigPickerMode } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
 import { BarcodeModal } from "./components/BarcodeModal";
 import { CameraBarcodeModal } from "./components/CameraBarcodeModal";
@@ -77,7 +78,13 @@ export default function App() {
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
   const [showDirPicker, setShowDirPicker] = useState<boolean>(false);
-  const [showConfigPicker, setShowConfigPicker] = useState<boolean>(false);
+  /**
+   * Config picker intent (issue #192): null = closed, "create" = the
+   * first-run auto-prompt, "load" = an explicit Load/Choose action. The
+   * mode lives HERE because the caller knows why the picker opened;
+   * LoadConfigModal no longer infers it from the global config state.
+   */
+  const [configPickerMode, setConfigPickerMode] = useState<ConfigPickerMode | null>(null);
   // In-app YAML configuration editor (issue #95), opened from the StatusBar
   // "Config" button. The old OS-launch behavior moved into the editor's
   // header ("Open in OS").
@@ -393,7 +400,8 @@ export default function App() {
     if (cfg.recursive_search !== undefined) setRecursive(cfg.recursive_search);
     if (initialFilter) setFilterText(initialFilter);
     if (!cfg.config_exists) {
-      setShowConfigPicker(true);
+      // First-run auto-prompt: the ONLY entry point that proposes create.
+      setConfigPickerMode("create");
     }
 
     if (initialDir) {
@@ -810,7 +818,7 @@ export default function App() {
     contextMenuPos ||
       showShortcuts ||
       showDirPicker ||
-      showConfigPicker ||
+      configPickerMode !== null ||
       showPropertiesModal ||
       showLogViewer ||
       showTimerModal ||
@@ -907,7 +915,9 @@ export default function App() {
           recursive={recursive}
           onDisableRecursive={handleDisableRecursive}
           onOpenDirectory={handleOpenActiveDirectory}
-          onLoadConfig={() => setShowConfigPicker(true)}
+          // FileList empty-state "Choose configuration" (issue #192): an
+          // explicit choose action always opens the picker in Load mode.
+          onLoadConfig={() => setConfigPickerMode("load")}
           filterText={filterText}
           onClearFilter={handleClearFilter}
           columnHeaders={config?.column_headers || []}
@@ -972,7 +982,9 @@ export default function App() {
         open={showConfigEditor}
         onClose={() => setShowConfigEditor(false)}
         onApplied={handleConfigLoaded}
-        onLoadConfig={() => setShowConfigPicker(true)}
+        // Editor header "Load config file…" (issue #192): an explicit load
+        // action opens the picker in Load mode, never the first-run Create.
+        onLoadConfig={() => setConfigPickerMode("load")}
         reloadKey={editorReloadKey}
       />
 
@@ -980,10 +992,10 @@ export default function App() {
           so an editor left open underneath re-fetches the freshly picked
           file instead of keeping stale text (issue #101). */}
       <LoadConfigModal
-        isOpen={showConfigPicker}
+        isOpen={configPickerMode !== null}
+        mode={configPickerMode ?? "load"}
         activeConfigPath={config?.config_path}
-        configExists={config?.config_exists}
-        onClose={() => setShowConfigPicker(false)}
+        onClose={() => setConfigPickerMode(null)}
         onLoaded={(cfg) => {
           void handleConfigLoaded(cfg);
           setEditorReloadKey((key) => key + 1);

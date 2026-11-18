@@ -256,6 +256,13 @@ python -m profiles --init
 
 This creates a `.profiles` file in the current directory with default settings.
 
+You can also skip this step: on the **first launch from the Start Menu** (or
+any launcher that runs without a project folder), ProFiles proposes to create
+the configuration at `~/.profiles/.profiles` — the same folder as
+`profiles.log` — and every later launch loads that per-user default
+automatically. Launches from a terminal inside a project keep proposing the
+project-local `.profiles`.
+
 ### 2. Customize configuration
 
 Edit the `.profiles` file to adapt:
