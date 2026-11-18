@@ -35,6 +35,35 @@ Download the installer for your platform from the
 Launch ProFiles from your Start Menu (Windows), `/Applications` (macOS),
 or your application launcher (Linux). No Python installation is needed.
 
+### Windows installer options
+
+The MSI wizard walks through: **license → install scope → install folder →
+install options → install**.
+
+- **Install scope** — the wizard asks whether to install *per-user* (no
+  admin rights, just for you) or *per-machine* (all users, requires local
+  Administrator privileges).
+- **Add ProFiles to PATH** — checked by default. Lets you run
+  `profiles --headless` (and the other CLI modes) from any *new* terminal
+  window, out of the box. Uncheck it if you prefer not to modify PATH.
+  A Start Menu entry **and a desktop shortcut** are always created.
+- **Finish page** — a checked *Launch ProFiles* box plus links to the
+  [documentation](../README.md) and the [what's new](../CHANGELOG.md) page.
+
+Silent installs keep working and add ProFiles to PATH by default:
+
+```bat
+:: quiet install (PATH included by default)
+msiexec /i ProFiles-<version>.msi /qn
+
+:: quiet install without the PATH modification
+msiexec /i ProFiles-<version>.msi /qn OPTION_ADD_TO_PATH=0
+```
+
+Uninstalling (from *Settings → Apps* or `msiexec /x`) removes the PATH
+entry the installer added and both shortcuts — your `.profiles`
+configurations and logs are left untouched.
+
 ## Method 2: One-Line Install (Developers)
 
 Requires Python 3.11+ on the machine.
