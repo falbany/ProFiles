@@ -153,6 +153,20 @@ def is_uninformative_directory(path: Path | None) -> bool:
     return False
 
 
+def _effective_start(start: Path | None) -> Path | None:
+    """Resolve the effective start directory: *start*, or the process CWD.
+
+    Returns ``None`` when both are unavailable (exotic service
+    environments where even ``Path.cwd()`` raises).
+    """
+    if start is not None:
+        return start
+    try:
+        return Path.cwd()
+    except OSError:
+        return None
+
+
 def default_config_path(start: Path | None = None) -> Path:
     """Return the path a missing configuration should be proposed at.
 
@@ -167,13 +181,8 @@ def default_config_path(start: Path | None = None) -> Path:
         the ``~/.profiles`` data folder), the per-user path is returned
         instead: the app never proposes a directory as its config file.
     """
-    if start is None:
-        try:
-            start = Path.cwd()
-        except OSError:
-            start = None
-
-    if is_uninformative_directory(start):
+    start = _effective_start(start)
+    if start is None or is_uninformative_directory(start):
         return user_config_path()
 
     candidate = start / CONFIG_FILE_NAMES[0]
@@ -196,13 +205,8 @@ def default_search_directory(start: Path | None = None) -> Path:
         *start* when informative; the home folder otherwise (a launcher
         start must never scan ``System32`` or the interpreter's folder).
     """
-    if start is None:
-        try:
-            start = Path.cwd()
-        except OSError:
-            start = None
-
-    if is_uninformative_directory(start):
+    start = _effective_start(start)
+    if start is None or is_uninformative_directory(start):
         return Path.home()
     return start
 
