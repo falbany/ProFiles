@@ -24,6 +24,8 @@ Si aucun fichier `.profiles` n'est trouvé :
 
 Au premier lancement en mode interactif (interface web dans la fenêtre PyWebView ou dans le navigateur), si aucun fichier `.profiles` n'est trouvé, ProFiles propose de créer un fichier de configuration par défaut dans le répertoire courant. Lorsque ce répertoire ne porte aucune information de lancement (raccourci du menu Démarrer, lanceur avec un champ « Démarrer dans » vide, lancement depuis le Finder/dock), la proposition cible `~/.profiles/.profiles` — le même dossier que `profiles.log` — afin de ne jamais écrire dans un répertoire système ; chaque lancement suivant charge automatiquement ce défaut par utilisateur.
 
+Sur macOS, les lancements depuis le Finder ou le Dock n'héritent d'aucun répertoire de travail : ProFiles adopte donc le **dossier de la fenêtre Finder au premier plan** comme dossier de lancement. Avec un dossier de projet ouvert, la proposition cible ce projet ; avec un dossier ordinaire sans rapport au premier plan (par exemple celui qui contient l'image DMG), c'est ce dossier qui est proposé. Fermez les fenêtres sans rapport avant de lancer, ou cliquez sur le bouton **Home** du sélecteur pour cibler `~/.profiles`.
+
 ### Méthode 2 : Commande ligne de commande
 
 ```bash
