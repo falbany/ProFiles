@@ -139,3 +139,30 @@ def test_registry_contracts_are_pinned() -> None:
         assert "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" in body
     pre = (REPO_ROOT / "packaging" / "windows" / "pre_uninstall.bat").read_text(encoding="utf-8")
     assert "catch{$key=$null}" in pre
+
+
+def test_banner_keeps_title_zone_clear() -> None:
+    """WiX draws the black banner title at x≈20; keep the title box white."""
+    path = REPO_ROOT / "img" / "installer_banner.bmp"
+    with Image.open(path) as img:
+        rgb = img.convert("RGB")
+        # The title control ends near x=420; the brand block starts at
+        # x=429. Probe 4 px inside each zone so the LANCZOS seam at the
+        # block edge does not count as art under the title.
+        darkest = min(band[0] for band in rgb.crop((0, 0, 425, 58)).getextrema())
+        brand = rgb.getpixel((434, 6))
+    assert darkest >= 250  # no art under the title
+    assert brand[2] > brand[0]  # indigo/violet block on the right
+
+
+def test_background_keeps_text_zone_clear() -> None:
+    """WiX draws body text from x≈173; keep the text zone white."""
+    path = REPO_ROOT / "img" / "installer_background.bmp"
+    with Image.open(path) as img:
+        rgb = img.convert("RGB")
+        darkest = min(band[0] for band in rgb.crop((170, 0, 493, 312)).getextrema())
+        panel = rgb.getpixel((160, 156))
+        text_zone = rgb.getpixel((170, 156))
+    assert darkest >= 250  # no art under the text, links or checkbox
+    assert panel[2] > panel[0]  # brand panel on the left
+    assert min(text_zone) >= 250  # panel ends before the text zone
