@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Wifi, WifiOff, X } from "lucide-react";
+import { AlertTriangle, Copy, ExternalLink, Wifi, WifiOff, X } from "lucide-react";
 
 import {
   fetchSystemInfo,
@@ -37,13 +37,17 @@ type Busy = "enable" | "disable" | null;
  * even while LAN is disabled (user decision overriding #198's original
  * gating) — it reuses `generateBarcode` / `POST /api/actions/barcode` like
  * the files' "Generate QR Code", no client-side dependency. The header
- * carries the live status — icon chip (Wifi / WifiOff) plus "LAN Access —
- * Reachable on this network." / "LAN Access — Restricted to the host
- * machine." — so the body holds only the addresses: the copyable hostname
- * + IP URLs and the clickable loopback link (#199), spaced clear of the IP
- * row. ❌ (header) and Escape close at any time; footer buttons never
- * disappear — the action disables while a rebind is in flight, with the
- * "Updating the LAN binding…" progress on the footer's left.
+ * carries the live status — icon chip (Wifi / WifiOff) plus the stable
+ * "LAN Access" title over a color-coded subtitle (grey restricted / green
+ * reachable / amber "Updating the LAN binding…" while a rebind is in
+ * flight, so header and footer never disagree). The addresses are grouped
+ * by audience: "For other devices" (IP first — what the QR encodes — then
+ * the hostname) and "This machine" (loopback, #199, now copyable too),
+ * with the QR caption tying it to the IP. While restricted, a muted amber
+ * banner restores the security warning the old confirm dialog carried
+ * ("If Enabled, ProFiles will be reachable by anyone on this network.").
+ * ❌ (header) and Escape close at any time; footer buttons never
+ * disappear — the action disables while a rebind is in flight.
  *
  * Closing mid-flow falls back to the toast channel: the async flow keeps
  * running and reports via `onConfirmed(sys)` + toasts, so App state stays in
@@ -123,6 +127,15 @@ export function LanModal({
 
   if (!open) return null;
 
+  const copyLoopback = async () => {
+    try {
+      await navigator.clipboard.writeText(loopbackUrl);
+      showToast("URL copied to clipboard.");
+    } catch {
+      showToast("Failed to copy URL.", "error");
+    }
+  };
+
   /** Toggle the bind in place — same UX for both directions. */
   const runToggleFlow = async (next: boolean) => {
     const seq = ++seqRef.current;
@@ -186,23 +199,54 @@ export function LanModal({
         <div className="mb-4 flex items-center gap-2.5">
           <span
             className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
-              liveEnabled
-                ? "bg-status-success-bg text-status-success-text"
-                : "bg-elevated text-ink-muted"
+              busy !== null
+                ? "bg-status-warning-bg text-status-warning-text"
+                : liveEnabled
+                  ? "bg-status-success-bg text-status-success-text"
+                  : "bg-elevated text-ink-muted"
             }`}
           >
-            {liveEnabled ? (
-              <Wifi className="h-5 w-5" />
-            ) : (
+            {busy === "disable" || (!liveEnabled && busy === null) ? (
               <WifiOff className="h-5 w-5" />
+            ) : (
+              <Wifi className="h-5 w-5" />
             )}
           </span>
-          <h2 id="lan-modal-title" className="flex-1 text-sm font-semibold text-ink">
-            LAN Access —{" "}
-            {liveEnabled
-              ? "Reachable on this network."
-              : "Restricted to the host machine."}
-          </h2>
+          <div className="min-w-0 flex-1">
+            <h2 id="lan-modal-title" className="text-sm font-semibold tracking-tight text-ink">
+              LAN Access
+            </h2>
+            <p
+              role="status"
+              className={`mt-0.5 flex items-center gap-1.5 text-xs font-medium ${
+                busy !== null
+                  ? "text-status-warning-text"
+                  : liveEnabled
+                    ? "text-status-success-text"
+                    : "text-ink-muted"
+              }`}
+            >
+              {busy !== null ? (
+                <>
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+                    aria-hidden="true"
+                  />
+                  Updating the LAN binding…
+                </>
+              ) : liveEnabled ? (
+                <>
+                  <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-current" aria-hidden="true" />
+                  Reachable on this network
+                </>
+              ) : (
+                <>
+                  <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-current" aria-hidden="true" />
+                  Restricted to the host machine
+                </>
+              )}
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -241,91 +285,104 @@ export function LanModal({
               )}
             </div>
             <p className="text-center text-[10px] text-ink-faint">
-              Scan to connect from a phone.
+              Scans the IP address
             </p>
           </div>
 
-          {/* Addresses column — status lives in the header now; explicit
-              margins keep the loopback row clear of the IP row. */}
+          {/* Addresses column — grouped by audience (user review): the IP
+              first (what the QR encodes), the hostname second, the loopback
+              alone under "This machine". Explicit margins keep rows apart. */}
           <div className="min-w-0 flex-1 text-xs text-ink-secondary">
             {busy === null && failureMessage && (
               <div
                 role="alert"
-                className="rounded-md border border-status-danger-border bg-status-danger-bg p-2.5 text-status-danger-text"
+                className="mb-2.5 rounded-md border border-status-danger-border bg-status-danger-bg p-2.5 text-status-danger-text"
               >
                 {failureMessage}
               </div>
+            )}
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+              For other devices
+            </p>
+            {ipUrl && (
+              <CopyableUrl
+                url={ipUrl}
+                label="Copy IP URL"
+                className="mt-1.5 rounded-lg bg-elevated/40 px-2 py-1.5"
+                onCopied={() => showToast("URL copied to clipboard.")}
+                onCopyError={() => showToast("Failed to copy URL.", "error")}
+              />
             )}
             {hostnameUrl && (
               <CopyableUrl
                 url={hostnameUrl}
                 label="Copy hostname URL"
-                className="mt-3"
+                className="mt-1.5 rounded-lg bg-elevated/40 px-2 py-1.5"
                 onCopied={() => showToast("URL copied to clipboard.")}
                 onCopyError={() => showToast("Failed to copy URL.", "error")}
               />
             )}
-            {ipUrl && (
-              <CopyableUrl
-                url={ipUrl}
-                label="Copy IP URL"
-                className="mt-2"
-                onCopied={() => showToast("URL copied to clipboard.")}
-                onCopyError={() => showToast("Failed to copy URL.", "error")}
-              />
-            )}
-            <span className="mt-4 flex items-center gap-1.5">
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+              This machine
+            </p>
+            <span className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-elevated/40 px-2 py-1.5">
               <ExternalLink className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden="true" />
               <a
                 href={loopbackUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all font-mono text-[11px] text-ink underline decoration-line underline-offset-2 hover:text-indigo-400"
+                className="min-w-0 flex-1 break-all font-mono text-[11px] text-ink underline decoration-line underline-offset-2 hover:text-indigo-400"
               >
                 {loopbackUrl}
               </a>
+              <button
+                type="button"
+                aria-label="Copy loopback URL"
+                title="Copy loopback URL"
+                onClick={() => void copyLoopback()}
+                className="focus-ring shrink-0 rounded p-1 text-ink-faint transition-colors hover:bg-elevated hover:text-ink"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
             </span>
           </div>
         </div>
 
+        {/* Security warning — the one line the old confirm dialog carried,
+            back while restricted (user wording). Hidden once LAN is on or a
+            rebind is in flight. */}
+        {!liveEnabled && busy === null && (
+          <div className="mt-3.5 flex items-center gap-2 rounded-lg border border-status-warning-border bg-status-warning-bg p-2.5 text-[11.5px] font-medium text-status-warning-text">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            If Enabled, ProFiles will be reachable by anyone on this network.
+          </div>
+        )}
+
         {/* Footer buttons never disappear (#197 override): the action flips
             with the live state and disables while a rebind is in flight —
-            the in-flight status sits on the footer's left (user review). */}
-        <div className="mt-4 flex items-center gap-2">
-          {busy !== null && (
-            <p
-              role="status"
-              className="flex min-w-0 items-center gap-2 text-xs text-ink"
-            >
-              <span
-                className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent"
-                aria-hidden="true"
-              />
-              Updating the LAN binding…
-            </p>
-          )}
-          <div className="ml-auto flex gap-2">
-            <button
-              ref={cancelRef}
-              type="button"
-              onClick={onClose}
-              className="min-h-9 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void runToggleFlow(!liveEnabled)}
-              className={`min-h-9 rounded-lg border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50 ${
-                liveEnabled
-                  ? "border-status-danger-border bg-status-danger-bg/30 text-status-danger-text hover:bg-status-danger-bg/60"
-                  : "btn-primary border-transparent bg-indigo-600 text-white hover:bg-indigo-500"
-              }`}
-            >
-              {liveEnabled ? "Disable LAN" : "Enable LAN"}
-            </button>
-          </div>
+            its progress lives in the header subtitle (user review: no
+            duplicate in the footer). */}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            ref={cancelRef}
+            type="button"
+            onClick={onClose}
+            className="min-h-9 rounded-lg border border-line bg-elevated px-3.5 text-sm text-ink-secondary transition-colors hover:bg-surface-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void runToggleFlow(!liveEnabled)}
+            className={`min-h-9 rounded-lg border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+              liveEnabled
+                ? "border-status-danger-border bg-status-danger-bg/30 text-status-danger-text hover:bg-status-danger-bg/60"
+                : "btn-primary border-transparent bg-indigo-600 text-white hover:bg-indigo-500"
+            }`}
+          >
+            {liveEnabled ? "Disable LAN" : "Enable LAN"}
+          </button>
         </div>
       </div>
     </div>
