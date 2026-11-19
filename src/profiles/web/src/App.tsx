@@ -850,7 +850,8 @@ export default function App() {
     onProperties: handleProperties,
     onToggleTheme: () => toggleTheme({ persist: true }),
     setShowLogViewer, setShowShortcuts, setShowTimerModal,
-    setShowConfigEditor, setBarcodeMode, setShowCameraScanner,
+    setShowConfigEditor, setShowLanModal: setLanModalOpen,
+    setBarcodeMode, setShowCameraScanner,
     moveSelection,
   });
 

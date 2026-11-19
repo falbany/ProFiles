@@ -30,6 +30,7 @@ export interface GlobalShortcutsDeps {
   setShowShortcuts: Dispatch<SetStateAction<boolean>>;
   setShowTimerModal: Dispatch<SetStateAction<boolean>>;
   setShowConfigEditor: Dispatch<SetStateAction<boolean>>;
+  setShowLanModal: Dispatch<SetStateAction<boolean>>;
   setBarcodeMode: Dispatch<SetStateAction<boolean>>;
   setShowCameraScanner: Dispatch<SetStateAction<boolean>>;
   // Selection — functional-updater style; App writes selectedPathRef inside the updater.
@@ -151,6 +152,16 @@ export function useGlobalShortcuts(deps: GlobalShortcutsDeps): void {
       if (e.ctrlKey && e.key === ",") {
         e.preventDefault();
         d.setShowConfigEditor(true);
+        return;
+      }
+
+      // Ctrl + K: Open the LAN access modal (issues #197/#198/#199) — same
+      // entry point as the status-bar LAN button. Ctrl+N was the requested
+      // mnemonic, but browsers reserve it for "new window" and a page can
+      // never intercept it, so the LAN modal lands on Ctrl + K.
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        d.setShowLanModal(true);
         return;
       }
 
