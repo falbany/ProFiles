@@ -27,6 +27,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     { key: "Ctrl + F", desc: "Focus Filter / Search field" },
     { key: "Ctrl + L", desc: "Focus File List" },
     { key: "Ctrl + Shift + L", desc: "Open the log viewer" },
+    { key: "Ctrl + K", desc: "Open the LAN access modal" },
     { key: "Ctrl + ,", desc: "Open the config editor" },
     { key: "Ctrl + Shift + T", desc: "Toggle theme (Dark / Light)" },
     { key: "Ctrl + B", desc: "Toggle barcode scanner mode" },

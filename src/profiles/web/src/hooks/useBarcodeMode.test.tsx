@@ -395,6 +395,7 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
       setShowShortcuts: vi.fn(),
       setShowTimerModal: vi.fn(),
       setShowConfigEditor: vi.fn(),
+      setShowLanModal: vi.fn(),
       setBarcodeMode: vi.fn(),
       setShowCameraScanner: vi.fn(),
       moveSelection: vi.fn(),

@@ -57,6 +57,7 @@ function makeDeps(overrides: Partial<GlobalShortcutsDeps> = {}): GlobalShortcuts
     setShowShortcuts: vi.fn(),
     setShowTimerModal: vi.fn(),
     setShowConfigEditor: vi.fn(),
+    setShowLanModal: vi.fn(),
     setBarcodeMode: vi.fn(),
     setShowCameraScanner: vi.fn(),
     moveSelection: vi.fn(),
@@ -263,6 +264,14 @@ describe("useGlobalShortcuts", () => {
     press(",", { ctrlKey: true });
     expect(deps.setShowConfigEditor).toHaveBeenCalledTimes(1);
     expect(deps.setShowConfigEditor).toHaveBeenCalledWith(true);
+
+    press("k", { ctrlKey: true });
+    expect(deps.setShowLanModal).toHaveBeenCalledTimes(1);
+    expect(deps.setShowLanModal).toHaveBeenCalledWith(true);
+
+    // Ctrl+Shift+K stays free (the disambiguation convention of this table).
+    press("k", { ctrlKey: true, shiftKey: true });
+    expect(deps.setShowLanModal).toHaveBeenCalledTimes(1);
 
     press("?");
     expect(deps.setShowShortcuts).toHaveBeenCalledTimes(1);

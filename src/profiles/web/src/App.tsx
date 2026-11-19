@@ -32,7 +32,7 @@ import { DropConfigOverlay } from "./components/DropConfigOverlay";
 import { FileListTable } from "./components/FileListTable";
 import { HeaderBar } from "./components/HeaderBar";
 import { InitErrorPanel } from "./components/InitErrorPanel";
-import { LanConfirmDialog } from "./components/LanConfirmDialog";
+import { LanModal } from "./components/LanModal";
 import { SearchBar } from "./components/SearchBar";
 import { LogViewerModal } from "./components/LogViewerModal";
 import { ShortcutsModal } from "./components/ShortcutsModal";
@@ -96,8 +96,8 @@ export default function App() {
   const [propertiesFile, setPropertiesFile] = useState<ScannedFileItem | null>(null);
   const [showLogViewer, setShowLogViewer] = useState<boolean>(false);
   const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
-  /** Pending LAN toggle (true/false) awaiting user confirmation. */
-  const [lanPending, setLanPending] = useState<boolean | null>(null);
+  /** LAN access modal visibility — one modal for enable and disable. */
+  const [lanModalOpen, setLanModalOpen] = useState(false);
 
   // Workflow Modal state
   const [workflowLaunchParams, setWorkflowLaunchParams] = useState<{
@@ -121,9 +121,10 @@ export default function App() {
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [singleMatchFile, setSingleMatchFile] = useState<ScannedFileItem | null>(null);
 
-  /** Open the in-app confirmation dialog for a LAN toggle request. */
-  const toggleLan = (next: boolean) => {
-    setLanPending(next);
+  /** Open the LAN modal; it reflects the live bind state and offers the
+   *  opposite action, so the requested direction from the header is unused. */
+  const toggleLan = (_next: boolean) => {
+    setLanModalOpen(true);
   };
 
   /**
@@ -849,7 +850,8 @@ export default function App() {
     onProperties: handleProperties,
     onToggleTheme: () => toggleTheme({ persist: true }),
     setShowLogViewer, setShowShortcuts, setShowTimerModal,
-    setShowConfigEditor, setBarcodeMode, setShowCameraScanner,
+    setShowConfigEditor, setShowLanModal: setLanModalOpen,
+    setBarcodeMode, setShowCameraScanner,
     moveSelection,
   });
 
@@ -1171,13 +1173,14 @@ export default function App() {
         onCancel={() => setPendingDeleteFile(null)}
       />
 
-      {/* LAN toggle confirmation */}
-      <LanConfirmDialog
-        pending={lanPending}
+      {/* LAN access modal (issues #197/#198/#199) — one modal for both
+          directions; it stays open through the rebind and reports inline. */}
+      <LanModal
+        open={lanModalOpen}
         systemInfo={systemInfo}
         showToast={showToast}
         onConfirmed={setSystemInfo}
-        onCancel={() => setLanPending(null)}
+        onClose={() => setLanModalOpen(false)}
       />
 
       {/* Single Match Launch Confirmation */}
