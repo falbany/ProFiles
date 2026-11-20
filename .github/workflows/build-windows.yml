@@ -36,3 +36,52 @@ jobs:
           path: dist/**/*.msi
           if-no-files-found: error
           retention-days: 7
+      # Boot smoke test (PR #195 report): install the freshly built MSI
+      # silently (per-machine) and run the installed exe with --help.
+      # That exercises the exact first-import chain of a real install
+      # (stub exe -> python313.zip + root .pyds -> app -> app_packages,
+      # including pydantic/typing_extensions) and exits 0 without
+      # starting the server or opening a window. A failure here means
+      # every user hits it, not just one machine (e.g. antivirus).
+      - name: Install MSI silently (per-machine)
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem dist -Recurse -Filter *.msi |
+            Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Installing $msi"
+          $p = Start-Process msiexec.exe -ArgumentList @(
+            '/i', "`"$msi`"", '/qn', 'ALLUSERS=1'
+          ) -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            throw "msiexec failed with exit code $($p.ExitCode)"
+          }
+      - name: Smoke-run installed app (full import chain)
+        shell: pwsh
+        run: |
+          $root = 'C:\Program Files\Falbany Labs\ProFiles'
+          $exe = Join-Path $root 'ProFiles.exe'
+          foreach ($f in @($exe, "$root\_socket.pyd", "$root\python313.zip")) {
+            if (-not (Test-Path $f)) { throw "MISSING after install: $f" }
+          }
+          # BRIEFCASE_DEBUG=1 makes the stub log its PYTHONPATH entries.
+          $env:BRIEFCASE_DEBUG = '1'
+          $p = Start-Process -FilePath $exe -ArgumentList '--help' -PassThru
+          if (-not $p.WaitForExit(120000)) {
+            $p.Kill()
+            Write-Host '::error::App did not exit within 120s (crash dialog?)'
+          } else {
+            Write-Host "App exit code: $($p.ExitCode)"
+          }
+          # Surface the stub log (stdout is redirected there for GUI apps).
+          $logs = Join-Path $env:LOCALAPPDATA 'Falbany Labs\ProFiles\Logs'
+          if (Test-Path $logs) {
+            Get-ChildItem $logs -Filter '*.log' | Sort-Object LastWriteTime |
+              Select-Object -Last 1 |
+              ForEach-Object {
+                Write-Host "--- $($_.FullName) ---"
+                Get-Content $_.FullName | ForEach-Object { Write-Host $_ }
+              }
+          }
+          if ($p.ExitCode -ne 0) {
+            throw "Installed app failed to boot (exit code $($p.ExitCode))"
+          }

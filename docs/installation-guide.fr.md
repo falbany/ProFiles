@@ -290,6 +290,23 @@ python -m profiles --init
 
 Cela crée un fichier `.profiles` dans le répertoire courant avec les paramètres par défaut.
 
+Vous pouvez aussi ignorer cette étape : au **premier lancement depuis le
+menu Démarrer** (ou tout lanceur exécuté sans dossier de projet), ProFiles
+propose de créer la configuration dans `~/.profiles/.profiles` — le même
+dossier que `profiles.log` — et chaque lancement suivant charge
+automatiquement ce défaut par utilisateur. Les lancements en terminal dans
+un projet continuent de proposer le `.profiles` du projet.
+
+Sur macOS, les lancements depuis le Finder ou le Dock n'héritent d'aucun
+répertoire de travail : ProFiles adopte donc le **dossier de la fenêtre
+Finder au premier plan** comme dossier de lancement. Ouvrez le dossier du
+projet avant de lancer pour proposer son `.profiles` ; lorsque ce dossier ne
+porte aucune information de lancement (volume DMG monté, `/Applications`,
+dossier personnel…), la proposition par utilisateur s'applique. Avec un
+dossier ordinaire sans rapport au premier plan, c'est ce dossier qui est
+proposé — fermez la fenêtre ou utilisez le bouton **Home** du sélecteur
+pour cibler `~/.profiles`.
+
 ### 2. Personnaliser la configuration
 
 Éditez le fichier `.profiles` pour adapter :

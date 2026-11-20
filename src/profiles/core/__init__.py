@@ -46,6 +46,14 @@ from profiles.core.environment import (
     parse_hook_entries,
     run_hooks_for_file,
 )
+from profiles.core.paths import (
+    default_config_path,
+    default_search_directory,
+    find_user_config,
+    is_uninformative_directory,
+    user_config_path,
+    user_data_dir,
+)
 from profiles.core.processing import (
     ScannedFile,
     ScannedFileDynamic,
@@ -90,6 +98,13 @@ __all__ = [
     "scan_and_process",
     # Template
     "STARTER_CONFIG_TEMPLATE",
+    # Per-user path policy (issue #191)
+    "default_config_path",
+    "default_search_directory",
+    "find_user_config",
+    "is_uninformative_directory",
+    "user_config_path",
+    "user_data_dir",
     # System
     "SystemInfo",
     "collect_system_info",

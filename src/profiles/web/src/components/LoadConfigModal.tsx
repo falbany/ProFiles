@@ -6,18 +6,24 @@ import { Check, ChevronRight, FileCog, FileText, Folder, Home, Loader2, X } from
 import { browseForConfigFiles, createConfigFile, loadConfigFile } from "../api/client";
 import type { AppConfigData, BrowseResult } from "../api/types";
 
+/** Why the picker is open: an explicit load action, or the first-run
+ * auto-prompt that proposes creating a starter configuration (#192).
+ * The caller owns the intent; the component never infers it from
+ * unrelated global config state. */
+export type ConfigPickerMode = "load" | "create";
+
 export interface LoadConfigModalProps {
   isOpen: boolean;
+  mode: ConfigPickerMode;
   activeConfigPath?: string;
-  configExists?: boolean;
   onClose: () => void;
   onLoaded: (config: AppConfigData) => void;
 }
 
 export function LoadConfigModal({
   isOpen,
+  mode,
   activeConfigPath,
-  configExists = true,
   onClose,
   onLoaded,
 }: LoadConfigModalProps) {
@@ -30,7 +36,7 @@ export function LoadConfigModal({
   const pathInputRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  const isCreateMode = configExists === false;
+  const isCreateMode = mode === "create";
 
   useEffect(() => {
     if (!isOpen) {

@@ -34,6 +34,7 @@ from profiles.core.config.io.yaml_io import (
     FALLBACK_CONFIG_NAMES,
     PRIMARY_CONFIG_NAME,
 )
+from profiles.core.paths import is_uninformative_directory
 
 #: Canonical primary configuration file name (``.profiles``).
 CONFIG_SUFFIX = PRIMARY_CONFIG_NAME
@@ -57,18 +58,18 @@ _IS_MACOS = sys.platform == "darwin"
 def cwd_is_uninformative(cwd: Path | None) -> bool:
     """True when *cwd* says nothing about the user's launch location.
 
+    Delegates to
+    :func:`profiles.core.paths.is_uninformative_directory` so launch
+    detection and the per-user path policy cannot drift (issue #191):
     GUI-style launches (double-click / Finder) typically inherit
-    ``CWD == "/"`` or an idle Python-runtime directory; only then is the
-    Finder probe worth consulting for the real launch folder, and only
-    then is the macOS odoc capture (:mod:`profiles.desktop.appkit_events`)
+    ``CWD == "/"`` or an idle Python-runtime directory, and launcher
+    shortcuts (Start Menu, ``.desktop``) inherit ``System32`` or the
+    home folder — in all those cases the CWD is discarded, the Finder
+    probe (macOS) is worth consulting for the real launch folder, and
+    the macOS odoc capture (:mod:`profiles.desktop.appkit_events`) is
     worth its bounded wait.
     """
-    if cwd is None or cwd == Path("/"):
-        return True
-    try:
-        return cwd.resolve().is_relative_to(Path(sys.prefix).resolve())
-    except OSError:
-        return True
+    return is_uninformative_directory(cwd)
 
 
 @dataclass(frozen=True)
@@ -183,7 +184,13 @@ def detect_launch_context(argv: list[str] | None = None) -> LaunchContext:
 
     probed = _finder_working_directory() if cwd is not None and cwd_is_uninformative(cwd) else None
 
-    if probed is not None:
+    # The probe mirrors the front Finder window — which, for a GUI launch,
+    # is often the very folder the user launched FROM: a mounted DMG
+    # volume, /Applications, a portable-apps folder.  The probe result
+    # must pass the same uninformative-directory policy as a CWD before
+    # it is trusted (issue #191 follow-up); otherwise it falls back to
+    # the plain CWD below.
+    if probed is not None and not cwd_is_uninformative(probed):
         working_directory = probed
         source = "launcher"
     elif cwd is not None:

@@ -17,6 +17,7 @@ from typing import Literal
 
 from profiles.core.actions import ActionStatus
 from profiles.core.actions import write_starter_config as _write_starter
+from profiles.core.paths import default_search_directory, user_data_dir
 
 
 @dataclass(frozen=True)
@@ -28,12 +29,38 @@ class CreationResult:
     message: str
 
 
-def propose_creation(target: Path) -> CreationResult:
+def _resolve_search_dir(target: Path, search_dir: Path | str | None) -> Path:
+    """Return the directory the starter's ``search_dir`` should point at.
+
+    Explicit *search_dir* wins.  Otherwise a normal project directory
+    scans itself, while the per-user data directory falls back to
+    :func:`default_search_directory` — that folder only holds logs and
+    configs, so scanning it is useless (issue #191).
+    """
+    if search_dir is not None:
+        return Path(search_dir)
+    try:
+        if target.resolve() == user_data_dir().resolve():
+            return default_search_directory()
+    except OSError:
+        return target
+    return target
+
+
+def propose_creation(
+    target: Path,
+    *,
+    search_dir: Path | str | None = None,
+) -> CreationResult:
     """Offer to write a starter ``.profiles`` at *target*.
 
     Args:
         target: Directory where the starter should be written.  The file
             will be created as ``target / ".profiles"``.
+        search_dir: Directory the starter's ``search_dir`` template
+            placeholder points at.  Defaults to *target* itself, except
+            when *target* is the per-user data directory (``~/.profiles``),
+            which scans :func:`default_search_directory` instead.
 
     Returns:
         A :class:`CreationResult` with the outcome.  Never raises: every
@@ -64,8 +91,9 @@ def propose_creation(target: Path) -> CreationResult:
             message=f"Could not create directory {config_path.parent}: {exc}",
         )
 
-    # Delegate to the existing domain action.
-    result = _write_starter(config_path)
+    # Delegate to the existing domain action, carrying the resolved
+    # search_dir so a launcher-created starter never scans System32.
+    result = _write_starter(config_path, cwd=_resolve_search_dir(target, search_dir))
 
     if result.status == ActionStatus.SUCCESS:
         return CreationResult(
