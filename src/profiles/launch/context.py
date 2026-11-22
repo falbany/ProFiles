@@ -184,7 +184,13 @@ def detect_launch_context(argv: list[str] | None = None) -> LaunchContext:
 
     probed = _finder_working_directory() if cwd is not None and cwd_is_uninformative(cwd) else None
 
-    if probed is not None:
+    # The probe mirrors the front Finder window — which, for a GUI launch,
+    # is often the very folder the user launched FROM: a mounted DMG
+    # volume, /Applications, a portable-apps folder.  The probe result
+    # must pass the same uninformative-directory policy as a CWD before
+    # it is trusted (issue #191 follow-up); otherwise it falls back to
+    # the plain CWD below.
+    if probed is not None and not cwd_is_uninformative(probed):
         working_directory = probed
         source = "launcher"
     elif cwd is not None:
