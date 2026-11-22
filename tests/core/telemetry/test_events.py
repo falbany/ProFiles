@@ -43,6 +43,7 @@ from profiles.core.telemetry.events import (
     scan_complete,
     scan_failed,
     theme_switched,
+    toast,
     wcag_contrast_faint,
     web_client,
     web_client_left,
@@ -731,6 +732,56 @@ class TestWebClientEvents:
         with caplog.at_level(logging.INFO, logger=logger.name):
             web_client_left(logger, ip="192.168.1.50", idle_s=135)
         assert 'WEB_CLIENT event="disconnected" ip="192.168.1.50" idle_s=135' in caplog.text
+
+
+class TestToast:
+    """TOAST — UI toasts mirrored to the log at DEBUG (issue #194)."""
+
+    def test_server_source_with_applied(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_toast_server")
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            toast(
+                logger,
+                source="server",
+                kind="config_handoff",
+                message="Configuration 'X' applied by a new ProFiles launch",
+                applied=True,
+            )
+        assert (
+            "TOAST source=server kind=config_handoff applied=true "
+            "msg=\"Configuration 'X' applied by a new ProFiles launch\"" in caplog.text
+        )
+        assert caplog.records[0].levelname == "DEBUG"
+
+    def test_server_source_not_applied(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_toast_server_failed")
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            toast(
+                logger,
+                source="server",
+                kind="config_handoff_failed",
+                message="Could not apply 'X'",
+                applied=False,
+            )
+        assert (
+            "TOAST source=server kind=config_handoff_failed applied=false msg=\"Could not apply 'X'\""
+            in caplog.text
+        )
+
+    def test_web_source_has_no_applied_part(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_toast_web")
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            toast(logger, source="web", kind="error", message="Failed to reload configuration")
+        assert 'TOAST source=web kind=error msg="Failed to reload configuration"' in caplog.text
+        assert "applied=" not in caplog.text
+
+    def test_quoting_follows_house_rules(self, caplog: pytest.LogCaptureFixture) -> None:
+        logger = logging.getLogger("test_toast_quoting")
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            toast(logger, source="web", kind="info", message="Ready")
+            toast(logger, source="web", kind="info", message="URL copied to clipboard.")
+        assert "kind=info msg=Ready" in caplog.text
+        assert 'msg="URL copied to clipboard."' in caplog.text
 
 
 class TestBindChanged:

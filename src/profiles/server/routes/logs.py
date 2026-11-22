@@ -2,15 +2,34 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+import logging
+from typing import Literal
 
-from profiles.core.telemetry import log_viewer
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from profiles.core.telemetry import events, log_viewer
 from profiles.core.telemetry.diagnostics import default_log_path
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
+# Server-side telemetry logger (the "profiles" logger writes profiles.log);
+# same module-level lookup as server/app.py.
+_LOGGER = logging.getLogger("profiles")
+
 # Matches the default used by ProFileApp; overridable per request.
 _DEFAULT_LOG_PATH = default_log_path()
+
+# Frontend toasts are one-liners by construction; the cap keeps a stray or
+# hostile client (the server can be LAN-exposed) from flooding profiles.log.
+_MAX_CLIENT_MESSAGE_LENGTH = 500
+
+
+class ClientLogRequest(BaseModel):
+    """Body of ``POST /api/logs/client`` — a frontend toast mirror (issue #194)."""
+
+    message: str = Field(min_length=1, max_length=_MAX_CLIENT_MESSAGE_LENGTH)
+    kind: Literal["info", "error"] = "info"
 
 
 @router.get("")
@@ -60,3 +79,15 @@ async def get_logs(
             for entry in entries
         ],
     }
+
+
+@router.post("/client")
+async def post_client_log(payload: ClientLogRequest) -> dict:
+    """Mirror a frontend toast into ``profiles.log`` at DEBUG (issue #194).
+
+    Logging only, fire-and-forget from the client's perspective: failures
+    here must never surface in the UI, and this endpoint must never buffer
+    an external event (no toast feedback loop).
+    """
+    events.toast(_LOGGER, source="web", kind=payload.kind, message=payload.message)
+    return {"status": "ok"}

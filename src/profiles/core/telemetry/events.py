@@ -98,6 +98,31 @@ def web_client_left(logger: logging.Logger, *, ip: str, idle_s: int) -> None:
     logger.info('WEB_CLIENT event="disconnected" ip="%s" idle_s=%d', ip, idle_s)
 
 
+def toast(
+    logger: logging.Logger,
+    *,
+    source: str,
+    kind: str,
+    message: str,
+    applied: bool | None = None,
+) -> None:
+    """Emit TOAST — a UI toast notification mirrored into the log (issue #194).
+
+    DEBUG by design ("nice to have, zero noise"): the record reaches
+    ``profiles.log`` only when the config's ``verbose`` is ``DEBUG``.
+    ``source`` distinguishes server-buffered events (``server``, logged at
+    the :meth:`ServerState.record_external_event` choke point) from
+    frontend toasts relayed by ``POST /api/logs/client`` (``web``).
+    ``applied`` is only emitted when known — server handoff events carry
+    it, frontend toasts do not.
+    """
+    parts = [f"source={_quote(source)}", f"kind={_quote(kind)}"]
+    if applied is not None:
+        parts.append(f"applied={_bool(applied)}")
+    parts.append(f"msg={_quote(message)}")
+    logger.debug("TOAST %s", " ".join(parts))
+
+
 def bind_changed(logger: logging.Logger, *, host: str, lan: bool) -> None:
     """Emit BIND_CHANGED — the server rebound between LAN exposure and loopback."""
     logger.info('BIND_CHANGED host="%s" lan=%s', host, "true" if lan else "false")
