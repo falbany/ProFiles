@@ -60,6 +60,23 @@ export async function fetchNotifications(afterId: number): Promise<{ events: Ext
   return res.json();
 }
 
+/**
+ * Mirror a UI toast into the server log at DEBUG (issue #194).
+ *
+ * Fire-and-forget by contract: telemetry must never break the UI, so the
+ * call is not awaited and every failure is swallowed silently — a toast
+ * already served its purpose on screen before this fires.
+ */
+export function postClientLog(message: string, kind: "info" | "error"): void {
+  void fetch("/api/logs/client", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, kind }),
+  }).catch(() => {
+    // Server unreachable — nothing to recover; the log record is best-effort.
+  });
+}
+
 export async function openLogFile(): Promise<{ status: string; message: string }> {
   const res = await fetch("/api/actions/open-log", {
     method: "POST",
