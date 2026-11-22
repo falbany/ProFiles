@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { fetchNotifications } from "../api/client";
 import type { ExternalEvent } from "../api/types";
+import type { ShowToast } from "./useToast";
 
 /** Poll interval for server-side UI events (config handoff toasts). */
 const NOTIFICATION_POLL_MS = 4000;
@@ -20,7 +21,7 @@ const NOTIFICATION_POLL_MS = 4000;
  */
 export function useExternalEvents(deps: {
   onConfigApplied: () => Promise<void>;
-  showToast: (msg: string, kind?: "info" | "error") => void;
+  showToast: ShowToast;
 }): void {
   const lastEventIdRef = useRef(0);
   // Latest deps for the interval callback (avoids stale closures — the
@@ -48,7 +49,10 @@ export function useExternalEvents(deps: {
             // Re-applying is best-effort; the toast still explains what happened.
           }
         }
-        depsRef.current.showToast(evt.message);
+        // mirror: false — the server already logged this event as a TOAST
+        // record at the record_external_event choke point (issue #194);
+        // relaying it back through POST /api/logs/client would duplicate it.
+        depsRef.current.showToast(evt.message, "info", { mirror: false });
       }
     };
     const id = setInterval(() => void poll(), NOTIFICATION_POLL_MS);

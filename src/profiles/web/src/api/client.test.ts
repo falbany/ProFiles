@@ -7,6 +7,7 @@ import {
   fetchConfigContent,
   fetchConfigTemplate,
   fetchNotifications,
+  postClientLog,
   reloadConfig,
   saveConfigFile,
   saveConfigFileAs,
@@ -432,5 +433,40 @@ describe("saveConfigFileAs", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(409);
     expect(err.message).toContain("already exists");
+  });
+});
+
+describe("postClientLog", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("POSTs the toast to /api/logs/client", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    postClientLog("URL copied to clipboard.", "info");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/logs/client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "URL copied to clipboard.", kind: "info" }),
+    });
+  });
+
+  it("swallows fetch rejections — logging must never break the UI", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("server unreachable");
+      }),
+    );
+
+    expect(() => postClientLog("Boom", "error")).not.toThrow();
+
+    // Flush the microtask queue: an unhandled rejection would fail the run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

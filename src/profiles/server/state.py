@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
 from profiles.core.config.io.yaml_io import PRIMARY_CONFIG_NAME, find_config_file
 from profiles.core.config.models import AppConfig
+from profiles.core.telemetry import events
 
 _MAX_EXTERNAL_EVENTS = 50
+
+# Server-side telemetry logger (the "profiles" logger writes profiles.log);
+# same module-level lookup as server/app.py.
+_LOGGER = logging.getLogger("profiles")
 
 
 class BindableServer(Protocol):
@@ -76,6 +82,10 @@ class ServerState:
 
         The buffer is capped so a long-lived server cannot grow it
         without bound even when no client is polling.
+
+        Every event is also mirrored to the logger as a DEBUG TOAST
+        record (issue #194): the single choke point covers all current
+        and future producers (odoc applier, instance handoff route).
         """
         self._external_event_seq += 1
         self._external_events.append(
@@ -89,6 +99,13 @@ class ServerState:
         if len(self._external_events) > _MAX_EXTERNAL_EVENTS:
             excess = len(self._external_events) - _MAX_EXTERNAL_EVENTS
             del self._external_events[:excess]
+        events.toast(
+            _LOGGER,
+            source="server",
+            kind=kind,
+            message=message,
+            applied=config_applied,
+        )
         return self._external_event_seq
 
     def external_events_after(self, after_id: int) -> list[dict[str, Any]]:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -159,3 +160,87 @@ async def test_get_logs_honours_limit(log_state: ServerState) -> None:
         response = await client.get("/api/logs?limit=2")
 
     assert response.json()["total_returned"] == 2
+
+
+# ---------------------------------------------------------------------------
+# POST /api/logs/client — frontend toast mirror (issue #194)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_post_client_log_emits_toast_debug(
+    log_state: ServerState, caplog: pytest.LogCaptureFixture
+) -> None:
+    app = create_app(log_state)
+
+    with caplog.at_level(logging.DEBUG, logger="profiles"):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/logs/client",
+                json={"message": "Failed to reload configuration", "kind": "error"},
+            )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert 'TOAST source=web kind=error msg="Failed to reload configuration"' in caplog.text
+    toast_records = [r for r in caplog.records if r.message.startswith("TOAST")]
+    assert toast_records and toast_records[0].levelname == "DEBUG"
+
+
+@pytest.mark.anyio
+async def test_post_client_log_defaults_to_info_kind(
+    log_state: ServerState, caplog: pytest.LogCaptureFixture
+) -> None:
+    app = create_app(log_state)
+
+    with caplog.at_level(logging.DEBUG, logger="profiles"):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/logs/client", json={"message": "URL copied"})
+
+    assert response.status_code == 200
+    assert 'TOAST source=web kind=info msg="URL copied"' in caplog.text
+
+
+@pytest.mark.anyio
+async def test_post_client_log_rejects_empty_message(log_state: ServerState) -> None:
+    app = create_app(log_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/logs/client", json={"message": ""})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_post_client_log_rejects_oversized_message(log_state: ServerState) -> None:
+    app = create_app(log_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/logs/client", json={"message": "x" * 501})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_post_client_log_rejects_unknown_kind(log_state: ServerState) -> None:
+    app = create_app(log_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/logs/client", json={"message": "hello", "kind": "verbose"}
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_post_client_log_never_buffers_notifications(log_state: ServerState) -> None:
+    """No feedback loop (issue #194): client logs must not enqueue UI events."""
+    app = create_app(log_state)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/logs/client", json={"message": "loop?", "kind": "error"})
+        response = await client.get("/api/notifications")
+
+    assert response.status_code == 200
+    assert response.json()["events"] == []

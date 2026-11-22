@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
 /**
@@ -8,9 +8,21 @@ import { act, cleanup, renderHook } from "@testing-library/react";
  * auto-dismiss, the error toast's longer 10000ms lifetime, the empty-message
  * guard (never blank an existing toast), the pending-timer replacement when a
  * new toast arrives, the immediate `dismissToast` clearing, and the default
- * `info` kind.
+ * `info` kind. Issue #194 adds the profiles.log mirror: every toast is
+ * relayed to `POST /api/logs/client` unless suppressed with `mirror: false`.
  */
 import { useToast } from "./useToast";
+import { postClientLog } from "../api/client";
+
+vi.mock("../api/client", () => ({
+  postClientLog: vi.fn(),
+}));
+
+const postClientLogSpy = vi.mocked(postClientLog);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 afterEach(() => {
   cleanup();
@@ -104,5 +116,34 @@ describe("useToast", () => {
     const { result } = renderHook(() => useToast());
     act(() => result.current.showToast("Default"));
     expect(result.current.toastMessage).toEqual({ message: "Default", kind: "info" });
+  });
+
+  // -----------------------------------------------------------------
+  // profiles.log mirror (issue #194)
+  // -----------------------------------------------------------------
+
+  it("showToast mirrors to the client-log endpoint", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => result.current.showToast("Logged please"));
+    expect(postClientLogSpy).toHaveBeenCalledWith("Logged please", "info");
+  });
+
+  it("error toasts are mirrored with their kind", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => result.current.showToast("Boom", "error"));
+    expect(postClientLogSpy).toHaveBeenCalledWith("Boom", "error");
+  });
+
+  it("mirror is suppressed with { mirror: false } (server-originated toasts)", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => result.current.showToast("Handoff", "info", { mirror: false }));
+    expect(result.current.toastMessage).toEqual({ message: "Handoff", kind: "info" });
+    expect(postClientLogSpy).not.toHaveBeenCalled();
+  });
+
+  it("empty messages are not mirrored", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => result.current.showToast(""));
+    expect(postClientLogSpy).not.toHaveBeenCalled();
   });
 });

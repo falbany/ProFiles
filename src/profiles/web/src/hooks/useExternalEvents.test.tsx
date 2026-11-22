@@ -83,8 +83,8 @@ describe("useExternalEvents", () => {
     expect(fetchNotificationsSpy).toHaveBeenCalledTimes(1);
     expect(fetchNotificationsSpy).toHaveBeenNthCalledWith(1, 0);
     expect(showToast).toHaveBeenCalledTimes(2);
-    expect(showToast).toHaveBeenNthCalledWith(1, "First handoff");
-    expect(showToast).toHaveBeenNthCalledWith(2, "Second handoff");
+    expect(showToast).toHaveBeenNthCalledWith(1, "First handoff", "info", { mirror: false });
+    expect(showToast).toHaveBeenNthCalledWith(2, "Second handoff", "info", { mirror: false });
 
     // The interval re-arms: the next tick polls again (4000ms later).
     fetchNotificationsSpy.mockResolvedValueOnce({ events: [] });
@@ -156,7 +156,7 @@ describe("useExternalEvents", () => {
       await vi.advanceTimersByTimeAsync(4000);
     });
     expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith("Recovered");
+    expect(showToast).toHaveBeenCalledWith("Recovered", "info", { mirror: false });
   });
 
   it("onConfigApplied failures are swallowed; the toast still fires", async () => {
@@ -172,7 +172,7 @@ describe("useExternalEvents", () => {
     });
     expect(onConfigApplied).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledTimes(1);
-    expect(showToast).toHaveBeenCalledWith("Applied anyway");
+    expect(showToast).toHaveBeenCalledWith("Applied anyway", "info", { mirror: false });
   });
 
   it("uses the latest onConfigApplied identity without re-subscribing", async () => {
@@ -204,7 +204,7 @@ describe("useExternalEvents", () => {
     // The LATEST identity is the one invoked.
     expect(latestApply).toHaveBeenCalledTimes(1);
     expect(firstApply).not.toHaveBeenCalled();
-    expect(latestToast).toHaveBeenCalledWith("Handoff");
+    expect(latestToast).toHaveBeenCalledWith("Handoff", "info", { mirror: false });
     setIntervalSpy.mockRestore();
   });
 

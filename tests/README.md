@@ -69,6 +69,7 @@ Highlights:
 | tests/launch/test_{context,creation,resolution}.py | profiles.launch.* | launch context detection, shortcut creation, resolution |
 | tests/packaging/ | (cross-cutting) | entry-point stub, packaging dependency rules, ProFiles.pyw stub |
 | tests/server/test_app.py | profiles.server.app | FastAPI factory, client connection telemetry |
+| tests/server/test_state.py | profiles.server.state | external-event buffer, TOAST DEBUG telemetry (issue #194) |
 | tests/server/routes/test_*.py | profiles.server.routes.* | actions/config/fs/logs/scan/system/workflow endpoints |
 | tests/utils/test_*.py | profiles.utils.* | file_utils, network, search_parser, shortcut |
 | tests/web/test_build{,_hook}.py | profiles.web.* | web build CLI and Briefcase build hook |

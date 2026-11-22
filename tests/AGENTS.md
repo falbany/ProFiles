@@ -92,6 +92,7 @@ tests/
 ├── server/
 │   ├── test_app.py                           # ← server/app.py (FastAPI factory + client telemetry)
 │   ├── test_barcode_integration.py           # cross-cutting server integration (exception)
+│   ├── test_state.py                         # ← server/state.py (external-event buffer + TOAST telemetry, #194)
 │   ├── test_static.py                        # ← server/static.py
 │   └── routes/
 │       ├── test_actions.py                   # ← server/routes/actions.py
@@ -123,7 +124,7 @@ tests/
 - `tests/server/test_barcode_integration.py` — end-to-end server integration (app + state + routes).
 
 **Known coverage gaps (mirrored test file does not exist yet):**
-`core/telemetry/log_viewer.py`, `server/state.py` — `server/state.py` is partially exercised through `tests/server/test_app.py`.
+`core/telemetry/log_viewer.py`.
 
 ## Writing Tests
 
