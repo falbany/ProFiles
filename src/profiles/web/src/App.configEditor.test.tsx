@@ -281,3 +281,75 @@ describe("App config editor integration", () => {
     );
   });
 });
+
+/**
+ * Picker-mode regressions (issue #192): with NO active configuration
+ * (`config_exists: false`), only the first-run auto-prompt opens Create
+ * mode. Every explicit Load/Choose action must open Load mode — previously
+ * the picker inferred its mode from `configExists` and all entry points
+ * rendered Create.
+ */
+describe("App config picker mode (issue #192)", () => {
+  /** A no-config session: per-user default path, no directories. */
+  const NO_CONFIG_OVERRIDES = {
+    config_exists: false,
+    config_path: "C:/Users/op/.profiles/.profiles",
+    directories: [],
+    active_directory: "",
+  };
+
+  it("test_first_run_auto_prompt_opens_create_mode_then_editor_entry_opens_load_mode", async () => {
+    const user = userEvent.setup();
+    fetchConfigSpy.mockResolvedValue(makeAppConfig(NO_CONFIG_OVERRIDES));
+    render(<App />);
+
+    // First-run auto-prompt: Create mode, as before.
+    const firstRun = await screen.findByRole("dialog", { name: /create configuration/i });
+    expect(
+      within(firstRun).getByRole("button", { name: /create configuration/i }),
+    ).toBeTruthy();
+
+    // Dismiss it — nothing else opens until the user acts.
+    await user.click(within(firstRun).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /configuration/i })).toBeNull(),
+    );
+
+    // Editor header "Load config file…": an explicit load action → Load mode.
+    await user.click(screen.getByRole("button", { name: /^config$/i }));
+    const editor = await screen.findByRole("dialog", { name: /configuration editor/i });
+    browseSpy.mockResolvedValue(
+      makeBrowseResult({
+        current_path: "C:/Users/op/.profiles",
+        items: [{ name: "user.profiles", path: "C:/Users/op/.profiles/user.profiles", is_dir: false, is_config: true }],
+      }),
+    );
+    await user.click(within(editor).getByRole("button", { name: /load config file/i }));
+
+    const picker = await screen.findByRole("dialog", { name: /load configuration/i });
+    expect(
+      within(picker).getByRole("button", { name: /^load configuration$/i }),
+    ).toBeTruthy();
+    expect(within(picker).queryByText(/no configuration file was found/i)).toBeNull();
+  });
+
+  it("test_filelist_choose_configuration_opens_load_mode", async () => {
+    const user = userEvent.setup();
+    fetchConfigSpy.mockResolvedValue(makeAppConfig(NO_CONFIG_OVERRIDES));
+    render(<App />);
+
+    // Dismiss the first-run auto-prompt.
+    const firstRun = await screen.findByRole("dialog", { name: /create configuration/i });
+    await user.click(within(firstRun).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /configuration/i })).toBeNull(),
+    );
+
+    // FileList empty-state "Choose configuration": Load mode, not Create.
+    await user.click(screen.getByRole("button", { name: /choose configuration/i }));
+    const picker = await screen.findByRole("dialog", { name: /load configuration/i });
+    expect(
+      within(picker).getByRole("button", { name: /^load configuration$/i }),
+    ).toBeTruthy();
+  });
+});

@@ -369,3 +369,41 @@ async def test_create_refuses_overwrite(config_state: ServerState, tmp_path: Pat
 
     assert response.status_code == 400
     assert "already exists" in response.json()["detail"].lower()
+
+
+@pytest.mark.anyio
+async def test_create_in_user_data_dir_scans_home(
+    tmp_path: Path, isolated_user_home, monkeypatch
+) -> None:
+    """Creating in ~/.profiles writes there and drafts a home scan dir (#191).
+
+    Given: a session with no active directory and a System32-style CWD
+    When: POST /api/config/create targets the per-user data directory
+    Then: the starter lands at ~/.profiles/.profiles and its search_dir
+        points at the home folder — never at the process CWD.
+    """
+    state = ServerState(
+        config=AppConfig(title="Fresh", search_dir="", extensions=(".mttl",)),
+        active_directory=None,
+    )
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    system32 = tmp_path / "System32"
+    system32.mkdir()
+    monkeypatch.chdir(system32)
+
+    data_dir = isolated_user_home / ".profiles"
+    app = create_app(state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/config/create", json={"directory": str(data_dir)})
+
+    assert response.status_code == 200
+    created = data_dir / ".profiles"
+    assert created.exists()
+    assert response.json()["config_path"] == str(created)
+    search_line = next(
+        line
+        for line in created.read_text(encoding="utf-8").splitlines()
+        if line.lstrip().startswith("search_dir:")
+    )
+    assert str(isolated_user_home) in search_line
+    assert "System32" not in search_line

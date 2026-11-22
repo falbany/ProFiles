@@ -270,11 +270,17 @@ def default_log_path() -> Path:
     ``CWD=/`` (read-only on macOS), so a CWD-relative log path crashes
     with ``OSError: [Errno 30]`` at the first log write.
 
+    Delegates to :func:`profiles.core.paths.user_data_dir` so the log
+    location and the per-user default configuration (issue #191) share
+    one source of truth and cannot drift apart.
+
     Returns:
         Absolute path under the user folder in a dedicated ``.profiles``
         directory (matching the ``.profiles`` config-file convention).
     """
-    return Path.home() / ".profiles" / "profiles.log"
+    from profiles.core.paths import user_data_dir
+
+    return user_data_dir() / "profiles.log"
 
 
 def configure_logger(

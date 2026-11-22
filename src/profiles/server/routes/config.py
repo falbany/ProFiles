@@ -8,10 +8,11 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from profiles.core.config.diagnostics import collect_config_issues
-from profiles.core.config.io.yaml_io import CONFIG_FILE_NAMES, content_hash, write_text_atomic
+from profiles.core.config.io.yaml_io import content_hash, is_config_file_name, write_text_atomic
 from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
+from profiles.core.paths import default_search_directory
 from profiles.launch.creation import propose_creation
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
@@ -68,9 +69,11 @@ def _is_config_path(path: Path) -> bool:
     ``BACKUP.PROFILES`` (its whitelist checks ``filename.lower()``), so the
     apply step that re-reads what was just written must accept it too — a
     case-sensitive comparison here turned a successful save-as into a 400
-    with the file already on disk (branch review, issue #95 wave).
+    with the file already on disk (branch review, issue #95 wave). The
+    predicate lives in the core so the desktop odoc applier's skip guard
+    (issue #193) stays in lockstep with what this apply step accepts.
     """
-    return path.name.lower().endswith(CONFIG_FILE_NAMES)
+    return is_config_file_name(path.name)
 
 
 def _is_safe_filename(filename: str) -> bool:
@@ -105,7 +108,10 @@ def _config_response(state: ServerState) -> dict:
         elif available_dirs:
             state.active_directory = Path(available_dirs[0])
         else:
-            state.active_directory = Path.cwd()
+            # Empty-config fallback (issue #191): a launcher-style start
+            # must pre-fill the picker with the home folder, never
+            # System32 or the interpreter directory the CWD happens to be.
+            state.active_directory = default_search_directory()
 
     if not available_dirs:
         available_dirs = [str(state.active_directory)]
@@ -290,7 +296,13 @@ async def create_config_endpoint(payload: CreateConfigRequest, request: Request)
             status_code=400, detail=f"Configuration already exists at {target_config}"
         )
 
-    result = propose_creation(target_dir)
+    result = propose_creation(
+        target_dir,
+        # The starter's search_dir: the session's active directory, or the
+        # policy default (home for launcher-style starts) — never the
+        # process CWD, which a Start-Menu launch puts in System32 (#191).
+        search_dir=state.active_directory or default_search_directory(),
+    )
     if result.status in {"SKIPPED", "FAILED"}:
         raise HTTPException(status_code=400, detail=result.message)
 
@@ -313,7 +325,10 @@ async def template_config_endpoint(request: Request) -> dict:
     directory so the rendered draft scans where the session points.
     """
     state: ServerState = request.app.state.server_state
-    cwd = str(state.active_directory) if state.active_directory else str(Path.cwd())
+    # default_search_directory over a bare CWD (issue #191): an unset
+    # active directory under a launcher start resolves to the home folder
+    # instead of System32 / the interpreter directory.
+    cwd = str(default_search_directory(state.active_directory))
     return {
         "content": STARTER_CONFIG_TEMPLATE.format(cwd=cwd),
         "filename": ".profiles",

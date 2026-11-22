@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-user configuration path policy** (issue #191): launcher-style
+  launches (Start Menu, pinned taskbar, `.desktop` entries — any process
+  whose CWD is System32, the home folder, or an install/runtime directory)
+  no longer propose creating `.profiles` in a system directory. The
+  proposal targets `~/.profiles/.profiles` (next to `profiles.log`), every
+  later launch loads that per-user default automatically, terminal/project
+  launches keep their current behavior, and no code path ever proposes an
+  existing directory as the configuration file. New
+  `profiles.core.paths` module is the single source of truth for these
+  user-level locations.
 - **Windows installer polish**: the MSI now creates a desktop shortcut, asks
   per-user vs per-machine at install time, and shows a proper finish page
   ("Launch ProFiles" checkbox plus Documentation / What's new links).
@@ -19,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OPTION_ADD_TO_PATH=0`.
 - **Branded installer**: the welcome dialog and page banners now use the
   ProFiles brand art (indigo-violet gradient) instead of the stock WiX look.
+
+### Fixed
+
+- **Config picker mode follows the entry point** (issue #192): with no
+  active configuration, the editor's **Load config file…** and the file
+  list's **Choose configuration** buttons now open the picker in Load
+  mode; only the first-run auto-prompt still opens Create mode.
 
 ### Changed
 

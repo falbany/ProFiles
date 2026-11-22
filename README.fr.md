@@ -220,7 +220,7 @@ ProFiles --config "/path/to/.profiles"
 
 ## 🛠 Configuration
 
-ProFiles est piloté par un fichier **YAML** `.profiles`, recherché en remontant l'arborescence du système de fichiers.
+ProFiles est piloté par un fichier **YAML** `.profiles`, recherché en remontant l'arborescence du système de fichiers. Les lancements par lanceur (menu Démarrer, dock, entrées `.desktop`) ignorent la recherche dans l'arborescence et chargent le défaut par utilisateur `~/.profiles/.profiles` s'il existe ; sans fichier trouvé, la proposition de création cible le dossier du projet — ou `~/.profiles` pour un lancement par lanceur — afin de ne jamais écrire dans un répertoire système.
 
 ```yaml
 # ProFiles Configuration — Format YAML

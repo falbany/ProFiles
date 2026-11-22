@@ -55,3 +55,20 @@ configs:
     config_file = tmp_path / ".profiles"
     config_file.write_text(dedent(config_content))
     return config_file
+
+
+@pytest.fixture(scope="function")
+def isolated_user_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the per-user data dir at a temp home (issue #191 hermeticity).
+
+    Every path helper in :mod:`profiles.core.paths` resolves the user
+    home through ``Path.home()``; patching it makes ``user_data_dir``,
+    ``user_config_path``, ``find_user_config``, the uninformative-directory
+    home check and the ``default_search_directory`` fallback all see the
+    same fake home, so tests never depend on (or pollute) the developer's
+    real ``~/.profiles`` folder.  Returns the fake home itself.
+    """
+    user_home = tmp_path / "uhome"
+    user_home.mkdir()
+    monkeypatch.setattr("profiles.core.paths.Path.home", lambda: user_home)
+    return user_home

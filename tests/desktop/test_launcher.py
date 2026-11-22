@@ -114,16 +114,51 @@ class TestDocumentApplier:
         assert events[-1]["config_applied"] is True
         assert "b.profiles" in events[-1]["message"]
 
-    def test_rejects_and_reports_a_non_config_file(self, tmp_path) -> None:
+    def test_skips_a_folder_document_without_events(self, tmp_path) -> None:
+        """A folder opened with the running app is not a config apply (#193).
+
+        macOS delivers the opened folder as an odoc document too; launch
+        resolution skips it and falls back to the directory search, so the
+        running-window applier must not report a failed config apply —
+        no toast, no state change.
+        """
+        state = ServerState(config=AppConfig(title="t"))
+        folder = tmp_path / "session"
+        folder.mkdir()
+        (folder / "a.profiles").write_text("defaults:\n  title: A\n", encoding="utf-8")
+
+        _make_document_applier(state)([str(folder)])  # must not raise
+
+        assert state.external_events_after(0) == []
+        assert state.config_path is None
+
+    def test_skips_a_non_config_file_silently(self, tmp_path) -> None:
+        """A non-config document is skipped like launch resolution does (#193)."""
         state = ServerState(config=AppConfig(title="t"))
         junk = tmp_path / "junk.txt"
         junk.write_text("nope", encoding="utf-8")
 
         _make_document_applier(state)([str(junk)])  # must not raise
 
+        assert state.external_events_after(0) == []
+        assert state.config_path is None
+
+    def test_applies_a_case_variant_config_name(self, tmp_path) -> None:
+        """The skip guard accepts exactly what the apply step accepts.
+
+        Case-insensitive like the load/save endpoints (issue #95 wave): a
+        ``ConfigB.PROFILES`` document applies instead of being skipped.
+        """
+        state = ServerState(config=AppConfig(title="t"))
+        config = tmp_path / "ConfigB.PROFILES"
+        config.write_text("defaults:\n  title: B\n", encoding="utf-8")
+
+        _make_document_applier(state)([str(config)])  # must not raise
+
+        assert state.config_path == config.resolve()
         events = state.external_events_after(0)
-        assert events[-1]["kind"] == "config_handoff_failed"
-        assert events[-1]["config_applied"] is False
+        assert events[-1]["kind"] == "config_handoff"
+        assert events[-1]["config_applied"] is True
 
     def test_reports_a_missing_file_without_raising(self, tmp_path) -> None:
         state = ServerState(config=AppConfig(title="t"))

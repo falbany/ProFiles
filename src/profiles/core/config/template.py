@@ -32,9 +32,15 @@ STARTER_CONFIG_TEMPLATE = """# ProFiles — Starter Configuration
 #   names win first (".profiles", then ".profiles.yaml"/".profiles.yml");
 #   when none of them exists anywhere, any "*.profiles"-style file (e.g.
 #   "a.profiles", "b.profiles") is accepted — several matches are sorted
-#   ascending and the first one is launched. If nothing is found at all,
-#   defaults are used (identical to this starter). An explicit file can
-#   be passed with --config (see CLI FLAGS).
+#   ascending and the first one is launched. The CWD tree is skipped when
+#   the CWD carries no launch information (System32, the home folder or
+#   the interpreter/app install root — Start-Menu and launcher starts);
+#   in that case, and whenever the tree search finds nothing, the
+#   per-user default "~/.profiles/.profiles" is loaded when it exists
+#   (issue #191). If nothing is found at all, defaults are used and a
+#   starter is proposed at the project folder, or at
+#   "~/.profiles/.profiles" for launcher-style starts. An explicit file
+#   can be passed with --config (see CLI FLAGS).
 #
 # SYNTAX
 #   * YAML format; all keys are case-insensitive.
