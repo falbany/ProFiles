@@ -256,13 +256,14 @@ describe("App command palette", () => {
     );
   });
 
-  it("is part of the shortcuts sheet, which now reads from the catalog", async () => {
+  it("also opens from the classic '?' and Ctrl+/ bindings", async () => {
     await launchWith([]);
 
     fireEvent.keyDown(window, { key: "?" });
+    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
 
-    const sheet = await screen.findByRole("dialog", { name: "Keyboard Shortcuts" });
-    expect(sheet).toHaveTextContent("Open the command palette");
-    expect(sheet).toHaveTextContent("Ctrl + Shift + P");
+    await userEvent.keyboard("{Escape}");
+    fireEvent.keyDown(window, { key: "/", ctrlKey: true });
+    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
   });
 });

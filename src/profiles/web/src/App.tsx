@@ -38,7 +38,6 @@ import { InitErrorPanel } from "./components/InitErrorPanel";
 import { LanModal } from "./components/LanModal";
 import { SearchBar } from "./components/SearchBar";
 import { LogViewerModal } from "./components/LogViewerModal";
-import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
 import type { ConfigPickerMode } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
@@ -78,7 +77,6 @@ export default function App() {
   const [prefilterQuery, setPrefilterQuery] = useState("");
 
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
-  const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const { toastMessage, showToast, dismissToast } = useToast();
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
@@ -842,7 +840,6 @@ export default function App() {
   // into the hidden UI behind the dialog.
   const anyModalOpen = Boolean(
     contextMenuPos ||
-      showShortcuts ||
       showDirPicker ||
       configPickerMode !== null ||
       showPropertiesModal ||
@@ -910,7 +907,6 @@ export default function App() {
     onGenerateBarcode: handleGenerateBarcode,
     onRequestLaunchWithArgs: requestLaunchWithArgs,
     setShowLogViewer,
-    setShowShortcuts,
     setShowTimerModal,
     setShowConfigEditor,
     setShowLanModal: setLanModalOpen,
@@ -920,7 +916,6 @@ export default function App() {
   });
   const onEscape = () => {
     setContextMenuPos(null);
-    setShowShortcuts(false);
     setShowLogViewer(false);
     setShowTimerModal(false);
     setShowCommandPalette(false);
@@ -1041,7 +1036,6 @@ export default function App() {
         // Config LOADING no longer lives here (issue #101): the editor's
         // "Load config file…" raises the picker from inside the editor.
         onOpenConfig={() => setShowConfigEditor(true)}
-        onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
         onExport={handleExport}
         exportDisabled={scan.files.length === 0 || scan.scanning}
@@ -1116,13 +1110,6 @@ export default function App() {
         onProperties={handleProperties}
         onClearFile={handleClearFile}
         onGenerateBarcode={handleGenerateBarcode}
-      />
-
-      {/* Keyboard Shortcuts — a view of the command catalog */}
-      <ShortcutsModal
-        isOpen={showShortcuts}
-        onClose={() => setShowShortcuts(false)}
-        commands={commands}
       />
 
       {/* File Properties Modal */}

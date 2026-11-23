@@ -3,8 +3,9 @@
  * trigger, described once and consumed three ways:
  *
  * - `useGlobalShortcuts` dispatches key presses to the command bound to them;
- * - `ShortcutsModal` lists the commands that have a key binding;
- * - `CommandPalette` lists the palette-visible ones and runs them.
+ * - `CommandPalette` lists the palette-visible ones (with their bindings) and
+ *   runs them — it is also the keyboard-shortcuts reference, so the sheet and
+ *   the runner are one surface.
  *
  * The catalog is rebuilt on every render: each `run` closes over the deps of
  * that render. The key dispatcher deliberately captures the list it sees when
@@ -71,7 +72,6 @@ export interface AppCommandsDeps {
   onRequestLaunchWithArgs: (file: ScannedFileItem) => void;
 
   setShowLogViewer: Dispatch<SetStateAction<boolean>>;
-  setShowShortcuts: Dispatch<SetStateAction<boolean>>;
   setShowTimerModal: Dispatch<SetStateAction<boolean>>;
   setShowConfigEditor: Dispatch<SetStateAction<boolean>>;
   setShowLanModal: Dispatch<SetStateAction<boolean>>;
@@ -420,18 +420,17 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       run: deps.onToggleTheme,
     },
     {
-      id: "view.shortcuts",
-      title: "Show keyboard shortcuts",
-      group: "view",
-      keys: [{ key: "?" }, { key: "/", ctrl: true }],
-      enabled: true,
-      run: () => deps.setShowShortcuts((prev) => !prev),
-    },
-    {
+      // "?" is the classic cheatsheet key — it lands here, on the palette,
+      // which lists every command WITH its binding: the shortcuts sheet and
+      // the runner are one surface.
       id: "view.commandPalette",
       title: "Open the command palette",
       group: "view",
-      keys: [{ key: "p", ctrl: true, shift: true }],
+      keys: [
+        { key: "p", ctrl: true, shift: true },
+        { key: "?" },
+        { key: "/", ctrl: true },
+      ],
       enabled: true,
       run: () => deps.setShowCommandPalette(true),
     },

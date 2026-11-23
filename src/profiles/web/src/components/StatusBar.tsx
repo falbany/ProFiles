@@ -1,5 +1,5 @@
 import Tooltip from "./Tooltip";
-import { Activity, Command, Download, FileText, Globe, Keyboard, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { Activity, Command, Download, FileText, Globe, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
@@ -11,7 +11,6 @@ interface StatusBarProps {
   onToggleTheme: () => void;
   onOpenLog: () => void;
   onOpenConfig: () => void;
-  onShowShortcuts: () => void;
   /** Open the command palette; renders the button only when set. */
   onOpenCommandPalette?: () => void;
   onReloadConfig?: () => void;
@@ -34,7 +33,6 @@ export function StatusBar({
   onToggleTheme,
   onOpenLog,
   onOpenConfig,
-  onShowShortcuts,
   onOpenCommandPalette,
   onReloadConfig,
   onExport,
@@ -121,18 +119,6 @@ export function StatusBar({
           </button>
           </Tooltip>
         )}
-
-        {/* Shortcuts Button */}
-        <Tooltip text="Keyboard shortcuts (?)" block={false}>
-        <button
-          onClick={onShowShortcuts}
-
-          className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
-        >
-          <Keyboard className="h-3 w-3" />
-          <span>Shortcuts</span>
-        </button>
-        </Tooltip>
 
         {/* Log Viewer Button */}
         <Tooltip text="Open the application log viewer" block={false}>

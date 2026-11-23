@@ -400,8 +400,8 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
         run: spies.properties ?? vi.fn(),
       },
       {
-        id: "view.shortcuts",
-        title: "Shortcuts",
+        id: "view.commandPalette",
+        title: "Command palette",
         group: "view",
         keys: [{ key: "?" }],
         enabled: true,
@@ -454,7 +454,7 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
     expect(deps.showToast).toHaveBeenCalledWith("Barcode filter: p");
   });
 
-  it("typed '?' does not open the shortcuts modal either", () => {
+  it("typed '?' does not open the command palette either", () => {
     const setShowShortcuts = vi.fn();
     const shortcuts = makeShortcutsDeps(makeCommands({ setShowShortcuts }));
     render(<CrosstalkHarness b={deps} s={shortcuts} />);

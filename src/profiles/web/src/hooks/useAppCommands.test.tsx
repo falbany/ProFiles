@@ -67,7 +67,6 @@ function makeDeps(overrides: Partial<AppCommandsDeps> = {}): AppCommandsDeps {
     onGenerateBarcode: vi.fn(),
     onRequestLaunchWithArgs: vi.fn(),
     setShowLogViewer: vi.fn(),
-    setShowShortcuts: vi.fn(),
     setShowTimerModal: vi.fn(),
     setShowConfigEditor: vi.fn(),
     setShowLanModal: vi.fn(),
@@ -167,7 +166,6 @@ describe("useAppCommands — catalog guarantees", () => {
       "directory.home",
       "view.logViewer",
       "view.theme",
-      "view.shortcuts",
       "view.commandPalette",
       "config.reload",
       "config.editor",
@@ -265,11 +263,20 @@ describe("useAppCommands — action shortcuts", () => {
 
     press("l", { ctrlKey: true, shiftKey: true });
     expect(toggled(deps.setShowLogViewer)).toEqual([false, true]);
+  });
+
+  it("opens the palette from every one of its bindings — ?, Ctrl+/ and Ctrl+Shift+P", () => {
+    installFixture();
+    const { deps, press } = mount();
 
     press("?");
     press("/", { ctrlKey: true });
-    expect(deps.setShowShortcuts).toHaveBeenCalledTimes(2);
-    expect(toggled(deps.setShowShortcuts)).toEqual([false, true]);
+    press("p", { ctrlKey: true, shiftKey: true });
+
+    expect(deps.setShowCommandPalette).toHaveBeenCalledTimes(3);
+    for (const call of (deps.setShowCommandPalette as Mock).mock.calls) {
+      expect(call[0]).toBe(true); // open, never toggle closed
+    }
   });
 
   it("keeps Ctrl+Shift+K free — Shift disambiguates K, L, T and B", () => {
