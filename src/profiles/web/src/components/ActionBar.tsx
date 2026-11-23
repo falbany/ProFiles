@@ -1,5 +1,6 @@
 import { Play, X, XCircle } from "lucide-react";
 import { ScanStatusStrip } from "./ScanStatusStrip";
+import type { ScanProgress } from "../hooks/useScanProgress";
 
 /** Shape of the transient status message exchanged with App. */
 export interface ActionBarToast {
@@ -20,6 +21,11 @@ interface ActionBarProps {
   totalCount?: number;
   /** Directory the running scan targets; shown compacted in the scan status. */
   scanningDirectory?: string;
+  /** True while the startup (initial-load) scan is in flight; the strip
+   * shows then too, since `scanning` stays false during it (#152). */
+  initialScanActive?: boolean;
+  /** Live SSE progress for the running scan; null-safe (degraded = elapsed-only). */
+  scanProgress?: ScanProgress;
   /** Transient status message; rendered centered above the bar while set. */
   toastMessage?: ActionBarToast | null;
   /** Dismiss the current toast; only used by the inline button on error toasts. */
@@ -33,6 +39,8 @@ export function ActionBar({
   fileCount,
   totalCount,
   scanningDirectory = "",
+  initialScanActive = false,
+  scanProgress,
   toastMessage,
   onToastDismiss,
 }: ActionBarProps) {
@@ -76,7 +84,13 @@ export function ActionBar({
       )}
 
       <div className="flex min-w-0 items-center gap-3">
-        {scanning && <ScanStatusStrip directory={scanningDirectory} />}
+        {(scanning || initialScanActive) && (
+          <ScanStatusStrip
+            directory={scanningDirectory}
+            progress={scanProgress?.progress ?? null}
+            inProgress={scanProgress?.inProgress ?? false}
+          />
+        )}
         {totalCount !== undefined && totalCount !== fileCount && (
           <span data-testid="action-bar-count" className="text-ink-muted">
             Showing {fileCount} of {totalCount}
