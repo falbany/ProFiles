@@ -368,6 +368,7 @@ def _run_scan_pipeline(
     worker: Callable[[Path, str, str], T],
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
+    on_progress: Callable[[int], None] | None = None,
 ) -> list[T]:
     """Shared scan → filter → process orchestration for all ``scan_*`` functions.
 
@@ -389,6 +390,8 @@ def _run_scan_pipeline(
         worker: Per-file processor ``(file_path, display_path, full_suffix) -> T``.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
+        on_progress: Called with the running count of filter-passing \
+candidates during collection. Must not raise.
 
     Returns:
         Processed results in scan order (failing files are skipped).
@@ -408,8 +411,11 @@ def _run_scan_pipeline(
         results: list[T] = []
         error_count = 0
         try:
-            # Collect all files first (needed for parallel processing)
-            files_to_process = list(
+            # Collect all files first (needed for parallel processing);
+            # the counting loop reports filter-passing candidates as they
+            # are yielded so a caller can surface live progress (#152).
+            files_to_process: list[T] = []
+            for count, candidate in enumerate(
                 _scan_and_filter(
                     directories,
                     extension=extension,
@@ -419,8 +425,12 @@ def _run_scan_pipeline(
                     exclude_files=exclude_files,
                     config=config,
                     recursive_override=recursive_override,
-                )
-            )
+                ),
+                start=1,
+            ):
+                files_to_process.append(candidate)
+                if on_progress is not None:
+                    on_progress(count)
 
             if files_to_process:
                 # Use the thread pool at/above the threshold, inline below
@@ -548,6 +558,7 @@ def scan_and_process_dynamic(
     log_metrics: bool = False,
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
+    on_progress: Callable[[int], None] | None = None,
 ) -> list[ScannedFileDynamic]:
     """Scan directory(ies) with dynamic column extraction.
 
@@ -567,6 +578,8 @@ def scan_and_process_dynamic(
         config: Optional AppConfig to check scan_metrics setting.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
+        on_progress: Called with the running count of filter-passing \
+candidates during collection. Must not raise.
 
     Returns:
         List of ``ScannedFileDynamic`` entries with column values (files
@@ -588,4 +601,5 @@ def scan_and_process_dynamic(
         worker=dynamic_worker,
         config=config,
         recursive_override=recursive_override,
+        on_progress=on_progress,
     )

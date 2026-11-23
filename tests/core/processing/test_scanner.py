@@ -715,3 +715,32 @@ class TestScanPipelineSharedOrchestration:
 
         assert [r.filename for r in legacy] == [d.column_values["File"] for d in dynamic]
         assert [r.path for r in legacy] == [d.path for d in dynamic]
+
+
+class TestDynamicScanProgress:
+    """Tests for the optional on_progress callback (issue #152)."""
+
+    def test_scan_and_process_dynamic_reports_progress(self, tmp_path: Path) -> None:
+        """on_progress receives monotonically rising counts of filter-passing
+        candidates; the final value equals the returned result count."""
+        scan_dir = tmp_path / "prog"
+        scan_dir.mkdir()
+        for i in range(3):
+            (scan_dir / f"f{i}.mttl").write_text("x")
+        (scan_dir / "skip.txt").write_text("x")
+
+        seen: list[int] = []
+        results = scan_and_process_dynamic(
+            str(scan_dir), extension=".mttl", on_progress=seen.append
+        )
+
+        assert seen == sorted(seen)
+        assert len(seen) >= 1
+        assert seen[-1] == len(results) == 3  # only .mttl candidates counted
+
+    def test_scan_and_process_dynamic_without_progress_callback(self, tmp_path: Path) -> None:
+        """Default (None) is a no-op: same results, no callback."""
+        scan_dir = tmp_path / "prog"
+        scan_dir.mkdir()
+        (scan_dir / "a.mttl").write_text("x")
+        assert scan_and_process_dynamic(str(scan_dir), extension=".mttl")
