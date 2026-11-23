@@ -17,6 +17,7 @@ import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
 import { resolveSessionTheme } from "./utils/theme";
 import { mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
+import { useScanProgress } from "./hooks/useScanProgress";
 import { useToast } from "./hooks/useToast";
 import { useExternalEvents } from "./hooks/useExternalEvents";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
@@ -172,6 +173,16 @@ export default function App() {
       setSelectedIndex(0);
     },
   });
+
+  /**
+   * True while the startup (initial-load) scan is in flight (#152): the
+   * controller's `scanning` flag deliberately stays false during it (the
+   * init panel owns that feedback), but the strip should still show live
+   * progress for what is usually the session's longest scan. Drives the
+   * strip gate together with `scan.scanning` and opens the SSE stream.
+   */
+  const [initialScanActive, setInitialScanActive] = useState(false);
+  const scanProgress = useScanProgress(scan.scanning || initialScanActive);
 
   /**
    * Barcode scanner mode (issue #148 PR 4): the mode state + buffer, the
@@ -416,6 +427,7 @@ export default function App() {
     }
 
     if (initialDir) {
+      setInitialScanActive(true);
       try {
         await scan.runScan(scanGeneration, {
           directory: initialDir,
@@ -425,6 +437,8 @@ export default function App() {
         });
       } catch (scanErr: any) {
         if (scan.isCurrentScan(scanGeneration)) showToast(`Initial scan failed: ${scanErr.message}`, "error");
+      } finally {
+        setInitialScanActive(false);
       }
     }
   };
@@ -1015,6 +1029,8 @@ export default function App() {
         onExecute={handleExecute}
         scanning={scan.scanning}
         scanningDirectory={activeDirectory}
+        initialScanActive={initialScanActive}
+        scanProgress={scanProgress}
         hasSelection={visibleFiles.length > 0}
         fileCount={visibleFiles.length}
         totalCount={scan.totalCount}

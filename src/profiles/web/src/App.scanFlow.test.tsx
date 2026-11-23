@@ -594,4 +594,37 @@ describe("App scan flow (characterization)", () => {
     // trial must not steal the stored preference).
     expect(localStorage.getItem("profiles-theme")).toBe("dark");
   });
+
+  it("shows the scan strip during the initial load and removes it after (#152)", async () => {
+    // The hook reads the SSE stream only for counts; the strip's visibility
+    // is client state (initialScanActive). A bare inert stub satisfies the
+    // EventSource existence check without asserting on stream traffic here.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).EventSource = class {
+      close() {}
+      addEventListener() {}
+    };
+
+    // Defer the initial scan so `initialScanActive` is provably true while
+    // it is in flight.
+    let resolveScan!: (v: { count: number; directory: string }) => void;
+    executeScanSpy.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          resolveScan = res;
+        }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    // `scanning` stays false during the initial load — only the new
+    // initialScanActive gate makes the strip visible here.
+    expect(screen.getByTestId("scan-status-strip")).toBeTruthy();
+
+    await act(async () => {
+      resolveScan({ count: 0, directory: "C:/data" });
+    });
+    await waitFor(() => expect(screen.queryByTestId("scan-status-strip")).toBeNull());
+  });
 });
