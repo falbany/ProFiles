@@ -1,5 +1,5 @@
 import Tooltip from "./Tooltip";
-import { Activity, Download, FileText, Globe, Keyboard, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
+import { Activity, Command, Download, FileText, Globe, Moon, Network, RefreshCw, Settings, Sun, User } from "lucide-react";
 import type { SystemInfo } from "../api/types";
 
 type Language = "en" | "fr";
@@ -11,7 +11,8 @@ interface StatusBarProps {
   onToggleTheme: () => void;
   onOpenLog: () => void;
   onOpenConfig: () => void;
-  onShowShortcuts: () => void;
+  /** Open the command palette; renders the button only when set. */
+  onOpenCommandPalette?: () => void;
   onReloadConfig?: () => void;
   /** Export the current results as CSV; the button renders only when set. */
   onExport?: () => void;
@@ -32,7 +33,7 @@ export function StatusBar({
   onToggleTheme,
   onOpenLog,
   onOpenConfig,
-  onShowShortcuts,
+  onOpenCommandPalette,
   onReloadConfig,
   onExport,
   exportDisabled = false,
@@ -105,17 +106,19 @@ export function StatusBar({
 
         <span className="text-ink-faint">|</span>
 
-        {/* Shortcuts Button */}
-        <Tooltip text="Keyboard shortcuts (?)" block={false}>
-        <button
-          onClick={onShowShortcuts}
-
-          className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
-        >
-          <Keyboard className="h-3 w-3" />
-          <span>Shortcuts</span>
-        </button>
-        </Tooltip>
+        {/* Command Palette Button — every action is reachable from here (#224) */}
+        {onOpenCommandPalette && (
+          <Tooltip text="Command palette (Ctrl+Shift+P)" block={false}>
+          <button
+            onClick={onOpenCommandPalette}
+            aria-keyshortcuts="Control+Shift+P"
+            className="focus-ring flex items-center gap-1 text-ink-muted hover:text-ink"
+          >
+            <Command className="h-3 w-3" />
+            <span>Commands</span>
+          </button>
+          </Tooltip>
+        )}
 
         {/* Log Viewer Button */}
         <Tooltip text="Open the application log viewer" block={false}>

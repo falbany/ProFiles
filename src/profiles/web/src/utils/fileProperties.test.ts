@@ -3,6 +3,7 @@ import type { FileMetadata } from "../api/types";
 import {
   buildPropertiesSummary,
   compactPath,
+  fileExtension,
   formatFileSize,
   humanizeTimestamp,
   parentDirectory,
@@ -42,6 +43,18 @@ describe("parentDirectory", () => {
 
   it("returns an empty string for a bare filename", () => {
     expect(parentDirectory("file.txt")).toBe("");
+  });
+});
+
+describe("fileExtension", () => {
+  it("keeps the leading dot", () => {
+    expect(fileExtension("report.log")).toBe(".log");
+    // Only the last suffix counts, exactly like the context menu did.
+    expect(fileExtension("archive.tar.gz")).toBe(".gz");
+  });
+
+  it("returns an empty string without an extension", () => {
+    expect(fileExtension("README")).toBe("");
   });
 });
 

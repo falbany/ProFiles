@@ -63,3 +63,20 @@ describe("StatusBar LAN toggle", () => {
     expect(screen.queryByRole("button", { name: /lan/i })).toBeNull();
   });
 });
+
+describe("StatusBar command palette button", () => {
+  it("forwards the click and advertises the shortcut", async () => {
+    const onOpenCommandPalette = vi.fn();
+    render(<StatusBar {...baseProps()} onOpenCommandPalette={onOpenCommandPalette} />);
+
+    const button = screen.getByRole("button", { name: /commands/i });
+    expect(button).toHaveAttribute("aria-keyshortcuts", "Control+Shift+P");
+    await userEvent.click(button);
+    expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders no button without a handler", () => {
+    render(<StatusBar {...baseProps()} />);
+    expect(screen.queryByRole("button", { name: /commands/i })).toBeNull();
+  });
+});

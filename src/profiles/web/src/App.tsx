@@ -20,11 +20,14 @@ import { useScanController } from "./hooks/useScanController";
 import { useToast } from "./hooks/useToast";
 import { useExternalEvents } from "./hooks/useExternalEvents";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useAppCommands } from "./hooks/useAppCommands";
+import { useRecentCommands } from "./hooks/useRecentCommands";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { useBarcodeMode } from "./hooks/useBarcodeMode";
 import { useTheme } from "./hooks/useTheme";
 import { useDragDropConfig } from "./hooks/useDragDropConfig";
 import { ActionBar } from "./components/ActionBar";
+import { CommandPalette } from "./components/CommandPalette";
 import { ConfigEditorModal } from "./components/ConfigEditorModal";
 import { ContextMenu, type ContextMenuPosition } from "./components/ContextMenu";
 import { DirectoryPickerModal } from "./components/DirectoryPickerModal";
@@ -35,10 +38,10 @@ import { InitErrorPanel } from "./components/InitErrorPanel";
 import { LanModal } from "./components/LanModal";
 import { SearchBar } from "./components/SearchBar";
 import { LogViewerModal } from "./components/LogViewerModal";
-import { ShortcutsModal } from "./components/ShortcutsModal";
 import { LoadConfigModal } from "./components/LoadConfigModal";
 import type { ConfigPickerMode } from "./components/LoadConfigModal";
 import { FilePropertiesModal } from "./components/FilePropertiesModal";
+import { LaunchArgsDialog } from "./components/LaunchArgsDialog";
 import { BarcodeModal } from "./components/BarcodeModal";
 import { CameraBarcodeModal } from "./components/CameraBarcodeModal";
 import { SingleMatchPromptModal } from "./components/SingleMatchPromptModal";
@@ -49,6 +52,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { exportToCsv } from "./utils/exportCsv";
 import { pathToFileUri } from "./utils/fileUri";
 import { matchFilter } from "./utils/searchSyntax";
+import { parentDirectory } from "./utils/fileProperties";
 
 /** Debounce for the client-side prefilter derivation while typing (lane #1). */
 const PREFILTER_DEBOUNCE_MS = 120;
@@ -73,7 +77,6 @@ export default function App() {
   const [prefilterQuery, setPrefilterQuery] = useState("");
 
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
-  const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const { toastMessage, showToast, dismissToast } = useToast();
   const [reloading, setReloading] = useState<boolean>(false);
   const [language, setLanguage] = useState<"en" | "fr">("en");
@@ -105,6 +108,13 @@ export default function App() {
   const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
   /** LAN access modal visibility — one modal for enable and disable. */
   const [lanModalOpen, setLanModalOpen] = useState(false);
+
+  /** Command palette visibility (issue #224). */
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  /** File awaiting command-line arguments ("Launch with arguments…"). */
+  const [argsFile, setArgsFile] = useState<ScannedFileItem | null>(null);
+  /** Recently used palette commands, newest first. */
+  const { recentIds, touch: touchRecentCommand } = useRecentCommands();
 
   // Workflow Modal state
   const [workflowLaunchParams, setWorkflowLaunchParams] = useState<{
@@ -571,8 +581,21 @@ export default function App() {
   };
 
   // Context menu actions
-  const handleLaunchWithArgs = async (file: ScannedFileItem, args: string) => {
-    handleLaunch(file, args);
+  /** "Launch with arguments…" (context menu, command palette): ask first,
+   *  then launch through the normal path so hooks still apply. */
+  const requestLaunchWithArgs = (file: ScannedFileItem) => setArgsFile(file);
+
+  /** Copy the folder containing *file* (context menu, command palette). */
+  const handleCopyDirectory = async (file: ScannedFileItem) => {
+    const dirPath = parentDirectory(file.path);
+    try {
+      // Await the write: clipboard failures (permissions, insecure context)
+      // must not report success (issue #35).
+      await navigator.clipboard.writeText(dirPath);
+      showToast(`Copied: ${dirPath}`);
+    } catch (err: unknown) {
+      showToast(`Copy failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
   };
 
   const handleReveal = async (file: ScannedFileItem) => {
@@ -817,7 +840,6 @@ export default function App() {
   // into the hidden UI behind the dialog.
   const anyModalOpen = Boolean(
     contextMenuPos ||
-      showShortcuts ||
       showDirPicker ||
       configPickerMode !== null ||
       showPropertiesModal ||
@@ -827,7 +849,9 @@ export default function App() {
       showCameraScanner ||
       singleMatchFile ||
       workflowLaunchParams ||
-      Boolean(pendingDeleteFile),
+      Boolean(pendingDeleteFile) ||
+      showCommandPalette ||
+      Boolean(argsFile),
   );
   // Plain function (builder call): the file uses no useCallback precedent, and
   // the hook captures deps at subscription time, so moveSelection's per-render
@@ -839,28 +863,75 @@ export default function App() {
       return next;
     });
   };
+  /**
+   * The command catalog (issue #224): every action the UI exposes, described
+   * once for the key dispatcher, the shortcuts sheet and the palette. Built
+   * here because each command closes over App's state and handlers.
+   */
+  const commands = useAppCommands({
+    visibleFiles,
+    selectedIndex,
+    activeDirectory,
+    filterText,
+    recursive,
+    canExport: scan.files.length > 0 && !scan.scanning,
+    moveSelection,
+    onContextMenu: setContextMenuPos,
+    onScan: handleScan,
+    onExecute: handleExecute,
+    onProperties: handleProperties,
+    onReloadConfig: handleReloadConfig,
+    onGoHome: handleGoToHomeDirectory,
+    onToggleTheme: () => toggleTheme({ persist: true }),
+    onBrowseDirectory: handleBrowseDirectory,
+    onGoToParentDirectory: handleGoToParentDirectory,
+    onOpenActiveDirectory: handleOpenActiveDirectory,
+    onOpenDirectoryInTerminal: () => handleOpenDirectoryInTerminal(activeDirectory),
+    onClearFilter: handleClearFilter,
+    onDisableRecursive: handleDisableRecursive,
+    onLoadConfig: () => setConfigPickerMode("load"),
+    onExport: handleExport,
+    onReveal: handleReveal,
+    onOpenFolder: handleOpenFolder,
+    onOpenTerminal: handleOpenTerminal,
+    onScanDirectory: handleScanDirectory,
+    onFilterFolder: handleFilterFolder,
+    onFilterExtension: handleFilterExtension,
+    onCopyPath: handleCopyPath,
+    onCopyFilename: handleCopyFilename,
+    onCopyDirectory: handleCopyDirectory,
+    onCopyUri: handleCopyUri,
+    onComputeHash: handleComputeHash,
+    onVerifyHash: handleVerifyHash,
+    onClearFile: handleClearFile,
+    onGenerateBarcode: handleGenerateBarcode,
+    onRequestLaunchWithArgs: requestLaunchWithArgs,
+    setShowLogViewer,
+    setShowTimerModal,
+    setShowConfigEditor,
+    setShowLanModal: setLanModalOpen,
+    setShowCameraScanner,
+    setShowCommandPalette,
+    setBarcodeMode,
+  });
   const onEscape = () => {
     setContextMenuPos(null);
-    setShowShortcuts(false);
     setShowLogViewer(false);
     setShowTimerModal(false);
+    setShowCommandPalette(false);
     resetDrop(); // hard reset lives in useDragDropConfig (WKWebView dragleave gap)
   };
   useGlobalShortcuts({
-    anyModalOpen, visibleFiles, selectedIndex,
-    activeDirectory, activeExtension, filterText, recursive, barcodeMode,
+    anyModalOpen,
+    visibleFiles,
+    selectedIndex,
+    activeDirectory,
+    activeExtension,
+    filterText,
+    recursive,
+    barcodeMode,
+    commands,
     onEscape,
-    onContextMenu: setContextMenuPos,
-    onExecute: handleExecute,
-    onScan: handleScan,
-    onReloadConfig: handleReloadConfig,
-    onGoHome: handleGoToHomeDirectory,
-    onProperties: handleProperties,
-    onToggleTheme: () => toggleTheme({ persist: true }),
-    setShowLogViewer, setShowShortcuts, setShowTimerModal,
-    setShowConfigEditor, setShowLanModal: setLanModalOpen,
-    setBarcodeMode, setShowCameraScanner,
-    moveSelection,
   });
 
   return (
@@ -957,6 +1028,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={() => toggleTheme({ persist: true })}
         onOpenLog={() => setShowLogViewer(true)}
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
         // Repurposed (issue #95): opens the in-app YAML editor. The OS-launch
         // this button used to perform now lives in the editor's header
         // ("Open in OS"); the modal's onApplied drives handleConfigLoaded,
@@ -964,7 +1036,6 @@ export default function App() {
         // Config LOADING no longer lives here (issue #101): the editor's
         // "Load config file…" raises the picker from inside the editor.
         onOpenConfig={() => setShowConfigEditor(true)}
-        onShowShortcuts={() => setShowShortcuts(true)}
         onReloadConfig={handleReloadConfig}
         onExport={handleExport}
         exportDisabled={scan.files.length === 0 || scan.scanning}
@@ -1023,7 +1094,7 @@ export default function App() {
         position={contextMenuPos}
         onClose={() => setContextMenuPos(null)}
         onLaunch={handleLaunch}
-        onLaunchWithArgs={handleLaunchWithArgs}
+        onRequestLaunchWithArgs={requestLaunchWithArgs}
         onReveal={handleReveal}
         onOpenFolder={handleOpenFolder}
         onOpenTerminal={handleOpenTerminal}
@@ -1032,17 +1103,14 @@ export default function App() {
         onFilterExtension={handleFilterExtension}
         onCopyPath={handleCopyPath}
         onCopyFilename={handleCopyFilename}
+        onCopyDirectory={handleCopyDirectory}
         onCopyUri={handleCopyUri}
         onComputeHash={handleComputeHash}
         onVerifyHash={handleVerifyHash}
         onProperties={handleProperties}
         onClearFile={handleClearFile}
         onGenerateBarcode={handleGenerateBarcode}
-        showToast={showToast}
       />
-
-      {/* Shortcuts Modal */}
-      <ShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
 
       {/* File Properties Modal */}
       <FilePropertiesModal
@@ -1207,6 +1275,31 @@ export default function App() {
           }
         }}
         onDismiss={() => setSingleMatchFile(null)}
+      />
+
+      {/* Command palette (issue #224) — every command, one surface */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        commands={commands}
+        files={scan.files}
+        onOpenFile={(file) => void handleLaunch(file)}
+        recentIds={recentIds}
+        onCommandUsed={touchRecentCommand}
+      />
+
+      {/* Command-line arguments before a launch (context menu, command
+          palette). Submitting closes the menu it came from, as before. */}
+      <LaunchArgsDialog
+        open={argsFile !== null}
+        filename={argsFile?.filename ?? ""}
+        onClose={() => setArgsFile(null)}
+        onSubmit={(args) => {
+          const file = argsFile;
+          setArgsFile(null);
+          setContextMenuPos(null);
+          if (file) void handleLaunch(file, args);
+        }}
       />
 
     </div>
