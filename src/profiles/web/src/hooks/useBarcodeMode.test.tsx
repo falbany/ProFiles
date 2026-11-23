@@ -25,6 +25,7 @@ import type { BarcodeModeDeps } from "./useBarcodeMode";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import type { GlobalShortcutsDeps } from "./useGlobalShortcuts";
 import type { ScanParams, ScanOutcome } from "./useScanController";
+import type { Command } from "../utils/commands";
 import type { ScannedFileItem } from "../api/types";
 
 function makeFile(n: number): ScannedFileItem {
@@ -373,7 +374,46 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
     return null;
   }
 
-  function makeShortcutsDeps(overrides: Partial<GlobalShortcutsDeps> = {}): GlobalShortcutsDeps {
+  /**
+   * The three commands these tests probe, with the key rules the catalog
+   * (`useAppCommands`) defines for them: launch on Enter, properties on a
+   * plain "p", the shortcuts sheet on "?".
+   */
+  function makeCommands(
+    spies: { properties?: Mock; execute?: Mock; setShowShortcuts?: Mock } = {},
+  ): Command[] {
+    return [
+      {
+        id: "file.launch",
+        title: "Launch",
+        group: "file-list",
+        keys: [{ key: "Enter" }],
+        enabled: true,
+        run: spies.execute ?? vi.fn(),
+      },
+      {
+        id: "file.properties",
+        title: "Properties",
+        group: "file-list",
+        keys: [{ key: "p", ctrl: false, shift: false, alt: false }],
+        enabled: true,
+        run: spies.properties ?? vi.fn(),
+      },
+      {
+        id: "view.shortcuts",
+        title: "Shortcuts",
+        group: "view",
+        keys: [{ key: "?" }],
+        enabled: true,
+        run: spies.setShowShortcuts ?? vi.fn(),
+      },
+    ];
+  }
+
+  function makeShortcutsDeps(
+    commands: Command[] = [],
+    overrides: Partial<GlobalShortcutsDeps> = {},
+  ): GlobalShortcutsDeps {
     return {
       anyModalOpen: false,
       visibleFiles: [makeFile(1)],
@@ -383,22 +423,8 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
       filterText: "",
       recursive: false,
       barcodeMode: true,
+      commands,
       onEscape: vi.fn(),
-      onContextMenu: vi.fn(),
-      onExecute: vi.fn(),
-      onScan: vi.fn(),
-      onReloadConfig: vi.fn(),
-      onGoHome: vi.fn(),
-      onProperties: vi.fn(),
-      onToggleTheme: vi.fn(),
-      setShowLogViewer: vi.fn(),
-      setShowShortcuts: vi.fn(),
-      setShowTimerModal: vi.fn(),
-      setShowConfigEditor: vi.fn(),
-      setShowLanModal: vi.fn(),
-      setBarcodeMode: vi.fn(),
-      setShowCameraScanner: vi.fn(),
-      moveSelection: vi.fn(),
       ...overrides,
     };
   }
@@ -406,7 +432,7 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
   it("wedge-consumed keys do not reach the global shortcuts listener", () => {
     const properties = vi.fn();
     const execute = vi.fn();
-    const shortcuts = makeShortcutsDeps({ onProperties: properties, onExecute: execute });
+    const shortcuts = makeShortcutsDeps(makeCommands({ properties, execute }));
     render(<CrosstalkHarness b={deps} s={shortcuts} />);
     act(() => {
       capturedBarcode!.setBarcodeMode(true);
@@ -430,7 +456,7 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
 
   it("typed '?' does not open the shortcuts modal either", () => {
     const setShowShortcuts = vi.fn();
-    const shortcuts = makeShortcutsDeps({ setShowShortcuts });
+    const shortcuts = makeShortcutsDeps(makeCommands({ setShowShortcuts }));
     render(<CrosstalkHarness b={deps} s={shortcuts} />);
     act(() => {
       capturedBarcode!.setBarcodeMode(true);
@@ -442,7 +468,7 @@ describe("wedge/shortcuts isolation (issue #187)", () => {
 
   it("escape still reaches the global shortcuts on purpose (modal-close preserved)", () => {
     const onEscape = vi.fn();
-    const shortcuts = makeShortcutsDeps({ onEscape });
+    const shortcuts = makeShortcutsDeps([], { onEscape });
     render(<CrosstalkHarness b={deps} s={shortcuts} />);
     act(() => {
       capturedBarcode!.setBarcodeMode(true);

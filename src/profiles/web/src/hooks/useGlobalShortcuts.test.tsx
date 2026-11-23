@@ -1,22 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mock } from "vitest";
-import { cleanup, fireEvent, renderHook } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, renderHook } from "@testing-library/react";
 
 /**
- * Unit tests for the `useGlobalShortcuts` hook (issue #148, PR 3) — the
- * global keydown effect extracted verbatim from `App.tsx`. They pin the
- * Escape-before-modal-guard ordering, the issue-#55 inert-while-modal guard,
- * the target routing guards, the context-menu position math (rect + 24 /
- * center, 24 fallbacks), every action shortcut's callback, the combobox
- * focus shortcuts, the exact clamp/identity semantics of the navigation
- * computes (Home/End identity-preserving returns included), the
- * subscription-time callback capture (the staleness profile of the original
- * inline effect — the double-Ctrl+R quirk's survival proof), and the
- * unmount teardown.
+ * Unit tests for the `useGlobalShortcuts` dispatcher (issue #148 PR 3,
+ * reshaped onto the command registry by issue #224). The handler owns the
+ * ORDER of the guards; which key does what is the registry's business
+ * (`useAppCommands.test.tsx`). These tests mount a hand-built command list
+ * and pin: Escape-before-modal-guard, the issue-#55 inert-while-modal guard,
+ * the before-target-guard phase, the target routing guards (incl. the
+ * Enter-in-input rule and its unpreserved default), first-match-wins with
+ * enabled gating, the subscription-time capture (the staleness profile of
+ * the original inline effect — the double-Ctrl+R quirk's survival proof),
+ * and the unmount teardown.
  */
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import type { GlobalShortcutsDeps } from "./useGlobalShortcuts";
+import type { Command, ShortcutSpec } from "../utils/commands";
 import type { ScannedFileItem } from "../api/types";
 
 function makeFile(n: number): ScannedFileItem {
@@ -45,23 +45,22 @@ function makeDeps(overrides: Partial<GlobalShortcutsDeps> = {}): GlobalShortcuts
     filterText: "",
     recursive: true,
     barcodeMode: false,
+    commands: [],
     onEscape: vi.fn(),
-    onContextMenu: vi.fn(),
-    onExecute: vi.fn(),
-    onScan: vi.fn(),
-    onReloadConfig: vi.fn(),
-    onGoHome: vi.fn(),
-    onProperties: vi.fn(),
-    onToggleTheme: vi.fn(),
-    setShowLogViewer: vi.fn(),
-    setShowShortcuts: vi.fn(),
-    setShowTimerModal: vi.fn(),
-    setShowConfigEditor: vi.fn(),
-    setShowLanModal: vi.fn(),
-    setBarcodeMode: vi.fn(),
-    setShowCameraScanner: vi.fn(),
-    moveSelection: vi.fn(),
     ...overrides,
+  };
+}
+
+/** A keyed test command whose `run` is a fresh spy (`vi.mocked(c.run)`). */
+function keyed(keys: ShortcutSpec[], extra: Partial<Omit<Command, "keys" | "run">> = {}): Command {
+  return {
+    id: `command-${keys[0].key}`,
+    title: "test",
+    group: "view",
+    keys,
+    enabled: true,
+    ...extra,
+    run: vi.fn(),
   };
 }
 
@@ -80,7 +79,7 @@ afterEach(() => {
 });
 
 /** Fixture DOM matching the real surface the shortcuts act on. */
-function installFixture(options: { rowIndex?: number } = {}): HTMLElement {
+function installFixture(): HTMLElement {
   const list = document.createElement("div");
   list.setAttribute("data-testid", "file-list");
   list.tabIndex = -1;
@@ -91,12 +90,6 @@ function installFixture(options: { rowIndex?: number } = {}): HTMLElement {
     input.id = id;
     document.body.appendChild(input);
   }
-
-  if (options.rowIndex !== undefined) {
-    const row = document.createElement("div");
-    row.setAttribute("data-row-index", String(options.rowIndex));
-    document.body.appendChild(row);
-  }
   return list;
 }
 
@@ -104,12 +97,15 @@ function installFixture(options: { rowIndex?: number } = {}): HTMLElement {
 function press(
   key: string,
   mods: { ctrlKey?: boolean; shiftKey?: boolean } = {},
-): void {
-  fireEvent.keyDown(window, {
+): Event {
+  const event = createEvent.keyDown(window, {
     key,
     ctrlKey: mods.ctrlKey ?? false,
     shiftKey: mods.shiftKey ?? false,
+    cancelable: true,
   });
+  fireEvent(window, event);
+  return event;
 }
 
 describe("useGlobalShortcuts", () => {
@@ -121,14 +117,19 @@ describe("useGlobalShortcuts", () => {
     press("Escape");
     expect(deps.onEscape).toHaveBeenCalledTimes(1);
 
-    // A plain key while the modal is up must not reach the shortcuts.
+    // A plain key while the modal is up must not reach the commands.
     press("a");
     expect(deps.onEscape).toHaveBeenCalledTimes(1);
   });
 
   it("shortcuts are inert while a modal is open", () => {
     installFixture();
-    deps = makeDeps({ anyModalOpen: true });
+    const scan = keyed([{ key: "F5" }]);
+    const reload = keyed([{ key: "r", ctrl: true }]);
+    const launch = keyed([{ key: "Enter" }]);
+    const next = keyed([{ key: "ArrowDown" }]);
+    const properties = keyed([{ key: "p" }]);
+    deps = makeDeps({ anyModalOpen: true, commands: [scan, reload, launch, next, properties] });
     renderHook(() => useGlobalShortcuts(deps));
 
     press("F5");
@@ -137,223 +138,130 @@ describe("useGlobalShortcuts", () => {
     press("ArrowDown");
     press("p");
 
-    expect(deps.onScan).not.toHaveBeenCalled();
-    expect(deps.onReloadConfig).not.toHaveBeenCalled();
-    expect(deps.onExecute).not.toHaveBeenCalled();
-    expect(deps.onProperties).not.toHaveBeenCalled();
-    expect(deps.moveSelection).not.toHaveBeenCalled();
+    for (const command of [scan, reload, launch, next, properties]) {
+      expect(command.run).not.toHaveBeenCalled();
+    }
   });
 
-  it("ctrl+L focuses the file list", () => {
-    const list = installFixture();
-    deps = makeDeps();
+  it("runs the first enabled command bound to the key and claims the key", () => {
+    installFixture();
+    const first = keyed([{ key: "F5" }], { id: "first" });
+    const second = keyed([{ key: "F5" }], { id: "second" });
+    deps = makeDeps({ commands: [first, second] });
     renderHook(() => useGlobalShortcuts(deps));
 
-    press("l", { ctrlKey: true });
-    expect(document.activeElement).toBe(list);
-    expect(deps.setShowLogViewer).not.toHaveBeenCalled();
+    expect(press("F5").defaultPrevented).toBe(true);
+    expect(first.run).toHaveBeenCalledTimes(1);
+    expect(second.run).not.toHaveBeenCalled();
+  });
 
-    // Shift+L variant does NOT focus — it toggles the log viewer instead.
-    list.blur();
-    press("l", { ctrlKey: true, shiftKey: true });
-    expect(document.activeElement).not.toBe(list);
-    expect(deps.setShowLogViewer).toHaveBeenCalledTimes(1);
-    expect(deps.setShowLogViewer).toHaveBeenCalledWith(expect.any(Function));
+  it("leaves an unbound key — and a key bound only to disabled commands — to the browser", () => {
+    installFixture();
+    const disabled = keyed([{ key: "F5" }], { enabled: false, disabledReason: "nope" });
+    const other = keyed([{ key: "F5" }], { id: "other", enabled: false });
+    deps = makeDeps({ commands: [disabled, other] });
+    renderHook(() => useGlobalShortcuts(deps));
+
+    expect(press("F5").defaultPrevented).toBe(false);
+    expect(press("F12").defaultPrevented).toBe(false);
+    expect(disabled.run).not.toHaveBeenCalled();
+    expect(other.run).not.toHaveBeenCalled();
+  });
+
+  it("skips a disabled command and runs the next one bound to the same key", () => {
+    installFixture();
+    const disabled = keyed([{ key: "F5" }], { enabled: false });
+    const enabled = keyed([{ key: "F5" }], { id: "enabled" });
+    deps = makeDeps({ commands: [disabled, enabled] });
+    renderHook(() => useGlobalShortcuts(deps));
+
+    press("F5");
+    expect(disabled.run).not.toHaveBeenCalled();
+    expect(enabled.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a before-target-guard command from inside an input, but no other", () => {
+    installFixture();
+    const directoryInput = document.getElementById("directory-combobox") as HTMLInputElement;
+    const focusList = keyed([{ key: "l", ctrl: true, shift: false }], {
+      id: "focus-list",
+      beforeTargetGuard: true,
+    });
+    const focusDirectory = keyed([{ key: "d", ctrl: true }], { id: "focus-directory" });
+    deps = makeDeps({ commands: [focusList, focusDirectory] });
+    renderHook(() => useGlobalShortcuts(deps));
+
+    // Ctrl+L is the one shortcut that works while the caret is in a field…
+    fireEvent.keyDown(directoryInput, { key: "l", ctrlKey: true });
+    expect(focusList.run).toHaveBeenCalledTimes(1);
+
+    // …Ctrl+D is stopped by the input guard, as before the registry.
+    fireEvent.keyDown(directoryInput, { key: "d", ctrlKey: true });
+    expect(focusDirectory.run).not.toHaveBeenCalled();
   });
 
   it("target guards route keys correctly", () => {
     installFixture();
-    const directoryInput = document.getElementById(
-      "directory-combobox",
-    ) as HTMLInputElement;
+    const directoryInput = document.getElementById("directory-combobox") as HTMLInputElement;
     const button = document.createElement("button");
     document.body.appendChild(button);
-    deps = makeDeps();
+    const scan = keyed([{ key: "F5" }], { id: "scan", fromInputEnter: true });
+    const launch = keyed([{ key: "Enter" }], { id: "launch" });
+    deps = makeDeps({ commands: [scan, launch] });
     renderHook(() => useGlobalShortcuts(deps));
 
-    // Enter in an input is the scan trigger.
-    fireEvent.keyDown(directoryInput, { key: "Enter" });
-    expect(deps.onScan).toHaveBeenCalledTimes(1);
+    // Enter in an input is the scan trigger — and the key is deliberately
+    // NOT claimed (the combobox keeps it too, as in the original handler).
+    const inInput = createEvent.keyDown(directoryInput, { key: "Enter", cancelable: true });
+    fireEvent(directoryInput, inInput);
+    expect(scan.run).toHaveBeenCalledTimes(1);
+    expect(inInput.defaultPrevented).toBe(false);
 
     // Enter on a control that handles activation itself must not leak.
     fireEvent.keyDown(button, { key: "Enter" });
-    expect(deps.onScan).toHaveBeenCalledTimes(1);
-    expect(deps.onExecute).not.toHaveBeenCalled();
+    expect(scan.run).toHaveBeenCalledTimes(1);
+    expect(launch.run).not.toHaveBeenCalled();
 
     // Enter on body executes the selected file.
-    fireEvent.keyDown(document.body, { key: "Enter" });
-    expect(deps.onExecute).toHaveBeenCalledTimes(1);
-    expect(deps.onScan).toHaveBeenCalledTimes(1);
+    expect(press("Enter").defaultPrevented).toBe(true);
+    expect(launch.run).toHaveBeenCalledTimes(1);
+    expect(scan.run).toHaveBeenCalledTimes(1);
   });
 
-  it("context menu opens at the selected row", () => {
-    installFixture({ rowIndex: 1 });
-    deps = makeDeps({ visibleFiles: [FILES[0], FILES[1]], selectedIndex: 1 });
-    renderHook(() => useGlobalShortcuts(deps));
-
-    // jsdom rects are all zeros → x = 0 + 24, y = 0 + 0 / 2.
-    press("ContextMenu");
-    expect(deps.onContextMenu).toHaveBeenCalledTimes(1);
-    expect(deps.onContextMenu).toHaveBeenCalledWith({ x: 24, y: 0, file: FILES[1] });
-
-    // Shift+F10 variant with a meaningful rect: x = 100 + 24, y = 50 + 28/2.
-    const row = document.querySelector<HTMLElement>('[data-row-index="1"]');
-    Object.defineProperty(row, "getBoundingClientRect", {
-      value: () => ({
-        x: 100,
-        y: 50,
-        left: 100,
-        top: 50,
-        right: 300,
-        bottom: 78,
-        width: 200,
-        height: 28,
-      }),
-    });
-    press("F10", { shiftKey: true });
-    expect(deps.onContextMenu).toHaveBeenCalledTimes(2);
-    expect(deps.onContextMenu).toHaveBeenLastCalledWith({ x: 124, y: 64, file: FILES[1] });
-
-    // No row in the DOM → the 24/24 fallbacks.
-    document.querySelector('[data-row-index="1"]')?.remove();
-    press("ContextMenu");
-    expect(deps.onContextMenu).toHaveBeenCalledTimes(3);
-    expect(deps.onContextMenu).toHaveBeenLastCalledWith({ x: 24, y: 24, file: FILES[1] });
-
-    // No file at the selection → the branch bails before anything fires.
-    cleanup();
-    deps = makeDeps({ visibleFiles: [FILES[0]], selectedIndex: 5 });
-    renderHook(() => useGlobalShortcuts(deps));
-    press("ContextMenu");
-    expect(deps.onContextMenu).not.toHaveBeenCalled();
-  });
-
-  it("action shortcuts fire their callbacks", () => {
+  it("Enter inside an input runs only the command flagged for it", () => {
     installFixture();
-    deps = makeDeps({ selectedIndex: 2 });
-    renderHook(() => useGlobalShortcuts(deps));
-
-    press("F5");
-    expect(deps.onScan).toHaveBeenCalledTimes(1);
-
-    press("r", { ctrlKey: true });
-    expect(deps.onReloadConfig).toHaveBeenCalledTimes(1);
-
-    press("h", { ctrlKey: true });
-    expect(deps.onGoHome).toHaveBeenCalledTimes(1);
-
-    press("p");
-    expect(deps.onProperties).toHaveBeenCalledTimes(1);
-    expect(deps.onProperties).toHaveBeenCalledWith(FILES[2]);
-
-    press("t", { ctrlKey: true, shiftKey: true });
-    expect(deps.onToggleTheme).toHaveBeenCalledTimes(1);
-
-    press("b", { ctrlKey: true });
-    expect(deps.setBarcodeMode).toHaveBeenCalledTimes(1);
-    expect(deps.setBarcodeMode).toHaveBeenCalledWith(expect.any(Function));
-
-    press("b", { ctrlKey: true, shiftKey: true });
-    expect(deps.setShowCameraScanner).toHaveBeenCalledTimes(1);
-    expect(deps.setShowCameraScanner).toHaveBeenCalledWith(expect.any(Function));
-
-    press("t", { ctrlKey: true });
-    expect(deps.setShowTimerModal).toHaveBeenCalledTimes(1);
-    expect(deps.setShowTimerModal).toHaveBeenCalledWith(true);
-
-    press(",", { ctrlKey: true });
-    expect(deps.setShowConfigEditor).toHaveBeenCalledTimes(1);
-    expect(deps.setShowConfigEditor).toHaveBeenCalledWith(true);
-
-    press("k", { ctrlKey: true });
-    expect(deps.setShowLanModal).toHaveBeenCalledTimes(1);
-    expect(deps.setShowLanModal).toHaveBeenCalledWith(true);
-
-    // Ctrl+Shift+K stays free (the disambiguation convention of this table).
-    press("k", { ctrlKey: true, shiftKey: true });
-    expect(deps.setShowLanModal).toHaveBeenCalledTimes(1);
-
-    press("?");
-    expect(deps.setShowShortcuts).toHaveBeenCalledTimes(1);
-    expect(deps.setShowShortcuts).toHaveBeenCalledWith(expect.any(Function));
-
-    press("/", { ctrlKey: true });
-    expect(deps.setShowShortcuts).toHaveBeenCalledTimes(2);
-    expect(deps.setShowShortcuts).toHaveBeenLastCalledWith(expect.any(Function));
-  });
-
-  it("focus shortcuts target the comboboxes", () => {
-    installFixture();
-    const directoryInput = document.getElementById(
-      "directory-combobox",
-    ) as HTMLInputElement;
-    const extensionInput = document.getElementById(
-      "extension-combobox",
-    ) as HTMLInputElement;
     const filterInput = document.getElementById("filter-combobox") as HTMLInputElement;
-    deps = makeDeps();
+    const launch = keyed([{ key: "Enter" }], { id: "launch" });
+    const scan = keyed([{ key: "F5" }], { id: "scan", fromInputEnter: true, enabled: false });
+    deps = makeDeps({ commands: [launch, scan] });
     renderHook(() => useGlobalShortcuts(deps));
 
-    press("d", { ctrlKey: true });
-    expect(document.activeElement).toBe(directoryInput);
+    fireEvent.keyDown(filterInput, { key: "Enter" });
+    expect(launch.run).not.toHaveBeenCalled();
+    expect(scan.run).not.toHaveBeenCalled();
 
-    press("e", { ctrlKey: true });
-    expect(document.activeElement).toBe(extensionInput);
-
-    press("f", { ctrlKey: true });
-    expect(document.activeElement).toBe(filterInput);
+    // Any other key typed in the field reaches no command at all.
+    fireEvent.keyDown(filterInput, { key: "F5" });
+    fireEvent.keyDown(filterInput, { key: "p" });
+    expect(launch.run).not.toHaveBeenCalled();
+    expect(scan.run).not.toHaveBeenCalled();
   });
 
-  it("navigation moves selection via functional computes", () => {
-    installFixture();
-    deps = makeDeps();
-    renderHook(() => useGlobalShortcuts(deps));
-
-    const computeFor = (key: string): (prev: number, count: number) => number => {
-      press(key);
-      const spy = deps.moveSelection as Mock<
-        (compute: (currentIndex: number, visibleCount: number) => number) => void
-      >;
-      const calls = spy.mock.calls;
-      return calls[calls.length - 1][0];
-    };
-
-    const down = computeFor("ArrowDown");
-    expect(down(0, 10)).toBe(1);
-    expect(down(9, 10)).toBe(9); // clamped at the last row
-
-    const up = computeFor("ArrowUp");
-    expect(up(0, 10)).toBe(0); // identity at the first row
-    expect(up(5, 10)).toBe(4);
-
-    const home = computeFor("Home");
-    expect(home(5, 10)).toBe(0);
-    expect(home(0, 10)).toBe(0); // identity — no no-op re-render
-
-    const end = computeFor("End");
-    expect(end(3, 10)).toBe(9);
-    expect(end(9, 10)).toBe(9); // identity — no no-op re-render
-
-    const pageUp = computeFor("PageUp");
-    expect(pageUp(25, 100)).toBe(5);
-
-    const pageDown = computeFor("PageDown");
-    expect(pageDown(0, 100)).toBe(20);
-    expect(pageDown(95, 100)).toBe(99); // clamped at the last row
-  });
-
-  it("captures callbacks at subscription time (staleness profile preserved)", () => {
+  it("captures commands at subscription time (staleness profile preserved)", () => {
     installFixture();
     // v1 is the closure alive when the effect subscribes.
     const v1 = vi.fn();
     const v2 = vi.fn();
     const v3 = vi.fn();
-    deps = makeDeps({ onReloadConfig: v1 });
+    const reload =
+      (run: () => void): Command =>
+      ({ ...keyed([{ key: "r", ctrl: true }]), run });
+    deps = makeDeps({ commands: [reload(v1)] });
     const { rerender } = renderHook(() => useGlobalShortcuts(deps));
 
-    // App re-rendered with fresh callback identities but UNCHANGED state
-    // deps (same FILES reference, same primitives) → no re-subscription.
-    deps = makeDeps({ onReloadConfig: v2 });
+    // App re-rendered with a fresh command list (new closures) but UNCHANGED
+    // state deps (same FILES reference, same primitives) → no re-subscription.
+    deps = makeDeps({ commands: [reload(v2)] });
     rerender();
 
     press("r", { ctrlKey: true });
@@ -362,7 +270,7 @@ describe("useGlobalShortcuts", () => {
 
     // A dep-changing state update (filterText) re-subscribes: the new
     // handler captures v3.
-    deps = makeDeps({ onReloadConfig: v3, filterText: "abc" });
+    deps = makeDeps({ commands: [reload(v3)], filterText: "abc" });
     rerender();
 
     press("r", { ctrlKey: true });
@@ -373,7 +281,10 @@ describe("useGlobalShortcuts", () => {
 
   it("unmount removes the listener", () => {
     installFixture();
-    deps = makeDeps();
+    const reload = keyed([{ key: "r", ctrl: true }]);
+    const scan = keyed([{ key: "F5" }]);
+    const launch = keyed([{ key: "Enter" }]);
+    deps = makeDeps({ commands: [reload, scan, launch] });
     const { unmount } = renderHook(() => useGlobalShortcuts(deps));
     unmount();
 
@@ -382,9 +293,9 @@ describe("useGlobalShortcuts", () => {
     press("Enter");
     press("Escape");
 
-    expect(deps.onReloadConfig).not.toHaveBeenCalled();
-    expect(deps.onScan).not.toHaveBeenCalled();
-    expect(deps.onExecute).not.toHaveBeenCalled();
+    expect(reload.run).not.toHaveBeenCalled();
+    expect(scan.run).not.toHaveBeenCalled();
+    expect(launch.run).not.toHaveBeenCalled();
     expect(deps.onEscape).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { ScannedFileItem } from "../api/types";
+import { fileExtension, parentDirectory } from "../utils/fileProperties";
 
 export interface ContextMenuPosition {
   x: number;
@@ -22,7 +23,8 @@ interface ContextMenuProps {
   position: ContextMenuPosition | null;
   onClose: () => void;
   onLaunch: (file: ScannedFileItem) => void;
-  onLaunchWithArgs: (file: ScannedFileItem, args: string) => void;
+  /** Ask for command-line arguments, then launch through the normal path. */
+  onRequestLaunchWithArgs: (file: ScannedFileItem) => void;
   onReveal: (file: ScannedFileItem) => void;
   onOpenFolder: (file: ScannedFileItem) => void;
   onOpenTerminal: (file: ScannedFileItem) => void;
@@ -31,20 +33,20 @@ interface ContextMenuProps {
   onFilterExtension: (ext: string) => void;
   onCopyPath: (file: ScannedFileItem, forwardSlash?: boolean) => void;
   onCopyFilename: (file: ScannedFileItem, withoutExt?: boolean) => void;
+  onCopyDirectory: (file: ScannedFileItem) => void;
   onCopyUri: (file: ScannedFileItem) => void;
   onComputeHash: (file: ScannedFileItem, algorithm: "md5" | "sha256") => void;
   onVerifyHash: (file: ScannedFileItem, algorithm: "md5" | "sha256") => void;
   onProperties: (file: ScannedFileItem) => void;
   onClearFile: (file: ScannedFileItem) => void;
   onGenerateBarcode: (file: ScannedFileItem) => void;
-  showToast?: (message: string, kind?: "info" | "error") => void;
 }
 
 export function ContextMenu({
   position,
   onClose,
   onLaunch,
-  onLaunchWithArgs,
+  onRequestLaunchWithArgs,
   onReveal,
   onOpenFolder,
   onOpenTerminal,
@@ -53,29 +55,17 @@ export function ContextMenu({
   onFilterExtension,
   onCopyPath,
   onCopyFilename,
+  onCopyDirectory,
   onCopyUri,
   onComputeHash,
   onVerifyHash,
   onProperties,
   onClearFile,
   onGenerateBarcode,
-  showToast,
 }: Readonly<ContextMenuProps>) {
-  const [showArgsModal, setShowArgsModal] = useState(false);
-  const [argsValue, setArgsValue] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
-  const argsDialogRef = useRef<HTMLDialogElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [menuCoordinates, setMenuCoordinates] = useState<{ left: number; top: number } | null>(null);
-
-  // The args dialog is a native <dialog>: showModal() gives the focus trap,
-  // top-layer stacking, backdrop-click target and Escape/cancel handling
-  // the raw rendered-but-not-shown dialog lacked (issue #62).
-  useEffect(() => {
-    if (showArgsModal) {
-      argsDialogRef.current?.showModal();
-    }
-  }, [showArgsModal]);
 
   useLayoutEffect(() => {
     if (!position) {
@@ -115,26 +105,7 @@ export function ContextMenu({
 
   const { file, x, y } = position;
 
-  const handleArgsSubmit = () => {
-    onLaunchWithArgs(file, argsValue);
-    setShowArgsModal(false);
-    onClose();
-  };
-
-  const getExt = (filename: string) => {
-    const idx = filename.lastIndexOf(".");
-    return idx !== -1 ? filename.slice(idx) : "";
-  };
-
-  const getDirectoryPath = (fullPath: string) => {
-    const lastSep = Math.max(fullPath.lastIndexOf("/"), fullPath.lastIndexOf("\\"));
-    return lastSep !== -1 ? fullPath.slice(0, lastSep) : fullPath;
-  };
-
-  const getRelativeFolderPath = (relPath: string) => {
-    const lastSep = Math.max(relPath.lastIndexOf("/"), relPath.lastIndexOf("\\"));
-    return lastSep !== -1 ? relPath.slice(0, lastSep) : "";
-  };
+  const extension = fileExtension(file.filename);
 
   return (
     <>
@@ -192,7 +163,7 @@ export function ContextMenu({
         </button>
         <button
           role="menuitem"
-          onClick={() => { setShowArgsModal(true); }}
+          onClick={() => { onRequestLaunchWithArgs(file); }}
           className="flex w-full items-center gap-2 px-3 py-3 min-h-[44px] hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={`Launch ${file.filename} with arguments`}
         >
@@ -246,8 +217,7 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => {
-            const dir = getDirectoryPath(file.path);
-            onScanDirectory(dir);
+            onScanDirectory(parentDirectory(file.path));
             onClose();
           }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
@@ -259,7 +229,7 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => {
-            const relFolder = getRelativeFolderPath(file.rel_path);
+            const relFolder = parentDirectory(file.rel_path);
             if (relFolder) {
               onFilterFolder(relFolder);
             }
@@ -274,12 +244,11 @@ export function ContextMenu({
         <button
           role="menuitem"
           onClick={() => {
-            const ext = getExt(file.filename);
-            if (ext) onFilterExtension(ext);
+            if (extension) onFilterExtension(extension);
             onClose();
           }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
-          aria-label={`Filter view by extension ${getExt(file.filename)}`}
+          aria-label={`Filter view by extension ${extension}`}
         >
           <FileCode className="h-3.5 w-3.5 text-chip-indigo-text group-hover:text-white" />
           <span>Filter by Extension</span>
@@ -326,18 +295,7 @@ export function ContextMenu({
         </button>
         <button
           role="menuitem"
-          onClick={async () => {
-            const dirPath = getDirectoryPath(file.path);
-            onClose();
-            try {
-              // Await the write: clipboard failures (permissions, insecure
-              // context) must not report success (issue #35).
-              await navigator.clipboard.writeText(dirPath);
-              showToast?.(`Copied: ${dirPath}`);
-            } catch (err: any) {
-              showToast?.(`Copy failed: ${err?.message ?? err}`, "error");
-            }
-          }}
+          onClick={() => { onCopyDirectory(file); onClose(); }}
           className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 active:scale-95 transition-transform group"
           aria-label={'Copy Directory'}
         >
@@ -416,56 +374,6 @@ export function ContextMenu({
           <span>Delete</span>
         </button>
       </div>
-
-      {/* Launch with Args Modal */}
-      {showArgsModal && (
-        <dialog
-          ref={argsDialogRef}
-          className="animate-overlay-in fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 rounded-xl"
-          aria-labelledby="args-modal-title"
-          onClick={(e) => {
-            if (e.target === argsDialogRef.current) setShowArgsModal(false);
-          }}
-          onCancel={(e) => {
-            e.preventDefault();
-            setShowArgsModal(false);
-          }}
-        >
-          <div className="animate-modal-in w-96 rounded-xl border border-frame-line glass-panel p-4">
-            <h3 id="args-modal-title" className="mb-2 text-sm font-semibold text-ink">Launch with Arguments</h3>
-            <p className="mb-3 text-xs text-ink-muted truncate">{file.filename}</p>
-            <input
-              type="text"
-              autoFocus
-              placeholder="Arguments (e.g. --verbose --port 80)"
-              value={argsValue}
-              onChange={(e) => setArgsValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleArgsSubmit();
-                if (e.key === "Escape") setShowArgsModal(false);
-              }}
-              className="mb-4 w-full rounded-md border border-line bg-elevated px-3 py-2 text-xs text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-              aria-label="Command line arguments"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowArgsModal(false)}
-                className="rounded-md px-3 py-1.5 text-xs text-ink-muted hover:bg-elevated hover:text-ink focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                aria-label="Cancel launch"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleArgsSubmit}
-                className="btn btn-primary px-3 py-1.5"
-                aria-label={`Launch ${file.filename} with arguments`}
-              >
-                Launch
-              </button>
-            </div>
-          </div>
-        </dialog>
-      )}
     </>
   );
 }

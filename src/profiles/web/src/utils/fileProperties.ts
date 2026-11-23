@@ -30,6 +30,15 @@ export function parentDirectory(path: string): string {
 }
 
 /**
+ * Return the extension of *filename* with its leading dot (".log"), or ""
+ * when the name has none.
+ */
+export function fileExtension(filename: string): string {
+  const idx = filename.lastIndexOf(".");
+  return idx !== -1 ? filename.slice(idx) : "";
+}
+
+/**
  * Build a multi-line plain-text summary of the most useful file properties,
  * suitable for pasting into tickets or QC records.
  */
