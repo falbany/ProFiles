@@ -381,3 +381,50 @@ async def test_scan_keeps_symlink_form_of_requested_directory(
     items = results.json()["items"]
     assert len(items) >= 1
     assert items[0]["path"].startswith(str(link))
+
+
+@pytest.mark.anyio
+async def test_scan_events_payload_includes_progress(test_state: ServerState) -> None:
+    """The status payload carries progress alongside the existing fields."""
+    from profiles.server.routes.scan import scan_status_payload
+
+    payload = scan_status_payload(test_state)
+    assert set(payload) >= {"in_progress", "count", "progress", "directory"}
+    assert payload["progress"] == 0
+
+
+@pytest.mark.anyio
+async def test_scan_progress_reset_survives_missing_directory(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """A scan of a nonexistent directory still resets the counter (the
+    early return sits after the reset)."""
+    test_state.scan_progress_count = 99
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/scan",
+            json={"directory": str(tmp_path / "nope"), "extension": ".mttl", "recursive": True},
+        )
+        assert resp.json()["warning"] == "Directory does not exist"
+    assert test_state.scan_progress_count == 0
+
+
+@pytest.mark.anyio
+async def test_scan_progress_generation_guard(test_state: ServerState) -> None:
+    """Callbacks from a scan superseded mid-flight write nothing."""
+    captured: dict = {}
+
+    def fake_scan(*args: object, **kwargs: object) -> list:
+        captured["on_progress"] = kwargs.get("on_progress")
+        test_state.scan_generation += 1  # a newer scan supersedes this one
+        return []
+
+    app = create_app(test_state)
+    with patch("profiles.core.processing.scanner.scan_and_process_dynamic", fake_scan):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post("/api/scan", json={"extension": ".mttl", "recursive": True})
+            if captured["on_progress"] is not None:
+                captured["on_progress"](500)
+    assert captured["on_progress"] is not None
+    assert test_state.scan_progress_count == 0

@@ -58,6 +58,10 @@ class ServerState:
     cached_results: list[Any] = field(default_factory=list)
     scan_in_progress: bool = False
     scan_generation: int = 0
+    # Candidates found so far by the running scan; surfaced live through
+    # the /api/scan/events SSE payload (issue #152). Server-global by the
+    # existing single-active-scan state model (see the #152 design spec).
+    scan_progress_count: int = 0
     # UI events recorded by external actors (config handoff), drained by
     # the frontend's /api/notifications poll.
     _external_events: list[dict[str, Any]] = field(default_factory=list)
