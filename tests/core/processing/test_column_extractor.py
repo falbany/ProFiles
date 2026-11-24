@@ -1,8 +1,23 @@
-"""Tests for profiles.core.processing.column_extractor — ColumnRule, ColumnExtractor."""
+"""Tests for profiles.core.processing.column_extractor — ColumnRule, ColumnExtractor.
+
+Covers the regex/rules engine, the attribute keywords (size, size_bytes,
+modified, created) backed by a ``FileAttrs`` snapshot, and the ``path``
+keyword (parent directory of the display path).
+"""
 
 from __future__ import annotations
 
-from profiles.core.processing.column_extractor import ColumnExtractor, ColumnRule
+from datetime import datetime
+from pathlib import Path
+
+from profiles.core.processing.column_extractor import (
+    ATTRIBUTE_KEYWORDS,
+    DEFAULT_ATTR_DATETIME_FORMAT,
+    ColumnExtractor,
+    ColumnRule,
+    format_human_size,
+)
+from profiles.core.processing.file_metadata import FileAttrs
 
 
 class TestColumnRule:
@@ -209,3 +224,167 @@ class TestColumnExtractorImmutability:
             parallel = list(pool.map(lambda fn: extractor.extract_all(fn, column_names), filenames))
 
         assert parallel == sequential
+
+
+class TestAttributeKeywords:
+    """Attribute keyword rules (size / size_bytes / modified / created)."""
+
+    def test_attribute_keywords_exact_set(self) -> None:
+        """The keyword set is exactly the four documented attribute keys."""
+        assert {"size", "size_bytes", "modified", "created"} == ATTRIBUTE_KEYWORDS
+
+    def test_size_human_format(self) -> None:
+        """`size` formats the byte count in human-readable units."""
+        rule = ColumnRule(name="Size", match="size")
+        attrs = FileAttrs(1572864, 1795545600.0, 1790000000.0)
+        assert rule.extract_attr(attrs) == "1.5 MB"
+
+    def test_size_bytes_raw_count(self) -> None:
+        """`size_bytes` returns the raw integer byte count as a string."""
+        rule = ColumnRule(name="SizeBytes", match="size_bytes")
+        attrs = FileAttrs(1572864, 1795545600.0, 1790000000.0)
+        assert rule.extract_attr(attrs) == "1572864"
+
+    def test_size_boundaries(self) -> None:
+        """`size` boundary pins: 0, 512, 1023 and the 1 MB rounding."""
+        rule = ColumnRule(name="Size", match="size")
+        for size_bytes, expected in (
+            (0, "0 B"),
+            (512, "512 B"),
+            (1023, "1023 B"),
+            (1048576, "1 MB"),
+        ):
+            attrs = FileAttrs(size_bytes, 0.0, 0.0)
+            assert rule.extract_attr(attrs) == expected
+
+    def test_modified_default_format(self) -> None:
+        """`modified` uses the default datetime format in local time."""
+        rule = ColumnRule(name="Modified", match="modified")
+        attrs = FileAttrs(1572864, 1795545600.0, 1790000000.0)
+        expected = datetime.fromtimestamp(1795545600.0).strftime(DEFAULT_ATTR_DATETIME_FORMAT)
+        assert rule.extract_attr(attrs) == expected
+
+    def test_modified_custom_transform_format(self) -> None:
+        """`modified` honors transform as a strftime pattern."""
+        rule = ColumnRule(name="Modified", match="modified", transform="%d/%m/%Y")
+        attrs = FileAttrs(1572864, 1795545600.0, 1790000000.0)
+        assert rule.extract_attr(attrs) == datetime.fromtimestamp(1795545600.0).strftime("%d/%m/%Y")
+
+    def test_created_uses_birthtime(self) -> None:
+        """`created` formats birthtime, not mtime."""
+        rule = ColumnRule(name="Created", match="created")
+        attrs = FileAttrs(1572864, 1795545600.0, 1790000000.0)
+        expected = datetime.fromtimestamp(1790000000.0).strftime(DEFAULT_ATTR_DATETIME_FORMAT)
+        assert rule.extract_attr(attrs) == expected
+
+    def test_none_attrs_returns_default_for_all_keywords(self) -> None:
+        """attrs=None yields the rule default for every attribute keyword."""
+        for keyword in ATTRIBUTE_KEYWORDS:
+            rule = ColumnRule(name=keyword.title(), match=keyword, default="N/A")
+            assert rule.extract_attr(None) == "N/A"
+
+    def test_is_attribute_case_insensitive(self) -> None:
+        """is_attribute is True for keyword matches regardless of case."""
+        assert ColumnRule(name="Size", match="SIZE").is_attribute is True
+        assert ColumnRule(name="Modified", match="Modified").is_attribute is True
+
+    def test_is_attribute_false_for_regex(self) -> None:
+        """is_attribute is False for raw regex matches."""
+        assert ColumnRule(name="File", match=r".*").is_attribute is False
+        assert ColumnRule(name="Device", match=r"Device_([A-Z0-9]+)").is_attribute is False
+
+    def test_format_human_size_pins(self) -> None:
+        """format_human_size boundary pins (binary units, 1 KB = 1024 B)."""
+        assert format_human_size(0) == "0 B"
+        assert format_human_size(512) == "512 B"
+        assert format_human_size(1023) == "1023 B"
+        assert format_human_size(1048576) == "1 MB"
+        assert format_human_size(1572864) == "1.5 MB"
+
+
+class TestPathKeyword:
+    """`path` keyword rule: parent directory of the display path (no stat)."""
+
+    def test_path_returns_parent_directory(self) -> None:
+        """A nested display path yields its containing directory."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Path", "path", default=".")
+        result = extractor.extract_all("sub/dir/dump.log", ("Path",))
+        assert result["Path"] == str(Path("sub/dir/dump.log").parent)
+
+    def test_path_bare_filename_returns_dot(self) -> None:
+        """A bare filename has no directory component: '.' is returned."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Path", "path", default=".")
+        result = extractor.extract_all("dump.log", ("Path",))
+        assert result["Path"] == "."
+
+    def test_path_transform_ignored(self) -> None:
+        """transform has no effect on the `path` keyword."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Path", "path", transform="IGNORED", default=".")
+        result = extractor.extract_all("sub/dir/dump.log", ("Path",))
+        assert result["Path"] == str(Path("sub/dir/dump.log").parent)
+
+    def test_path_is_not_an_attribute(self) -> None:
+        """`path` rules never count as attribute rules (no stat cost)."""
+        assert ColumnRule(name="Path", match="path").is_attribute is False
+
+
+class TestHasAttributeRules:
+    """ColumnExtractor.has_attribute_rules() gating for worker-side stat."""
+
+    def test_true_when_attribute_column_requested(self) -> None:
+        """An attribute rule whose name is requested returns True."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Size", "size")
+        assert extractor.has_attribute_rules(("Size",)) is True
+
+    def test_false_for_regex_only(self) -> None:
+        """A pure regex rule set never triggers a stat."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("File", r".*", group=0, priority=100)
+        assert extractor.has_attribute_rules(("File",)) is False
+
+    def test_false_for_path_rule(self) -> None:
+        """`path` rules are string-derived and must not count."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Path", "path")
+        assert extractor.has_attribute_rules(("Path",)) is False
+
+    def test_false_when_attribute_column_not_requested(self) -> None:
+        """An attribute rule outside the requested columns does not count."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Size", "size")
+        assert extractor.has_attribute_rules(("File",)) is False
+
+    def test_false_with_no_rules(self) -> None:
+        """An empty extractor has no attribute rules."""
+        assert ColumnExtractor().has_attribute_rules(("Size",)) is False
+
+
+class TestExtractAllWithAttrs:
+    """extract_all() integration with the optional attrs snapshot."""
+
+    def test_extract_all_fills_attribute_columns(self) -> None:
+        """File / Size / Modified columns fill from filename and attrs."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("File", r".*", group=0, priority=100)
+        extractor.add_rule("Size", "size", priority=20)
+        extractor.add_rule("Modified", "modified", priority=10)
+        attrs = FileAttrs(1572864, 1795545600.0, 1790000000.0)
+
+        result = extractor.extract_all("dump.log", ("File", "Size", "Modified"), attrs)
+
+        assert result["File"] == "dump.log"
+        assert result["Size"] == "1.5 MB"
+        assert result["Modified"] == datetime.fromtimestamp(1795545600.0).strftime(
+            DEFAULT_ATTR_DATETIME_FORMAT
+        )
+
+    def test_extract_all_without_attrs_uses_defaults(self) -> None:
+        """Omitting attrs (2-arg call) keeps attribute defaults — callers unaffected."""
+        extractor = ColumnExtractor()
+        extractor.add_rule("Size", "size", default="?")
+        result = extractor.extract_all("dump.log", ("Size",))
+        assert result["Size"] == "?"
