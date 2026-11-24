@@ -659,6 +659,42 @@
         "birthtime": { "from": "today", "offset_seconds": -7200 }
       },
       "expected": true
+    },
+    {
+      "name": "size_unit_mixed_case_above_boundary_true",
+      "query": "size:>10Mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485761,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "bare_duration_fallback_filename_contains_literal_true",
+      "query": "modified:7d",
+      "now": 1700000000,
+      "filename": "log_modified:7d.bak",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "multi_range_fallback_filename_contains_literal_true",
+      "query": "size:1kb..1mb..2gb",
+      "now": 1700000000,
+      "filename": "batch_size:1kb..1mb..2gb.bin",
+      "attrs": {
+        "size_bytes": 2048,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
     }
   ],
   "substring_cases": [
