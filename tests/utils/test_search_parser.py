@@ -344,3 +344,366 @@ class TestEmptyTokenDropping:
 
     def test_unmatched_quote_is_literal_token(self) -> None:
         assert tokenize('"foo bar') == ['"foo', "bar"]
+
+
+# ── Attribute operators (Task 2, #227) ────────────────────────────────────
+
+from datetime import datetime  # noqa: E402
+
+from profiles.core.processing.file_metadata import FileAttrs  # noqa: E402
+from profiles.utils.search_parser import (  # noqa: E402
+    AttrTerm,
+    _Comparator,
+    _parse_attr_token,
+    match_file,
+    query_needs_attributes,
+)
+
+NOW = 1_700_000_000.0
+DAY = 86400
+
+
+def _local_midnight_ts(year: int, month: int, day: int) -> float:
+    """Local midnight timestamp of a calendar day (test-side helper)."""
+    return datetime(year, month, day).timestamp()
+
+
+def _midnight_of_now(now: float) -> float:
+    """Local midnight of *now* (mirrors the parser's ``today`` anchor)."""
+    return (
+        datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    )
+
+
+class TestMatchFileSizeOperators:
+    """size operators: strict comparisons, inclusive ranges, floored decimals."""
+
+    def test_size_gt_strict_at_boundary(self) -> None:
+        attrs = FileAttrs(10485760, NOW, NOW)
+        assert match_file("f.log", "size:>10mb", attrs, now=NOW) is False
+
+    def test_size_gt_above_boundary(self) -> None:
+        attrs = FileAttrs(10485761, NOW, NOW)
+        assert match_file("f.log", "size:>10mb", attrs, now=NOW) is True
+
+    def test_size_gt_below_threshold(self) -> None:
+        attrs = FileAttrs(900 * 1024, NOW, NOW)
+        assert match_file("f.log", "size:>10mb", attrs, now=NOW) is False
+
+    def test_size_lt_strict_at_boundary(self) -> None:
+        attrs = FileAttrs(500 * 1024, NOW, NOW)
+        assert match_file("f.log", "size:<500kb", attrs, now=NOW) is False
+
+    def test_size_lt_below_boundary(self) -> None:
+        attrs = FileAttrs(500 * 1024 - 1, NOW, NOW)
+        assert match_file("f.log", "size:<500kb", attrs, now=NOW) is True
+
+    def test_size_range_inclusive_lower_bound(self) -> None:
+        attrs = FileAttrs(1024, NOW, NOW)
+        assert match_file("f.log", "size:1kb..1mb", attrs, now=NOW) is True
+
+    def test_size_range_inclusive_upper_bound(self) -> None:
+        attrs = FileAttrs(1048576, NOW, NOW)
+        assert match_file("f.log", "size:1kb..1mb", attrs, now=NOW) is True
+
+    def test_size_range_below_lower_bound(self) -> None:
+        attrs = FileAttrs(1023, NOW, NOW)
+        assert match_file("f.log", "size:1kb..1mb", attrs, now=NOW) is False
+
+    def test_size_range_above_upper_bound(self) -> None:
+        attrs = FileAttrs(1048577, NOW, NOW)
+        assert match_file("f.log", "size:1kb..1mb", attrs, now=NOW) is False
+
+    def test_size_bare_equality_match(self) -> None:
+        attrs = FileAttrs(1048576, NOW, NOW)
+        assert match_file("f.log", "size:1048576", attrs, now=NOW) is True
+
+    def test_size_bare_equality_off_by_one(self) -> None:
+        attrs = FileAttrs(1048577, NOW, NOW)
+        assert match_file("f.log", "size:1048576", attrs, now=NOW) is False
+
+    def test_size_decimal_exact(self) -> None:
+        attrs = FileAttrs(1572864, NOW, NOW)
+        assert match_file("f.log", "size:1.5mb", attrs, now=NOW) is True
+
+    def test_size_decimal_floored(self) -> None:
+        attrs = FileAttrs(1572863, NOW, NOW)
+        assert match_file("f.log", "size:1.5mb", attrs, now=NOW) is False
+
+    def test_size_key_and_unit_case_insensitive(self) -> None:
+        big = FileAttrs(10485761, NOW, NOW)
+        assert match_file("f.log", "SIZE:>10MB", big, now=NOW) is True
+        assert match_file("f.log", "size:>10Mb", big, now=NOW) is True
+
+    def test_size_key_and_unit_case_insensitive_no_match(self) -> None:
+        small = FileAttrs(900 * 1024, NOW, NOW)
+        assert match_file("f.log", "SIZE:>10MB", small, now=NOW) is False
+
+
+class TestMatchFileSubstringFallback:
+    """Malformed operators are not errors: they degrade to substring terms."""
+
+    def test_unparseable_value_without_attrs_is_substring(self) -> None:
+        assert match_file("report_size:abc.log", "size:abc", None, now=NOW) is True
+
+    def test_unparseable_value_with_attrs_is_substring_miss(self) -> None:
+        attrs = FileAttrs(10, NOW, NOW)
+        assert match_file("unrelated.log", "size:abc", attrs, now=NOW) is False
+
+    def test_unparseable_value_with_attrs_is_substring_hit(self) -> None:
+        attrs = FileAttrs(10, NOW, NOW)
+        assert match_file("size:abc.log", "size:abc", attrs, now=NOW) is True
+
+
+class TestMatchFileModifiedDurations:
+    """Durations compare the file's AGE (``modified:<7d`` means recent)."""
+
+    def test_modified_lt_7d_recent_file(self) -> None:
+        attrs = FileAttrs(1, NOW - 3600, NOW)
+        assert match_file("f.log", "modified:<7d", attrs, now=NOW) is True
+
+    def test_modified_lt_7d_old_file(self) -> None:
+        attrs = FileAttrs(1, NOW - 8 * DAY, NOW)
+        assert match_file("f.log", "modified:<7d", attrs, now=NOW) is False
+
+    def test_modified_gt_7d_old_file(self) -> None:
+        attrs = FileAttrs(1, NOW - 8 * DAY, NOW)
+        assert match_file("f.log", "modified:>7d", attrs, now=NOW) is True
+
+    def test_modified_gt_7d_recent_file(self) -> None:
+        attrs = FileAttrs(1, NOW - 3600, NOW)
+        assert match_file("f.log", "modified:>7d", attrs, now=NOW) is False
+
+    def test_modified_range_middle_of_window(self) -> None:
+        attrs = FileAttrs(1, NOW - 3 * DAY, NOW)
+        assert match_file("f.log", "modified:1d..7d", attrs, now=NOW) is True
+
+    def test_modified_range_too_recent(self) -> None:
+        attrs = FileAttrs(1, NOW - 3600, NOW)
+        assert match_file("f.log", "modified:1d..7d", attrs, now=NOW) is False
+
+    def test_modified_range_too_old(self) -> None:
+        attrs = FileAttrs(1, NOW - 8 * DAY, NOW)
+        assert match_file("f.log", "modified:1d..7d", attrs, now=NOW) is False
+
+
+class TestMatchFileDates:
+    """Date operators anchor to local midnights of the calendar day."""
+
+    def test_modified_gt_date_same_day(self) -> None:
+        mtime = _local_midnight_ts(2026, 11, 1) + 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:>2026-11-01", attrs, now=NOW) is True
+
+    def test_modified_gt_date_prior_day(self) -> None:
+        mtime = _local_midnight_ts(2026, 10, 31) + 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:>2026-11-01", attrs, now=NOW) is False
+
+    def test_modified_lt_date_prior_day(self) -> None:
+        mtime = _local_midnight_ts(2026, 10, 31) + 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:<2026-11-01", attrs, now=NOW) is True
+
+    def test_modified_lt_date_excludes_same_day(self) -> None:
+        mtime = _local_midnight_ts(2026, 11, 1) + 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:<2026-11-01", attrs, now=NOW) is False
+
+    def test_bare_date_matches_whole_local_day(self) -> None:
+        mtime = _local_midnight_ts(2026, 11, 1) + 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:2026-11-01", attrs, now=NOW) is True
+
+    def test_bare_date_excludes_next_day(self) -> None:
+        mtime = _local_midnight_ts(2026, 11, 1) + 86401
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:2026-11-01", attrs, now=NOW) is False
+
+    def test_created_date_evaluates_birthtime_not_mtime(self) -> None:
+        birthtime = _local_midnight_ts(2026, 11, 1) + 3600
+        mtime = _local_midnight_ts(2020, 1, 1)  # far older — must not matter
+        attrs = FileAttrs(1, mtime, birthtime)
+        assert match_file("f.log", "created:>2026-11-01", attrs, now=NOW) is True
+
+    def test_created_date_prior_day(self) -> None:
+        birthtime = _local_midnight_ts(2026, 10, 31) + 3600
+        mtime = _local_midnight_ts(2020, 1, 1)
+        attrs = FileAttrs(1, mtime, birthtime)
+        assert match_file("f.log", "created:>2026-11-01", attrs, now=NOW) is False
+
+
+class TestMatchFileToday:
+    """``today`` resolves against the injected *now* anchor."""
+
+    def test_modified_today_after_local_midnight(self) -> None:
+        mtime = _midnight_of_now(NOW) + 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:today", attrs, now=NOW) is True
+
+    def test_modified_today_before_local_midnight(self) -> None:
+        mtime = _midnight_of_now(NOW) - 3600
+        attrs = FileAttrs(1, mtime, mtime)
+        assert match_file("f.log", "modified:today", attrs, now=NOW) is False
+
+
+class TestMatchFileNegationAndMixing:
+    """Prefixes, OR groups, and mixing substring terms with operators."""
+
+    def test_negated_size_operator_on_small_file(self) -> None:
+        attrs = FileAttrs(500, NOW, NOW)
+        assert match_file("f.log", "-size:>10mb", attrs, now=NOW) is True
+
+    def test_negated_size_operator_on_big_file(self) -> None:
+        attrs = FileAttrs(10485761, NOW, NOW)
+        assert match_file("f.log", "-size:>10mb", attrs, now=NOW) is False
+
+    def test_plus_prefix_applies_operator_normally(self) -> None:
+        attrs = FileAttrs(10485761, NOW, NOW)
+        assert match_file("f.log", "+size:>10mb", attrs, now=NOW) is True
+
+    def test_or_group_with_size_operator(self) -> None:
+        attrs = FileAttrs(500, NOW, NOW)
+        assert match_file("small_run.log", "big OR size:<1kb", attrs, now=NOW) is True
+
+    def test_mixed_substring_and_negated_operator_old_file(self) -> None:
+        attrs = FileAttrs(1, NOW - 8 * DAY, NOW)
+        assert match_file("report_final.log", "report -modified:<1d", attrs, now=NOW) is True
+
+    def test_mixed_substring_and_negated_operator_recent_file(self) -> None:
+        attrs = FileAttrs(1, NOW - 3600, NOW)
+        assert match_file("report_final.log", "report -modified:<1d", attrs, now=NOW) is False
+
+
+class TestMatchFileWithoutAttrs:
+    """attrs=None: attribute terms fail while substring terms still evaluate."""
+
+    def test_operator_term_is_false_without_attrs(self) -> None:
+        assert match_file("anything.log", "size:>10mb", None, now=NOW) is False
+
+    def test_substring_alternative_still_matches_without_attrs(self) -> None:
+        assert match_file("report_2026.log", "report OR size:>10mb", None, now=NOW) is True
+
+    def test_and_group_fails_on_operator_term_without_attrs(self) -> None:
+        assert match_file("report_2026.log", "report size:>10mb", None, now=NOW) is False
+
+    def test_pure_substring_query_without_attrs(self) -> None:
+        assert match_file("report_2026.log", "report", None, now=NOW) is True
+
+
+class TestMatchFileBasics:
+    """Operator-mode edge cases shared with match_filter semantics."""
+
+    def test_empty_query_matches_everything(self) -> None:
+        attrs = FileAttrs(1, NOW, NOW)
+        assert match_file("any.log", "", attrs, now=NOW) is True
+
+    def test_substring_semantics_unchanged_with_attrs(self) -> None:
+        attrs = FileAttrs(1, NOW, NOW)
+        assert match_file("PROD_Tester_V01.mttl", "PROD -V01", attrs, now=NOW) is False
+        assert match_file("PROD_Tester.mttl", "PROD -V01", attrs, now=NOW) is True
+        assert match_file("PROD_Tester.mttl", "PROD", attrs, now=NOW) is True
+
+    def test_non_string_filename_raises(self) -> None:
+        with pytest.raises(TypeError):
+            match_file(123, "query", None)  # type: ignore[arg-type]
+
+    def test_non_string_query_raises(self) -> None:
+        with pytest.raises(TypeError):
+            match_file("file.txt", 456, None)  # type: ignore[arg-type]
+
+
+class TestQueryNeedsAttributes:
+    """Precheck telling callers whether attribute data must be collected."""
+
+    @pytest.mark.parametrize("query", ["", "datalog", "size:abc", '"size:>10mb"', "modified:7d"])
+    def test_queries_without_operators(self, query: str) -> None:
+        assert query_needs_attributes(query) is False
+
+    @pytest.mark.parametrize(
+        "query",
+        ["size:>10mb", "datalog modified:<7d", "report -size:>1gb", "created:2026-11-01"],
+    )
+    def test_queries_with_operators(self, query: str) -> None:
+        assert query_needs_attributes(query) is True
+
+
+class TestMatchFilterRegression:
+    """match_filter never enters operator mode (substring behavior preserved)."""
+
+    def test_operator_shaped_token_stays_substring(self) -> None:
+        assert match_filter("size:>10mb.log", "size:>10mb") is True
+
+    def test_operator_shaped_token_misses_other_names(self) -> None:
+        assert match_filter("unrelated.log", "size:>10mb") is False
+
+
+class TestParseAttrToken:
+    """Structural contract of the exported-for-tests parse hook."""
+
+    def test_size_gt(self) -> None:
+        term = _parse_attr_token("size:>10mb")
+        assert term == AttrTerm("size", (_Comparator("size_bytes", "gt", 10485760),))
+
+    def test_created_maps_to_birthtime(self) -> None:
+        term = _parse_attr_token("created:>2026-11-01")
+        assert term == AttrTerm(
+            "created", (_Comparator("birthtime", "since_day_start", "2026-11-01"),)
+        )
+
+    def test_bare_date_is_whole_day_window(self) -> None:
+        term = _parse_attr_token("modified:2026-11-01")
+        assert term == AttrTerm(
+            "modified",
+            (
+                _Comparator("mtime", "since_day_start", "2026-11-01"),
+                _Comparator("mtime", "before_day_end", "2026-11-01"),
+            ),
+        )
+
+    def test_lt_date_is_strict_before_midnight(self) -> None:
+        term = _parse_attr_token("modified:<2026-11-01")
+        assert term == AttrTerm("modified", (_Comparator("mtime", "lt", "2026-11-01"),))
+
+    def test_duration_range_uses_age_comparators(self) -> None:
+        term = _parse_attr_token("modified:1d..7d")
+        assert term == AttrTerm(
+            "modified",
+            (
+                _Comparator("mtime", "age_ge", 86400),
+                _Comparator("mtime", "age_le", 604800),
+            ),
+        )
+
+    def test_size_range_is_inclusive_bounds(self) -> None:
+        term = _parse_attr_token("size:1kb..1mb")
+        assert term == AttrTerm(
+            "size",
+            (
+                _Comparator("size_bytes", "ge", 1024),
+                _Comparator("size_bytes", "le", 1048576),
+            ),
+        )
+
+    def test_kind_mismatch_is_rejected(self) -> None:
+        assert _parse_attr_token("modified:>10mb") is None
+        assert _parse_attr_token("size:>2026-11-01") is None
+
+    def test_bare_duration_is_rejected(self) -> None:
+        assert _parse_attr_token("modified:7d") is None
+
+    def test_invalid_calendar_date_is_rejected(self) -> None:
+        assert _parse_attr_token("modified:2026-13-45") is None
+
+    def test_prefixes_are_caller_responsibility(self) -> None:
+        assert _parse_attr_token("-size:>10mb") is None
+        assert _parse_attr_token("+size:>10mb") is None
+
+    def test_unknown_key_is_rejected(self) -> None:
+        assert _parse_attr_token("owner:>10mb") is None
+
+    def test_missing_separator_is_rejected(self) -> None:
+        assert _parse_attr_token("size") is None
+
+    def test_multiple_range_separators_are_rejected(self) -> None:
+        assert _parse_attr_token("size:1..2..3") is None
