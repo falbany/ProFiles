@@ -12,7 +12,7 @@ import os
 import stat as stat_module
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 
 class FileMetadata(TypedDict):
@@ -152,3 +152,28 @@ def _extract_file_attributes(file_path: Path, stat_result: Any) -> dict[str, Any
             pass
 
     return attributes
+
+
+class FileAttrs(NamedTuple):
+    """Minimal stat snapshot for attribute columns and search operators."""
+
+    size_bytes: int
+    mtime: float
+    birthtime: float
+
+
+def _stat_path(path: Path) -> os.stat_result:
+    """Indirection so tests can shim stat results (birthtime selection)."""
+    return os.stat(path)
+
+
+def collect_file_attrs(path: Path) -> FileAttrs | None:
+    """One-stat snapshot; None when the file cannot be statted (deleted mid-scan)."""
+    try:
+        st = _stat_path(path)
+    except OSError:
+        return None
+    birthtime = getattr(st, "st_birthtime", None)
+    if birthtime is None:
+        birthtime = st.st_ctime  # Linux: inode-change time (documented caveat)
+    return FileAttrs(int(st.st_size), st.st_mtime, float(birthtime))
