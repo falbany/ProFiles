@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import logging
+import os
+import time
 from pathlib import Path
 
+import pytest
+
 import profiles.core.processing.scanner as scanner
-from profiles.core.config.models import AppConfig, MachineConfiguration
+from profiles.core.config.models import AppConfig, ColumnConfiguration, MachineConfiguration
+from profiles.core.processing import file_metadata
+from profiles.core.processing.file_metadata import FileAttrs
 from profiles.core.processing.scanner import (
     ScannedFile,
     ScannedFileDynamic,
+    _scan_and_filter,
     is_simple_extension,
     scan_and_process,
     scan_and_process_dynamic,
@@ -459,10 +466,12 @@ class TestScanPipelineSharedOrchestration:
         self._write_files(tmp_path, 3)
         real = scanner._process_file
 
-        def failing(file_path: Path, display_path: str, full_suffix: str) -> ScannedFile:
+        def failing(
+            file_path: Path, display_path: str, full_suffix: str, attrs: FileAttrs | None
+        ) -> ScannedFile:
             if file_path.name == "file_001.mttl":
                 raise OSError("boom")
-            return real(file_path, display_path, full_suffix)
+            return real(file_path, display_path, full_suffix, attrs)
 
         monkeypatch.setattr(scanner, "_process_file", failing)
 
@@ -478,10 +487,12 @@ class TestScanPipelineSharedOrchestration:
         self._write_files(tmp_path, 3)
         real = scanner._process_file
 
-        def failing(file_path: Path, display_path: str, full_suffix: str) -> ScannedFile:
+        def failing(
+            file_path: Path, display_path: str, full_suffix: str, attrs: FileAttrs | None
+        ) -> ScannedFile:
             if file_path.name == "file_002.mttl":
                 raise OSError("boom")
-            return real(file_path, display_path, full_suffix)
+            return real(file_path, display_path, full_suffix, attrs)
 
         monkeypatch.setattr(scanner, "_process_file", failing)
         monkeypatch.setattr(scanner, "_PARALLEL_THRESHOLD", 0)
@@ -501,13 +512,17 @@ class TestScanPipelineSharedOrchestration:
         def failing(
             file_path: Path,
             display_path: str,
+            full_suffix: str,
+            attrs: FileAttrs | None,
             extractor,
             column_names,
             extension,
         ) -> ScannedFileDynamic:
             if file_path.name == "file_001.mttl":
                 raise OSError("boom")
-            return real(file_path, display_path, extractor, column_names, extension)
+            return real(
+                file_path, display_path, full_suffix, attrs, extractor, column_names, extension
+            )
 
         monkeypatch.setattr(scanner, "_process_file_dynamic", failing)
 
@@ -527,10 +542,12 @@ class TestScanPipelineSharedOrchestration:
         self._write_files(tmp_path, 3)
         real = scanner._process_file
 
-        def failing(file_path: Path, display_path: str, full_suffix: str) -> ScannedFile:
+        def failing(
+            file_path: Path, display_path: str, full_suffix: str, attrs: FileAttrs | None
+        ) -> ScannedFile:
             if file_path.name == "file_000.mttl":
                 raise OSError("boom")
-            return real(file_path, display_path, full_suffix)
+            return real(file_path, display_path, full_suffix, attrs)
 
         monkeypatch.setattr(scanner, "_process_file", failing)
         config = AppConfig(scan_metrics=True)
@@ -744,3 +761,296 @@ class TestDynamicScanProgress:
         scan_dir.mkdir()
         (scan_dir / "a.mttl").write_text("x")
         assert scan_and_process_dynamic(str(scan_dir), extension=".mttl")
+
+
+# ── #227: stat-backed scan pipeline (4-tuple candidates, zero-stat gate) ────
+
+
+def _install_counting_wrapper(monkeypatch: pytest.MonkeyPatch, calls: list[Path]) -> None:
+    """Patch ``scanner.collect_file_attrs`` with a counting pass-through wrapper.
+
+    The wrapper delegates to the real implementation so scans still work;
+    *calls* records every path the pipeline tried to stat.
+    """
+    real = file_metadata.collect_file_attrs
+
+    def wrapper(path: Path) -> FileAttrs | None:
+        calls.append(path)
+        return real(path)
+
+    monkeypatch.setattr(scanner, "collect_file_attrs", wrapper)
+
+
+_MIB = 1024 * 1024
+
+
+class TestCandidateTuples:
+    """``_scan_and_filter`` yields 4-tuples whose attrs follow the query."""
+
+    def test_plain_query_yields_none_attrs(self, tmp_path: Path) -> None:
+        """Substring-free scan: every candidate carries ``attrs=None``."""
+        (tmp_path / "a.mttl").write_text("x")
+
+        candidates = list(_scan_and_filter(str(tmp_path), extension=".mttl"))
+
+        assert candidates == [(tmp_path / "a.mttl", "a.mttl", ".mttl", None)]
+
+    def test_operator_query_yields_stat_attrs(self, tmp_path: Path) -> None:
+        """Operator query: the 4th element is the stat snapshot of the file."""
+        (tmp_path / "a.mttl").write_text("x" * 1234)
+
+        candidates = list(
+            _scan_and_filter(str(tmp_path), extension=".mttl", filter_text="size:>1kb")
+        )
+
+        assert len(candidates) == 1
+        file_path, display_path, full_suffix, attrs = candidates[0]
+        assert file_path == tmp_path / "a.mttl"
+        assert display_path == "a.mttl"
+        assert full_suffix == ".mttl"
+        assert attrs is not None
+        assert attrs.size_bytes == 1234
+
+
+class TestOperatorFilterScan:
+    """Operator queries filter rows by stat data in the plain scan path."""
+
+    def test_size_operator_keeps_only_big_file(self, tmp_path: Path) -> None:
+        """`size:>1mb` on a 100 B vs 10 MiB tree keeps only the big file."""
+        (tmp_path / "small.mttl").write_text("x" * 100)
+        (tmp_path / "big.mttl").write_text("x" * (10 * _MIB))
+
+        results = scan_and_process(str(tmp_path), extension=".mttl", filter_text="size:>1mb")
+
+        assert [r.filename for r in results] == ["big.mttl"]
+
+    def test_unreachable_size_threshold_returns_nothing(self, tmp_path: Path) -> None:
+        """A threshold no file reaches yields an empty result, not an error."""
+        (tmp_path / "small.mttl").write_text("x" * 100)
+
+        results = scan_and_process(str(tmp_path), extension=".mttl", filter_text="size:>20mb")
+
+        assert results == []
+
+
+class TestOperatorFilterDynamic:
+    """Dynamic scan: substring and operator terms combine with implicit AND."""
+
+    COLUMNS = {"File": ColumnConfiguration(name="File", match=".*")}
+
+    def test_substring_plus_modified_operator(self, tmp_path: Path) -> None:
+        """`datalog modified:<7d`: fresh datalog files pass; old and
+        non-matching names are filtered out."""
+        aged = tmp_path / "datalog_old.mttl"
+        aged.write_text("x")
+        old_ts = time.time() - 30 * 24 * 3600  # 30 days ago
+        os.utime(aged, (old_ts, old_ts))
+        (tmp_path / "datalog_fresh.mttl").write_text("x")  # fresh mtime → passes
+        (tmp_path / "other_fresh.mttl").write_text("x")  # fails the substring term
+
+        results = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            filter_text="datalog modified:<7d",
+            column_names=("File",),
+            columns=self.COLUMNS,
+        )
+
+        assert [r.column_values["File"] for r in results] == ["datalog_fresh.mttl"]
+
+    def test_fresh_mtime_passes_modified_operator(self, tmp_path: Path) -> None:
+        """Files just written (mtime untouched) satisfy `modified:<7d`."""
+        (tmp_path / "datalog_a.mttl").write_text("x")
+        (tmp_path / "datalog_b.mttl").write_text("x")
+
+        results = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            filter_text="datalog modified:<7d",
+            column_names=("File",),
+            columns=self.COLUMNS,
+        )
+
+        assert sorted(r.column_values["File"] for r in results) == [
+            "datalog_a.mttl",
+            "datalog_b.mttl",
+        ]
+
+
+class TestAttrsPassthrough:
+    """Attribute columns render from the stat snapshot carried on the row."""
+
+    def test_size_column_renders_and_attrs_stick(self, tmp_path: Path) -> None:
+        """Size column shows the human-readable value; row.attrs keeps bytes."""
+        (tmp_path / "big.mttl").write_text("x" * 1048576)
+
+        results = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            column_names=("Size",),
+            columns={"Size": ColumnConfiguration(name="Size", match="size")},
+        )
+
+        assert len(results) == 1
+        row = results[0]
+        assert row.column_values["Size"] == "1 MB"
+        assert row.attrs is not None
+        assert row.attrs.size_bytes == 1048576
+
+
+class TestOneStatPerCandidate:
+    """Operator query + attribute column: exactly one stat per candidate."""
+
+    def test_collection_loop_stats_each_candidate_once(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """3 extension-passing candidates, 1 filter pass → wrapper called 3×.
+
+        The stat happens once per candidate in the collection loop; workers
+        must reuse that snapshot (a worker re-stat would push the count to 4
+        and ``row.attrs`` identifies the collection-loop snapshot).
+        """
+        (tmp_path / "small.mttl").write_text("x" * 100)
+        (tmp_path / "small2.mttl").write_text("x" * 200)
+        (tmp_path / "big.mttl").write_text("x" * (10 * _MIB))
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            filter_text="size:>1mb",
+            column_names=("Size",),
+            columns={"Size": ColumnConfiguration(name="Size", match="size")},
+        )
+
+        assert [r.rel_path for r in results] == ["big.mttl"]
+        assert len(calls) == 3
+        assert {c.name for c in calls} == {"small.mttl", "small2.mttl", "big.mttl"}
+        assert results[0].attrs is not None
+        assert results[0].attrs.size_bytes == 10 * _MIB
+
+
+class TestStatSites:
+    """Stat placement per scan shape: column-only stats per row, plain zero."""
+
+    def test_column_only_scan_stats_once_per_row(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No operator query, attribute column → workers collect the snapshot."""
+        for i in range(3):
+            (tmp_path / f"f{i}.mttl").write_text("x" * (100 * (i + 1)))
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process_dynamic(
+            str(tmp_path),
+            extension=".mttl",
+            column_names=("Size",),
+            columns={"Size": ColumnConfiguration(name="Size", match="size")},
+        )
+
+        assert len(results) == 3
+        assert len(calls) == 3  # one per row, from the worker-side stat site
+        assert all(r.attrs is not None for r in results)
+
+    def test_plain_dynamic_scan_stats_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Plain query + no attribute column → zero calls, attrs stay None."""
+        for i in range(3):
+            (tmp_path / f"f{i}.mttl").write_text("x")
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process_dynamic(str(tmp_path), extension=".mttl")
+
+        assert len(results) == 3
+        assert calls == []
+        assert all(r.attrs is None for r in results)
+
+
+class TestZeroStatGate:
+    """THE hard acceptance criterion of #227: plain scans stat nothing.
+
+    ``collect_file_attrs`` is the only stat path added by #227 — every
+    other stage (directory walk, extension pushdown, keyword filtering,
+    version extraction) is untouched.  Patching it with a counting wrapper
+    and observing 0 calls for plain scans therefore proves the plain
+    pipeline gained no stat cost.
+    """
+
+    def test_plain_scan_and_process_never_stats(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Plain scan, substring-only filter: wrapper call count == 0."""
+        for i in range(5):
+            (tmp_path / f"file_{i}.mttl").write_text("x" * 10)
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process(str(tmp_path), extension=".mttl", filter_text="file")
+
+        assert len(results) == 5
+        assert calls == []
+
+    def test_plain_dynamic_scan_never_stats(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Plain dynamic scan (no attribute columns, no filter): count == 0."""
+        for i in range(5):
+            (tmp_path / f"file_{i}.mttl").write_text("x" * 10)
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process_dynamic(str(tmp_path), extension=".mttl")
+
+        assert len(results) == 5
+        assert calls == []
+        assert all(r.attrs is None for r in results)
+
+
+class TestDeletedMidScan:
+    """A file deleted between listing and stat degrades, never raises."""
+
+    def test_unstatable_candidates_excluded_without_raising(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`collect_file_attrs` → None: operator rows drop out (attr terms
+        evaluate False) while substring-only OR alternatives still match."""
+        (tmp_path / "datalog_small.mttl").write_text("x" * 100)
+        (tmp_path / "big.mttl").write_text("x" * (10 * _MIB))
+
+        monkeypatch.setattr(scanner, "collect_file_attrs", lambda path: None)
+
+        # Pure operator query: every row excluded, no exception raised.
+        results = scan_and_process(str(tmp_path), extension=".mttl", filter_text="size:>1mb")
+        assert results == []
+
+        # OR query: the substring alternative keeps its rows.
+        or_results = scan_and_process(
+            str(tmp_path), extension=".mttl", filter_text="size:>1mb OR datalog"
+        )
+        assert [r.filename for r in or_results] == ["datalog_small.mttl"]
+
+
+class TestScannedFileDynamicPositional:
+    """The trailing attrs field defaults so 3-positional construction holds."""
+
+    def test_three_positional_args_default_attrs(self) -> None:
+        """`ScannedFileDynamic(path, column_values, rel_path)` stays valid."""
+        entry = ScannedFileDynamic(Path("a.mttl"), {"File": "a.mttl"}, "a.mttl")
+        assert entry.path == Path("a.mttl")
+        assert entry.rel_path == "a.mttl"
+        assert entry.attrs is None
+
+    def test_four_positional_args_fill_attrs(self) -> None:
+        """The 4th positional argument populates the attrs field."""
+        attrs = FileAttrs(7, 1.0, 2.0)
+        entry = ScannedFileDynamic(Path("a.mttl"), {}, "a.mttl", attrs)
+        assert entry.attrs is attrs

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from profiles.core.config.models import ColumnConfiguration
 from profiles.core.processing.column_extractor import ColumnExtractor
+from profiles.core.processing.file_metadata import FileAttrs
 
 
 def ensure_trailing_separator(path: str | Path) -> str:
@@ -143,14 +144,23 @@ def _extract_columns_with_defaults(
     extractor: ColumnExtractor,
     column_names: tuple[str, ...],
     extension: str,
+    attrs: FileAttrs | None = None,
 ) -> dict[str, str]:
     """Extract dynamic column values, then apply the built-in fallbacks.
 
     The ``File`` column always receives the full path when the user has
     not defined a custom ``File`` rule, and the ``Version`` value gets
     the file extension stripped when present.
+
+    Args:
+        full_path: The display path to extract values from.
+        extractor: Pre-built ColumnExtractor instance.
+        column_names: Ordered list of column names to extract.
+        extension: File extension for version stripping.
+        attrs: Optional stat snapshot consumed by attribute keyword rules
+            (``size``, ``modified``…); ``None`` renders their defaults.
     """
-    result = extractor.extract_all(full_path, column_names)
+    result = extractor.extract_all(full_path, column_names, attrs)
 
     # File column always gets the full path, unless user defined custom COLUMN_File
     if "File" in column_names and "File" not in result:

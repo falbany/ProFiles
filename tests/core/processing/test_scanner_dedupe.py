@@ -24,7 +24,7 @@ class TestSingleRootNoDedupe:
 
         files = list(_scan_and_filter(str(tmp_path), recursive=True))
 
-        rels = sorted(f.relative_to(tmp_path).as_posix() for f, _d, _s in files)
+        rels = sorted(f.relative_to(tmp_path).as_posix() for f, _d, _s, _attrs in files)
         assert rels == ["a.pdf", "one/b.pdf", "one/two/c.pdf", "one/two/d.pdf"]
 
     def test_nested_folders_each_file_once_scan_and_process(self, tmp_path: Path) -> None:

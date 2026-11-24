@@ -22,6 +22,7 @@ from profiles.core.processing.file_classifier import (
     _extract_columns_with_defaults,
     get_file_info,
 )
+from profiles.core.processing.file_metadata import FileAttrs, collect_file_attrs
 from profiles.core.telemetry import events as _events
 from profiles.core.telemetry.metrics import ScanTimer
 from profiles.utils.file_utils import (
@@ -29,7 +30,12 @@ from profiles.utils.file_utils import (
     scan_directory,
     suffix_of_name,
 )
-from profiles.utils.search_parser import match_filter, tokenize
+from profiles.utils.search_parser import (
+    match_file,
+    match_filter,
+    query_needs_attributes,
+    tokenize,
+)
 
 # Thread pool configuration for parallel file processing
 _MAX_PROCESSING_WORKERS = min(32, (os.cpu_count() or 1) * 2)
@@ -68,11 +74,14 @@ class ScannedFileDynamic(NamedTuple):
         path: Full filesystem path to the file.
         column_values: Dictionary mapping column names to extracted values.
         rel_path: Path relative to the scanned directory (for global search).
+        attrs: Optional stat snapshot backing attribute columns and \
+operator-filtered rows; ``None`` when the scan never needed one.
     """
 
     path: Path
     column_values: dict[str, str]
     rel_path: str
+    attrs: FileAttrs | None = None
 
 
 def is_simple_extension(ext: str) -> bool:
@@ -238,11 +247,17 @@ def _scan_and_filter(
     exclude_files: Sequence[str] | None = None,
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
-) -> Iterator[tuple[Path, str, str]]:
+) -> Iterator[tuple[Path, str, str, FileAttrs | None]]:
     """Shared scanning + filtering generator used by all ``scan_*`` functions.
 
-    Yields ``(file_path, display_path, full_suffix)`` for every file
+    Yields ``(file_path, display_path, full_suffix, attrs)`` for every file
     that passes both the extension and keyword filters.
+
+    When *filter_text* carries attribute operators (``size:>1mb`` …), each
+    extension-passing candidate is statted **once** — via
+    :func:`collect_file_attrs`, the only stat path added by #227 — and the
+    snapshot rides along on the candidate tuple. Plain and substring-only
+    queries never stat (zero-stat gate: ``attrs`` is ``None`` everywhere).
 
     Args:
         directories: Filesystem path(s) to scan.
@@ -256,14 +271,20 @@ def _scan_and_filter(
 ``None`` = defer to config-entry/param precedence.
 
     Yields:
-        Tuples of (absolute Path, display path str, full suffix str).
-        When multiple directories are provided, files are deduplicated by their absolute path (so identical files reached via different paths will only be yielded once).
+        Tuples of (absolute Path, display path str, full suffix str, \
+stat snapshot or ``None``). When multiple directories are provided, \
+files are deduplicated by their absolute path (so identical files \
+reached via different paths will only be yielded once).
     """
     directory_list = [directories] if isinstance(directories, str) else list(directories)
     seen_paths: set[str] = set()
     # Deduplicate only when several roots could yield the same file
     # (e.g. ``A`` and ``A/sub``); a single root cannot repeat itself.
     dedupe = len(directory_list) > 1
+
+    # The query is identical for every directory: decide once per scan
+    # whether candidates need a stat snapshot (#227 zero-stat gate).
+    collect_attrs = bool(filter_text) and query_needs_attributes(filter_text)
 
     for directory in directory_list:
         if not directory:
@@ -287,10 +308,20 @@ def _scan_and_filter(
 
                 display_path = _compute_display_path(file_path, base_path)
 
-                if filter_text and not match_filter(display_path, filter_text):
-                    continue
+                if filter_text:
+                    # One stat per extension-passing candidate, only when the
+                    # query actually carries attribute operators; a deleted
+                    # file simply yields None (attr terms evaluate False).
+                    attrs = collect_file_attrs(file_path) if collect_attrs else None
+                    if collect_attrs:
+                        if not match_file(display_path, filter_text, attrs):
+                            continue
+                    elif not match_filter(display_path, filter_text):
+                        continue
+                else:
+                    attrs = None
 
-                yield file_path, display_path, full_suffix
+                yield file_path, display_path, full_suffix, attrs
         except Exception as e:
             _events.scan_failed(logger, directory=directory, error=str(e))
 
@@ -306,7 +337,12 @@ def _compute_display_path(file_path: Path, base_path: Path) -> str:
         return str(file_path)
 
 
-def _process_file(file_path: Path, display_path: str, full_suffix: str) -> ScannedFile:
+def _process_file(
+    file_path: Path,
+    display_path: str,
+    full_suffix: str,
+    attrs: FileAttrs | None,
+) -> ScannedFile:
     """Process a single file (thread-safe worker).
 
     Args:
@@ -314,6 +350,8 @@ def _process_file(file_path: Path, display_path: str, full_suffix: str) -> Scann
         display_path: Path for display (relative to scan directory).
         full_suffix: Full file suffix (e.g. ``".mttx.lnk"``) used for
             version extraction.
+        attrs: Candidate stat snapshot — accepted for the unified worker
+            signature and ignored: the plain worker never stats.
 
     Returns:
         ScannedFile with filename (display path) and version.
@@ -325,28 +363,43 @@ def _process_file(file_path: Path, display_path: str, full_suffix: str) -> Scann
 def _process_file_dynamic(
     file_path: Path,
     display_path: str,
+    full_suffix: str,
+    attrs: FileAttrs | None,
     extractor: ColumnExtractor,
     column_names: tuple[str, ...],
     extension: str,
 ) -> ScannedFileDynamic:
     """Process a single file for dynamic columns (thread-safe worker).
 
+    The stat snapshot arrives pre-computed when the query carries attribute
+    operators (collected once per candidate in the scan loop). When absent
+    and a rendered column is attribute-backed, the worker collects it here —
+    the only worker-side stat site (#227).
+
     Args:
         file_path: Absolute path to the file.
         display_path: Path for display (relative to scan directory).
+        full_suffix: Full file suffix — accepted for the unified worker
+            signature; version stripping uses *extension*.
+        attrs: Pre-computed stat snapshot, or ``None`` when the scan loop
+            did not collect one.
         extractor: Pre-built ColumnExtractor instance.
         column_names: Ordered list of column names to extract.
         extension: File extension for version stripping.
 
     Returns:
-        ScannedFileDynamic with extracted column values.
+        ScannedFileDynamic with extracted column values and the stat
+        snapshot actually used (``None`` when none was needed).
     """
+    if attrs is None and extractor.has_attribute_rules(column_names):
+        attrs = collect_file_attrs(file_path)
+
     full_path_str = str(display_path)
     column_values = _extract_columns_with_defaults(
-        full_path_str, extractor, column_names, extension
+        full_path_str, extractor, column_names, extension, attrs
     )
 
-    return ScannedFileDynamic(file_path, column_values, display_path)
+    return ScannedFileDynamic(file_path, column_values, display_path, attrs)
 
 
 def _metrics_enabled(log_metrics: bool, config: AppConfig | None) -> bool:
@@ -365,7 +418,7 @@ def _run_scan_pipeline(
     exclude_dirs: Sequence[str] | None,
     exclude_files: Sequence[str] | None,
     enable_metrics: bool,
-    worker: Callable[[Path, str, str], T],
+    worker: Callable[[Path, str, str, FileAttrs | None], T],
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
     on_progress: Callable[[int], None] | None = None,
@@ -387,7 +440,8 @@ def _run_scan_pipeline(
         exclude_dirs: Directory names to skip during recursion.
         exclude_files: File name glob patterns to skip during scanning.
         enable_metrics: If True, time the scan and log DEBUG metrics.
-        worker: Per-file processor ``(file_path, display_path, full_suffix) -> T``.
+        worker: Per-file processor \
+``(file_path, display_path, full_suffix, attrs) -> T``.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
         on_progress: Called with the running count of filter-passing \
@@ -414,7 +468,9 @@ candidates during collection. Must not raise.
             # Collect all files first (needed for parallel processing);
             # the counting loop reports filter-passing candidates as they
             # are yielded so a caller can surface live progress (#152).
-            files_to_process: list[tuple[Path, str, str]] = []
+            # Candidates are the worker-input shape: 4-tuples of
+            # (file_path, display_path, full_suffix, attrs) (#152, #227).
+            files_to_process: list[tuple[Path, str, str, FileAttrs | None]] = []
             for count, candidate in enumerate(
                 _scan_and_filter(
                     directories,
@@ -448,8 +504,8 @@ candidates during collection. Must not raise.
 
 
 def _process_files(
-    files: list[tuple[Path, str, str]],
-    worker: Callable[[Path, str, str], T],
+    files: list[tuple[Path, str, str, FileAttrs | None]],
+    worker: Callable[[Path, str, str, FileAttrs | None], T],
     max_workers: int,
 ) -> tuple[list[T], int]:
     """Process *files* through *worker* — the single processing path.
@@ -461,7 +517,7 @@ def _process_files(
     on both modes).
 
     Args:
-        files: List of (file_path, display_path, full_suffix) tuples.
+        files: List of (file_path, display_path, full_suffix, attrs) tuples.
         worker: Per-file processor (thread-safe when pooling).
         max_workers: 0/1 runs inline; > 1 builds a thread pool.
 
@@ -472,9 +528,9 @@ def _process_files(
     error_count = 0
 
     if max_workers <= 1:
-        for file_path, display_path, full_suffix in files:
+        for file_path, display_path, full_suffix, attrs in files:
             try:
-                results.append(worker(file_path, display_path, full_suffix))
+                results.append(worker(file_path, display_path, full_suffix, attrs))
             except Exception as exc:
                 _events.processing_failed(logger, path=str(file_path), error=str(exc))
                 error_count += 1
@@ -483,7 +539,9 @@ def _process_files(
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(worker, *task) for task in files]
         # Submission order == input order: iterate futures as submitted.
-        for future, (file_path, _display_path, _full_suffix) in zip(futures, files, strict=True):
+        for future, (file_path, _display_path, _full_suffix, _attrs) in zip(
+            futures, files, strict=True
+        ):
             try:
                 results.append(future.result())
             except Exception as exc:
@@ -587,8 +645,12 @@ candidates during collection. Must not raise.
     """
     extractor = _build_column_extractor(columns, column_names)
 
-    def dynamic_worker(file_path: Path, display_path: str, _full_suffix: str) -> ScannedFileDynamic:
-        return _process_file_dynamic(file_path, display_path, extractor, column_names, extension)
+    def dynamic_worker(
+        file_path: Path, display_path: str, full_suffix: str, attrs: FileAttrs | None
+    ) -> ScannedFileDynamic:
+        return _process_file_dynamic(
+            file_path, display_path, full_suffix, attrs, extractor, column_names, extension
+        )
 
     return _run_scan_pipeline(
         directories,

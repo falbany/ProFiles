@@ -282,11 +282,18 @@ class FileAttrsProtocol(Protocol):
 
     Satisfied by :class:`profiles.core.processing.file_metadata.FileAttrs`;
     defined here so the utils layer stays independent of the core layer.
+    Members are declared read-only: consumers only ever read them, so both
+    immutable (NamedTuple) and mutable providers satisfy the protocol.
     """
 
-    size_bytes: int
-    mtime: float
-    birthtime: float
+    @property
+    def size_bytes(self) -> int: ...
+
+    @property
+    def mtime(self) -> float: ...
+
+    @property
+    def birthtime(self) -> float: ...
 
 
 @dataclass(frozen=True)
