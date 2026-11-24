@@ -224,7 +224,7 @@ export default function App() {
     () =>
       prefilterQuery.trim() === ""
         ? scan.files
-        : scan.files.filter((f) => matchFilter(f.rel_path, prefilterQuery)),
+        : scan.files.filter((f) => matchFilter(f.rel_path, prefilterQuery, f.attrs)),
     [scan.files, prefilterQuery],
   );
 

@@ -22,6 +22,22 @@ const OPERATOR_HELP = (
     <span>
       <code className="font-mono text-chip-indigo-text">"a b"</code> — exact phrase
     </span>
+    <span className="mt-1 font-semibold">File attributes</span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">size:&gt;10mb</code> — larger than
+    </span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">size:1kb..1mb</code> — size range
+    </span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">modified:&lt;7d</code> — within the last 7 days
+    </span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">modified:&gt;2026-11-01</code> — after a date
+    </span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">modified:today</code> — today only
+    </span>
   </span>
 );
 
@@ -86,7 +102,7 @@ export function SearchBar({
             options={filterOptions || []}
             onChange={onFilterTextChange}
             onOpenChange={setFilterListOpen}
-            placeholder="Filter files: keyword, a OR b, -tag, exact phrase..."
+            placeholder="Filter files: keyword, size:>10mb, modified:<7d, a OR b, -tag..."
             className="w-full"
             inputClassName="pl-9 pr-3"
             optionLabel={(filter) => filter || "(No filter)"}
