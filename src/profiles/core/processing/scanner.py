@@ -414,7 +414,7 @@ candidates during collection. Must not raise.
             # Collect all files first (needed for parallel processing);
             # the counting loop reports filter-passing candidates as they
             # are yielded so a caller can surface live progress (#152).
-            files_to_process: list[T] = []
+            files_to_process: list[tuple[Path, str, str]] = []
             for count, candidate in enumerate(
                 _scan_and_filter(
                     directories,
