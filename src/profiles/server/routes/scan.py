@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -202,9 +203,12 @@ async def scan_events(request: Request) -> EventSourceResponse:
         while True:
             if await request.is_disconnected():
                 break
+            # Pre-serialize: the installed sse-starlette str()-ifies dict
+            # payloads (Python repr, unparseable by browser EventSource
+            # clients — the reason this endpoint was dead surface in #143).
             yield {
                 "event": "status",
-                "data": scan_status_payload(state),
+                "data": json.dumps(scan_status_payload(state)),
             }
             await asyncio.sleep(1.0)
 

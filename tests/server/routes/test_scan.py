@@ -428,3 +428,47 @@ async def test_scan_progress_generation_guard(test_state: ServerState) -> None:
                 captured["on_progress"](500)
     assert captured["on_progress"] is not None
     assert test_state.scan_progress_count == 0
+
+
+@pytest.mark.anyio
+async def test_scan_events_wire_payload_is_valid_json(test_state: ServerState) -> None:
+    """The SSE wire `data:` field must be machine-parseable JSON.
+
+    Browser EventSource clients `JSON.parse` the data field; the installed
+    sse-starlette str()-ifies dict payloads (Python repr: single quotes,
+    capitalized booleans), so the route must pre-serialize the payload
+    itself. Regression test for the #152 live-verification finding — this
+    wire-format defect is why the endpoint was dead surface in #143. Runs
+    against a real uvicorn server: ASGITransport buffers the whole body,
+    so an infinite SSE stream can never be read in-process.
+    """
+    import json as _json
+
+    import uvicorn
+
+    app = create_app(test_state)
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning", lifespan="off")
+    server = uvicorn.Server(config)
+    serve_task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(100):
+            if server.started:
+                break
+            await asyncio.sleep(0.05)
+        assert server.started, "uvicorn did not start in time"
+        port = server.servers[0].sockets[0].getsockname()[1]
+
+        async with (
+            AsyncClient() as client,
+            client.stream("GET", f"http://127.0.0.1:{port}/api/scan/events") as resp,
+        ):
+            chunk = await asyncio.wait_for(resp.aiter_bytes().__anext__(), timeout=3.0)
+    finally:
+        server.should_exit = True
+        await asyncio.wait_for(serve_task, timeout=5.0)
+
+    text = chunk.decode("utf-8", errors="replace")
+    data_lines = [ln for ln in text.splitlines() if ln.startswith("data:")]
+    assert data_lines, f"no data: line in first SSE chunk: {text!r}"
+    payload = _json.loads(data_lines[0].removeprefix("data:").strip())
+    assert set(payload) >= {"in_progress", "count", "progress", "directory"}
