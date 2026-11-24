@@ -112,6 +112,8 @@ tests/
 │   │   (+ _classify/_errors/_excludes/_launch/_suffix_parity supplements)
 │   ├── test_network.py                       # ← utils/network.py
 │   ├── test_search_parser.py                 # ← utils/search_parser.py (+_compiled.py supplement)
+│   ├── test_search_parser_fixture.py         # ← shared Py/TS operator fixture consumer (#227,
+│   │                                         #    fixture: src/profiles/web/src/utils/searchOperators.fixture.json)
 │   └── test_shortcut.py                      # ← utils/shortcut.py
 └── web/
     ├── test_build.py                         # ← web/build.py
