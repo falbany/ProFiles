@@ -136,11 +136,13 @@ defaults:
   scan_metrics: false
 
 # ============================================================================
-# COLUMNS — dynamic columns extracted from filenames via regex.
+# COLUMNS — dynamic columns extracted from filenames, paths and file
+# attributes (size, timestamps).
 # ============================================================================
-# Patterns are applied to the FULL FILE PATH, enabling extraction of path
-# components as well as filename metadata. The "File" column is implicit and
-# always appears first; entries here add or override columns.
+# Regex patterns are applied to the FULL FILE PATH, enabling extraction of
+# path components as well as filename metadata; built-in keywords can also
+# read file attributes and the containing directory. The "File" column is
+# implicit and always appears first; entries here add or override columns.
 #
 # Keys per column:
 #   name        string  optional       friendly header label (falls back to key)
@@ -149,17 +151,26 @@ defaults:
 #   match       string  required       built-in keyword (see below) or raw regex
 #   transform   string  optional       replacement pattern with {{group:N}} backrefs
 #                                      (e.g. 'Build {{group:1}}'). Defaults to group 1
-#                                      when it exists, else the whole match.
+#                                      when it exists, else the whole match. For the
+#                                      modified/created keywords, transform is a
+#                                      strftime pattern (see keyword table).
 #   priority    int     default 0      extraction priority (higher = first)
 #   default     string  optional       value used when the pattern doesn't match
 #
 # Built-in "match" keywords:
 #   version      "1.2.3" found after "-V" / "_V"   program_V2026.7.1_PRO.mttl
+#                (keyword still available; no longer a default column)
 #   date         2026-10-25 | 2026_10_25 | 20261025
 #   git_commit   7-hex commit id after "_g"        build_g1a2b3c4.zip
-#   type         PRO | ENG | DEV | TMP | DEBUG     (last occurrence wins)
+#   type         PRO | ENG | DEV | TMP | DEBUG     (still available; not a default)
 #   filename     file name with extension
 #   extension    text after the last dot
+#   size         human-readable size (1024 base)   12.4 MB
+#   size_bytes   raw byte count                    13002394
+#   modified     last-modified time; transform = strftime pattern
+#                (default "%Y-%m-%d %H:%M:%S")
+#   created      creation time (Linux: inode-change time)
+#   path         containing directory ("." for files at the scan root)
 # ============================================================================
 columns:
   File:
@@ -174,8 +185,7 @@ columns:
     name: Path
     width: 200
     stretch: false
-    match: '(.+[\\\\/])'
-    transform: '{{group:1}}'
+    match: path                     # containing directory; "." at scan root
     priority: 40
     default: "."
   FileName:
@@ -185,20 +195,18 @@ columns:
     match: '([^/\\\\]+)$'
     transform: '{{group:1}}'
     priority: 30
-  Type:
-    name: Type
-    width: 80
+  Size:
+    name: Size
+    width: 110
     stretch: false
-    match: "(PRO|ENG|DEV|TMP|DEBUG)(?!.*(?:PRO|ENG|DEV|TMP|DEBUG))"
-    transform: '{{group:1}}'
+    match: size                     # human-readable, binary 1024 base
     priority: 20
-  Version:
-    name: Version
-    width: 100
+  Modified:
+    name: Modified
+    width: 150
     stretch: false
-    match: '[-_]V(\\d+(?:\\.\\d+)*)(?=[^\\/]*\\.[a-zA-Z0-9]+$)'
-    transform: '{{group:1}}'
-    priority: 10
+    match: modified                 # transform accepts a strftime pattern,
+    priority: 10                    # e.g. transform: '%d/%m/%Y %H:%M'
   # Extension:
   #   name: Ext
   #   width: 80
