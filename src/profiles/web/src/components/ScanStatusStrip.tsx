@@ -4,6 +4,11 @@ import { Loader2 } from "lucide-react";
 interface ScanStatusStripProps {
   /** Directory the running scan targets; shown compacted, full path on title. */
   directory: string;
+  /** Live candidates count from the SSE stream; null = degraded/no data. */
+  progress: number | null;
+  /** Whether the SERVER reports a scan running (gates the count segment —
+   * cache-only spinner runs like sort reloads must never show a count). */
+  inProgress: boolean;
 }
 
 /** Seconds elapsed string: `42s` / `2m05s`. */
@@ -25,13 +30,18 @@ function shortDirectoryName(directory: string): { label: string; cut: boolean } 
 /**
  * Inline scan status rendered inside the ActionBar's left cluster.
  *
- * Shows "Scanning <dir> — Ns" with a per-mount second counter — the interval
- * is torn down automatically because the component unmounts when the scan
- * ends. Compact inline presentation (icon + text, no strip borders or pinned
- * header behavior) sized for a single-bar height; the spinner is the motion
- * cue and is disabled under `prefers-reduced-motion`.
+ * Shows "Scanning <dir> — N files — Ns": a per-mount second counter plus a
+ * live candidates count fed by the `/api/scan/events` SSE stream through
+ * `useScanProgress` (issue #152). The count segment renders only while the
+ * server reports `in_progress` AND progress data exists — anything else
+ * (degraded stream, cache-only spinner runs like sort reloads) falls back
+ * byte-identical to the pre-#152 elapsed-only display. The interval is
+ * torn down automatically because the component unmounts when the scan
+ * ends. Compact inline presentation (icon + text, no strip borders or
+ * pinned header behavior) sized for a single-bar height; the spinner is
+ * the motion cue and is disabled under `prefers-reduced-motion`.
  */
-export function ScanStatusStrip({ directory }: ScanStatusStripProps) {
+export function ScanStatusStrip({ directory, progress, inProgress }: ScanStatusStripProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -58,6 +68,17 @@ export function ScanStatusStrip({ directory }: ScanStatusStripProps) {
             <span className="font-mono text-ink-secondary" title={directory}>
               {cut ? "…/" : ""}
               {label}
+            </span>
+          </>
+        )}
+        {inProgress && progress != null && (
+          <>
+            {" — "}
+            <span
+              data-testid="scan-progress-count"
+              className="font-mono tabular-nums text-ink-secondary"
+            >
+              {progress.toLocaleString()} files
             </span>
           </>
         )}

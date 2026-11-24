@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -33,6 +34,9 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     state: ServerState = request.app.state.server_state
     state.scan_generation += 1
     scan_generation = state.scan_generation
+    # Reset BEFORE any early return so every scan start — including the
+    # missing-directory one — begins the progress strip from zero (#152).
+    state.scan_progress_count = 0
     if payload.directory:
         state.active_directory = normalize_user_path(payload.directory)
 
@@ -51,6 +55,13 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
         }
 
     state.scan_in_progress = True
+
+    def _push_progress(count: int) -> None:
+        # Generation-guarded: late callbacks from a superseded scan must
+        # not pollute a newer scan's counter (#152).
+        if scan_generation == state.scan_generation:
+            state.scan_progress_count = count
+
     try:
         results = await asyncio.to_thread(
             scanner.scan_and_process_dynamic,
@@ -65,6 +76,7 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
             recursive_override=payload.recursive,
             column_names=state.config.column_names,
             columns=state.config.columns,
+            on_progress=_push_progress,
         )
         if scan_generation == state.scan_generation:
             state.cached_results = results
@@ -172,6 +184,16 @@ async def get_scan_results(
     return response
 
 
+def scan_status_payload(state: ServerState) -> dict:
+    """Build one `status` SSE event payload from the current scan state."""
+    return {
+        "in_progress": state.scan_in_progress,
+        "count": len(state.cached_results),
+        "progress": state.scan_progress_count,
+        "directory": str(state.active_directory) if state.active_directory else "",
+    }
+
+
 @router.get("/events")
 async def scan_events(request: Request) -> EventSourceResponse:
     """Server-Sent Events streaming scan status."""
@@ -181,13 +203,12 @@ async def scan_events(request: Request) -> EventSourceResponse:
         while True:
             if await request.is_disconnected():
                 break
+            # Pre-serialize: the installed sse-starlette str()-ifies dict
+            # payloads (Python repr, unparseable by browser EventSource
+            # clients — the reason this endpoint was dead surface in #143).
             yield {
                 "event": "status",
-                "data": {
-                    "in_progress": state.scan_in_progress,
-                    "count": len(state.cached_results),
-                    "directory": str(state.active_directory) if state.active_directory else "",
-                },
+                "data": json.dumps(scan_status_payload(state)),
             }
             await asyncio.sleep(1.0)
 
