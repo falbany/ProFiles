@@ -50,6 +50,8 @@ export interface AppCommandsDeps {
   onOpenActiveDirectory: () => void;
   onOpenDirectoryInTerminal: () => void;
   onClearFilter: () => void;
+  /** Append a filter-preset operator term (e.g. "size:>100mb") to the current filter. */
+  onAppendFilterTerm: (term: string) => void;
   onDisableRecursive: () => void;
   onLoadConfig: () => void;
   onExport: () => void;
@@ -84,6 +86,18 @@ const NO_SELECTION = "Select a file first";
 
 // Rows jumped by PageUp/PageDown in the file list (~a viewport of 28px rows).
 const TABLE_PAGE_JUMP = 20;
+
+/**
+ * Compose a filter-preset term (e.g. `size:>100mb`) into the current filter
+ * as an implicit AND (issue #227): trim the current text; an empty filter
+ * takes the term alone; a term already present as a whole token is a no-op
+ * (idempotent); anything else joins with a single space.
+ */
+export function appendFilterTerm(current: string, term: string): string {
+  const trimmed = current.trim();
+  if (trimmed.split(/\s+/).includes(term)) return trimmed;
+  return trimmed ? `${trimmed} ${term}` : term;
+}
 
 /** Focus the first element matching *selector*. */
 function focusField(selector: string): () => void {
@@ -140,6 +154,44 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       enabled: Boolean(deps.filterText.trim()),
       ...(deps.filterText.trim() ? {} : { disabledReason: "No filter is active" }),
       run: deps.onClearFilter,
+    },
+    // Filter presets (issue #227): append an attribute operator to the
+    // current filter as an implicit AND. Always enabled on purpose: they
+    // compose with any filter, including none. The palette runs them
+    // through the same append path as typing, then hands the focus back
+    // to the filter field.
+    {
+      id: "filter.largeFiles",
+      title: "Show only files larger than 100 MB",
+      group: "file-list",
+      keywords: ["filter", "size", "large"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("size:>100mb");
+        focusField("#filter-combobox")();
+      },
+    },
+    {
+      id: "filter.modifiedToday",
+      title: "Show only files modified today",
+      group: "file-list",
+      keywords: ["filter", "modified", "recent"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("modified:today");
+        focusField("#filter-combobox")();
+      },
+    },
+    {
+      id: "filter.modifiedLastWeek",
+      title: "Show only files from the last 7 days",
+      group: "file-list",
+      keywords: ["filter", "modified", "recent", "week"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("modified:<7d");
+        focusField("#filter-combobox")();
+      },
     },
     {
       id: "scan.disableRecursive",
