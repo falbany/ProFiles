@@ -1015,6 +1015,57 @@ class TestZeroStatGate:
         assert all(r.attrs is None for r in results)
 
 
+class TestExtensionFieldInertness:
+    """The EXT field stays pure-substring: attribute-lookalike extensions
+    filter by name only and must never trigger stat collection.
+
+    A file literally named ``dump.size:>10mb.mttl`` carries
+    ``size:>10mb`` inside its compound suffix, so the extension
+    expression ``size:>10mb`` matches it as a plain substring. If the
+    pipeline ever started interpreting the extension expression as an
+    attribute query, the tiny file would be filtered out by its size AND
+    the stat counter would move — both are pinned here.
+    """
+
+    def test_operator_lookalike_extension_is_substring_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`extension="size:>10mb"` matches by suffix substring, stats nothing."""
+        (tmp_path / "dump.size:>10mb.mttl").write_text("tiny")
+        (tmp_path / "plain.mttl").write_text("x")
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process(str(tmp_path), extension="size:>10mb", recursive=True)
+
+        # (a) The suffix-matching file is returned despite its tiny size:
+        # pure substring semantics, no attribute interpretation.
+        assert [r.filename for r in results] == ["dump.size:>10mb.mttl"]
+        # (b) The extension field alone never triggers stat collection,
+        # even when it looks exactly like an attribute operator.
+        assert calls == []
+        # (c) The ordinary file lacks the looked-for suffix substring.
+        assert "plain.mttl" not in [r.filename for r in results]
+
+    def test_operator_lookalike_extension_with_keyword_filter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`filter_text="dump"` rides the normal substring path: still 0 stats."""
+        (tmp_path / "dump.size:>10mb.mttl").write_text("tiny")
+        (tmp_path / "plain.mttl").write_text("x")
+
+        calls: list[Path] = []
+        _install_counting_wrapper(monkeypatch, calls)
+
+        results = scan_and_process(
+            str(tmp_path), extension="size:>10mb", filter_text="dump", recursive=True
+        )
+
+        assert [r.filename for r in results] == ["dump.size:>10mb.mttl"]
+        assert calls == []
+
+
 class TestDeletedMidScan:
     """A file deleted between listing and stat degrades, never raises."""
 
