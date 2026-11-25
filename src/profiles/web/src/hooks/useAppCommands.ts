@@ -194,6 +194,50 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       },
     },
     {
+      id: "filter.createdToday",
+      title: "Show only files created today",
+      group: "file-list",
+      keywords: ["filter", "created", "today", "recent"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("created:today");
+        focusField("#filter-combobox")();
+      },
+    },
+    {
+      id: "filter.createdLastWeek",
+      title: "Show only files created within the last 7 days",
+      group: "file-list",
+      keywords: ["filter", "created", "recent", "week"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("created:<7d");
+        focusField("#filter-combobox")();
+      },
+    },
+    {
+      id: "filter.smallFiles",
+      title: "Show only files smaller than 1 MB",
+      group: "file-list",
+      keywords: ["filter", "size", "small"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("size:<1mb");
+        focusField("#filter-combobox")();
+      },
+    },
+    {
+      id: "filter.modifiedOld",
+      title: "Show only files modified more than 30 days ago",
+      group: "file-list",
+      keywords: ["filter", "modified", "old", "stale"],
+      enabled: true,
+      run: () => {
+        deps.onAppendFilterTerm("modified:>30d");
+        focusField("#filter-combobox")();
+      },
+    },
+    {
       id: "scan.disableRecursive",
       title: "Turn off recursive scanning",
       group: "file-list",

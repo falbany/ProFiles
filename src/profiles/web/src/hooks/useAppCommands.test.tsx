@@ -568,4 +568,47 @@ describe("useAppCommands — filter preset commands", () => {
     expect(deps.onAppendFilterTerm).toHaveBeenCalledTimes(3);
     expect(document.activeElement).toBe(document.getElementById("filter-combobox"));
   });
+
+  // Issue #227 follow-up: the created / small-size / old-modified presets,
+  // shipped on the same live grammar (created mirrors modified on birthtime,
+  // >duration reads as older, size < is strict).
+  const MORE_PRESETS = [
+    {
+      id: "filter.createdToday",
+      title: "Show only files created today",
+      term: "created:today",
+    },
+    {
+      id: "filter.createdLastWeek",
+      title: "Show only files created within the last 7 days",
+      term: "created:<7d",
+    },
+    {
+      id: "filter.smallFiles",
+      title: "Show only files smaller than 1 MB",
+      term: "size:<1mb",
+    },
+    {
+      id: "filter.modifiedOld",
+      title: "Show only files modified more than 30 days ago",
+      term: "modified:>30d",
+    },
+  ] as const;
+
+  for (const { id, title, term } of MORE_PRESETS) {
+    it(`lists ${id} and runs it to the exact term ${term}`, () => {
+      installFixture();
+      const { deps, byId } = mount();
+
+      const command = byId(id);
+      expect(command.title).toBe(title);
+      expect(command.group).toBe("file-list");
+      expect(command.enabled).toBe(true);
+
+      command.run();
+      expect(deps.onAppendFilterTerm).toHaveBeenCalledTimes(1);
+      expect(deps.onAppendFilterTerm).toHaveBeenCalledWith(term);
+      expect(document.activeElement).toBe(document.getElementById("filter-combobox"));
+    });
+  }
 });
