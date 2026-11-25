@@ -4,7 +4,7 @@ import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 import { FilterSyntaxHelper } from "./FilterSyntaxHelper";
 
-const OPERATOR_HELP = (
+const BASE_OPERATOR_HELP = (
   <span className="flex flex-col gap-1 whitespace-nowrap text-left">
     <span className="font-semibold">Supported operators</span>
     <span>
@@ -22,6 +22,14 @@ const OPERATOR_HELP = (
     <span>
       <code className="font-mono text-chip-indigo-text">"a b"</code> — exact phrase
     </span>
+  </span>
+);
+
+// Attribute operators only apply to the filter field (the Ext field is a
+// pure substring match), so this section is composed into the filter
+// tooltip only (#227).
+const FILE_ATTRIBUTE_HELP = (
+  <span className="flex flex-col gap-1 whitespace-nowrap text-left">
     <span className="mt-1 font-semibold">File attributes</span>
     <span>
       <code className="font-mono text-chip-indigo-text">size:&gt;10mb</code> — larger than
@@ -38,7 +46,20 @@ const OPERATOR_HELP = (
     <span>
       <code className="font-mono text-chip-indigo-text">modified:today</code> — today only
     </span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">created:&gt;2026-11-01</code> — created after a date
+    </span>
+    <span>
+      <code className="font-mono text-chip-indigo-text">created:&lt;7d</code> — created within the last 7 days
+    </span>
   </span>
+);
+
+const FILTER_OPERATOR_HELP = (
+  <>
+    {BASE_OPERATOR_HELP}
+    {FILE_ATTRIBUTE_HELP}
+  </>
 );
 
 interface SearchBarProps {
@@ -84,7 +105,7 @@ export function SearchBar({
 
   return (
     <div className="flex w-full flex-wrap items-center gap-3 border-b border-line bg-surface-glass p-3 text-xs">
-      <Tooltip text={OPERATOR_HELP} suppress={filterListOpen}>
+      <Tooltip text={FILTER_OPERATOR_HELP} suppress={filterListOpen}>
         <div
           className="relative min-w-0 flex-1 basis-64"
           onFocusCapture={(event) => {
@@ -116,7 +137,7 @@ export function SearchBar({
         </div>
       </Tooltip>
 
-      <Tooltip text={OPERATOR_HELP} block={false} suppress={extListOpen}>
+      <Tooltip text={BASE_OPERATOR_HELP} block={false} suppress={extListOpen}>
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="text-ink-muted">Ext:</span>
           <EditableCombobox
