@@ -27,6 +27,16 @@ Au lieu d'écrire une regex personnalisée, utilisez un mot-clé intégré comme
 | `type`        | Dernier tag de type d'environnement |
 | `filename`    | Nom de fichier sans chemin      |
 | `extension`   | Extension (sans le point)       |
+| `size`        | Taille lisible, base binaire 1024 (ex. `12.4 MB` ; octets exacts sous 1 KB, ex. `512 B`) |
+| `size_bytes`  | Nombre d'octets brut (entier, ex. `13002394`) |
+| `modified`    | Date de dernière modification ; `transform` = motif strftime (défaut `%Y-%m-%d %H:%M:%S`, heure locale) |
+| `created`     | Date de création (sur Linux : repli sur la date de changement d'inode) |
+| `path`        | Répertoire contenant le fichier (« . » à la racine du scan) |
+
+> **⚠️ Coût de scan** : les mots-clés `size`, `size_bytes`, `modified` et `created`
+> lisent les attributs via un `stat` par fichier — exécuté en parallèle dans le pool
+> de workers, et uniquement quand une telle colonne est configurée (ou que le filtre
+> porte des opérateurs d'attributs). `path` ne déclenche jamais de `stat`.
 
 Exemple :
 
@@ -40,6 +50,67 @@ columns:
     transform: "{group:1}"
     priority: 10
 ```
+
+---
+
+## 📊 Attributs Fichiers (Taille, Dates, Chemin)
+
+Ces colonnes affichent les attributs du fichier (taille, horodatages, répertoire
+parent). Copiez-les sous `columns:` — le modèle starter (`--init`) embarque déjà
+File/Path/FileName/Size/Modified.
+
+### Taille (lisible, base 1024)
+```yaml
+  Size:
+    name: Size
+    width: 110
+    stretch: false
+    match: size                     # taille lisible, base 1024
+    priority: 20
+```
+
+Filtre d'exemple : `size:>10mb` — fichiers de plus de 10 MB.
+
+### Date de Modification (motif strftime)
+```yaml
+  Modified:
+    name: Modified
+    width: 150
+    stretch: false
+    match: modified
+    transform: '%d/%m/%Y %H:%M'     # motif strftime (défaut : %Y-%m-%d %H:%M:%S)
+    priority: 10
+```
+
+Filtre d'exemple : `modified:<7d` — modifiés dans les 7 derniers jours.
+
+### Répertoire Parent (mot-clé path)
+```yaml
+  Path:
+    name: Path
+    width: 200
+    stretch: false
+    match: path                     # répertoire contenant ; "." à la racine du scan
+    priority: 40
+    default: "."
+```
+
+Filtre d'exemple : `Archives` — un terme simple filtre déjà sur le chemin affiché
+(aucun opérateur `path:` n'existe).
+
+### Variantes brutes et requêtes par opérateur
+
+| Mot-clé      | `match`       | Exemple de filtre       | Signification                                |
+| ------------ | ------------- | ----------------------- | -------------------------------------------- |
+| `size`       | `size`        | `size:>10mb`            | plus de 10 MB (base binaire)                 |
+| `size_bytes` | `size_bytes`  | `size_bytes:>1048576`   | plus de 1 048 576 octets                     |
+| `modified`   | `modified`    | `modified:<7d`          | modifiés dans les 7 derniers jours           |
+| `created`    | `created`     | `created:>2026-11-01`   | créés à partir du 1er novembre 2026 (minuit local) |
+| `path`       | `path`        | *(terme simple)*        | filtre déjà sur le chemin affiché            |
+
+Les formes complètes (`size:<500kb`, `size:1kb..1mb`, `modified:>7d`,
+`modified:1d..7d`, `modified:today`, …) sont documentées dans le
+[Guide des Colonnes Dynamiques](./columns-guide.fr.md#filtrage-avec-les-opérateurs-dattributs).
 
 ---
 
@@ -90,6 +161,8 @@ columns:
     priority: 10
     default: "."
 ```
+
+> Astuce : le mot-clé intégré `match: path` (section [Attributs Fichiers](#-attributs-fichiers-taille-dates-chemin) ci-dessus) fait la même chose sans regex.
 
 ### Nom de Fichier Seulement (sans chemin)
 ```yaml
