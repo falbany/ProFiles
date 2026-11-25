@@ -294,6 +294,12 @@ three scenarios:
 | `operators` | `size:>10mb` | none              | Collection-loop stat path |
 | `columns`   | *(none)*     | template defaults | Worker-pool stat path |
 
+Rate semantics: the `operators` scenario's rate is **matched** files per
+scan-second — the numerator is the number of files passing the `size:>10mb`
+filter (e.g. 4 on the current repo tree), not the whole tree — so use its
+`duration_ms` for throughput comparisons. The ±10% regression gate applies
+to the `plain` scenario only.
+
 ### Usage
 
 ```bash
@@ -308,7 +314,7 @@ uv run python benchmark.py --directory /path  # measure a different tree
   loads it, prints a verdict table and exits **1** if any scenario is a
   REGRESSION (baseline missing → exit 2).
 - Verdicts: `PASS` (within ±10% of the baseline median rate; improvements
-  pass), `REGRESSION` (slower by more than ±10%), `STALE-TREE` (file count
+  pass), `REGRESSION` (slower by more than 10%), `STALE-TREE` (file count
   drifted >1% — warning only, delta still shown), `NEW` (scenario absent
   from the baseline).
 - Baselines are machine-local: `benchmark-baseline.json` is **git-ignored**

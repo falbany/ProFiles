@@ -1,10 +1,10 @@
 """Reusable scan-benchmark harness for ProFiles (A/B basis for perf work).
 
-This dev tool (repo root, like ``probe_webview_camera.py`` — pytest never
-collects it) formalizes the manual A/B procedure used for #227's performance
-gate (see PR #235): it measures ``scan_and_process_dynamic`` throughput on a
-fixed tree, saves the numbers as a machine-local JSON baseline, and compares
-future runs against it.
+This dev tool (repo root — pytest never collects it, like its dev-script
+sibling ``scripts/dev/probe_webview_camera.py``) formalizes the manual A/B
+procedure used for #227's performance gate (see PR #235): it measures
+``scan_and_process_dynamic`` throughput on a fixed tree, saves the numbers as
+a machine-local JSON baseline, and compares future runs against it.
 
 Scenarios (all run with ``extension="All"``, ``recursive=True``,
 ``column_names=("File",)``):
@@ -12,6 +12,10 @@ Scenarios (all run with ``extension="All"``, ``recursive=True``,
 1. ``plain``     — no filter, no columns: the zero-cost invariant. The
    ±10% regression gate applies to THIS scenario.
 2. ``operators`` — ``size:>10mb`` filter: the collection-loop stat path.
+   Rate semantics: matched-files per scan-second — the numerator is the
+   files passing the filter (e.g. 4 on the current repo tree), not the
+   whole tree — so use its ``duration_ms`` for throughput comparisons;
+   the ±10% gate applies to ``plain`` only.
 3. ``columns``   — template-default column mirrors: the worker-pool stat
    path.
 
@@ -33,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import platform
 import statistics
 import sys
@@ -459,6 +464,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     runs = max(1, args.runs)
     directory = str(Path(args.directory))
+
+    # The scanner logger inherits the root WARNING level, so the SCAN_METRICS
+    # DEBUG lines requested via ``log_metrics=True`` would be dropped before
+    # events.py ever emits them; raise the root level so they actually print.
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+
     print(f"Scanning {directory} ({runs} measured run(s) per scenario)...")
     results = run_all(directory, runs)
     print(format_report(results, directory=directory))

@@ -1,8 +1,9 @@
 """Tests for the root ``benchmark.py`` scan-benchmark harness (dev tool, #227).
 
-``benchmark.py`` lives at the repo root (next to ``probe_webview_camera.py``)
-and is not part of the ``profiles`` package, so it is loaded by file path via
-``importlib`` — path setup never matters.
+``benchmark.py`` lives at the repo root (its ``probe_webview_camera.py``
+sibling lives at ``scripts/dev/probe_webview_camera.py``) and is not part of
+the ``profiles`` package, so it is loaded by file path via ``importlib`` —
+path setup never matters.
 """
 
 from __future__ import annotations
