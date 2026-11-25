@@ -33,6 +33,7 @@ tests/
 ├── test_app_host.py                          # ← app.py (supplement: --host CLI option)
 ├── test_app_launch_resolution.py             # ← app.py (supplement: launch config resolution)
 ├── test_app_log_path.py                      # ← app.py (supplement: CWD-independent log path)
+├── test_benchmark.py                         # ← benchmark.py (root dev tool: scan A/B harness, #227)
 ├── test_config.py                            # ← config.py (shim re-exports)
 ├── characterization/                         # cross-cutting golden baseline (see exceptions)
 ├── core/
@@ -125,6 +126,7 @@ tests/
 - `tests/core/processing/test_public_api.py` — tests the `core/processing/__init__.py` re-exports (a package init, not a module).
 - `tests/packaging/` — packaging rules, entry-point stub, and `ProFiles.pyw` launcher-stub behavior.
 - `tests/server/test_barcode_integration.py` — end-to-end server integration (app + state + routes).
+- `tests/test_benchmark.py` — tests the repo-root dev tool `benchmark.py` (scan A/B harness, #227; loaded via `importlib.util.spec_from_file_location`, no `src/` mirror).
 
 **Known coverage gaps (mirrored test file does not exist yet):**
 `core/telemetry/log_viewer.py`.

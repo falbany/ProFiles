@@ -312,3 +312,7 @@ profiles.log
 
 # Local workflow-demo launch targets (my.profiles hooks bench)
 demo/
+
+# Scan-benchmark baselines: machine-local numbers (machine/Python/tree-bound),
+# never committed — write with `uv run python benchmark.py --save` (#227)
+benchmark-baseline.json
