@@ -69,6 +69,16 @@ export interface BrowseResult {
   items: BrowseEntry[];
 }
 
+/** Per-file stat snapshot served with scan results (mirrors the Python `FileAttrs` NamedTuple). */
+export interface FileAttrsInfo {
+  /** File size in bytes. */
+  size_bytes: number;
+  /** Last modification time (epoch seconds). */
+  mtime: number;
+  /** Creation time (epoch seconds). */
+  birthtime: number;
+}
+
 export interface ScannedFileItem {
   filename: string;
   path: string;
@@ -76,6 +86,8 @@ export interface ScannedFileItem {
   rel_path: string;
   has_hook?: boolean;
   hook_pattern?: string | null;
+  /** Stat attributes backing the `size:` / `modified:` filter operators; null when unavailable. */
+  attrs?: FileAttrsInfo | null;
 }
 
 export interface WorkflowStepRecord {

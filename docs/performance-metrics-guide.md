@@ -281,6 +281,51 @@ logging.basicConfig(
 
 ---
 
+## 🧪 Benchmark Script
+
+The repo-root dev tool `benchmark.py` formalizes the manual A/B procedure
+used for #227's performance gate (PR #235). It measures
+`scan_and_process_dynamic` throughput (files/second) on a fixed tree across
+three scenarios:
+
+| Scenario    | Filter       | Columns           | Code path exercised |
+|-------------|--------------|-------------------|---------------------|
+| `plain`     | *(none)*     | none              | Zero-cost invariant — **the ±10% regression gate applies to this scenario** |
+| `operators` | `size:>10mb` | none              | Collection-loop stat path |
+| `columns`   | *(none)*     | template defaults | Worker-pool stat path |
+
+Rate semantics: the `operators` scenario's rate is **matched** files per
+scan-second — the numerator is the number of files passing the `size:>10mb`
+filter (e.g. 4 on the current repo tree), not the whole tree — so use its
+`duration_ms` for throughput comparisons. The ±10% regression gate applies
+to the `plain` scenario only.
+
+### Usage
+
+```bash
+uv run python benchmark.py                    # run all scenarios + print the report
+uv run python benchmark.py --runs 5           # more measured runs (default 3, min 1)
+uv run python benchmark.py --save             # also write benchmark-baseline.json
+uv run python benchmark.py --compare          # also compare vs the baseline (exit 1 on regression)
+uv run python benchmark.py --directory /path  # measure a different tree
+```
+
+- `--save` writes a machine-local baseline (path printed); `--compare`
+  loads it, prints a verdict table and exits **1** if any scenario is a
+  REGRESSION (baseline missing → exit 2).
+- Verdicts: `PASS` (within ±10% of the baseline median rate; improvements
+  pass), `REGRESSION` (slower by more than 10%), `STALE-TREE` (file count
+  drifted >1% — warning only, delta still shown), `NEW` (scenario absent
+  from the baseline).
+- Baselines are machine-local: `benchmark-baseline.json` is **git-ignored**
+  — only compare numbers recorded on the same machine, Python version and
+  tree.
+- PR #235's gate numbers (attribute columns at zero cost for `plain`) are
+  reproducible with this script: save a baseline before a change, check out
+  the change, re-run with `--compare`, and require `plain` to stay `PASS`.
+
+---
+
 ## 📚 Related Documentation
 
 - **[Configuration Reference](./configuration-profile.en.md)** - Full `.profiles` configuration guide

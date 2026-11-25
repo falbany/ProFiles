@@ -10,10 +10,26 @@ from unittest.mock import patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from profiles.core.config.models import AppConfig, MachineConfiguration
+from profiles.core.config.models import (
+    AppConfig,
+    ColumnConfiguration,
+    MachineConfiguration,
+)
+from profiles.core.processing.file_metadata import FileAttrs
 from profiles.core.processing.scanner import ScannedFileDynamic
 from profiles.server.app import create_app
 from profiles.server.state import ServerState
+
+
+def _row(
+    path: Path,
+    column_values: dict[str, str],
+    attrs: FileAttrs | None = None,
+) -> ScannedFileDynamic:
+    """Build a cached-result row for server tests (filename = path.name)."""
+    return ScannedFileDynamic(
+        path=path, column_values=column_values, rel_path=path.name, attrs=attrs
+    )
 
 
 @pytest.fixture
@@ -472,3 +488,214 @@ async def test_scan_events_wire_payload_is_valid_json(test_state: ServerState) -
     assert data_lines, f"no data: line in first SSE chunk: {text!r}"
     payload = _json.loads(data_lines[0].removeprefix("data:").strip())
     assert set(payload) >= {"in_progress", "count", "progress", "directory"}
+
+
+# ---------------------------------------------------------------------------
+# Typed sort + attrs payload on attribute-backed columns (#227, Task 7)
+# ---------------------------------------------------------------------------
+
+_10_MB = FileAttrs(10485760, 1700000000.0, 1699000000.0)
+_900_KB = FileAttrs(921600, 1700000001.0, 1699000001.0)
+
+
+def _attr_bench_state(test_state: ServerState, rows: list[ScannedFileDynamic]) -> ServerState:
+    """State with Size/Modified attribute columns and pre-built result rows."""
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.config.columns = {
+        "Size": ColumnConfiguration(match="size"),
+        "Modified": ColumnConfiguration(match="modified"),
+    }
+    scan_state.cached_results = rows
+    return scan_state
+
+
+@pytest.mark.anyio
+async def test_results_attr_column_sorts_typed_ascending(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """An attribute-backed column sorts by raw bytes: 900 KB before 10 MB.
+
+    Text/natural sort would put "10 MB" (10 < 900) first; the typed key
+    must rank 921600 < 10485760 instead.
+    """
+    scan_state = _attr_bench_state(
+        test_state,
+        [
+            _row(tmp_path / "big_10mb.mttl", {"Size": "10 MB"}, _10_MB),
+            _row(tmp_path / "small_900kb.mttl", {"Size": "900 KB"}, _900_KB),
+        ],
+    )
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/scan/results", params={"sort_by": "Size", "sort_dir": "asc"}
+        )
+
+    payload = response.json()
+    assert [item["filename"] for item in payload["items"]] == [
+        "small_900kb.mttl",
+        "big_10mb.mttl",
+    ]
+    assert payload["sort_by"] == "Size"
+    assert payload["sort_dir"] == "asc"
+
+
+@pytest.mark.anyio
+async def test_results_attr_column_sorts_typed_descending(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """sort_dir=desc reverses the attr-backed rows: 10 MB before 900 KB."""
+    scan_state = _attr_bench_state(
+        test_state,
+        [
+            _row(tmp_path / "big_10mb.mttl", {"Size": "10 MB"}, _10_MB),
+            _row(tmp_path / "small_900kb.mttl", {"Size": "900 KB"}, _900_KB),
+        ],
+    )
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/scan/results", params={"sort_by": "Size", "sort_dir": "desc"}
+        )
+
+    payload = response.json()
+    assert [item["filename"] for item in payload["items"]] == [
+        "big_10mb.mttl",
+        "small_900kb.mttl",
+    ]
+    assert payload["sort_dir"] == "desc"
+
+
+@pytest.mark.anyio
+async def test_results_rows_without_attrs_sort_last_both_directions(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """Rows lacking a stat snapshot trail the attr-backed rows in asc AND desc.
+
+    The attrs-less row carries "500 B" — mid-pack under a text sort — so
+    landing last in both directions pins the typed path, not the text value.
+    """
+    scan_state = _attr_bench_state(
+        test_state,
+        [
+            _row(tmp_path / "a_10mb.mttl", {"Size": "10 MB"}, _10_MB),
+            _row(tmp_path / "b_900kb.mttl", {"Size": "900 KB"}, _900_KB),
+            _row(tmp_path / "c_nostat.mttl", {"Size": "500 B"}, None),
+        ],
+    )
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        ascending = await client.get(
+            "/api/scan/results", params={"sort_by": "Size", "sort_dir": "asc"}
+        )
+        descending = await client.get(
+            "/api/scan/results", params={"sort_by": "Size", "sort_dir": "desc"}
+        )
+
+    assert [item["filename"] for item in ascending.json()["items"]] == [
+        "b_900kb.mttl",
+        "a_10mb.mttl",
+        "c_nostat.mttl",
+    ]
+    assert [item["filename"] for item in descending.json()["items"]] == [
+        "a_10mb.mttl",
+        "b_900kb.mttl",
+        "c_nostat.mttl",
+    ]
+
+
+@pytest.mark.anyio
+async def test_results_non_attribute_column_keeps_natural_sort(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """A configured non-attribute column still sorts on its natural text key."""
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.config.columns = {
+        "File": ColumnConfiguration(match="filename"),
+        "Size": ColumnConfiguration(match="size"),
+    }
+    scan_state.cached_results = [
+        _row(
+            tmp_path / f"item_{n}_prod.mttl",
+            {"File": f"item_{n}", "Size": "1 MB"},
+            FileAttrs(1048576, 1700000000.0 + n, 1699000000.0),
+        )
+        for n in (10, 2, 1)
+    ]
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/scan/results", params={"sort_by": "File"})
+
+    assert [item["filename"] for item in response.json()["items"]] == [
+        "item_1_prod.mttl",
+        "item_2_prod.mttl",
+        "item_10_prod.mttl",
+    ]
+
+
+@pytest.mark.anyio
+async def test_results_payload_carries_attrs(test_state: ServerState, tmp_path: Path) -> None:
+    """Items serialize the stat snapshot; rows without one carry null."""
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.cached_results = [
+        _row(tmp_path / "statted.mttl", {"Size": "10 MB"}, _10_MB),
+        _row(tmp_path / "bare.mttl", {"Size": "1 MB"}, None),
+    ]
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/scan/results")
+
+    by_name = {item["filename"]: item for item in response.json()["items"]}
+    assert by_name["statted.mttl"]["attrs"] == {
+        "size_bytes": 10485760,
+        "mtime": 1700000000.0,
+        "birthtime": 1699000000.0,
+    }
+    assert by_name["bare.mttl"]["attrs"] is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("sort_column", "columns"),
+    [
+        pytest.param(
+            "Kind", {"Size": ColumnConfiguration(match="size")}, id="column-missing-from-config"
+        ),
+        pytest.param("Size", {}, id="empty-columns"),
+    ],
+)
+async def test_results_unconfigured_column_keeps_natural_sort(
+    test_state: ServerState,
+    tmp_path: Path,
+    sort_column: str,
+    columns: dict[str, ColumnConfiguration],
+) -> None:
+    """A column absent from config.columns falls back to the natural key.
+
+    Guards against keying every sort by attrs: only configured attribute
+    keywords route to the typed path.
+    """
+    scan_state = ServerState(config=test_state.config, active_directory=test_state.active_directory)
+    scan_state.config.columns = columns
+    scan_state.cached_results = [
+        _row(
+            tmp_path / f"unit_{n}.mttl",
+            {sort_column: f"unit_{n}"},
+            FileAttrs(1048576, 1700000000.0, 1699000000.0),
+        )
+        for n in (10, 2)
+    ]
+
+    app = create_app(scan_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/scan/results", params={"sort_by": sort_column})
+
+    assert [item["filename"] for item in response.json()["items"]] == [
+        "unit_2.mttl",
+        "unit_10.mttl",
+    ]

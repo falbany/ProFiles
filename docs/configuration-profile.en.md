@@ -232,6 +232,59 @@ Prod OR Dev
 Production Program
 ```
 
+### Attribute Operators (size, modified, created)
+
+In the **Filter** field (and the web UI filter bar), a token shaped `key:value` with
+a known key and a parseable value is evaluated against the file's `stat` snapshot.
+Keys are `size`, `size_bytes` (aliases — same bytes), `modified` and `created`;
+keys and units are **case-insensitive**. There is deliberately no `path` key: plain
+terms already substring-match the display path. The **Extension** field matches
+suffixes and has no attribute data, so an attribute-shaped term there is treated as
+a literal substring. Quoted phrases (`"size:>10mb"`) are always literal, never
+operators.
+
+| Expression               | Meaning                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `size:>10mb`             | Size strictly greater than 10 MB (binary units, 1 KB = 1024 B)                 |
+| `size:<500kb`            | Size strictly less than 500 KB                                                 |
+| `size:1048576`           | Size equal to the operand (bare magnitude = equality)                          |
+| `size:1kb..1mb`          | Size range — inclusive on both ends                                            |
+| `modified:>2026-11-01`   | Modified on or after the local midnight of that date (Nov 1 files match)       |
+| `modified:<2026-11-01`   | Modified strictly before that local midnight (the whole day is excluded)       |
+| `modified:2026-11-01`    | Modified during that local day (bare date)                                     |
+| `modified:today`         | Modified during the local day of evaluation                                    |
+| `modified:<7d`           | Modified **within the last 7 days** (recent files)                             |
+| `modified:>7d`           | Modified **more than 7 days ago** (older files)                                |
+| `modified:1d..7d`        | File age between 1 and 7 days — inclusive                                      |
+| `created:…`              | Same grammar as `modified`, applied to the creation time (on Linux: inode-change time) |
+| `-size:>10mb`            | Negation — flips the operator's outcome                                        |
+
+> **⚠️ Duration reading (GNU-find style)** — a duration bounds the file's **age**,
+> not its timestamp:
+>
+> - `modified:<7d` = age **less** than 7 days = modified **within the last 7 days** (recent files)
+> - `modified:>7d` = age **greater** than 7 days = modified **more than 7 days ago** (old files)
+
+**Operands** — sizes use binary units `b` `kb` `mb` `gb` `tb` (a plain number is
+bytes; decimals floored to whole bytes), durations use units `s` `m` `h` `d` `w`
+(decimals floored, e.g. `<0.5d` = 12 hours), dates are `YYYY-MM-DD` in local time
+(a date denotes its local midnight; `today` anchors to the local midnight of
+evaluation). Ranges `a..b` (no spaces) are inclusive at the named granularity;
+each side resolves independently by its own kind.
+
+**Fallback and composition** — malformed operators (`size:abc`, `modified:>10mb`,
+a bare duration `modified:7d`, a broken range `1..2..3`) are not errors: they fall
+back to literal substring matching. Composition follows the Google-style grammar
+above (space = AND, `OR`, `-term`, `+term`), and date/duration comparisons read
+the clock **at evaluation time**, so `today` and `<7d` stay honest in a long-lived
+session. The web UI filter bar implements the identical grammar.
+
+> **Performance** — a filter carrying at least one attribute operator makes each
+> scan perform one `stat` per candidate file (executed in the parallel worker
+> pool). A scan is fully stat-free only when the filter has no attribute operator
+> **and** the `columns:` block has no attribute keyword — see
+> [Dynamic Columns](./columns-guide.en.md).
+
 ---
 
 ## Row Coloring (`row_colors`)

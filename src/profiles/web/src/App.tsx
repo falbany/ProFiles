@@ -21,7 +21,7 @@ import { useScanProgress } from "./hooks/useScanProgress";
 import { useToast } from "./hooks/useToast";
 import { useExternalEvents } from "./hooks/useExternalEvents";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
-import { useAppCommands } from "./hooks/useAppCommands";
+import { appendFilterTerm, useAppCommands } from "./hooks/useAppCommands";
 import { useRecentCommands } from "./hooks/useRecentCommands";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
 import { useBarcodeMode } from "./hooks/useBarcodeMode";
@@ -224,7 +224,7 @@ export default function App() {
     () =>
       prefilterQuery.trim() === ""
         ? scan.files
-        : scan.files.filter((f) => matchFilter(f.rel_path, prefilterQuery)),
+        : scan.files.filter((f) => matchFilter(f.rel_path, prefilterQuery, f.attrs)),
     [scan.files, prefilterQuery],
   );
 
@@ -552,6 +552,17 @@ export default function App() {
       { directory: activeDirectory, extension: activeExtension, filter_text: "", recursive },
       { errorPrefix: "Scan failed" },
     );
+  };
+
+  /**
+   * Filter-preset command (issue #227): append the operator term to the
+   * current filter as an implicit AND via the pure `appendFilterTerm` and
+   * the plain setter — the same state path as handleClearFilter. No server
+   * rescan: the prefilter effect applies the composed text to the loaded
+   * list, exactly as after a keystroke.
+   */
+  const handleAppendFilterTerm = (term: string) => {
+    setFilterText(appendFilterTerm(filterText, term));
   };
 
   /** Re-run the scan with recursive subdirectories turned off (empty-state action). */
@@ -902,6 +913,7 @@ export default function App() {
     onOpenActiveDirectory: handleOpenActiveDirectory,
     onOpenDirectoryInTerminal: () => handleOpenDirectoryInTerminal(activeDirectory),
     onClearFilter: handleClearFilter,
+    onAppendFilterTerm: handleAppendFilterTerm,
     onDisableRecursive: handleDisableRecursive,
     onLoadConfig: () => setConfigPickerMode("load"),
     onExport: handleExport,

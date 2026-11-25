@@ -20,7 +20,11 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import ClassVar
+
+from profiles.core.processing.file_metadata import FileAttrs
 
 _logger = logging.getLogger("profiles")
 
@@ -33,6 +37,47 @@ BUILTIN_PATTERNS: dict[str, str] = {
     "filename": r"([^/\\]+)$",
     "extension": r"\.([^./\\]+)$",
 }
+
+# Attribute keywords are NOT regexes: they resolve from a FileAttrs stat
+# snapshot and must short-circuit before the compiled() regex machinery.
+ATTRIBUTE_KEYWORDS: set[str] = {"size", "size_bytes", "modified", "created"}
+
+# strftime pattern used by "modified"/"created" when no transform is set
+# (rendered in local time).
+DEFAULT_ATTR_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# The `path` keyword resolves the containing directory of the display path
+# (string-derived, never stats).  Kept separate from ATTRIBUTE_KEYWORDS.
+_PATH_KEYWORD = "path"
+
+
+def format_human_size(n: int) -> str:
+    """Format a byte count in human-readable binary units (1 KB = 1024 B).
+
+    Args:
+        n: Size in bytes.
+
+    Returns:
+        A string like ``"512 B"``, ``"1.5 MB"`` or ``"1 MB"`` — one decimal
+        place, with a trailing ``".0"`` stripped.
+
+    Examples:
+        >>> format_human_size(0)
+        '0 B'
+        >>> format_human_size(1572864)
+        '1.5 MB'
+    """
+    if n < 1024:
+        return f"{n} B"
+    value = float(n)
+    unit = "TB"
+    for candidate in ("KB", "MB", "GB", "TB"):
+        value /= 1024
+        if value < 1024:
+            unit = candidate
+            break
+    formatted = f"{value:.1f}".rstrip("0").rstrip(".")
+    return f"{formatted} {unit}"
 
 
 @dataclass
@@ -82,6 +127,17 @@ class ColumnRule:
         if pattern_key in BUILTIN_PATTERNS:
             return BUILTIN_PATTERNS[pattern_key]
         return self.match
+
+    @property
+    def is_attribute(self) -> bool:
+        """True when this rule's match is an attribute keyword.
+
+        Attribute keywords (``size``, ``size_bytes``, ``modified``,
+        ``created``) are case-insensitive and resolve from a
+        :class:`~profiles.core.processing.file_metadata.FileAttrs` snapshot
+        instead of the filename regex.
+        """
+        return self.match.lower() in ATTRIBUTE_KEYWORDS
 
     def compiled(self) -> re.Pattern:
         """Get compiled regex pattern with caching.
@@ -142,6 +198,35 @@ class ColumnRule:
             return match.group(1) if match.lastindex and match.lastindex >= 1 else match.group(0)
         except (IndexError, AttributeError, re.error):
             return self.default
+
+    def extract_attr(self, attrs: FileAttrs | None) -> str:
+        """Return the display value of an attribute rule from a stat snapshot.
+
+        Dispatches on the rule's keyword: ``size`` renders a human-readable
+        size, ``size_bytes`` the raw byte count, ``modified`` the mtime and
+        ``created`` the birthtime — both formatted with ``transform`` as a
+        strftime pattern, else
+        :data:`DEFAULT_ATTR_DATETIME_FORMAT` (local time).
+
+        Args:
+            attrs: Stat snapshot for the file, or ``None`` when unavailable.
+
+        Returns:
+            The formatted attribute value, the rule ``default`` when ``attrs``
+            is ``None`` (or the rule carries no recognized keyword).
+        """
+        if attrs is None:
+            return self.default
+        key = self.match.lower()
+        if key == "size":
+            return format_human_size(attrs.size_bytes)
+        if key == "size_bytes":
+            return str(int(attrs.size_bytes))
+        if key in ("modified", "created"):
+            pattern = self.transform or DEFAULT_ATTR_DATETIME_FORMAT
+            timestamp = attrs.mtime if key == "modified" else attrs.birthtime
+            return datetime.fromtimestamp(timestamp).strftime(pattern)
+        return self.default
 
 
 class ColumnExtractor:
@@ -218,12 +303,24 @@ class ColumnExtractor:
         """
         return list(self._rules)
 
-    def extract_all(self, filename: str, column_names: tuple[str, ...]) -> dict[str, str]:
+    def extract_all(
+        self,
+        filename: str,
+        column_names: tuple[str, ...],
+        attrs: FileAttrs | None = None,
+    ) -> dict[str, str]:
         """Extract all column values for a filename.
 
+        Attribute keyword rules resolve from ``attrs`` (each rule's default
+        when ``attrs`` is ``None``); the ``path`` keyword resolves to the
+        parent directory of the display path; everything else uses the
+        configured regex rule.
+
         Args:
-            filename: The filename to extract values from.
+            filename: The filename (or display path) to extract values from.
             column_names: Ordered list of column names to extract.
+            attrs: Optional stat snapshot consumed by attribute keyword rules
+                (``size``, ``size_bytes``, ``modified``, ``created``).
 
         Returns:
             Dictionary mapping column names to extracted values.
@@ -237,8 +334,18 @@ class ColumnExtractor:
 
         for col_name in column_names:
             if col_name in rules_by_name:
-                # Use configured rule
-                result[col_name] = rules_by_name[col_name].extract(filename)
+                rule = rules_by_name[col_name]
+                if rule.is_attribute:
+                    # Attribute keyword: value comes from the stat snapshot,
+                    # short-circuiting before the regex machinery.
+                    result[col_name] = rule.extract_attr(attrs)
+                elif rule.match.lower() == _PATH_KEYWORD:
+                    # `path` keyword: parent directory of the display path,
+                    # string-derived (no stat); transform is ignored.
+                    result[col_name] = str(Path(filename).parent)
+                else:
+                    # Use configured rule
+                    result[col_name] = rule.extract(filename)
             elif col_name == "File":
                 # Special case: File column always returns the full filename
                 result[col_name] = filename
@@ -247,6 +354,23 @@ class ColumnExtractor:
                 result[col_name] = ""
 
         return result
+
+    def has_attribute_rules(self, column_names: tuple[str, ...]) -> bool:
+        """Check whether any requested column is backed by an attribute rule.
+
+        Used to gate worker-side stat collection: a scan only needs a
+        :class:`~profiles.core.processing.file_metadata.FileAttrs` snapshot
+        when a rendered column actually demands one.  ``path`` rules do
+        **not** count — they are string-derived and never stat.
+
+        Args:
+            column_names: Column names the caller intends to render.
+
+        Returns:
+            True only if a rule whose name is in ``column_names`` is an
+            attribute rule.
+        """
+        return any(rule.name in column_names and rule.is_attribute for rule in self._rules)
 
     def clear_rules(self) -> None:
         """Remove all extraction rules."""

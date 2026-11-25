@@ -231,6 +231,62 @@ Prod OR Dev
 Production Program
 ```
 
+### Opérateurs d'attributs (`size`, `modified`, `created`)
+
+Dans le champ **Filter** (et la barre de filtre de l'interface web), un token de
+forme `key:valeur` avec une clé connue et une valeur analysable est évalué sur
+l'instantané `stat` du fichier. Les clés sont `size`, `size_bytes` (alias — mêmes
+octets), `modified` et `created` ; clés et unités sont **insensibles à la casse**.
+Il n'existe délibérément aucune clé `path` : un terme simple filtre déjà sur le
+chemin affiché. Le champ **Extension** filtre les suffixes et ne dispose d'aucune
+donnée d'attribut : un terme en forme d'opérateur d'attribut y est traité comme une
+sous-chaîne littérale. Les phrases quotées (`"size:>10mb"`) sont toujours
+littérales, jamais des opérateurs.
+
+| Expression               | Signification                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `size:>10mb`             | Taille strictement supérieure à 10 MB (unités binaires, 1 KB = 1024 B)               |
+| `size:<500kb`            | Taille strictement inférieure à 500 KB                                               |
+| `size:1048576`           | Taille égale à l'opérande (valeur seule = égalité)                                   |
+| `size:1kb..1mb`          | Plage de tailles — inclusive aux deux bornes                                         |
+| `modified:>2026-11-01`   | Modifié à partir de minuit local ce jour-là (les fichiers du 1er novembre correspondent) |
+| `modified:<2026-11-01`   | Modifié strictement avant minuit local ce jour-là (toute la journée est exclue)      |
+| `modified:2026-11-01`    | Modifié durant cette journée locale (date seule)                                     |
+| `modified:today`         | Modifié durant la journée locale de l'évaluation                                     |
+| `modified:<7d`           | Modifié **dans les 7 derniers jours** (fichiers récents)                             |
+| `modified:>7d`           | Modifié **il y a plus de 7 jours** (fichiers anciens)                                |
+| `modified:1d..7d`        | Âge du fichier entre 1 et 7 jours — inclus                                           |
+| `created:…`              | Même grammaire que `modified`, appliquée à la date de création (sur Linux : changement d'inode) |
+| `-size:>10mb`            | Négation — inverse le résultat de l'opérateur                                        |
+
+> **⚠️ Lecture des durées (à la GNU-find)** — une durée borne l'**âge** du fichier,
+> pas son horodatage :
+>
+> - `modified:<7d` = âge **inférieur** à 7 jours = modifié **dans les 7 derniers jours** (fichiers récents)
+> - `modified:>7d` = âge **supérieur** à 7 jours = modifié **il y a plus de 7 jours** (fichiers anciens)
+
+**Opérandes** — les tailles utilisent les unités binaires `b` `kb` `mb` `gb` `tb`
+(un nombre seul est en octets ; décimales arrondies à l'octet inférieur), les
+durées utilisent les unités `s` `m` `h` `d` `w` (décimales tronquées, ex.
+`<0.5d` = 12 heures), les dates sont `YYYY-MM-DD` en heure locale (une date désigne
+son minuit local ; `today` s'ancre au minuit local du moment de l'évaluation). Les
+plages `a..b` (sans espaces) sont incluses à la granularité nommée ; chaque borne
+se résout indépendamment selon son genre.
+
+**Repli et composition** — les opérateurs malformés (`size:abc`, `modified:>10mb`,
+une durée seule `modified:7d`, une plage cassée `1..2..3`) ne sont pas des erreurs :
+ils retombent sur la recherche de sous-chaîne littérale. La composition suit la
+grammaire Google-style ci-dessus (espace = AND, `OR`, `-terme`, `+terme`), et les
+comparaisons de dates/durées lisent l'horloge **au moment de l'évaluation**, donc
+`today` et `<7d` restent exacts dans une session longue. La barre de filtre de
+l'interface web implémente la même grammaire.
+
+> **Performance** — un filtre portant au moins un opérateur d'attribut fait
+> effectuer à chaque scan un `stat` par fichier candidat (exécuté dans le pool de
+> workers parallèle). Un scan est totalement sans `stat` uniquement quand le filtre
+> n'a aucun opérateur d'attribut **et** que le bloc `columns:` n'a aucun mot-clé
+> d'attribut — voir [Colonnes Dynamiques](./columns-guide.fr.md).
+
 ---
 
 ## Coloration des lignes (`row_colors`)

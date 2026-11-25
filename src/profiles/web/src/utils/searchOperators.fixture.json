@@ -1,0 +1,762 @@
+{
+  "operator_cases": [
+    {
+      "name": "size_gt_strict_equal_boundary_false",
+      "query": "size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485760,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_gt_strict_above_boundary_true",
+      "query": "size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485761,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_gt_strict_small_file_false",
+      "query": "size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 921600,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_lt_strict_equal_boundary_false",
+      "query": "size:<500kb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 512000,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_lt_strict_below_boundary_true",
+      "query": "size:<500kb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 511999,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_range_inclusive_lower_bound_true",
+      "query": "size:1kb..1mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_range_inclusive_upper_bound_true",
+      "query": "size:1kb..1mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1048576,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_range_below_lower_bound_false",
+      "query": "size:1kb..1mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1023,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_range_above_upper_bound_false",
+      "query": "size:1kb..1mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1048577,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_bare_equality_exact_true",
+      "query": "size:1048576",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1048576,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_bare_equality_off_by_one_false",
+      "query": "size:1048576",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1048577,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_decimal_operand_exact_true",
+      "query": "size:1.5mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1572864,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_decimal_operand_floored_off_by_one_false",
+      "query": "size:1.5mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1572863,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_key_case_insensitive_true",
+      "query": "SIZE:>10MB",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485761,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_unit_case_insensitive_false",
+      "query": "size:>10Mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485760,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_malformed_value_fallback_miss_false",
+      "query": "size:abc",
+      "now": 1700000000,
+      "filename": "notes.log",
+      "attrs": {
+        "size_bytes": 10485761,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "size_malformed_value_fallback_hit_true",
+      "query": "size:abc",
+      "now": 1700000000,
+      "filename": "report_size:abc.log",
+      "attrs": null,
+      "expected": true
+    },
+    {
+      "name": "modified_lt_7d_recent_true",
+      "query": "modified:<7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_lt_7d_eight_days_old_false",
+      "query": "modified:<7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -691200 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_lt_7d_exact_boundary_false",
+      "query": "modified:<7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -604800 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_gt_7d_old_true",
+      "query": "modified:>7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -691200 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_gt_7d_recent_false",
+      "query": "modified:>7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_range_1d_7d_three_days_true",
+      "query": "modified:1d..7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -259200 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_range_1d_7d_exact_lower_bound_true",
+      "query": "modified:1d..7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -86400 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_range_1d_7d_exact_upper_bound_true",
+      "query": "modified:1d..7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -604800 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_range_1d_7d_too_recent_false",
+      "query": "modified:1d..7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_range_1d_7d_too_old_false",
+      "query": "modified:1d..7d",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -691200 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_gt_date_on_day_true",
+      "query": "modified:>2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-01", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_gt_date_previous_day_false",
+      "query": "modified:>2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-10-31", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_lt_date_previous_day_true",
+      "query": "modified:<2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-10-31", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_lt_date_exact_midnight_false",
+      "query": "modified:<2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-01", "offset_seconds": 0 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_lt_date_on_day_false",
+      "query": "modified:<2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-01", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_bare_date_inside_day_true",
+      "query": "modified:2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-01", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_bare_date_next_day_false",
+      "query": "modified:2026-11-01",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-02", "offset_seconds": 1 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_today_inside_day_true",
+      "query": "modified:today",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "today", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_today_yesterday_false",
+      "query": "modified:today",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "today", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "created_gt_date_birthtime_on_day_true",
+      "query": "created:>2026-11-01",
+      "now": 1700000000,
+      "filename": "archive.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -691200 },
+        "birthtime": { "from": "date", "date": "2026-11-01", "offset_seconds": 3600 }
+      },
+      "expected": true
+    },
+    {
+      "name": "created_gt_date_birthtime_previous_day_false",
+      "query": "created:>2026-11-01",
+      "now": 1700000000,
+      "filename": "archive.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "date", "date": "2026-10-31", "offset_seconds": 3600 }
+      },
+      "expected": false
+    },
+    {
+      "name": "negated_size_gt_small_file_true",
+      "query": "-size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 921600,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "plus_prefix_size_gt_big_file_true",
+      "query": "+size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485761,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "or_group_substring_alternative_true",
+      "query": "big OR size:<1kb",
+      "now": 1700000000,
+      "filename": "big_report.log",
+      "attrs": {
+        "size_bytes": 921600,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "mixed_group_substring_negated_operator_old_true",
+      "query": "report -modified:<1d",
+      "now": 1700000000,
+      "filename": "old_report.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -691200 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "mixed_group_substring_negated_operator_recent_false",
+      "query": "report -modified:<1d",
+      "now": 1700000000,
+      "filename": "recent_report.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "null_attrs_operator_term_false",
+      "query": "size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": null,
+      "expected": false
+    },
+    {
+      "name": "null_attrs_negated_operator_true",
+      "query": "-size:>10mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": null,
+      "expected": true
+    },
+    {
+      "name": "null_attrs_same_group_substring_and_operator_false",
+      "query": "report size:>10mb",
+      "now": 1700000000,
+      "filename": "report_data.log",
+      "attrs": null,
+      "expected": false
+    },
+    {
+      "name": "null_attrs_or_substring_group_true",
+      "query": "report OR size:>10mb",
+      "now": 1700000000,
+      "filename": "report_data.log",
+      "attrs": null,
+      "expected": true
+    },
+    {
+      "name": "spec_10mb_file_gt_1mb_true",
+      "query": "size:>1mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485760,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "spec_900kb_file_gt_1mb_false",
+      "query": "size:>1mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 921600,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "spec_10mb_file_gt_1gb_false",
+      "query": "size:>1gb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485760,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "spec_900kb_file_gt_1gb_false",
+      "query": "size:>1gb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 921600,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "quoted_operator_phrase_substring_in_operator_mode_true",
+      "query": "\"size:>10mb\"",
+      "now": 1700000000,
+      "filename": "report_size:>10mb.log",
+      "attrs": null,
+      "expected": true
+    },
+    {
+      "name": "mixed_group_datalog_and_modified_lt_7d_true",
+      "query": "datalog modified:<7d",
+      "now": 1700000000,
+      "filename": "datalog_dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "mixed_group_datalog_substring_miss_false",
+      "query": "datalog modified:<7d",
+      "now": 1700000000,
+      "filename": "other_dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "modified_date_range_inside_true",
+      "query": "modified:2026-11-01..2026-11-05",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-03", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "modified_date_range_after_upper_day_false",
+      "query": "modified:2026-11-01..2026-11-05",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "date", "date": "2026-11-06", "offset_seconds": 3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": false
+    },
+    {
+      "name": "kind_mismatch_temporal_key_size_value_fallback_true",
+      "query": "modified:>10mb",
+      "now": 1700000000,
+      "filename": "report_modified:>10mb.log",
+      "attrs": {
+        "size_bytes": 2048,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "size_unit_mixed_case_above_boundary_true",
+      "query": "size:>10Mb",
+      "now": 1700000000,
+      "filename": "dump.log",
+      "attrs": {
+        "size_bytes": 10485761,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "bare_duration_fallback_filename_contains_literal_true",
+      "query": "modified:7d",
+      "now": 1700000000,
+      "filename": "log_modified:7d.bak",
+      "attrs": {
+        "size_bytes": 1024,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    },
+    {
+      "name": "multi_range_fallback_filename_contains_literal_true",
+      "query": "size:1kb..1mb..2gb",
+      "now": 1700000000,
+      "filename": "batch_size:1kb..1mb..2gb.bin",
+      "attrs": {
+        "size_bytes": 2048,
+        "mtime": { "from": "now", "offset_seconds": -3600 },
+        "birthtime": { "from": "today", "offset_seconds": -7200 }
+      },
+      "expected": true
+    }
+  ],
+  "substring_cases": [
+    {
+      "name": "substring_literal_operator_token_in_filename",
+      "query": "size:>10mb",
+      "filename": "report_size:>10mb.log",
+      "expected": true
+    },
+    {
+      "name": "substring_malformed_operator_hit",
+      "query": "size:abc",
+      "filename": "notes_size:abc.log",
+      "expected": true
+    },
+    {
+      "name": "substring_malformed_operator_miss",
+      "query": "size:abc",
+      "filename": "quarterly_report.log",
+      "expected": false
+    },
+    {
+      "name": "substring_quoted_operator_phrase_hit",
+      "query": "\"size:>10mb\"",
+      "filename": "report_size:>10mb.log",
+      "expected": true
+    },
+    {
+      "name": "substring_quoted_operator_phrase_miss",
+      "query": "\"size:>10mb\"",
+      "filename": "summary.log",
+      "expected": false
+    },
+    {
+      "name": "substring_plain_keyword_hit",
+      "query": "datalog",
+      "filename": "datalog_20261114.log",
+      "expected": true
+    },
+    {
+      "name": "substring_negation_excludes_file",
+      "query": "report -draft",
+      "filename": "report_draft_v2.log",
+      "expected": false
+    },
+    {
+      "name": "substring_negation_allows_clean_file",
+      "query": "report -draft",
+      "filename": "report_final.log",
+      "expected": true
+    },
+    {
+      "name": "substring_empty_query_matches_everything",
+      "query": "",
+      "filename": "anything.log",
+      "expected": true
+    },
+    {
+      "name": "substring_whitespace_query_matches_everything",
+      "query": "   ",
+      "filename": "anything.log",
+      "expected": true
+    }
+  ]
+}

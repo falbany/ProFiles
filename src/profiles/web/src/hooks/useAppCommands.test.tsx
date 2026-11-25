@@ -15,7 +15,7 @@ import { cleanup, renderHook } from "@testing-library/react";
  * every keyed command, no key combination claimed twice, and a disabled
  * command that always says why.
  */
-import { useAppCommands } from "./useAppCommands";
+import { appendFilterTerm, useAppCommands } from "./useAppCommands";
 import type { AppCommandsDeps } from "./useAppCommands";
 import { findCommand, formatKeys } from "../utils/commands";
 import type { Command, ShortcutEvent, ShortcutSpec } from "../utils/commands";
@@ -48,6 +48,7 @@ function makeDeps(overrides: Partial<AppCommandsDeps> = {}): AppCommandsDeps {
     onOpenActiveDirectory: vi.fn(),
     onOpenDirectoryInTerminal: vi.fn(),
     onClearFilter: vi.fn(),
+    onAppendFilterTerm: vi.fn(),
     onDisableRecursive: vi.fn(),
     onLoadConfig: vi.fn(),
     onExport: vi.fn(),
@@ -507,4 +508,107 @@ describe("useAppCommands — commands gated by view state", () => {
     byId("file.launch").run();
     expect(deps.onExecute).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("useAppCommands — appendFilterTerm (pure)", () => {
+  it("composes the preset term into the current filter as an implicit AND", () => {
+    expect(appendFilterTerm("", "modified:today")).toBe("modified:today");
+    expect(appendFilterTerm("datalog", "modified:today")).toBe("datalog modified:today");
+    expect(appendFilterTerm("  datalog  ", "size:>100mb")).toBe("datalog size:>100mb");
+  });
+
+  it("treats the term as present only when it is a whole token (idempotent)", () => {
+    // Already present as a whole token → no-op.
+    expect(appendFilterTerm("datalog modified:today", "modified:today")).toBe(
+      "datalog modified:today",
+    );
+    // Glued into a larger token → NOT present, still appended.
+    expect(appendFilterTerm("sizemodified:today", "modified:today")).toBe(
+      "sizemodified:today modified:today",
+    );
+    // Partial token at the end → NOT present either.
+    expect(appendFilterTerm("modified:todayextra", "modified:today")).toBe(
+      "modified:todayextra modified:today",
+    );
+  });
+});
+
+describe("useAppCommands — filter preset commands", () => {
+  const PRESETS = [
+    { id: "filter.largeFiles", title: "Show only files larger than 100 MB", term: "size:>100mb" },
+    { id: "filter.modifiedToday", title: "Show only files modified today", term: "modified:today" },
+    {
+      id: "filter.modifiedLastWeek",
+      title: "Show only files from the last 7 days",
+      term: "modified:<7d",
+    },
+  ] as const;
+
+  it("lists the three operator presets in the file-list group, always enabled", () => {
+    const { byId } = mount();
+
+    for (const { id, title } of PRESETS) {
+      const command = byId(id);
+      expect(command.title).toBe(title);
+      expect(command.group).toBe("file-list");
+      expect(command.enabled).toBe(true);
+      expect(command.keywords?.length).toBeGreaterThan(0);
+      expect(command.disabledReason).toBeUndefined();
+    }
+  });
+
+  it("appends each preset's exact term to the current filter and refocuses the field", () => {
+    installFixture();
+    const { deps, byId } = mount({ filterText: "datalog" });
+
+    for (const { id, term } of PRESETS) {
+      byId(id).run();
+      expect(deps.onAppendFilterTerm).toHaveBeenLastCalledWith(term);
+    }
+    expect(deps.onAppendFilterTerm).toHaveBeenCalledTimes(3);
+    expect(document.activeElement).toBe(document.getElementById("filter-combobox"));
+  });
+
+  // Issue #227 follow-up: the created / small-size / old-modified presets,
+  // shipped on the same live grammar (created mirrors modified on birthtime,
+  // >duration reads as older, size < is strict).
+  const MORE_PRESETS = [
+    {
+      id: "filter.createdToday",
+      title: "Show only files created today",
+      term: "created:today",
+    },
+    {
+      id: "filter.createdLastWeek",
+      title: "Show only files created within the last 7 days",
+      term: "created:<7d",
+    },
+    {
+      id: "filter.smallFiles",
+      title: "Show only files smaller than 1 MB",
+      term: "size:<1mb",
+    },
+    {
+      id: "filter.modifiedOld",
+      title: "Show only files modified more than 30 days ago",
+      term: "modified:>30d",
+    },
+  ] as const;
+
+  for (const { id, title, term } of MORE_PRESETS) {
+    it(`lists ${id} and runs it to the exact term ${term}`, () => {
+      installFixture();
+      const { deps, byId } = mount();
+
+      const command = byId(id);
+      expect(command.title).toBe(title);
+      expect(command.group).toBe("file-list");
+      expect(command.enabled).toBe(true);
+
+      command.run();
+      expect(deps.onAppendFilterTerm).toHaveBeenCalledTimes(1);
+      expect(deps.onAppendFilterTerm).toHaveBeenCalledWith(term);
+      expect(document.activeElement).toBe(document.getElementById("filter-combobox"));
+    });
+  }
 });

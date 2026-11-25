@@ -24,8 +24,8 @@ Each column is defined under the `columns:` block with the following parameters:
 | `name`       | String  | *(falls back to key)*     | Friendly header label displayed in the GUI column heading.                             |
 | `width`      | Integer | `150` (or `600` for File) | Width of the column in pixels (used when `stretch` is `false`).                        |
 | `stretch`    | Boolean | `false`                   | Whether the column stretches to fill available space in the Treeview.                    |
-| `match`      | String  | **Required**              | Built-in keyword (`version`, `date`, `git_commit`, `type`, `filename`, `extension`) or a raw regex pattern. |
-| `transform`  | String  | `None`                    | Replacement pattern with group backreferences. Supports `{group:N}` (e.g. `v{group:1}`) or standard `\g<N>` / `\N` syntax. Falls back to the whole match if omitted. |
+| `match`      | String  | **Required**              | Built-in keyword (`version`, `date`, `git_commit`, `type`, `filename`, `extension`, `path`, `size`, `size_bytes`, `modified`, `created`) or a raw regex pattern. |
+| `transform`  | String  | `None`                    | Replacement pattern with group backreferences. Supports `{group:N}` (e.g. `v{group:1}`) or standard `\g<N>` / `\N` syntax. Falls back to the whole match if omitted. For `modified`/`created`, `transform` is a strftime pattern (default `%Y-%m-%d %H:%M:%S`, local time); it is ignored for `path`. |
 | `priority`   | Integer | `0`                       | Order of extraction evaluation (higher numbers are evaluated first).                   |
 | `default`    | String  | `""`                      | Fallback value displayed if the pattern does not match.                                |
 
@@ -59,6 +59,44 @@ doesn't match a keyword, it's treated as a raw regex pattern.
 | `filename`    | `([^/\\]+)$`                                            | Filename without directory path   |
 | `extension`   | `\.([^./\\]+)$`                                         | File extension (without dot)      |
 
+### File Attribute and Path Keywords
+
+Five keywords are not regexes: four resolve from a per-file `stat` snapshot and one
+from the display path itself. Like the macros above, they are matched
+case-insensitively in the `match` field.
+
+| Keyword       | Extracts                                                                 | Example               |
+| ------------- | ------------------------------------------------------------------------ | --------------------- |
+| `size`        | Human-readable size, binary base (1 KB = 1024 B); exact bytes below 1 KB | `12.4 MB`, `512 B`    |
+| `size_bytes`  | Raw byte count (integer)                                                 | `13002394`            |
+| `modified`    | Last-modified time; `transform` is a strftime pattern (default `%Y-%m-%d %H:%M:%S`, local time) | `2026-11-25 14:03:07` |
+| `created`     | Creation time (on Linux, falls back to the inode-change time)            | `2026-11-25 09:41:22` |
+| `path`        | Containing directory of the display path (`transform` is ignored)        | `subdir` (`.` at the scan root) |
+
+> **Performance note** — the four attribute keywords cost one `stat` per file,
+> executed in the parallel worker pool, and only when such a column is configured
+> (or the filter query carries attribute operators). `path` is string-derived and
+> never triggers a stat. A configuration with no attribute column and no attribute
+> operator in the filter performs zero stats.
+
+```yaml
+columns:
+  Size:
+    name: Size
+    width: 110
+    stretch: false
+    match: size              # attribute keyword — human-readable size
+    priority: 20
+
+  Modified:
+    name: Modified
+    width: 150
+    stretch: false
+    match: modified          # transform = strftime pattern (local time)
+    transform: "%Y-%m-%d %H:%M"
+    priority: 10
+```
+
 ### Using Built-in Macros
 
 ```yaml
@@ -87,6 +125,69 @@ columns:
     transform: "{group:1}"
     priority: 20
 ```
+
+---
+
+## Filtering with Attribute Operators
+
+The **Filter** field (and the web UI filter bar) accepts attribute operators built
+on the same keys as the keyword table above: `size`, `size_bytes` (aliases — same
+bytes), `modified` and `created`. Keys and units are **case-insensitive**
+(`SIZE:>10MB`). A token shaped `key:value` with a parseable value is evaluated
+against the file's attributes; everything else — quoted phrases and malformed
+operators included — falls back to the plain substring grammar documented in the
+[configuration reference](./configuration-profile.en.md#search-operators). There is
+deliberately no `path` key: plain terms already substring-match the display path.
+
+### Comparison Forms
+
+| Expression               | Meaning                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `size:>10mb`             | Size strictly greater than 10 MB (binary units)                                |
+| `size:<500kb`            | Size strictly less than 500 KB                                                 |
+| `size:1048576`           | Size equal to the operand (bare magnitude = equality)                          |
+| `size:1kb..1mb`          | Size range — inclusive on both ends                                            |
+| `modified:>2026-11-01`   | Modified on or after the local midnight of that date (Nov 1 files match)       |
+| `modified:<2026-11-01`   | Modified strictly before that local midnight (the whole day is excluded)       |
+| `modified:2026-11-01`    | Modified during that local day (bare date)                                     |
+| `modified:today`         | Modified during the local day of evaluation                                    |
+| `modified:<7d`           | Modified **within the last 7 days** (recent files)                             |
+| `modified:>7d`           | Modified **more than 7 days ago** (older files)                                |
+| `modified:1d..7d`        | File age between 1 and 7 days — inclusive                                      |
+| `created:…`              | Same grammar as `modified`, applied to the creation time                       |
+| `-size:>10mb`            | Negation — flips the operator's outcome                                        |
+| `"size:>10mb"`           | Quoted — literal substring, never an operator                                  |
+
+> **⚠️ Duration reading (GNU-find style)** — a duration bounds the file's **age**,
+> not its timestamp. The comparison direction is inverted compared to a naive
+> reading of the timestamp:
+>
+> - `modified:<7d` = age **less** than 7 days = modified **within the last 7 days** (recent files)
+> - `modified:>7d` = age **greater** than 7 days = modified **more than 7 days ago** (old files)
+
+### Operands
+
+| Kind     | Syntax                | Notes                                                                                                                                             |
+| -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Size     | `10`, `10mb`, `1.5kb` | Binary units `b` `kb` `mb` `gb` `tb` (1 KB = 1024 B); a plain number is bytes; decimals allowed and floored to whole bytes                         |
+| Duration | `7d`, `12h`, `0.5w`   | Units `s` `m` `h` `d` `w` (seconds, minutes, hours, days, weeks); decimals floored (`<0.5d` = 12 hours)                                            |
+| Date     | `2026-11-01`, `today` | `YYYY-MM-DD` in local time; a date denotes its local midnight; `today` anchors to the local midnight of evaluation                                 |
+| Range    | `a..b` (no spaces)    | Inclusive at the named granularity: bytes for sizes, whole days for dates, ages for durations; each side resolves independently by its own kind (a date and a duration may be mixed), but mixing size with a date/duration side is invalid |
+
+### Fallback and Composition
+
+- **Fallback**: malformed operators are not errors — `size:abc`, a size operand on a
+  time key (`modified:>10mb`), a bare duration (`modified:7d`) or a broken range
+  (`1..2..3`) are matched as literal substrings, exactly like any plain term.
+- **Composition** follows the Google-style grammar: a space is an implicit AND, `OR`
+  separates alternatives, `-term` excludes and `+term` forces inclusion.
+- **Clock**: date and duration comparisons read the clock **at evaluation time**, so
+  `today` and `<7d` stay honest in a long-lived session.
+- **Cost**: a filter carrying at least one attribute operator makes the scan perform
+  one `stat` per candidate file (in the parallel worker pool); a filter without
+  attribute operators never stats.
+- **Parity**: the web UI filter bar implements the identical grammar (both parsers
+  are tested against the same shared fixtures).
 
 ---
 

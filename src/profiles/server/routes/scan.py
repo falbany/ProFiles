@@ -13,12 +13,25 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from profiles.core.config.models import AppConfig
 from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.processing import scanner
+from profiles.core.processing.column_extractor import ATTRIBUTE_KEYWORDS
+from profiles.core.processing.file_metadata import FileAttrs
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
+
+# Attribute keyword → :class:`FileAttrs` field read for typed sorting.
+# ``ATTRIBUTE_KEYWORDS`` (core) gates which keywords resolve at all; this
+# map is the authority for the raw stat field each keyword sorts on.
+_ATTR_FIELD_BY_KEYWORD: dict[str, str] = {
+    "size": "size_bytes",
+    "size_bytes": "size_bytes",
+    "modified": "mtime",
+    "created": "birthtime",
+}
 
 
 class ScanRequest(BaseModel):
@@ -120,6 +133,71 @@ def _column_value(row: Any, column: str) -> str:
     return str(value)
 
 
+def _attr_field(column: str, config: AppConfig | None) -> str | None:
+    """Return the :class:`FileAttrs` field backing *column*, else ``None``.
+
+    A column is attribute-backed when its configured ``match`` keyword is
+    one of the core ``ATTRIBUTE_KEYWORDS`` (``size``, ``size_bytes``,
+    ``modified``, ``created``); the returned field names the raw stat value
+    that typed sorting must use. Unconfigured columns, plain regex columns
+    and missing configurations yield ``None`` so the caller keeps its
+    natural-text sort.
+    """
+    if config is None:
+        return None
+    rule = config.columns.get(column)
+    if rule is None:
+        return None
+    keyword = str(getattr(rule, "match", "")).lower()
+    if keyword not in ATTRIBUTE_KEYWORDS:
+        return None
+    return _ATTR_FIELD_BY_KEYWORD.get(keyword)
+
+
+def _attrs_payload(attrs: FileAttrs | None) -> dict[str, int | float] | None:
+    """Serialize a row's stat snapshot for the JSON payload.
+
+    Returns ``None`` for rows without a snapshot (the scan never statted
+    the file) so the web client can render the cell as empty.
+    """
+    if attrs is None:
+        return None
+    return {
+        "size_bytes": attrs.size_bytes,
+        "mtime": attrs.mtime,
+        "birthtime": attrs.birthtime,
+    }
+
+
+def _sorted_results(
+    cached: list[Any],
+    sort_by: str | None,
+    descending: bool,
+    config: AppConfig | None,
+) -> tuple[list[Any], bool]:
+    """Order *cached* for *sort_by* and report whether any row moved.
+
+    An attribute-backed column sorts on the raw :class:`FileAttrs` field
+    (``900 KB`` ranks below ``10 MB`` by bytes, not by text); rows without
+    a snapshot trail the sorted rows in *both* directions. Other columns
+    keep the natural-text key; an unknown column leaves the list in scan
+    order.
+
+    Returns:
+        The ordered list and ``sort_applied`` — ``True`` only when the
+        sort actually reordered at least one row.
+    """
+    attr_field = _attr_field(sort_by, config) if sort_by else None
+    if attr_field is not None:
+        with_attrs = [r for r in cached if getattr(r, "attrs", None) is not None]
+        without_attrs = [r for r in cached if getattr(r, "attrs", None) is None]
+        with_attrs.sort(key=lambda row: getattr(row.attrs, attr_field), reverse=descending)
+        return with_attrs + without_attrs, bool(with_attrs)
+    if sort_by and any(sort_by in (getattr(r, "column_values", None) or {}) for r in cached):
+        return sorted(cached, key=_sort_key(sort_by), reverse=descending), True
+    return cached, False
+
+
 @router.get("/results")
 async def get_scan_results(
     request: Request,
@@ -137,16 +215,16 @@ async def get_scan_results(
     Sorting is applied to the *whole* cached result set before paging, so
     pages fetched later keep the requested order. When ``sort_by`` names a
     column that does not exist, the list is left in scan order.
+
+    An attribute-backed column (``match`` resolves to a stat keyword) sorts
+    on the raw :class:`FileAttrs` field instead of the rendered text; see
+    :func:`_sorted_results` for the ordering contract.
     """
     state: ServerState = request.app.state.server_state
-    cached = state.cached_results
-    total = len(cached)
+    total = len(state.cached_results)
 
-    sort_applied = False
     descending = sort_dir == "desc"
-    if sort_by and any(sort_by in (getattr(r, "column_values", None) or {}) for r in cached):
-        cached = sorted(cached, key=_sort_key(sort_by), reverse=descending)
-        sort_applied = True
+    cached, sort_applied = _sorted_results(state.cached_results, sort_by, descending, state.config)
 
     page = cached if limit is None else cached[offset : offset + limit]
 
@@ -167,6 +245,7 @@ async def get_scan_results(
                 "rel_path": getattr(r, "rel_path", ""),
                 "has_hook": bool(matched_hook),
                 "hook_pattern": matched_hook,
+                "attrs": _attrs_payload(getattr(r, "attrs", None)),
             }
         )
     response: dict = {
