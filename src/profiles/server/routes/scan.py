@@ -18,6 +18,7 @@ from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.processing import scanner
 from profiles.core.processing.column_extractor import ATTRIBUTE_KEYWORDS
 from profiles.core.processing.file_metadata import FileAttrs
+from profiles.core.processing.watcher import DirectoryWatcher
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
 
@@ -97,6 +98,103 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     finally:
         if scan_generation == state.scan_generation:
             state.scan_in_progress = False
+
+
+class WatchRequest(BaseModel):
+    """Body of the watch-mode toggle."""
+
+    enabled: bool
+    recursive: bool = True
+
+
+def _shutdown_watcher(state: ServerState, *, error: str | None) -> None:
+    """Lock-free watcher teardown shared by the start/stop helpers.
+
+    The caller must hold ``state._watch_lock``. Stops the active watcher
+    (if any), drops it from state and records or clears ``watch_error``.
+    """
+    watcher = state.watcher
+    if watcher is not None:
+        watcher.stop()
+    state.watcher = None
+    state.watch_error = error
+
+
+def _stop_watcher(state: ServerState, *, error: str | None = None) -> None:
+    """Stop the active watch and record or clear its error state.
+
+    Safe against concurrent enable/disable: the whole body runs under
+    ``state._watch_lock``. ``watcher.stop()`` joins the poller thread
+    (bounded by the watcher's join timeout); a same-thread call — an
+    ``on_error`` fired from the watcher thread — returns without joining
+    (guarded inside the watcher).
+    """
+    # ``_watch_lock`` is the brief-specified watch-state lock owned by
+    # ServerState; the server routes are its designated operator, so the
+    # underscore access is intra-package, not a client-class reach-in.
+    with state._watch_lock:  # pylint: disable=protected-access
+        _shutdown_watcher(state, error=error)
+
+
+def _start_watcher(state: ServerState, *, recursive: bool) -> None:
+    """Start (or replace) the directory watcher on the active directory.
+
+    The probe's depth and excludes come from
+    :func:`scanner.effective_search_boundary` — the same merge that
+    governs a scan of the same root. Callbacks capture *state* only:
+    ``on_change`` bumps ``watch_seq`` under the lock (cheap and
+    non-blocking — the watcher-thread contract), ``on_error`` stops and
+    records the message. Any previous watcher is stopped first, so at
+    most one poller runs; a fresh enable clears a stale ``watch_error``.
+    """
+    with state._watch_lock:  # pylint: disable=protected-access
+        _shutdown_watcher(state, error=None)
+        directory = state.active_directory
+        if directory is None:  # The route 400s before this; fail safe.
+            return
+
+        depth, exclude_dirs = scanner.effective_search_boundary(
+            str(directory), state.config, recursive=recursive
+        )
+
+        def _on_change() -> None:
+            with state._watch_lock:  # pylint: disable=protected-access
+                state.watch_seq += 1
+
+        def _on_error(message: str) -> None:
+            _stop_watcher(state, error=message)
+
+        watcher = DirectoryWatcher(
+            directory,
+            exclude_dirs=exclude_dirs,
+            max_depth=depth,
+            on_change=_on_change,
+            on_error=_on_error,
+        )
+        watcher.start()
+        state.watcher = watcher
+        state.watch_error = None
+
+
+@router.post("/watch")
+async def set_watch_mode(payload: WatchRequest, request: Request) -> dict:
+    """Enable or disable watch mode on the active directory.
+
+    Returns the resulting watching state and the watcher's current
+    adaptive interval (``None`` when not watching).
+    """
+    state: ServerState = request.app.state.server_state
+    if payload.enabled:
+        if not state.active_directory:
+            raise HTTPException(status_code=400, detail="Active directory is not set")
+        _start_watcher(state, recursive=payload.recursive)
+    else:
+        _stop_watcher(state)
+    watcher = state.watcher
+    return {
+        "watching": watcher is not None,
+        "interval_s": watcher.interval_s if watcher is not None else None,
+    }
 
 
 def _sort_key(column: str) -> Callable[[Any], Any]:
@@ -265,11 +363,16 @@ async def get_scan_results(
 
 def scan_status_payload(state: ServerState) -> dict:
     """Build one `status` SSE event payload from the current scan state."""
+    watcher = state.watcher
     return {
         "in_progress": state.scan_in_progress,
         "count": len(state.cached_results),
         "progress": state.scan_progress_count,
         "directory": str(state.active_directory) if state.active_directory else "",
+        "watching": watcher is not None,
+        "watch_interval_s": watcher.interval_s if watcher is not None else None,
+        "watch_seq": state.watch_seq,
+        "watch_error": state.watch_error,
     }
 
 

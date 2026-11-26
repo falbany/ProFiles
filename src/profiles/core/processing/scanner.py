@@ -160,6 +160,40 @@ def _resolve_scan_config(
     return eff_recursive, eff_depth, eff_exclude_dirs, eff_exclude_files
 
 
+def effective_search_boundary(
+    directory: str,
+    config: AppConfig | None,
+    *,
+    recursive: bool,
+) -> tuple[int, tuple[str, ...]]:
+    """Resolve the effective search boundary ``(max_depth, exclude_dirs)``.
+
+    Public, thin wrapper over :func:`_resolve_scan_config`: the depth and
+    exclusion patterns returned are exactly the ones a scan of *directory*
+    would apply (active machine/directory entry → ``config`` → defaults).
+    The watch-mode probe (issue #223) uses it to sample the same tree a
+    scan of the same root would walk.
+
+    Args:
+        directory: Root directory the boundary applies to.
+        config: Optional application configuration for the merge.
+        recursive: Whether the search descends below the root. A
+            non-recursive boundary forces depth ``0`` (root only) while
+            keeping the merged excludes.
+
+    Returns:
+        Tuple ``(max_depth, exclude_dirs)`` — depth levels below the
+        root, and the merged directory-exclusion patterns.
+    """
+    (
+        _eff_recursive,
+        eff_depth,
+        eff_exclude_dirs,
+        _eff_exclude_files,
+    ) = _resolve_scan_config(directory, True, None, None, config)
+    return (eff_depth if recursive else 0, eff_exclude_dirs)
+
+
 def _extension_filter(extension: str) -> Callable[[str], bool] | None:
     """Build a file-name predicate for *extension*, or ``None`` when not filtering.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -10,6 +11,7 @@ from typing import Any, Protocol
 from profiles.core.config.io.yaml_io import find_config_file
 from profiles.core.config.models import AppConfig
 from profiles.core.paths import default_config_path
+from profiles.core.processing.watcher import DirectoryWatcher
 from profiles.core.telemetry import events
 
 _MAX_EXTERNAL_EVENTS = 50
@@ -62,6 +64,18 @@ class ServerState:
     # the /api/scan/events SSE payload (issue #152). Server-global by the
     # existing single-active-scan state model (see the #152 design spec).
     scan_progress_count: int = 0
+    # Watch-mode runtime (issue #223): the active directory-mtime probe
+    # plus its bookkeeping. ``watch_seq`` counts debounced change
+    # notifications; the watcher thread and route handlers both mutate
+    # the watch fields under ``_watch_lock`` (cheap counter bumps only —
+    # the watcher-thread callback contract). ``watch_recursive`` records
+    # the recursion intent of the last scan/enable so a re-enable mirrors
+    # the same boundary.
+    watcher: DirectoryWatcher | None = None
+    watch_seq: int = 0
+    watch_error: str | None = None
+    watch_recursive: bool = True
+    _watch_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     # UI events recorded by external actors (config handoff), drained by
     # the frontend's /api/notifications poll.
     _external_events: list[dict[str, Any]] = field(default_factory=list)
