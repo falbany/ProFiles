@@ -9,14 +9,18 @@ reaching clients is covered end-to-end by the Task 8 hook tests.
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from profiles.core.config.models import AppConfig
+from profiles.core.processing import watcher as watcher_module
 from profiles.core.processing.watcher import DirectoryWatcher
 from profiles.server.app import create_app
+from profiles.server.routes import scan as scan_routes
 from profiles.server.routes.scan import scan_status_payload
 from profiles.server.state import ServerState
 
@@ -241,3 +245,146 @@ async def test_scan_records_recursive_intent(test_state: ServerState) -> None:
 
     assert test_state.watch_recursive is False
     assert test_state.watcher is not None
+
+
+@pytest.mark.anyio
+async def test_scan_same_directory_and_intent_skips_restart(test_state: ServerState) -> None:
+    """A rescan of the same directory with the same intent keeps the poller.
+
+    Final-review refinement (#223): restarting the watcher on every
+    rescan was needless churn (and every stop is a thread join) — the
+    same-directory/same-intent scan must leave the running watcher
+    untouched, by identity.
+    """
+    directory = test_state.active_directory
+    assert directory is not None
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        first = test_state.watcher
+        assert first is not None
+
+        response = await client.post(
+            "/api/scan",
+            json={
+                "directory": str(directory),
+                "recursive": True,
+                "extension": "",
+                "filter_text": "",
+            },
+        )
+        assert response.status_code == 200
+
+    assert test_state.watcher is first
+    assert first.is_running
+    assert test_state.watch_recursive is True
+
+
+@pytest.mark.anyio
+async def test_scan_same_directory_changed_intent_restarts(test_state: ServerState) -> None:
+    """A same-directory scan with a flipped recursion intent still re-targets.
+
+    The intent change alters the effective boundary (depth/excludes), so
+    the watcher must restart even though the root is unchanged.
+    """
+    directory = test_state.active_directory
+    assert directory is not None
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        first = test_state.watcher
+        assert first is not None
+
+        response = await client.post(
+            "/api/scan",
+            json={
+                "directory": str(directory),
+                "recursive": False,
+                "extension": "",
+                "filter_text": "",
+            },
+        )
+        assert response.status_code == 200
+
+    assert test_state.watcher is not first
+    assert not first.is_running
+    assert test_state.watcher is not None
+    assert test_state.watcher.is_running
+    assert test_state.watch_recursive is False
+
+
+def test_stale_error_cannot_clear_replacement(test_state: ServerState) -> None:
+    """A stale watcher's error exit must not clear its replacement.
+
+    The identity-checked teardown (:func:`_watcher_error_exit`) only
+    clears the watch state when the failing watcher is still the active
+    one — an outgoing poller finishing a failing walk after a
+    replacement started must leave the replacement (and its error state)
+    alone.
+    """
+    directory = test_state.active_directory
+    assert directory is not None
+    stale = DirectoryWatcher(directory, on_change=lambda: None, on_error=lambda _m: None)
+    fresh = DirectoryWatcher(directory, on_change=lambda: None, on_error=lambda _m: None)
+    test_state.watcher = fresh
+
+    scan_routes._watcher_error_exit(test_state, stale, "stale boom")
+    assert test_state.watcher is fresh
+    assert test_state.watch_error is None
+
+    scan_routes._watcher_error_exit(test_state, fresh, "fresh boom")
+    assert test_state.watcher is None
+    assert test_state.watch_error == "fresh boom"
+
+
+def test_seq_lock_free_during_stop_join(
+    test_state: ServerState, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stop's thread join must never hold the cheap state lock.
+
+    Regression pin for the final-review fix (#223): while
+    ``_stop_watcher`` joins a poller stuck mid-walk, work needing
+    ``_watch_lock`` (what a watcher's seq-bump callback does) must
+    complete — holding the cheap lock across the join deadlocked it
+    until the join timeout, freezing the caller for up to 5 seconds.
+    """
+    release = threading.Event()
+    walk_entered = threading.Event()
+    real_snapshot = watcher_module.snapshot_dir_mtimes
+
+    def slow_snapshot(
+        root: Path,
+        exclude_dirs: Sequence[str] | None = None,
+        *,
+        max_depth: int | None = None,
+    ) -> dict[str, float]:
+        walk_entered.set()
+        release.wait(timeout=5.0)
+        return real_snapshot(root, exclude_dirs, max_depth=max_depth)
+
+    monkeypatch.setattr(watcher_module, "snapshot_dir_mtimes", slow_snapshot)
+    scan_routes._start_watcher(test_state, recursive=True)
+    assert walk_entered.wait(timeout=5.0)
+
+    stop_done = threading.Event()
+
+    def _stop() -> None:
+        scan_routes._stop_watcher(test_state)
+        stop_done.set()
+
+    stopper = threading.Thread(target=_stop, daemon=True)
+    try:
+        stopper.start()
+        acquired = threading.Event()
+
+        def _poke() -> None:
+            with test_state._watch_lock:  # pylint: disable=protected-access
+                acquired.set()
+
+        poker = threading.Thread(target=_poke, daemon=True)
+        poker.start()
+        assert acquired.wait(timeout=2.0), "state lock held across the stop join"
+    finally:
+        release.set()
+        stopper.join(timeout=10.0)
+    assert stop_done.wait(timeout=10.0)

@@ -76,6 +76,14 @@ class ServerState:
     watch_error: str | None = None
     watch_recursive: bool = True
     _watch_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    # Operator lock for the start/stop/retarget lifecycle (final review,
+    # #223): serializes the whole enable/disable/re-target body — including
+    # the poller-thread join — so ``_watch_lock`` stays a cheap counter/
+    # state lock and is NEVER held across a join (a watcher callback
+    # needing it mid-join would otherwise deadlock until the join timeout).
+    # Public name: routes are the designated operators, same as for the
+    # underscore-prefixed state lock.
+    watch_ops_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     # UI events recorded by external actors (config handoff), drained by
     # the frontend's /api/notifications poll.
     _external_events: list[dict[str, Any]] = field(default_factory=list)

@@ -59,21 +59,35 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     if payload.directory:
         state.active_directory = normalize_user_path(payload.directory)
 
-    # Watch re-target (issue #223): every scan records the recursion intent
-    # it was issued with, then a running watcher follows the active
-    # directory — restarted onto the new root (a full restart IS the
-    # re-target: it re-baselines the snapshot and re-resolves the
-    # per-directory boundary), or stopped when the root is dead so no
-    # poller is left watching a missing directory. The helpers take
-    # ``_watch_lock`` themselves; no outer lock here (double-acquire on a
-    # non-reentrant Lock deadlocks).
+    # Watch re-target (issue #223; refined by the final review): a scan
+    # keeps a running watcher in step with the scanned directory — but a
+    # scan of the SAME directory with UNCHANGED recursion intent skips
+    # the stop/start cycle entirely: restarting on every rescan was
+    # needless churn, and every stop is a thread join (the costliest
+    # thing a route can do — hence the to_thread hops below keep that
+    # wait off the event loop). When the intent changed or the directory
+    # moved, the watcher restarts onto the new root (a full restart IS
+    # the re-target: it re-baselines the snapshot and re-resolves the
+    # per-directory boundary), or stops when the root is dead so no
+    # poller is left watching a missing directory. A vanished root with
+    # an unchanged directory and intent is the watcher's own error path,
+    # not this branch's. The helpers serialize on ``watch_ops_lock``;
+    # no outer lock here (double-acquire on a non-reentrant Lock
+    # deadlocks).
+    same_watch_target = (
+        state.watcher is not None
+        and state.watcher.directory == state.active_directory
+        and payload.recursive == state.watch_recursive
+    )
     state.watch_recursive = payload.recursive
-    if state.watcher is not None:
+    if state.watcher is not None and not same_watch_target:
         target = state.active_directory
         if target is None or not target.exists():
-            _stop_watcher(state, error="Watch stopped: directory does not exist")
+            await asyncio.to_thread(
+                _stop_watcher, state, error="Watch stopped: directory does not exist"
+            )
         else:
-            _start_watcher(state, recursive=payload.recursive)
+            await asyncio.to_thread(_start_watcher, state, recursive=payload.recursive)
 
     scan_directory = state.active_directory
     if not scan_directory:
@@ -128,33 +142,51 @@ class WatchRequest(BaseModel):
     recursive: bool = True
 
 
-def _shutdown_watcher(state: ServerState, *, error: str | None) -> None:
-    """Lock-free watcher teardown shared by the start/stop helpers.
+def _detach_watcher(state: ServerState) -> DirectoryWatcher | None:
+    """Swap the active watcher out of state under the cheap state lock.
 
-    The caller must hold ``state._watch_lock``. Stops the active watcher
-    (if any), drops it from state and records or clears ``watch_error``.
+    Returns the detached watcher (or ``None``). The caller owns stopping
+    it — outside ``_watch_lock``, per the join discipline documented on
+    :func:`_stop_watcher`.
     """
-    watcher = state.watcher
-    if watcher is not None:
-        watcher.stop()
-    state.watcher = None
-    state.watch_error = error
+    with state._watch_lock:  # pylint: disable=protected-access
+        watcher = state.watcher
+        state.watcher = None
+        return watcher
+
+
+def _watcher_error_exit(state: ServerState, owner: DirectoryWatcher, message: str) -> None:
+    """Identity-checked, join-free error teardown (watcher-thread side).
+
+    ``on_error`` fires on the watcher's own thread as it exits — joining
+    there is pointless, and any lock held across a join here would
+    deadlock the stop path (final review, #223). Clear the watch state
+    only when the failing watcher is STILL the active one: a replacement
+    started in the meantime must not be cleared by a stale error.
+    """
+    with state._watch_lock:  # pylint: disable=protected-access
+        if state.watcher is owner:
+            state.watcher = None
+            state.watch_error = message
 
 
 def _stop_watcher(state: ServerState, *, error: str | None = None) -> None:
     """Stop the active watch and record or clear its error state.
 
-    Safe against concurrent enable/disable: the whole body runs under
-    ``state._watch_lock``. ``watcher.stop()`` joins the poller thread
-    (bounded by the watcher's join timeout); a same-thread call — an
-    ``on_error`` fired from the watcher thread — returns without joining
-    (guarded inside the watcher).
+    Join discipline (final review, #223): the lifecycle serializes under
+    ``state.watch_ops_lock``; ``_watch_lock`` guards only the brief state
+    swap and is NEVER held across ``watcher.stop()``'s thread join — a
+    watcher callback needing it mid-join would otherwise stall the stop
+    until the join timeout (and, called from the event loop, freeze every
+    route with it). Callers running on the event loop must hop to a
+    worker thread (``asyncio.to_thread``) before invoking this helper.
     """
-    # ``_watch_lock`` is the brief-specified watch-state lock owned by
-    # ServerState; the server routes are its designated operator, so the
-    # underscore access is intra-package, not a client-class reach-in.
-    with state._watch_lock:  # pylint: disable=protected-access
-        _shutdown_watcher(state, error=error)
+    with state.watch_ops_lock:  # pylint: disable=protected-access
+        watcher = _detach_watcher(state)
+        with state._watch_lock:  # pylint: disable=protected-access
+            state.watch_error = error
+        if watcher is not None:
+            watcher.stop()
 
 
 def _start_watcher(state: ServerState, *, recursive: bool) -> None:
@@ -162,16 +194,26 @@ def _start_watcher(state: ServerState, *, recursive: bool) -> None:
 
     The probe's depth and excludes come from
     :func:`scanner.effective_search_boundary` — the same merge that
-    governs a scan of the same root. Callbacks capture *state* only:
-    ``on_change`` bumps ``watch_seq`` under the lock (cheap and
-    non-blocking — the watcher-thread contract), ``on_error`` stops and
-    records the message. Any previous watcher is stopped first, so at
-    most one poller runs; a fresh enable clears a stale ``watch_error``.
+    governs a scan of the same root. Same join discipline as
+    :func:`_stop_watcher` (:func:`_detach_watcher`, ops lock, join
+    outside ``_watch_lock``); the new watcher is stored BEFORE the
+    previous one is joined, so the watch never gaps to "off" during a
+    replacement, and a change noticed by the outgoing poller in that
+    overlap still bumps ``watch_seq`` (it was a real change). Callbacks
+    capture *state* only: ``on_change`` bumps ``watch_seq`` under the
+    cheap lock (the watcher-thread contract), ``on_error`` runs the
+    join-free identity-checked teardown (:func:`_watcher_error_exit`).
+    A fresh enable clears a stale ``watch_error``.
     """
-    with state._watch_lock:  # pylint: disable=protected-access
-        _shutdown_watcher(state, error=None)
+    with state.watch_ops_lock:  # pylint: disable=protected-access
+        old = _detach_watcher(state)
+        with state._watch_lock:  # pylint: disable=protected-access
+            state.watch_error = None
+
         directory = state.active_directory
         if directory is None:  # The route 400s before this; fail safe.
+            if old is not None:
+                old.stop()
             return
 
         depth, exclude_dirs = scanner.effective_search_boundary(
@@ -182,8 +224,14 @@ def _start_watcher(state: ServerState, *, recursive: bool) -> None:
             with state._watch_lock:  # pylint: disable=protected-access
                 state.watch_seq += 1
 
+        # ``error_box`` bridges construction order: ``DirectoryWatcher``
+        # takes ``on_error`` at construction, but the identity check
+        # needs the instance — filled before ``start()``, so the first
+        # possible error always sees it.
+        error_box: list[DirectoryWatcher] = []
+
         def _on_error(message: str) -> None:
-            _stop_watcher(state, error=message)
+            _watcher_error_exit(state, error_box[0], message)
 
         watcher = DirectoryWatcher(
             directory,
@@ -192,9 +240,12 @@ def _start_watcher(state: ServerState, *, recursive: bool) -> None:
             on_change=_on_change,
             on_error=_on_error,
         )
+        error_box.append(watcher)
         watcher.start()
-        state.watcher = watcher
-        state.watch_error = None
+        with state._watch_lock:  # pylint: disable=protected-access
+            state.watcher = watcher
+        if old is not None:
+            old.stop()  # Join outside ``_watch_lock`` (ops lock only).
 
 
 @router.post("/watch")
@@ -212,9 +263,12 @@ async def set_watch_mode(payload: WatchRequest, request: Request) -> dict:
         # recursive-false must mirror the non-recursive boundary on a
         # later re-enable, exactly like a scan does.
         state.watch_recursive = payload.recursive
-        _start_watcher(state, recursive=payload.recursive)
+        # to_thread hop (final review, #223): the start/stop lifecycle can
+        # join a poller thread — that wait must never block the event loop
+        # every route and the SSE tick share.
+        await asyncio.to_thread(_start_watcher, state, recursive=payload.recursive)
     else:
-        _stop_watcher(state)
+        await asyncio.to_thread(_stop_watcher, state)
     watcher = state.watcher
     return {
         "watching": watcher is not None,
