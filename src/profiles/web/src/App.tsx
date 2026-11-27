@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   computeHash,
   fetchConfig,
+  fetchScanResults,
   fetchSystemInfo,
+  findScanResultsPath,
   launchFile,
   openFolder,
   openLogFile,
@@ -53,6 +55,7 @@ import { WorkflowRunnerModal } from "./components/WorkflowRunnerModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { exportToCsv } from "./utils/exportCsv";
 import { pathToFileUri } from "./utils/fileUri";
+import { followSelection } from "./utils/selection";
 import { matchFilter } from "./utils/searchSyntax";
 import { parentDirectory } from "./utils/fileProperties";
 
@@ -154,6 +157,13 @@ export default function App() {
   const selectedPathRef = useRef<string | null>(null);
 
   /**
+   * Selection-restore dedupe (#218): the reconcile effect re-fires on every
+   * visible-set change, so while a server lookup for a vanished row is in
+   * flight, identical re-entries for the same path must not stack.
+   */
+  const restoreInFlightRef = useRef<string | null>(null);
+
+  /**
    * Current search-bar state as scan parameters — the single source shared
    * by the scan controller and the barcode hook (issue #148 PR 4).
    */
@@ -163,16 +173,16 @@ export default function App() {
    * Scan orchestration (issue #148): list state, the generation protocol,
    * the deferred server auto-rescan, sort reloads and paging live in the
    * hook. App keeps the UI-side concerns — toasts (showToast) and selection
-   * (a fresh result set is authoritative, so onFreshResults re-anchors it).
+   * (the reconcile effect re-anchors it; see onFreshResults below).
    */
   const scan = useScanController({
     showToast,
     getScanParams,
-    onFreshResults: () => {
-      // Reset the selection anchor; a fresh result set is authoritative.
-      selectedPathRef.current = null;
-      setSelectedIndex(0);
-    },
+    // Selection follows the previous path on every fresh result set (#218)
+    // — the reconcile effect owns it; nothing to reset here. (The old
+    // `selectedPathRef.current = null; setSelectedIndex(0)` reset WAS the
+    // #218 bug: it dropped the path the reconcile effect needs to follow.)
+    onFreshResults: () => {},
   });
 
   /**
@@ -239,19 +249,26 @@ export default function App() {
       ? `Prefiltering loaded results — press Enter to search all ${scan.totalCount}`
       : null;
 
-  // Selection reconcile: when a new visible set arrives, follow the previously
-  // selected file (matched by path) if it is still visible — even though its
-  // index moved — otherwise clamp into the shrunken set.
+  // Selection reconcile (#218): when a new visible set arrives, follow the
+  // previously selected file (matched by path) if it is still visible — even
+  // though its index moved. Rows never selected keep the clamp into the
+  // visible set; a selected row that vanished is asked of the server
+  // (restoreSelection) and either comes back with its window or clears.
   useEffect(() => {
     const queryPath = selectedPathRef.current;
-    const followed = queryPath
-      ? visibleFiles.findIndex((f) => f.path === queryPath)
-      : -1;
+    if (!queryPath) {
+      // Never selected (or already cleared): clamp into the visible set.
+      setSelectedIndex((prev) => Math.min(prev, Math.max(0, visibleFiles.length - 1)));
+      return;
+    }
+    const followed = followSelection(queryPath, visibleFiles);
     if (followed >= 0) {
       setSelectedIndex((prev) => (followed !== prev ? followed : prev));
       return;
     }
-    setSelectedIndex((prev) => Math.min(prev, Math.max(0, visibleFiles.length - 1)));
+    // Not in the visible set: the server knows whether the row moved beyond
+    // the loaded window or is gone (#218).
+    void restoreSelection(queryPath);
   }, [visibleFiles]);
 
   const handleReloadConfig = async () => {
@@ -624,6 +641,10 @@ export default function App() {
     }
   };
 
+  // A cleared selection is `-1` — an inert "nothing selected" (#218): the
+  // vanished row must never silently land on another file. No guard change
+  // needed here — `visibleFiles[-1]` is undefined, so the existing check
+  // simply launches nothing.
   const handleExecute = () => {
     if (visibleFiles.length > 0 && visibleFiles[selectedIndex]) {
       handleLaunch(visibleFiles[selectedIndex]);
@@ -634,6 +655,66 @@ export default function App() {
   const handleSelectIndex = (idx: number) => {
     selectedPathRef.current = visibleFiles[idx]?.path ?? null;
     setSelectedIndex(idx);
+  };
+
+  /**
+   * Recover the selection for a row that left the visible set (#218). Called
+   * by the reconcile effect when followSelection missed. The row either
+   * moved beyond the loaded window — fetch that window in ONE request and
+   * append it, letting the reconcile effect re-select from the enlarged
+   * visible set — or is genuinely gone / filtered away, and the selection
+   * clears instead of drifting onto another file.
+   *
+   * Best-effort: a failed lookup leaves the selection untouched (the next
+   * visible-set change retries through the reconcile effect); every state
+   * write is dropped when another scan superseded this one mid-flight.
+   */
+  const restoreSelection = async (path: string) => {
+    const gen = scan.currentGeneration();
+    // All rows are already loaded: absence from the visible set is decidable
+    // locally — the row is either filtered away or gone; both clear. No
+    // server round-trip needed.
+    if (scan.files.length >= scan.totalCount) {
+      if (!scan.isCurrentScan(gen)) return;
+      selectedPathRef.current = null;
+      setSelectedIndex(-1);
+      return;
+    }
+    // One in-flight restore per path — identical re-entries (the reconcile
+    // effect re-fires on every visible-set change) are dropped.
+    if (restoreInFlightRef.current === path) return;
+    restoreInFlightRef.current = path;
+    try {
+      const { offset } = await findScanResultsPath({
+        path,
+        sort_by: scan.sort?.column,
+        sort_dir: scan.sort?.direction,
+      });
+      if (!scan.isCurrentScan(gen)) return;
+      if (offset < 0 || offset < scan.files.length) {
+        // Genuinely gone from the server set (`offset: -1`), or loaded but
+        // hidden by the prefilter — the user filtered it away, and clearing
+        // is honest (#218).
+        selectedPathRef.current = null;
+        setSelectedIndex(-1);
+        return;
+      }
+      // The row lives beyond the loaded window: fetch the missing span in
+      // ONE request, append it (dedupe-by-path in the controller), then let
+      // the reconcile effect re-fire on the new visibleFiles and follow.
+      const res = await fetchScanResults({
+        offset: scan.files.length,
+        limit: Math.min(offset + 1 - scan.files.length, 50_000),
+        sort_by: scan.sort?.column,
+        sort_dir: scan.sort?.direction,
+      });
+      if (!scan.isCurrentScan(gen)) return;
+      scan.appendResults(gen, res);
+    } catch {
+      // Non-fatal: keep the current selection until the next reconcile.
+    } finally {
+      restoreInFlightRef.current = null;
+    }
   };
 
   // Context menu actions

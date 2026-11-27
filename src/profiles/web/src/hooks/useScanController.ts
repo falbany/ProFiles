@@ -6,6 +6,19 @@ import { SCAN_PAGE_SIZE } from "../components/FileListTable";
 /** Debounce for the deferred server auto-rescan after the last filter keystroke. */
 const AUTO_RESCAN_DEBOUNCE_MS = 800;
 
+/**
+ * Merge freshly fetched rows into the loaded list, deduping by path — the
+ * shared guard against duplicated rows when the cache changed mid-request
+ * (used by paging and by the selection-restore append, #218).
+ */
+function mergeAppendedRows(
+  current: ScannedFileItem[],
+  incoming: ScannedFileItem[],
+): ScannedFileItem[] {
+  const existing = new Set(current.map((f) => f.path || f.filename));
+  return [...current, ...incoming.filter((f) => !existing.has(f.path || f.filename))];
+}
+
 export type ScanParams = Parameters<typeof executeScan>[0];
 
 export type ScanOutcome =
@@ -29,8 +42,16 @@ export interface ScanController {
   sort: ScanSort | null;
   beginScan(): number;
   claimGeneration(): number;
+  /** Current generation number — capture it, then guard later writes with isCurrentScan (#218). */
+  currentGeneration(): number;
   isCurrentScan(generation: number): boolean;
   finishScan(generation: number): void;
+  /**
+   * Append rows fetched outside the controller (the selection-restore
+   * window fetch, #218) to the loaded list, deduping by path like paging.
+   * No-op when *generation* was superseded mid-flight.
+   */
+  appendResults(generation: number, res: ScanResultsResponse): void;
   runScan(generation: number, params: ScanParams): Promise<boolean>;
   scanWith(params: ScanParams, opts?: { errorPrefix?: string }): Promise<ScanOutcome>;
   scanWithGeneration(gen: number, params: ScanParams, opts?: { errorPrefix?: string }): Promise<ScanOutcome>;
@@ -114,6 +135,24 @@ export function useScanController(deps: ScanControllerDeps): ScanController {
   };
 
   const isCurrentScan = (generation: number) => generation === scanGenerationRef.current;
+
+  /** Read the current generation number: App's selection-restore flow
+   *  (#218) captures it at entry, then guards every late state write with
+   *  isCurrentScan. Reading must not claim/abort like claimGeneration. */
+  const currentGeneration = () => scanGenerationRef.current;
+
+  /**
+   * Append rows fetched outside the controller (the selection-restore
+   * window fetch, #218) to the loaded list. Same dedupe-by-path guard as
+   * paging: a cache change mid-request must not duplicate rows. The
+   * response's count is authoritative (the server may have grown/shrunk
+   * since the last page).
+   */
+  const appendResults = (generation: number, res: ScanResultsResponse) => {
+    if (!isCurrentScan(generation)) return;
+    setTotalCount(res.count);
+    setFiles((prev) => mergeAppendedRows(prev, res.items));
+  };
 
   const finishScan = (generation: number) => {
     if (isCurrentScan(generation)) setScanning(false);
@@ -252,9 +291,7 @@ export function useScanController(deps: ScanControllerDeps): ScanController {
         sort_dir: sort?.direction,
       });
       if (!isCurrentScan(generation)) return;
-      // Guard against duplicated rows if the cache changed mid-request.
-      const existing = new Set(files.map((f) => f.path || f.filename));
-      setFiles((prev) => [...prev, ...res.items.filter((f) => !existing.has(f.path || f.filename))]);
+      setFiles((prev) => mergeAppendedRows(prev, res.items));
       setTotalCount(res.count);
     } catch {
       // Paging failure is non-fatal; retry happens on the next scroll attempt.
@@ -288,8 +325,10 @@ export function useScanController(deps: ScanControllerDeps): ScanController {
     sort,
     beginScan,
     claimGeneration,
+    currentGeneration,
     isCurrentScan,
     finishScan,
+    appendResults,
     runScan,
     scanWith,
     scanWithGeneration,
