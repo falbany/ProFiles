@@ -44,7 +44,12 @@ class ScanRequest(BaseModel):
 
 @router.post("")
 async def execute_scan(payload: ScanRequest, request: Request) -> dict:
-    """Execute dynamic scan on the active directory and cache results."""
+    """Execute dynamic scan on the active directory and cache results.
+
+    Keeps the watch in step with the scan (#223): records the recursion
+    intent, re-targets a running watcher onto the scanned directory, and
+    stops the watch when the scanned directory is missing.
+    """
     state: ServerState = request.app.state.server_state
     state.scan_generation += 1
     scan_generation = state.scan_generation
@@ -53,6 +58,22 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     state.scan_progress_count = 0
     if payload.directory:
         state.active_directory = normalize_user_path(payload.directory)
+
+    # Watch re-target (issue #223): every scan records the recursion intent
+    # it was issued with, then a running watcher follows the active
+    # directory — restarted onto the new root (a full restart IS the
+    # re-target: it re-baselines the snapshot and re-resolves the
+    # per-directory boundary), or stopped when the root is dead so no
+    # poller is left watching a missing directory. The helpers take
+    # ``_watch_lock`` themselves; no outer lock here (double-acquire on a
+    # non-reentrant Lock deadlocks).
+    state.watch_recursive = payload.recursive
+    if state.watcher is not None:
+        target = state.active_directory
+        if target is None or not target.exists():
+            _stop_watcher(state, error="Watch stopped: directory does not exist")
+        else:
+            _start_watcher(state, recursive=payload.recursive)
 
     scan_directory = state.active_directory
     if not scan_directory:
@@ -187,6 +208,10 @@ async def set_watch_mode(payload: WatchRequest, request: Request) -> dict:
     if payload.enabled:
         if not state.active_directory:
             raise HTTPException(status_code=400, detail="Active directory is not set")
+        # Record the recursion intent on enable too (#223): enable-with-
+        # recursive-false must mirror the non-recursive boundary on a
+        # later re-enable, exactly like a scan does.
+        state.watch_recursive = payload.recursive
         _start_watcher(state, recursive=payload.recursive)
     else:
         _stop_watcher(state)

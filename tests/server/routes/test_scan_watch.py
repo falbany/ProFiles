@@ -1,7 +1,8 @@
-"""Tests for the watch-mode route, helpers and status payload (#223, Task 3).
+"""Tests for the watch-mode route, helpers and status payload (#223, Tasks 3-4).
 
 Covers ``POST /api/scan/watch`` (enable/disable lifecycle on the active
-directory) and the four watch fields ``scan_status_payload`` adds to the
+directory), the scan re-target / dead-root policy in ``execute_scan``
+(Task 4), and the four watch fields ``scan_status_payload`` adds to the
 SSE ``status`` event. The stream shape itself is unchanged — ``watch_seq``
 reaching clients is covered end-to-end by the Task 8 hook tests.
 """
@@ -57,7 +58,7 @@ async def test_watch_enable_start_roundtrip(test_state: ServerState) -> None:
     """Enable starts a running watcher reporting its interval; disable stops it."""
     app = create_app(test_state)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        enable = await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        enable = await client.post("/api/scan/watch", json={"enabled": True, "recursive": False})
         assert enable.status_code == 200
         assert enable.json()["watching"] is True
         assert isinstance(enable.json()["interval_s"], float)
@@ -74,6 +75,10 @@ async def test_watch_enable_start_roundtrip(test_state: ServerState) -> None:
         assert test_state.watcher is None
         # stop() joins the poller thread before returning.
         assert not watcher.is_running
+        # The enable path records the recursion intent too (Task 4 ruling):
+        # posting recursive=False distinguishes the write from the field
+        # default (True) — a later scan/enable mirrors the boundary here.
+        assert test_state.watch_recursive is False
 
 
 @pytest.mark.anyio
@@ -142,3 +147,97 @@ async def test_watch_error_cleared_on_enable(test_state: ServerState) -> None:
         assert response.status_code == 200
 
     assert test_state.watch_error is None
+
+
+# --- Task 4: scan re-target and dead-root policy in execute_scan ---------
+
+
+@pytest.mark.anyio
+async def test_scan_to_new_directory_retargets_watcher(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """A scan onto a new directory re-targets the running watcher onto it."""
+    dir_b = tmp_path / "releases"
+    dir_b.mkdir()
+    (dir_b / "tool_2.0_PROD.mttl").write_text("launchable")
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        first = test_state.watcher
+        assert first is not None
+
+        response = await client.post(
+            "/api/scan",
+            json={
+                "directory": str(dir_b),
+                "recursive": True,
+                "extension": "",
+                "filter_text": "",
+            },
+        )
+        assert response.status_code == 200
+
+    watcher = test_state.watcher
+    assert watcher is not None
+    # A full restart IS the re-target: the old poller is gone, exactly one
+    # poller stays running and it now watches dir_b.
+    assert watcher is not first
+    assert not first.is_running
+    assert watcher.is_running
+    assert watcher.directory == dir_b
+    assert test_state.watch_error is None
+    assert test_state.watch_recursive is True
+
+
+@pytest.mark.anyio
+async def test_scan_to_missing_directory_stops_watch_with_error(
+    test_state: ServerState, tmp_path: Path
+) -> None:
+    """A scan onto a dead root stops the watch with an explicit error."""
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        assert test_state.watcher is not None
+
+        response = await client.post(
+            "/api/scan",
+            json={
+                "directory": str(tmp_path / "nope"),
+                "recursive": True,
+                "extension": "",
+                "filter_text": "",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "warning" in response.json()
+    assert test_state.watcher is None
+    assert test_state.watch_error == "Watch stopped: directory does not exist"
+    payload = scan_status_payload(test_state)
+    assert payload["watching"] is False
+    assert payload["watch_error"] == "Watch stopped: directory does not exist"
+
+
+@pytest.mark.anyio
+async def test_scan_records_recursive_intent(test_state: ServerState) -> None:
+    """A non-recursive scan records its intent for the next enable."""
+    directory = test_state.active_directory
+    assert directory is not None
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        assert test_state.watch_recursive is True
+
+        response = await client.post(
+            "/api/scan",
+            json={
+                "directory": str(directory),
+                "recursive": False,
+                "extension": "",
+                "filter_text": "",
+            },
+        )
+        assert response.status_code == 200
+
+    assert test_state.watch_recursive is False
+    assert test_state.watcher is not None
