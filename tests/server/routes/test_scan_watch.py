@@ -388,3 +388,107 @@ def test_seq_lock_free_during_stop_join(
         release.set()
         stopper.join(timeout=10.0)
     assert stop_done.wait(timeout=10.0)
+
+
+# --- #240 Task 2: the scan's derived depth/recursion feeds the watch -------
+
+
+@pytest.fixture
+def depth_state(tmp_path: Path) -> ServerState:
+    """State rooted at the 4-level depth tree (same shape as the core tests).
+
+    Creates ``root/{f1.mttl, l1/{f2.mttl, l2/{f3.mttl, l3/{f4.mttl}}}}``;
+    ``config.max_search_depth`` stays at the default (10) so a depth pick
+    is the only boundary in play.
+    """
+    l2 = tmp_path / "l1" / "l2"
+    l3 = l2 / "l3"
+    l3.mkdir(parents=True)
+    (tmp_path / "f1.mttl").write_text("1")
+    (tmp_path / "l1" / "f2.mttl").write_text("2")
+    (l2 / "f3.mttl").write_text("3")
+    (l3 / "f4.mttl").write_text("4")
+    config = AppConfig(
+        title="Test Bench",
+        search_dir=str(tmp_path),
+        extensions=(".mttl",),
+    )
+    state = ServerState(config=config, active_directory=tmp_path)
+    # Safety net: never leak a poller thread out of a test.
+    yield state
+    if state.watcher is not None:
+        state.watcher.stop()
+
+
+@pytest.mark.anyio
+async def test_scan_records_watch_depth_and_recursion(depth_state: ServerState) -> None:
+    """A depth pick records the DERIVED recursion and the picked depth.
+
+    max_depth=1 implies non-recursive (1 > 1 is False): the watch fields
+    must reflect that derivation, not the raw payload (which carries no
+    ``recursive`` at all here).
+    """
+    root = depth_state.active_directory
+    assert root is not None
+    app = create_app(depth_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/scan", json={"directory": str(root), "max_depth": 1})
+        assert response.status_code == 200
+
+    assert depth_state.watch_recursive is False
+    assert depth_state.watch_max_depth == 1
+
+
+@pytest.mark.anyio
+async def test_legacy_scan_leaves_watch_depth_none(depth_state: ServerState) -> None:
+    """A legacy checkbox scan records the intent but no depth pick."""
+    root = depth_state.active_directory
+    assert root is not None
+    app = create_app(depth_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/scan", json={"directory": str(root), "recursive": False})
+        assert response.status_code == 200
+
+    assert depth_state.watch_recursive is False
+    assert depth_state.watch_max_depth is None
+
+
+@pytest.mark.anyio
+async def test_depth_change_retargets_watcher(depth_state: ServerState) -> None:
+    """A changed depth pick re-targets the watcher; the probe follows the pick.
+
+    Same root, same directory, only the picked depth moves (1 → 3): the
+    watcher must restart onto the boundary the scan walks — a root-only
+    probe for the depth-1 pick (non-recursive → forced depth 0) and a
+    depth-3 probe for the depth-3 pick.
+    """
+    root = depth_state.active_directory
+    assert root is not None
+    app = create_app(depth_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        first = depth_state.watcher
+        assert first is not None
+
+        # Depth pick 1: derived non-recursive — root-only probe.
+        pick_one = await client.post("/api/scan", json={"directory": str(root), "max_depth": 1})
+        assert pick_one.status_code == 200
+        mid = depth_state.watcher
+
+        # Depth pick 3: intent changed (3 != 1) — re-target, probe depth 3.
+        pick_three = await client.post("/api/scan", json={"directory": str(root), "max_depth": 3})
+        assert pick_three.status_code == 200
+
+    assert depth_state.watch_max_depth == 3
+    assert depth_state.watch_recursive is True
+    watcher = depth_state.watcher
+    assert watcher is not None
+    assert watcher is not first
+    assert watcher is not mid
+    assert not first.is_running
+    assert not mid.is_running
+    assert watcher.is_running
+    # The probe samples the depth the scan walks (protected attribute —
+    # no public reader exists; same disable pattern as the state lock).
+    assert watcher._max_depth == 3  # pylint: disable=protected-access
+    assert mid._max_depth == 0  # pylint: disable=protected-access
