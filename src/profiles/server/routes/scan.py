@@ -328,6 +328,7 @@ async def get_scan_results(
     limit: int | None = Query(default=None, ge=1, le=50_000),
     sort_by: str | None = Query(default=None),
     sort_dir: Literal["asc", "desc"] | None = Query(default=None),
+    find_path: str | None = Query(default=None),
 ) -> dict:
     """Return cached scan results formatted for table rendering.
 
@@ -342,12 +343,32 @@ async def get_scan_results(
     An attribute-backed column (``match`` resolves to a stat keyword) sorts
     on the raw :class:`FileAttrs` field instead of the rendered text; see
     :func:`_sorted_results` for the ordering contract.
+
+    When ``find_path`` is given, the response short-circuits to
+    ``{"count": int, "offset": int}`` — the row's position in the ordered
+    set (``-1`` when absent) with no ``items`` key (#218 selection
+    preservation).
     """
     state: ServerState = request.app.state.server_state
     total = len(state.cached_results)
 
-    descending = sort_dir == "desc"
-    cached, sort_applied = _sorted_results(state.cached_results, sort_by, descending, state.config)
+    # ``sort_dir == "desc"`` is inlined (single use) to keep the local count
+    # within the pylint budget — the find_path parameter is the 20th.
+    cached, sort_applied = _sorted_results(
+        state.cached_results, sort_by, sort_dir == "desc", state.config
+    )
+
+    # Selection lookup (#218): the client only wants a row's offset in the
+    # ordered set — skip item serialization so huge caches answer without
+    # building thousands of dicts.
+    if find_path is not None:
+        return {
+            "count": total,
+            "offset": next(
+                (i for i, row in enumerate(cached) if str(getattr(row, "path", "")) == find_path),
+                -1,
+            ),
+        }
 
     page = cached if limit is None else cached[offset : offset + limit]
 
