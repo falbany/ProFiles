@@ -784,3 +784,65 @@ async def test_no_fields_defaults_recursive(depth_state: ServerState) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["count"] == 4
+
+
+# ---------------------------------------------------------------------------
+# The ∞ sentinel below the UI (#240, final review): the dropdown's
+# "unlimited" option sends the int32 sentinel; the API must walk past the
+# 25-entry UI cap without tripping the walker budget.
+# ---------------------------------------------------------------------------
+
+_SENTINEL_DEPTH = 2_147_483_647  # int32 max — the UI "unlimited" pick
+_DEEP_TREE_FILE_COUNT = 31  # f1 at the root + one file per level l1..l30
+
+
+def _make_deep_tree(tmp_path: Path) -> None:
+    """Build a 30-level nested tree, one ``.mttl`` file per level.
+
+    Extends the :func:`_make_depth_tree` shape: ``root/{f1.mttl,
+    l1/{f2.mttl, ..., l30/{f31.mttl}}}`` — a file at depth 0 (root) and
+    at every level 1..30 below it, well past the config default (10) and
+    the 25-entry UI dropdown.
+    """
+    current = tmp_path
+    (current / "f1.mttl").write_text("1")
+    for level in range(1, 31):
+        current = current / f"l{level}"
+        current.mkdir(parents=True)
+        (current / f"f{level + 1}.mttl").write_text(str(level + 1))
+
+
+@pytest.fixture
+def deep_tree_state(tmp_path: Path) -> ServerState:
+    """State rooted at the 30-level deep tree, default config depth (10).
+
+    ``config.max_search_depth`` stays at the default so the request's
+    ``max_depth`` is the only boundary in play.
+    """
+    _make_deep_tree(tmp_path)
+    config = AppConfig(
+        title="Test Bench",
+        search_dir=str(tmp_path),
+        extensions=(".mttl",),
+    )
+    return ServerState(config=config, active_directory=tmp_path)
+
+
+@pytest.mark.anyio
+async def test_max_depth_sentinel_scans_everything(
+    deep_tree_state: ServerState, tmp_path: Path
+) -> None:
+    """The int32 sentinel walks EVERY level — nothing stops below the tree.
+
+    Pydantic accepts the sentinel (``ge=1``, no upper bound — the 25-entry
+    cap is UI-side) and the walker's ``current_depth > max_depth`` budget
+    never trips below it: all 31 files, down to level 30, come back.
+    """
+    app = create_app(deep_tree_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/scan", json={"directory": str(tmp_path), "max_depth": _SENTINEL_DEPTH}
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["count"] == _DEEP_TREE_FILE_COUNT

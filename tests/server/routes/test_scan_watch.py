@@ -492,3 +492,35 @@ async def test_depth_change_retargets_watcher(depth_state: ServerState) -> None:
     # no public reader exists; same disable pattern as the state lock).
     assert watcher._max_depth == 3  # pylint: disable=protected-access
     assert mid._max_depth == 0  # pylint: disable=protected-access
+
+
+@pytest.mark.anyio
+async def test_watch_probe_honors_sentinel(depth_state: ServerState) -> None:
+    """The ∞ sentinel re-targets the probe unclamped onto the walk boundary.
+
+    The "unlimited" dropdown pick sends the int32 sentinel (2147483647);
+    the API accepts it (``ge=1``, no upper bound) and the probe must carry
+    it verbatim — clamping it to the config default (10) would let the
+    watch miss changes below level 10 that a sentinel scan still walks.
+    """
+    root = depth_state.active_directory
+    assert root is not None
+    app = create_app(depth_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        enable = await client.post("/api/scan/watch", json={"enabled": True, "recursive": True})
+        assert enable.status_code == 200
+        assert depth_state.watcher is not None
+
+        response = await client.post(
+            "/api/scan", json={"directory": str(root), "max_depth": 2147483647}
+        )
+        assert response.status_code == 200
+
+    assert depth_state.watch_max_depth == 2147483647
+    assert depth_state.watch_recursive is True
+    watcher = depth_state.watcher
+    assert watcher is not None
+    assert watcher.is_running
+    # The probe samples the depth the scan walks (protected attribute —
+    # no public reader exists; same disable pattern as the state lock).
+    assert watcher._max_depth == 2147483647  # pylint: disable=protected-access

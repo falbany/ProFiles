@@ -211,7 +211,9 @@ def validate_issues(content: str) -> list[dict[str, str]]:
 
     Returns:
         ``[]`` when the content parses and validates, otherwise
-        ``{"severity": "error", "message": ...}`` dicts, one per problem.
+        ``{"severity": "error" | "warning", "message": ...}`` dicts, one
+        per problem — deprecation warnings (e.g. ``recursive_search``)
+        flow through as ``"warning"``.
     """
     return collect_config_issues(content)
 
