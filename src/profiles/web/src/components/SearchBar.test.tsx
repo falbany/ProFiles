@@ -46,7 +46,7 @@ describe("SearchBar depth select", () => {
       ...buildDepthOptions(25).map(String),
       "unlimited",
     ]);
-    expect(options[options.length - 1].textContent).toBe("∞ (unlimited)");
+    expect(options[options.length - 1].textContent).toBe("∞");
   });
 
   it("shows the picked depth as selected", () => {

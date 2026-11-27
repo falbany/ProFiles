@@ -180,7 +180,7 @@ export function SearchBar({
         text="Scan depth — 1: selected directory only; N: up to N levels; ∞: unlimited"
         block={false}
       >
-        <label className="flex shrink-0 select-none items-center gap-1.5 text-ink-secondary">
+        <label className="flex shrink-0 select-none items-center gap-1.5 text-ink-muted">
           <span>Depth:</span>
           <select
             aria-label="Scan depth"
@@ -189,14 +189,17 @@ export function SearchBar({
               const raw = e.target.value;
               onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
             }}
-            className="rounded-md border border-line bg-elevated px-2 py-1 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            // w-14 fits the widest finite value ("25") plus the native arrow;
+            // the ∞ option renders as just "∞" so the closed select stays
+            // 2-digit wide. py-1.5 matches the combobox/button height in this bar.
+            className="w-14 rounded-md border border-line bg-elevated px-2 py-1.5 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             {buildDepthOptions(configDepth).map((n) => (
               <option key={n} value={String(n)}>
                 {n}
               </option>
             ))}
-            <option value="unlimited">∞ (unlimited)</option>
+            <option value="unlimited">∞</option>
           </select>
         </label>
       </Tooltip>
