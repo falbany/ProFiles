@@ -105,7 +105,7 @@ function makeAppConfig(overrides: Partial<AppConfigData> = {}): AppConfigData {
     title: "machine",
     release: "1.0",
     search_dir: "C:/data",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "dark",
     directories: ["C:/data"],
     extensions: [".mttl"],
@@ -147,7 +147,7 @@ beforeEach(() => {
   openInOSSpy.mockResolvedValue({ status: "SUCCESS", message: "Opened" });
   // POST /api/config/load-content applies content as a session trial:
   // not anchored to disk, and carrying the freshly derived values the
-  // app must pick up (new directory/extension/recursive).
+  // app must pick up (new directory/extension/depth).
   loadContentSpy.mockResolvedValue(
     makeAppConfig({
       release: "9.9",
@@ -155,7 +155,7 @@ beforeEach(() => {
       active_directory: "E:/applied",
       directories: ["E:/applied"],
       extensions: [".yaml"],
-      recursive_search: true,
+      max_search_depth: 10,
       session_trial: true,
     }),
   );
@@ -178,7 +178,7 @@ describe("App config editor integration", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "",
-      recursive: false,
+      max_depth: 10,
     });
 
     // The StatusBar "Config" button opens the in-app editor — it must NOT
@@ -211,7 +211,7 @@ describe("App config editor integration", () => {
       directory: "E:/applied",
       extension: ".yaml",
       filter_text: "",
-      recursive: true,
+      max_depth: 10,
     });
     await waitFor(() => expect(scanResultsSpy).toHaveBeenCalled());
     expect(openInOSSpy).not.toHaveBeenCalled();

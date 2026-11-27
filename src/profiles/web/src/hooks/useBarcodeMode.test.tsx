@@ -42,7 +42,7 @@ const BASE_PARAMS: ScanParams = {
   directory: "C:/base",
   extension: ".mttl",
   filter_text: "",
-  recursive: false,
+  max_depth: 10,
 };
 
 function makeDeps(overrides: Partial<BarcodeModeDeps> = {}): BarcodeModeDeps {
@@ -50,6 +50,8 @@ function makeDeps(overrides: Partial<BarcodeModeDeps> = {}): BarcodeModeDeps {
     showToast: vi.fn(),
     scanWith: vi.fn().mockResolvedValue({ ok: false }),
     getScanParams: vi.fn(() => BASE_PARAMS),
+    /** Configured depth the barcode `recursive=true` mapping scans with. */
+    configDepth: 25,
     onApplyValues: vi.fn(),
     onSingleMatch: vi.fn(),
     onCameraClose: vi.fn(),
@@ -261,7 +263,7 @@ describe("useBarcodeMode", () => {
   });
 
   it("50 ms timeout reads the LATEST getScanParams (issue #34)", () => {
-    const paramsA: ScanParams = { directory: "C:/a", extension: ".mttl", filter_text: "", recursive: false };
+    const paramsA: ScanParams = { directory: "C:/a", extension: ".mttl", filter_text: "", max_depth: 10 };
     deps = makeDeps({ getScanParams: vi.fn(() => paramsA) });
     const { result, rerender } = renderHook(() => useBarcodeMode(deps));
     enableMode(result);
@@ -269,7 +271,7 @@ describe("useBarcodeMode", () => {
     // App re-rendered with fresh deps (new getScanParams → C:/b) while the
     // mode dep is unchanged → NO re-subscription: the listener keeps its
     // subscription-time closures, only the timeout's latest-ref sees C:/b.
-    const paramsB: ScanParams = { directory: "C:/b", extension: ".mttl", filter_text: "z", recursive: false };
+    const paramsB: ScanParams = { directory: "C:/b", extension: ".mttl", filter_text: "z", max_depth: 10 };
     deps = makeDeps({ getScanParams: vi.fn(() => paramsB) });
     rerender();
 
@@ -308,7 +310,7 @@ describe("useBarcodeMode", () => {
     expect(deps.onApplyValues).toHaveBeenCalledWith({ dir: "C:/cam", filter: "q" });
     expect(deps.scanWith).toHaveBeenCalledTimes(1);
     expect(deps.scanWith).toHaveBeenCalledWith(
-      { directory: "C:/cam", extension: ".mttl", filter_text: "q", recursive: false },
+      { directory: "C:/cam", extension: ".mttl", filter_text: "q", max_depth: 10 },
       { errorPrefix: "Scan error" },
     );
     expect(deps.onSingleMatch).toHaveBeenCalledTimes(1);
@@ -355,6 +357,56 @@ describe("useBarcodeMode", () => {
     });
     expect(deps.scanWith).not.toHaveBeenCalled();
     expect(deps.showToast).not.toHaveBeenCalledWith("Barcode mode cancelled.");
+  });
+});
+
+/**
+ * Barcode `recursive` → scan depth mapping (issue #240): the camera path
+ * computes the next depth through `barcodeRecursiveToDepth` — `false` scans
+ * the selected directory only (depth 1), `true` scans at the configured
+ * depth, and an absent flag keeps the current params' depth.
+ */
+describe("barcode recursive → depth mapping", () => {
+  it("recursive=0 scans the selected directory only (max_depth 1)", async () => {
+    const { result } = renderHook(() => useBarcodeMode(deps));
+
+    await act(async () => {
+      await result.current.handleCameraDetected("dir=C:/cam;recursive=0");
+    });
+
+    expect(deps.scanWith).toHaveBeenCalledTimes(1);
+    expect(deps.scanWith).toHaveBeenCalledWith(
+      { directory: "C:/cam", extension: ".mttl", filter_text: "", max_depth: 1 },
+      { errorPrefix: "Scan error" },
+    );
+  });
+
+  it("recursive=1 scans with the configured depth", async () => {
+    const { result } = renderHook(() => useBarcodeMode(deps));
+
+    await act(async () => {
+      await result.current.handleCameraDetected("dir=C:/cam;recursive=1");
+    });
+
+    expect(deps.scanWith).toHaveBeenCalledTimes(1);
+    expect(deps.scanWith).toHaveBeenCalledWith(
+      { directory: "C:/cam", extension: ".mttl", filter_text: "", max_depth: 25 },
+      { errorPrefix: "Scan error" },
+    );
+  });
+
+  it("absent recursive keeps the current depth", async () => {
+    const { result } = renderHook(() => useBarcodeMode(deps));
+
+    await act(async () => {
+      await result.current.handleCameraDetected("dir=C:/cam");
+    });
+
+    expect(deps.scanWith).toHaveBeenCalledTimes(1);
+    expect(deps.scanWith).toHaveBeenCalledWith(
+      { directory: "C:/cam", extension: ".mttl", filter_text: "", max_depth: 10 },
+      { errorPrefix: "Scan error" },
+    );
   });
 });
 

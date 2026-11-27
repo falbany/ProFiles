@@ -49,7 +49,7 @@ export function exportToCsv(
     ["Directory", config?.active_directory ?? ""],
     ["Extensions", config?.extensions?.join(" | ") ?? ""],
     ["Filter Text", filterText ?? config?.filters?.[0] ?? ""],
-    ["Recursive", String(config?.recursive_search ?? true)],
+    ["Max search depth", String(config?.max_search_depth ?? "")],
     ["Title", config?.title ?? ""],
     ["Release", config?.release ?? ""],
   ];

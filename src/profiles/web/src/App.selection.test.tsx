@@ -85,7 +85,7 @@ function makeAppConfig(overrides: Partial<AppConfigData> = {}): AppConfigData {
     title: "machine",
     release: "1.0",
     search_dir: "C:/data",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "dark",
     directories: ["C:/data"],
     extensions: [".mttl"],

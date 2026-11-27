@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   decodeBarcodeImage,
+  executeScan,
   exportCsvToDisk,
   fetchConfigContent,
   fetchConfigTemplate,
@@ -18,7 +19,7 @@ const SAMPLE_CONFIG = {
   title: "Fresh From Disk",
   release: "",
   search_dir: "",
-  recursive_search: true,
+  max_search_depth: 10,
   theme: "light",
   directories: ["C:/tmp"],
   extensions: [".newext"],
@@ -69,6 +70,41 @@ describe("reloadConfig", () => {
 
     await expect(reloadConfig()).rejects.toThrow("Invalid dropped configuration");
     expect(fetch).toHaveBeenCalledWith("/api/config/reload", { method: "POST" });
+  });
+});
+
+describe("executeScan", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("POSTs the scan params, carrying max_depth, to /api/scan", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init: RequestInit) =>
+        new Response(JSON.stringify({ count: 0, directory: "C:/tmp" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await executeScan({
+      directory: "C:/tmp",
+      extension: ".mttl",
+      filter_text: "",
+      max_depth: 10,
+    });
+
+    expect(res).toEqual({ count: 0, directory: "C:/tmp" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/scan");
+    expect(init.method).toBe("POST");
+    // The scan request carries the picked depth — the boolean `recursive`
+    // flag is gone (#240).
+    expect(JSON.parse(String(init.body))).toEqual({
+      directory: "C:/tmp",
+      extension: ".mttl",
+      filter_text: "",
+      max_depth: 10,
+    });
   });
 });
 

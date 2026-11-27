@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { barcodeShouldScan, parseBarcodeInput } from "../utils/barcodeScanner";
 import type { BarcodeParsedInput } from "../utils/barcodeScanner";
+import { barcodeRecursiveToDepth } from "../utils/scanDefaults";
 import type { ScanParams, ScanOutcome } from "./useScanController";
 import type { ScannedFileItem } from "../api/types";
 
@@ -9,6 +10,8 @@ export interface BarcodeModeDeps {
   showToast: (msg: string, kind?: "info" | "error") => void;
   scanWith: (params: ScanParams, opts?: { errorPrefix?: string }) => Promise<ScanOutcome>;
   getScanParams: () => ScanParams;
+  /** Configured max search depth (pre-clamped by App) — barcode `recursive=true` rescans at this depth (#240). */
+  configDepth: number;
   onApplyValues: (values: Partial<BarcodeParsedInput>) => void;
   onSingleMatch: (file: ScannedFileItem) => void;
   onCameraClose: () => void;
@@ -78,11 +81,13 @@ export function useBarcodeMode(deps: BarcodeModeDeps): {
     const vals = result.values;
 
     // Fields the barcode doesn't set fall back to the current scan params.
+    // The legacy `recursive` flag maps onto the scan depth (#240): false =
+    // selected directory only (1), true = configured depth, absent = current.
     const params = deps.getScanParams();
     const nextDir = vals.dir !== undefined ? vals.dir : params.directory;
     const nextExt = vals.ext !== undefined ? vals.ext : params.extension;
     const nextFilter = vals.filter !== undefined ? vals.filter : params.filter_text;
-    const nextRecursive = vals.recursive !== undefined ? vals.recursive : params.recursive;
+    const nextDepth = barcodeRecursiveToDepth(vals.recursive, params.max_depth, deps.configDepth);
 
     deps.onApplyValues(vals);
 
@@ -92,7 +97,7 @@ export function useBarcodeMode(deps: BarcodeModeDeps): {
           directory: nextDir,
           extension: nextExt,
           filter_text: nextFilter,
-          recursive: nextRecursive,
+          max_depth: nextDepth,
         },
         { errorPrefix: "Scan error" },
       );

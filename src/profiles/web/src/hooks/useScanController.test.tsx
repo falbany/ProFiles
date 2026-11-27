@@ -38,7 +38,7 @@ function makeFile(name: string, path?: string): ScannedFileItem {
 
 /** Mutable scan params: the deps' `getScanParams` returns THIS object. */
 function makeParams(): ScanParams {
-  return { directory: "C:/data", extension: "", filter_text: "", recursive: true };
+  return { directory: "C:/data", extension: "", filter_text: "", max_depth: 10 };
 }
 
 function makeDeps(params: ScanParams): ScanControllerDeps {

@@ -32,7 +32,7 @@ function makeConfig(): AppConfigData {
     title: "Dropped config",
     release: "test",
     search_dir: "/tmp/project",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "auto",
     directories: [],
     extensions: [],

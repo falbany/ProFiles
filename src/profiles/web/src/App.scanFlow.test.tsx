@@ -116,7 +116,7 @@ function makeAppConfig(overrides: Partial<AppConfigData> = {}): AppConfigData {
     title: "machine",
     release: "1.0",
     search_dir: "C:/data",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "dark",
     directories: ["C:/data"],
     extensions: [".mttl"],
@@ -180,7 +180,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "all",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -240,7 +240,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "ab",
-      recursive: false,
+      max_depth: 10,
     });
 
     // Fresh render: typing "a" schedules the deferred rescan, but pressing
@@ -269,7 +269,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "a",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -297,7 +297,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/other",
       extension: ".mttl",
       filter_text: "prod",
-      recursive: false,
+      max_depth: 10,
     });
 
     // The changed site's empty extension/filter lists fall back to "" —
@@ -313,7 +313,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/empty",
       extension: "",
       filter_text: "",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -413,7 +413,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/handoff",
       extension: ".yaml",
       filter_text: "handoff",
-      recursive: false,
+      max_depth: 10,
     });
 
     // The event's message toasts via the action bar's status role.
@@ -465,7 +465,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: ".py",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -499,7 +499,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".yaml",
       filter_text: "cam",
-      recursive: false,
+      max_depth: 10,
     });
 
     // Exactly one match → the launch-confirmation prompt names the file.
