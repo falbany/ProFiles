@@ -56,6 +56,7 @@
 - **Opérateurs de style Google** : AND implicite, `OR`, NOT (`-`), expression exacte (`"..."`).
 - **Colonnes dynamiques** : extraction de métadonnées (version, device, révision) depuis les noms de fichiers via des règles regex.
 - **Récursion parallèle** : scanning en thread d'arrière-plan haute performance qui garde l'interface réactive.
+- **Mode Watch** : la liste se rescanne elle-même quand le répertoire change (sans timer fixe).
 - **Exclusion par glob** : ignorer les répertoires bruyants (ex. `node_modules`, `.venv`) et filtrer les fichiers correspondant à des motifs glob (ex. `*backup*`, `~$*`).
 
 ### 🚀 Exécuter et automatiser
@@ -195,6 +196,7 @@ Lance le serveur FastAPI local et ouvre le frontend React dans une fenêtre de b
 - **Interface** : le chrome web est bilingue (anglais / français). Utilisez le sélecteur de langue dans la barre de statut pour changer à la volée, ou définissez `language: en` / `language: fr` dans la section `defaults`.
 - **Recherche** : utilisez `+` pour l'inclusion, `-` pour l'exclusion, `OR` pour les alternatives et `"..."` pour les expressions exactes.
 - **Raccourcis clavier** : `Ctrl+F` (champ filtre) · `Ctrl+D` (champ répertoire) · `Ctrl+E` (champ extension) · `F5` (rescan) · `Ctrl+R` (recharger la config + rescan) · `Ctrl+H` (répertoire home) · `Ctrl+Shift+L` (visionneuse de logs) · `Ctrl+,` (ouvrir l'éditeur de config) · `Ctrl+Shift+T` (cycler le thème) · `Ctrl+B` (mode scanner de code-barres) · `Ctrl+Shift+B` (scanner de code-barres caméra) · `Ctrl+T` (timer de rescan auto) · `Ctrl+Shift+P` ou `?` (palette de commandes — rechercher et lancer une commande avec son raccourci, ou ouvrir un fichier chargé).
+- **Mode Watch** : l'icône œil à côté du timer de rescan auto fait se rescanner la liste dès que le répertoire surveillé change — le timer et le watch sont deux modes d'un même contrôle, mutuellement exclusifs (activer l'un désactive l'autre). Sur les serveurs partagés, le serveur fait tourner un watcher unique partagé par tous les clients LAN. Voir le [Guide Serveur Réseau](./docs/network-server-guide.fr.md) pour les limites de détection.
 - **PWA** : le frontend embarque un precache de service worker, la page peut donc être installée dans le navigateur comme une application.
 
 ### Mode Navigateur / PWA (serveurs partagés)
