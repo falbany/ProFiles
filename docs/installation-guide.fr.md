@@ -595,8 +595,8 @@ defaults:
   # Limiter les extensions
   extensions: [.lnk, .pdf]
 
-  # Ou désactiver le récursif initialement
-  recursive_search: false
+  # Ou limiter la profondeur initialement (1 = répertoire sélectionné uniquement)
+  max_search_depth: 1
 ```
 
 ---
@@ -605,9 +605,9 @@ defaults:
 
 ### Pour les Grands Projets (>10 000 fichiers)
 
-1. **Utiliser le scan non-récursif** :
+1. **Limiter la profondeur de scan (1 = répertoire sélectionné uniquement)** :
    ```ini
-   recursive_search = Faux
+   max_search_depth = 1
    ```
 
 2. **Exclure les répertoires inutiles** :

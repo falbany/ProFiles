@@ -47,7 +47,7 @@ filter=.py;ext=toml;recursive=0;dir=/Users/me/docs;scan=1
 |-----|-----------|-------------|
 | `filter` | `query`, `search`, `filter_text` | Text filter applied to the file list |
 | `ext` | `extension`, `filetype` | File extension filter (e.g., `.py`, `.toml`) |
-| `recursive` | `recurse`, `recursive_search` | `1`/`true`/`on` → recursive; `0`/`false`/`off` → non-recursive |
+| `recursive` | `recurse`, `recursive_search` | Legacy flag mapped to the scan depth: `0`/`false`/`off` → Depth 1 (selected directory only); `1`/`true`/`on` → configured max search depth |
 | `dir` | `directory`, `path`, `folder` | Directory path to scan. `~` expands to the OS home directory |
 | `scan` | — | `1`/`true` → auto-trigger scan after applying values; `0`/`false` → apply only |
 
@@ -67,7 +67,7 @@ This sets the filter field to `project-report-final` and (if `scan` is not speci
 
 When a barcode is scanned:
 
-1. **Parsed values are applied** to the controls (directory in the header bar; filter, extension, recursive toggle in the search bar).
+1. **Parsed values are applied** to the controls (directory in the header bar; filter, extension, and the Depth dropdown in the search bar).
 2. If the `scan=1` key is present (or if the payload is a structured `key=value` set), ProFiles **automatically triggers a scan** with the new criteria.
 3. A **toast notification** confirms the scan was initiated.
 

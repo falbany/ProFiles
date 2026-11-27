@@ -701,7 +701,7 @@ columns:
 defaults:
   title: Project Launcher
   theme: light
-  recursive_search: true
+  # recursive_search : déprécié — utilisez max_search_depth
   extensions: [mttl OR mttx -backup, mttl, mttx]
   filters: ["", QTY_PRO, QTY_ENG]
 

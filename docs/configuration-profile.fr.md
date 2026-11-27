@@ -64,13 +64,13 @@ Cette section définit les paramètres par défaut applicables à toutes les mac
 | `theme`               | enum               | `"auto"`             | Thème d'interface : `"light"`, `"dark"` ou `"auto"` (Material Design 3)     |
 | `language`            | enum               | `"en"`               | Langue de l'interface : `"en"` (anglais) ou `"fr"` (français) ; basculable via le bouton langue de la barre de statut (cycle en → fr → en) |
 | `search_dir`          | string             | `""`                 | Répertoire de recherche par défaut pour le champ Directory                  |
-| `recursive_search`    | bool               | `false`              | État initial de la case à cocher Recursive                                  |
+| `recursive_search`    | bool               | `false`              | **Déprécié.** Anciennement l'état initial de la case à cocher Recursive ; remplacé par `max_search_depth`, qui pilote désormais le menu déroulant Depth de l'interface. Toujours analysé (le scanner l'honore en l'absence de surcharge explicite) ; l'interface web l'ignore ; un avertissement de dépréciation est journalisé au chargement. |
 | `extensions`          | array of strings   | `[All, .lnk]`        | Présélections du combobox Extension (remplies par `configs`)      |
 | `filters`             | array of strings   | `["", PROD, DEV]` | Présélections du combobox Filter ("" = tous les fichiers)                   |
 | `row_colors`          | array of objects   | `[]`                 | Règles de coloration génériques appliquées à TOUS les configurations. Chaque objet a `pattern` (string) et `color` (#RRGGBB)        |
 | `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Noms de répertoires (motifs glob insensibles à la casse) ignorés lors du scan récursif. Prend en charge les jokers `*`, `?`, `[seq]` (`*tmp`, `node_modules`, `Debug*`, etc.) |
 | `search_exclude_files` | array of strings | `[]`                 | Noms de fichiers (motifs glob insensibles à la casse) ignorés lors du scan. S'applique aux scans récursifs ET non récursifs. Même syntaxe de jokers que `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Les motifs par configuration sont AJOUTÉS. |
-| `max_search_depth`    | integer            | `10`                 | Profondeur maximale de récursion pour le scan de répertoires |
+| `max_search_depth`    | integer            | `10`                 | Profondeur de scan maximale (1 = répertoire sélectionné uniquement ; N = N niveaux sous la racine ; ∞ = illimité). Pilote le menu déroulant Depth de l'interface (options 1 à max(configurée, 25), plus ∞) |
 | `verbose`             | enum               | `"INFO"`             | Verbosité du logging : `"DEBUG"` | `"INFO"` | `"WARNING"` | `"ERROR"` | `"CRITICAL"` |
 | `scan_metrics`        | bool               | `false`              | Journaliser les métriques de performance après chaque scan                   |
 
@@ -88,7 +88,7 @@ defaults:
   theme: dark
   language: en
   search_dir: "C:/Users/YourName/Workspace"
-  recursive_search: true
+  # recursive_search : déprécié — utilisez max_search_depth
   extensions: [All, .lnk, .pdf, .docx]
   filters: ["", PROD, DEV, ENG]
   row_colors:
@@ -141,8 +141,8 @@ Les configurations peuvent `extend` une autre configuration pour hériter des pa
 | `row_colors`  | array of objects   | Non         | Règles de coloration spécifiques à la configuration. AJOUTÉES à `defaults.row_colors` et vérifiées en premier |
 | `search_exclude_files` | array of strings | Non | Motifs d'exclusion de fichiers par station. AJOUTÉS à `defaults.search_exclude_files`. Même syntaxe de jokers. |
 | `search_exclude_dirs` | array of strings | Non | Motifs d'exclusion de répertoires par station (remplace `defaults.search_exclude_dirs`). |
-| `max_search_depth`    | integer            | Non         | Profondeur maximale de récursion par station. |
-| `recursive_search`    | bool               | Non         | État du scan récursif par station. |
+| `max_search_depth`    | integer            | Non         | Profondeur de scan maximale par station (1 = répertoire sélectionné uniquement ; ∞ = illimité). Pilote le menu déroulant Depth de l'interface. |
+| `recursive_search`    | bool               | Non         | **Déprécié.** Anciennement la surcharge de récursivité par station ; remplacé par `max_search_depth`, qui pilote désormais le menu déroulant Depth de l'interface. Toujours analysé (le scanner l'honore en l'absence de surcharge explicite) ; l'interface web l'ignore ; un avertissement de dépréciation est journalisé au chargement. |
 
 ### Champ `match`
 
@@ -407,7 +407,7 @@ defaults:
   close_after_execute: false
   theme: dark
   search_dir: /chemin/vers/racine/production
-  recursive_search: true
+  # recursive_search : déprécié — utilisez max_search_depth
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
   filters: ["", PROD, DEV, DEV, TMP]
   row_colors:
@@ -675,8 +675,8 @@ defaults:
 # Exclure les répertoires courants volumineux
   search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj, Debug, Release, tmp]
 
-# Ou désactiver le scan récursif pour le scan initial
-  recursive_search: false
+# Ou scanner uniquement le répertoire sélectionné pour le scan initial (Depth 1)
+  max_search_depth: 1
 ```
 
 ---
@@ -703,7 +703,7 @@ defaults:
 ### Optimisation Mémoire
 
 Pour les très grands répertoires (>10 000 fichiers) :
-- Désactiver le scan récursif initialement
+- Commencer avec une profondeur faible (Depth 1 — répertoire sélectionné uniquement)
 - Utiliser des motifs de filtre pour réduire les résultats
 - Envisager de diviser en plusieurs sections de configuration
 
