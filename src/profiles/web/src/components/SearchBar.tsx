@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Camera, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
+import { useRef, useState } from "react";
+import { Camera, ChevronDown, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 import { FilterSyntaxHelper } from "./FilterSyntaxHelper";
@@ -116,6 +116,17 @@ export function SearchBar({
 }: SearchBarProps) {
   // Whether the filter input itself has focus — drives the live syntax helper.
   const [filterFocused, setFilterFocused] = useState(false);
+  // Depth select (issue #240): the chevron cell replicates the combobox
+  // affordance and re-opens the native picker via showPicker() (engine
+  // support permitting; focus fallback keeps it a no-op elsewhere).
+  const depthSelectRef = useRef<HTMLSelectElement>(null);
+  const openDepthPicker = () => {
+    try {
+      depthSelectRef.current?.showPicker();
+    } catch {
+      depthSelectRef.current?.focus();
+    }
+  };
   // Unfolded combobox lists — tooltips and the syntax helper yield to them (issue #53/#59).
   const [filterListOpen, setFilterListOpen] = useState(false);
   const [extListOpen, setExtListOpen] = useState(false);
@@ -182,27 +193,37 @@ export function SearchBar({
       >
         <label className="flex shrink-0 select-none items-center gap-1.5 text-ink-muted">
           <span>Depth:</span>
-          <select
-            aria-label="Scan depth"
-            value={depth === UNLIMITED_SCAN_DEPTH ? "unlimited" : String(depth)}
-            onChange={(e) => {
-              const raw = e.target.value;
-              onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
-            }}
-            // w-14 fits the widest finite value ("25") plus the native arrow;
-            // the ∞ option renders as just "∞" so the closed select stays
-            // 2-digit wide. h-[30px] pins the height to the combobox/button
-            // height in this bar — WKWebView (pywebview) ignores the padding
-            // derived height on native selects and rendered it too small.
-            className="h-[30px] w-14 rounded-md border border-line bg-elevated px-2 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            {buildDepthOptions(configDepth).map((n) => (
-              <option key={n} value={String(n)}>
-                {n}
-              </option>
-            ))}
-            <option value="unlimited">∞</option>
-          </select>
+          {/* Combobox replica (#240): appearance-none drops the native arrow
+              (engine-dependent — WKWebView/pywebview drew its own) so the
+              chevron cell below matches the EditableComboboxes. The select
+              cell stays 2-digit wide; h-[30px] pins the height in WKWebView
+              too, which ignores padding-derived select heights. */}
+          <div className="relative flex h-[30px] shrink-0">
+            <select
+              ref={depthSelectRef}
+              aria-label="Scan depth"
+              value={depth === UNLIMITED_SCAN_DEPTH ? "unlimited" : String(depth)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
+              }}
+              className="h-[30px] w-9 appearance-none rounded-l-md border border-line bg-elevated px-2 text-ink-secondary outline-none transition-colors hover:bg-surface-strong focus:border-indigo-500"
+            >
+              {buildDepthOptions(configDepth).map((n) => (
+                <option key={n} value={String(n)}>
+                  {n}
+                </option>
+              ))}
+              <option value="unlimited">∞</option>
+            </select>
+            <span
+              aria-hidden="true"
+              onClick={openDepthPicker}
+              className="flex h-[30px] shrink-0 cursor-pointer items-center rounded-r-md border border-l-0 border-line bg-elevated px-2 text-ink-muted transition-colors hover:bg-surface-strong hover:text-ink"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </span>
+          </div>
         </label>
       </Tooltip>
 
