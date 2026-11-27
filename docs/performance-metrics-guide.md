@@ -134,14 +134,14 @@ defaults:
 Evaluate the performance impact of recursive scanning:
 
 ```yaml
-# Non-recursive scan
+# Shallow scan (Depth 1 — selected directory only)
 defaults:
-  recursive_search: false
+  max_search_depth: 1
   scan_metrics: true
 
-# Recursive scan
+# Recursive scan at the configured depth
 defaults:
-  recursive_search: true
+  max_search_depth: 10
   scan_metrics: true
 ```
 
@@ -186,7 +186,7 @@ defaults:
 1. **Network drive** - Scanning over network is slower
 2. **Antivirus** - Real-time scanning adds overhead
 3. **Too many files** - Consider exclusions
-4. **Recursive scan** - Non-recursive is faster
+4. **Deep recursive scan** - A shallow scan (Depth 1) is faster
 
 **Recommendations**:
 ```yaml
@@ -195,8 +195,8 @@ defaults:
   search_exclude_dirs: [.git, __pycache__, bin, obj, tmp, Debug, Release, .vs]
   search_exclude_files: ["*backup*", "*.tmp", "~$*", "*.log"]
 
-  # Use non-recursive if possible
-  recursive_search: false
+  # Limit the scan depth if possible (1 = selected directory only)
+  max_search_depth: 1
 
   # Enable metrics to verify improvement
   scan_metrics: true

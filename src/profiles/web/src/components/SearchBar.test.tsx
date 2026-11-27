@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SearchBar } from "./SearchBar";
+import { UNLIMITED_SCAN_DEPTH, buildDepthOptions } from "../utils/scanDefaults";
 
 afterEach(cleanup);
 
@@ -13,8 +14,9 @@ function baseProps() {
     onExtensionChange: vi.fn(),
     filterText: "",
     onFilterTextChange: vi.fn(),
-    recursive: true,
-    onRecursiveChange: vi.fn(),
+    depth: 10,
+    onDepthChange: vi.fn(),
+    configDepth: 25,
     onScan: vi.fn(),
     scanning: false,
     barcodeMode: false,
@@ -27,6 +29,65 @@ function baseProps() {
     onWatchToggle: vi.fn(),
   };
 }
+
+/** The Depth select — one of three combobox roles, disambiguated by name. */
+function getDepthSelect(): HTMLSelectElement {
+  return screen.getByRole("combobox", { name: "Scan depth" }) as HTMLSelectElement;
+}
+
+describe("SearchBar depth select", () => {
+  it("renders the configured depth options plus the unlimited entry", () => {
+    render(<SearchBar {...baseProps()} />);
+
+    const select = getDepthSelect();
+    const options = Array.from(select.options);
+    // 1..configDepth from buildDepthOptions, then the ∞ entry.
+    expect(options.map((o) => o.value)).toEqual([
+      ...buildDepthOptions(25).map(String),
+      "unlimited",
+    ]);
+    expect(options[options.length - 1].textContent).toBe("∞");
+  });
+
+  it("shows the picked depth as selected", () => {
+    render(<SearchBar {...baseProps()} depth={3} />);
+
+    expect(getDepthSelect().value).toBe("3");
+  });
+
+  it("renders ∞ (unlimited) as selected when depth is UNLIMITED_SCAN_DEPTH", () => {
+    render(<SearchBar {...baseProps()} depth={UNLIMITED_SCAN_DEPTH} />);
+
+    expect(getDepthSelect().value).toBe("unlimited");
+  });
+
+  it("fires onDepthChange with the picked number", () => {
+    const props = baseProps();
+    render(<SearchBar {...props} />);
+
+    fireEvent.change(getDepthSelect(), { target: { value: "4" } });
+
+    expect(props.onDepthChange).toHaveBeenCalledTimes(1);
+    expect(props.onDepthChange).toHaveBeenCalledWith(4);
+  });
+
+  it("fires onDepthChange with UNLIMITED_SCAN_DEPTH for the ∞ entry", () => {
+    const props = baseProps();
+    render(<SearchBar {...props} />);
+
+    fireEvent.change(getDepthSelect(), { target: { value: "unlimited" } });
+
+    expect(props.onDepthChange).toHaveBeenCalledTimes(1);
+    expect(props.onDepthChange).toHaveBeenCalledWith(UNLIMITED_SCAN_DEPTH);
+  });
+
+  it("no checkbox remains — the select replaced the Recursive toggle", () => {
+    const { container } = render(<SearchBar {...baseProps()} />);
+
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(screen.queryByText("Recursive")).toBeNull();
+  });
+});
 
 describe("SearchBar base grammar", () => {
   it("repeats the base grammar rows in both tooltips", () => {

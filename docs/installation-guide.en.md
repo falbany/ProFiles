@@ -568,8 +568,8 @@ defaults:
   # Limit extensions
   extensions: [.lnk, .pdf]
 
-  # Or disable recursive initially
-  recursive_search: false
+  # Or limit the depth initially (1 = selected directory only)
+  max_search_depth: 1
 ```
 
 ---
@@ -578,9 +578,9 @@ defaults:
 
 ### For Large Projects (>10,000 files)
 
-1. **Use non-recursive scanning**:
+1. **Limit the scan depth (1 = selected directory only)**:
    ```ini
-   recursive_search = false
+   max_search_depth = 1
    ```
 
 2. **Exclude unnecessary directories**:

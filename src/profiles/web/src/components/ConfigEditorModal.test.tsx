@@ -82,7 +82,7 @@ function makeAppConfig(): AppConfigData {
     title: "machine",
     release: "1.0",
     search_dir: "C:/data",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "dark",
     directories: [],
     extensions: [".mttl"],
@@ -1245,7 +1245,7 @@ describe("ConfigEditorModal status bar and problems panel (issue #105)", () => {
 
   it("test_cursor_position_tracks_selection", async () => {
     fetchContentSpy.mockResolvedValue(
-      makeContent({ content: 'release: "1.0"\nsearch_dir: "C:/data"\nrecursive_search: false\ntheme: dark\n' }),
+      makeContent({ content: 'release: "1.0"\nsearch_dir: "C:/data"\nmax_search_depth: 10\ntheme: dark\n' }),
     );
     renderModal();
     const view = await readyEditorView();

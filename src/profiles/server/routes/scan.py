@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from profiles.core.config.models import AppConfig
@@ -36,19 +36,37 @@ _ATTR_FIELD_BY_KEYWORD: dict[str, str] = {
 
 
 class ScanRequest(BaseModel):
+    """Body of a scan request (#240).
+
+    ``recursive`` / ``max_depth`` are ``None`` when the client did not send
+    them (stale clients send neither): :func:`execute_scan` derives the
+    effective intent — an explicit ``max_depth`` wins and implies recursion
+    for any depth above 1, ``recursive`` alone keeps the legacy checkbox
+    meaning, and neither field defaults to today's recursive scan.
+    """
+
     directory: str = ""
     extension: str = ""
     filter_text: str = ""
-    recursive: bool = True
+    recursive: bool | None = None
+    # No upper bound: the API accepts any depth >= 1 — the 25-entry cap is
+    # UI-side (the dropdown only offers that many).
+    max_depth: int | None = Field(default=None, ge=1)
 
 
 @router.post("")
 async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     """Execute dynamic scan on the active directory and cache results.
 
-    Keeps the watch in step with the scan (#223): records the recursion
-    intent, re-targets a running watcher onto the scanned directory, and
-    stops the watch when the scanned directory is missing.
+    Derives the scan intent from ``max_depth`` / ``recursive`` (#240): an
+    explicit depth wins and implies recursion above depth 1; the legacy
+    checkbox applies when no depth was sent; neither field keeps today's
+    recursive meaning. The derived intent — not the raw payload fields —
+    feeds the watch bookkeeping below and the scan call.
+
+    Keeps the watch in step with the scan (#223): records the derived
+    recursion/depth intent, re-targets a running watcher onto the scanned
+    directory, and stops the watch when the scanned directory is missing.
     """
     state: ServerState = request.app.state.server_state
     state.scan_generation += 1
@@ -59,27 +77,46 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     if payload.directory:
         state.active_directory = normalize_user_path(payload.directory)
 
-    # Watch re-target (issue #223; refined by the final review): a scan
-    # keeps a running watcher in step with the scanned directory — but a
-    # scan of the SAME directory with UNCHANGED recursion intent skips
+    # Derived scan intent (#240) — ONE derivation, before any use. An
+    # explicit max_depth wins (depth 1 IS root-only); the legacy checkbox
+    # applies when no depth was sent; neither field keeps the meaning the
+    # old Pydantic default (recursive=True) gave absence.
+    if payload.max_depth is not None:
+        eff_recursive = payload.max_depth > 1
+        max_depth_override: int | None = payload.max_depth
+    elif payload.recursive is not None:
+        eff_recursive = payload.recursive
+        max_depth_override = None
+    else:
+        eff_recursive = True  # today's absence meaning (Pydantic default was True)
+        max_depth_override = None
+
+    # Watch re-target (issue #223; refined by the final review; #240): a
+    # scan keeps a running watcher in step with the scanned directory —
+    # but a scan of the SAME directory with UNCHANGED search intent skips
     # the stop/start cycle entirely: restarting on every rescan was
     # needless churn, and every stop is a thread join (the costliest
     # thing a route can do — hence the to_thread hops below keep that
-    # wait off the event loop). When the intent changed or the directory
-    # moved, the watcher restarts onto the new root (a full restart IS
-    # the re-target: it re-baselines the snapshot and re-resolves the
-    # per-directory boundary), or stops when the root is dead so no
-    # poller is left watching a missing directory. A vanished root with
-    # an unchanged directory and intent is the watcher's own error path,
-    # not this branch's. The helpers serialize on ``watch_ops_lock``;
-    # no outer lock here (double-acquire on a non-reentrant Lock
-    # deadlocks).
+    # wait off the event loop). The intent compared here is the DERIVED
+    # one (eff_recursive plus the picked depth), not the raw payload
+    # fields: a depth pick alone must re-target the probe onto the
+    # boundary the scan walks (#240). When the intent changed or the
+    # directory moved, the watcher restarts onto the new root (a full
+    # restart IS the re-target: it re-baselines the snapshot and
+    # re-resolves the per-directory boundary), or stops when the root is
+    # dead so no poller is left watching a missing directory. A vanished
+    # root with an unchanged directory and intent is the watcher's own
+    # error path, not this branch's. The helpers serialize on
+    # ``watch_ops_lock``; no outer lock here (double-acquire on a
+    # non-reentrant Lock deadlocks).
     same_watch_target = (
         state.watcher is not None
         and state.watcher.directory == state.active_directory
-        and payload.recursive == state.watch_recursive
+        and eff_recursive == state.watch_recursive
+        and payload.max_depth == state.watch_max_depth
     )
-    state.watch_recursive = payload.recursive
+    state.watch_recursive = eff_recursive
+    state.watch_max_depth = payload.max_depth
     if state.watcher is not None and not same_watch_target:
         target = state.active_directory
         if target is None or not target.exists():
@@ -87,7 +124,12 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
                 _stop_watcher, state, error="Watch stopped: directory does not exist"
             )
         else:
-            await asyncio.to_thread(_start_watcher, state, recursive=payload.recursive)
+            await asyncio.to_thread(
+                _start_watcher,
+                state,
+                recursive=eff_recursive,
+                max_depth_override=max_depth_override,
+            )
 
     scan_directory = state.active_directory
     if not scan_directory:
@@ -118,11 +160,14 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
             config=state.config,
             extension=payload.extension,
             filter_text=payload.filter_text,
-            recursive=payload.recursive,
-            # The web checkbox is explicit user intent: it always wins over
-            # any matching machine-config recursive_search override
-            # (recursive= is still honored when the override is somehow None).
-            recursive_override=payload.recursive,
+            recursive=eff_recursive,
+            # The derived intent (#240) is explicit user intent: it always
+            # wins over any matching machine-config recursive_search
+            # override, and an explicit depth wins over the config chain
+            # for this scan (recursive= is still honored when the override
+            # is somehow None).
+            recursive_override=eff_recursive,
+            max_depth_override=max_depth_override,
             column_names=state.config.column_names,
             columns=state.config.columns,
             on_progress=_push_progress,
@@ -136,7 +181,12 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
 
 
 class WatchRequest(BaseModel):
-    """Body of the watch-mode toggle."""
+    """Body of the watch-mode toggle.
+
+    Enable keeps today's semantics (recursion flag only, config-chain
+    depth): the depth a scan picks re-targets the watcher on the next
+    scan (#240).
+    """
 
     enabled: bool
     recursive: bool = True
@@ -189,15 +239,22 @@ def _stop_watcher(state: ServerState, *, error: str | None = None) -> None:
             watcher.stop()
 
 
-def _start_watcher(state: ServerState, *, recursive: bool) -> None:
+def _start_watcher(
+    state: ServerState,
+    *,
+    recursive: bool,
+    max_depth_override: int | None = None,
+) -> None:
     """Start (or replace) the directory watcher on the active directory.
 
     The probe's depth and excludes come from
     :func:`scanner.effective_search_boundary` — the same merge that
-    governs a scan of the same root. Same join discipline as
-    :func:`_stop_watcher` (:func:`_detach_watcher`, ops lock, join
-    outside ``_watch_lock``); the new watcher is stored BEFORE the
-    previous one is joined, so the watch never gaps to "off" during a
+    governs a scan of the same root; *max_depth_override* (a scan's depth
+    pick, #240) threads through so the probe samples the depth the scan
+    walks (``None`` defers to the config chain, as on enable). Same join
+    discipline as :func:`_stop_watcher` (:func:`_detach_watcher`, ops
+    lock, join outside ``_watch_lock``); the new watcher is stored BEFORE
+    the previous one is joined, so the watch never gaps to "off" during a
     replacement, and a change noticed by the outgoing poller in that
     overlap still bumps ``watch_seq`` (it was a real change). Callbacks
     capture *state* only: ``on_change`` bumps ``watch_seq`` under the
@@ -217,7 +274,7 @@ def _start_watcher(state: ServerState, *, recursive: bool) -> None:
             return
 
         depth, exclude_dirs = scanner.effective_search_boundary(
-            str(directory), state.config, recursive=recursive
+            str(directory), state.config, recursive=recursive, max_depth_override=max_depth_override
         )
 
         def _on_change() -> None:

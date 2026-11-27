@@ -12,6 +12,8 @@ Error-collection guarantees:
 - Semantic problems (unknown top-level keys, unknown ``extends``
   references, inheritance cycles) are collected exhaustively.
 - Schema violations report every Pydantic error, with a dotted path.
+- Deprecated keys report ``{"severity": "warning"}`` entries alongside
+  the errors (warn-but-honored — see issue #240).
 """
 
 from __future__ import annotations
@@ -30,10 +32,10 @@ def collect_config_issues(text: str) -> list[dict[str, str]]:
         text: Raw YAML configuration content (a ``.profiles`` draft).
 
     Returns:
-        A list of ``{"severity": "error", "message": ...}`` dicts — ``[]``
-        when the content parses, passes semantic validation and the
-        schema. The first YAML syntax error (if any) ends the report:
-        no tree exists to validate until it is fixed.
+        A list of ``{"severity": "error" | "warning", "message": ...}``
+        dicts — ``[]`` when the content parses, passes semantic
+        validation and the schema. The first YAML syntax error (if any)
+        ends the report: no tree exists to validate until it is fixed.
     """
     try:
         raw = read_yaml_text(text)
@@ -60,6 +62,27 @@ def collect_config_issues(text: str) -> list[dict[str, str]]:
             )
     except Exception as exc:  # noqa: BLE001
         issues.append({"severity": "error", "message": f"schema validation error: {exc}"})
+
+    defaults = raw.get("defaults")
+    if isinstance(defaults, dict) and "recursive_search" in defaults:
+        issues.append(
+            {
+                "severity": "warning",
+                "message": "defaults: recursive_search is deprecated — use max_search_depth",
+            }
+        )
+    configs = raw.get("configs")
+    if isinstance(configs, dict):
+        for name, entry in configs.items():
+            if isinstance(entry, dict) and "recursive_search" in entry:
+                issues.append(
+                    {
+                        "severity": "warning",
+                        "message": (
+                            f"configs.{name}: recursive_search is deprecated — use max_search_depth"
+                        ),
+                    }
+                )
     return issues
 
 

@@ -65,13 +65,13 @@ This section defines default parameters applicable to all machines.
 | `theme`               | enum               | `"auto"`             | UI theme: `"light"`, `"dark"`, or `"auto"` (Material Design 3; the web UI resolves `"auto"` and unknown values to dark)                                                                                                       |
 | `language`            | enum               | `"en"`               | GUI language: `"en"` (English) or `"fr"` (French); toggled from the status-bar language button (cycles en → fr → en)                                                  |
 | `search_dir`          | string             | `""`                 | Default search directory for Directory field                                                                                                                      |
-| `recursive_search`    | bool               | `false`              | Initial state of Recursive checkbox                                                                                                                               |
+| `recursive_search`    | bool               | `false`              | **Deprecated.** Formerly the Recursive checkbox initial state; superseded by `max_search_depth`, which now drives the UI Depth dropdown. Still parsed (the scanner honors it when no explicit override arrives); the web UI ignores it; a deprecation warning is logged on load. |
 | `extensions`          | array of strings   | `[All, .lnk]`        | Extension combobox presets (fallback for `configs` sections)                                                                                                     |
 | `filters`             | array of strings   | `["", PROD, DEV]` | Filter combobox presets ("" = show all files)                                                                                                                     |
 | `row_colors`          | array of objects   | `[]`                 | Generic row-coloring rules applied to ALL configurations. Each object has `pattern` (string) and `color` (#RRGGBB)                                                |
 | `search_exclude_dirs` | array of strings   | `[.git, __pycache__]` | Directory basenames (case-insensitive glob patterns) skipped during recursive scan. Supports `*`, `?`, `[seq]` wildcards (`*tmp`, `node_modules`, `Debug*`, etc.) |
 | `search_exclude_files` | array of strings | `[]`                 | File basenames (case-insensitive glob patterns) skipped during scan. Applies to recursive AND non-recursive scans. Same wildcard syntax as `search_exclude_dirs` (`*backup*`, `~$*`, `*.tmp`). Per-config entries are APPENDED. |
-| `max_search_depth`    | integer            | `10`                 | Maximum recursion depth for directory scanning |
+| `max_search_depth`    | integer            | `10`                 | Maximum scan depth (1 = selected directory only; N = N levels below the root; ∞ = unlimited). Drives the UI Depth dropdown (options 1 to max(configured, 25), plus ∞) |
 | `verbose`             | enum               | `"INFO"`             | Logging verbosity: `"DEBUG"` | `"INFO"` | `"WARNING"` | `"ERROR"` | `"CRITICAL"`                                              |
 | `scan_metrics`        | bool               | `false`              | Log performance metrics after each scan                                                                                                                           |
 
@@ -89,7 +89,7 @@ defaults:
   theme: dark
   language: en
   search_dir: "C:/Users/YourName/Workspace"
-  recursive_search: true
+  # recursive_search: deprecated — use max_search_depth
   extensions: [All, .lnk, .pdf, .docx]
   filters: ["", PROD, DEV, DEV]
   row_colors:
@@ -142,8 +142,8 @@ Configurations can `extend` another configuration to inherit settings. Lists are
 | `row_colors`  | array of objects   | No       | Configuration-specific coloring rules. APPENDED to `defaults.row_colors` and checked first |
 | `search_exclude_files` | array of strings | No | Per-station file exclusion patterns. APPENDED to `defaults.search_exclude_files`. Same wildcard syntax. |
 | `search_exclude_dirs` | array of strings | No | Per-station directory exclusion patterns (overrides `defaults.search_exclude_dirs`). |
-| `max_search_depth`    | integer            | No       | Per-station maximum recursion depth override. |
-| `recursive_search`    | bool               | No       | Per-station recursive search state override. |
+| `max_search_depth`    | integer            | No       | Per-station maximum scan depth override (1 = selected directory only; ∞ = unlimited). Drives the UI Depth dropdown. |
+| `recursive_search`    | bool               | No       | **Deprecated.** Formerly the per-station recursion override; superseded by `max_search_depth`, which now drives the UI Depth dropdown. Still parsed (the scanner honors it when no explicit override arrives); the web UI ignores it; a deprecation warning is logged on load. |
 
 ### `match` Field
 
@@ -406,7 +406,7 @@ defaults:
   close_after_execute: false
   theme: dark
   search_dir: /path/to/production/root
-  recursive_search: true
+  # recursive_search: deprecated — use max_search_depth
   extensions: [All, .lnk, .pdf, .docx, .xlsx]
   filters: ["", PROD, DEV, DEV, TMP]
   row_colors:
@@ -682,8 +682,8 @@ defaults:
 # Exclude common large directories
   search_exclude_dirs: [.git, node_modules, __pycache__, bin, obj, Debug, Release, tmp]
 
-# Or disable recursive search for initial scan
-  recursive_search: false
+# Or scan the selected directory only for the initial scan (Depth 1)
+  max_search_depth: 1
 ```
 
 ---
@@ -713,7 +713,7 @@ defaults:
 
 For very large directories (>10,000 files):
 
-- Disable recursive search initially
+- Start with a shallow depth (Depth 1 — selected directory only)
 - Use filter patterns to narrow results
 - Consider splitting into multiple configuration sections
 

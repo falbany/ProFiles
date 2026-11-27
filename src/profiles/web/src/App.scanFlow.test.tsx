@@ -116,7 +116,7 @@ function makeAppConfig(overrides: Partial<AppConfigData> = {}): AppConfigData {
     title: "machine",
     release: "1.0",
     search_dir: "C:/data",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "dark",
     directories: ["C:/data"],
     extensions: [".mttl"],
@@ -180,8 +180,41 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "all",
-      recursive: false,
+      max_depth: 10,
     });
+  });
+
+  it("init syncs the depth state from the payload: config 40 stays 40 (#240)", async () => {
+    // Dedicated fixture override (not the shared one): every other scenario
+    // pins the default-depth scan bodies above, so a non-10 depth proves
+    // the App-level sync (depth read from the payload, never re-defaulted).
+    fetchConfigSpy.mockResolvedValue(makeAppConfig({ max_search_depth: 40 }));
+    render(<App />);
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+
+    // The post-load scan body carries the config depth verbatim — 40 from
+    // the payload, not the 10 the default fixture carries.
+    expect(executeScanSpy.mock.calls[0][0]).toEqual({
+      directory: "C:/data",
+      extension: ".mttl",
+      filter_text: "",
+      max_depth: 40,
+    });
+
+    // The SearchBar mirrors the synced depth state: the option list extends
+    // to the configured depth (buildDepthOptions(40)) plus unlimited, and
+    // the select shows 40 as the current pick. The controlled commit may
+    // land a microtask after the scan call the wait above resolves on, so
+    // the select value is poll-waited (same treatment as the theme
+    // attribute in the theme pins below).
+    await waitFor(() => expect(screen.getByLabelText("Scan depth")).toHaveValue("40"));
+    const depthSelect = screen.getByLabelText("Scan depth") as HTMLSelectElement;
+    const values = Array.from(depthSelect.options).map((option) => option.value);
+    // Index 39 pins the list ENDING at the configured depth — under the
+    // default 25-entry cap this slot would not exist (list + unlimited ends
+    // at index 25).
+    expect(values[39]).toBe("40");
+    expect(values).toContain("unlimited");
   });
 
   it("scan 200-with-warning surfaces the warning as an error toast", async () => {
@@ -240,7 +273,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "ab",
-      recursive: false,
+      max_depth: 10,
     });
 
     // Fresh render: typing "a" schedules the deferred rescan, but pressing
@@ -269,7 +302,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: "a",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -297,7 +330,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/other",
       extension: ".mttl",
       filter_text: "prod",
-      recursive: false,
+      max_depth: 10,
     });
 
     // The changed site's empty extension/filter lists fall back to "" —
@@ -313,7 +346,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/empty",
       extension: "",
       filter_text: "",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -413,7 +446,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/handoff",
       extension: ".yaml",
       filter_text: "handoff",
-      recursive: false,
+      max_depth: 10,
     });
 
     // The event's message toasts via the action bar's status role.
@@ -465,7 +498,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".mttl",
       filter_text: ".py",
-      recursive: false,
+      max_depth: 10,
     });
   });
 
@@ -499,7 +532,7 @@ describe("App scan flow (characterization)", () => {
       directory: "C:/data",
       extension: ".yaml",
       filter_text: "cam",
-      recursive: false,
+      max_depth: 10,
     });
 
     // Exactly one match → the launch-confirmation prompt names the file.

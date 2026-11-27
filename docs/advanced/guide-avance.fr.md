@@ -63,7 +63,7 @@ filter=.py;ext=toml;recursive=0;dir=/path/to/scannedir;scan=1
 |-----|-----------|-------------|
 | `filter` | `query`, `search` | Filtre texte pour la liste des fichiers |
 | `ext` | `extension`, `filetype` | Filtre d'extension de fichier |
-| `recursive` | `recurse` | `1` pour récursif, `0` pour non-récursif |
+| `recursive` | `recurse` | Ancien indicateur mappé sur la profondeur de scan : `0` → Depth 1 (répertoire uniquement), `1` → profondeur configurée |
 | `dir` | `directory`, `path` | Chemin du répertoire (`~` se développe en répertoire personnel) |
 | `scan` | — | `1` pour déclencher automatiquement le scan, `0` pour appliquer uniquement |
 

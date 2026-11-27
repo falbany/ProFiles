@@ -29,6 +29,31 @@ from profiles.core.telemetry import events
 _DEFAULT_FILE_COLUMN_WIDTH = 600
 _DEFAULT_COLUMN_WIDTH = 150
 
+_LOGGER = logging.getLogger(__name__)
+_RECURSIVE_SEARCH_DEPRECATED_MSG = (
+    "recursive_search is deprecated and will be removed; use max_search_depth"
+)
+
+
+def _warn_recursive_search_deprecation(raw: dict) -> None:
+    """Log a deprecation warning for every declared ``recursive_search`` key.
+
+    Warn-but-honored (issue #240): the values are still parsed into the
+    configuration — the scanner keeps honoring them — only this log line
+    announces the upcoming removal.
+
+    Args:
+        raw: The parsed YAML configuration mapping (``defaults`` + ``configs``).
+    """
+    defaults = raw.get("defaults")
+    if isinstance(defaults, dict) and "recursive_search" in defaults:
+        _LOGGER.warning(_RECURSIVE_SEARCH_DEPRECATED_MSG)
+    configs = raw.get("configs")
+    if isinstance(configs, dict):
+        for name, entry in configs.items():
+            if isinstance(entry, dict) and "recursive_search" in entry:
+                _LOGGER.warning("configs.%s.%s", name, _RECURSIVE_SEARCH_DEPRECATED_MSG)
+
 
 class ConfigReader:
     """Reads and parses the ``.profiles`` configuration file.
@@ -90,6 +115,7 @@ class ConfigReader:
                 raise ValueError("configuration file is empty")
             validate(raw)
             schema = AppConfigYaml.model_validate(raw)
+            _warn_recursive_search_deprecation(raw)
             config = AppConfig()
             # A throwaway reader bound to a <memory> sentinel: the apply
             # helpers are instance methods but never read instance state
@@ -169,6 +195,7 @@ class ConfigReader:
             self._build_column_configs(config)
             return config
 
+        _warn_recursive_search_deprecation(raw)
         return config
 
     def _apply_defaults(self, config: AppConfig, schema: AppConfigYaml) -> None:

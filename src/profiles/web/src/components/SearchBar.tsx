@@ -3,6 +3,7 @@ import { Camera, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-reac
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 import { FilterSyntaxHelper } from "./FilterSyntaxHelper";
+import { UNLIMITED_SCAN_DEPTH, buildDepthOptions } from "../utils/scanDefaults";
 
 const BASE_OPERATOR_HELP = (
   <span className="flex flex-col gap-1 whitespace-nowrap text-left">
@@ -69,8 +70,12 @@ interface SearchBarProps {
   filterOptions?: string[];
   filterText: string;
   onFilterTextChange: (text: string) => void;
-  recursive: boolean;
-  onRecursiveChange: (val: boolean) => void;
+  /** Depth currently selected in the UI (1 = selected directory only; #240). */
+  depth: number;
+  /** Depth pick handler; ∞ arrives as UNLIMITED_SCAN_DEPTH. */
+  onDepthChange: (depth: number) => void;
+  /** Configured max search depth (pre-clamped by App) — sizes the option list. */
+  configDepth: number;
   onScan: () => void;
   scanning: boolean;
   barcodeMode: boolean;
@@ -94,8 +99,9 @@ export function SearchBar({
   filterOptions,
   filterText,
   onFilterTextChange,
-  recursive,
-  onRecursiveChange,
+  depth,
+  onDepthChange,
+  configDepth,
   onScan,
   scanning,
   barcodeMode,
@@ -168,15 +174,33 @@ export function SearchBar({
         </div>
       </Tooltip>
 
-      <Tooltip text="Include subdirectories when scanning" block={false}>
-        <label className="flex shrink-0 cursor-pointer select-none items-center gap-1.5 text-ink-secondary">
-          <input
-            type="checkbox"
-            checked={recursive}
-            onChange={(e) => onRecursiveChange(e.target.checked)}
-            className="rounded border-line text-chip-indigo-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-app"
-          />
-          <span>Recursive</span>
+      {/* Scan depth (#240): 1 = selected directory only, N = up to N levels,
+          ∞ = unlimited (carried as UNLIMITED_SCAN_DEPTH). Always visible. */}
+      <Tooltip
+        text="Scan depth — 1: selected directory only; N: up to N levels; ∞: unlimited"
+        block={false}
+      >
+        <label className="flex shrink-0 select-none items-center gap-1.5 text-ink-muted">
+          <span>Depth:</span>
+          <select
+            aria-label="Scan depth"
+            value={depth === UNLIMITED_SCAN_DEPTH ? "unlimited" : String(depth)}
+            onChange={(e) => {
+              const raw = e.target.value;
+              onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
+            }}
+            // w-14 fits the widest finite value ("25") plus the native arrow;
+            // the ∞ option renders as just "∞" so the closed select stays
+            // 2-digit wide. py-1.5 matches the combobox/button height in this bar.
+            className="w-14 rounded-md border border-line bg-elevated px-2 py-1.5 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            {buildDepthOptions(configDepth).map((n) => (
+              <option key={n} value={String(n)}>
+                {n}
+              </option>
+            ))}
+            <option value="unlimited">∞</option>
+          </select>
         </label>
       </Tooltip>
 

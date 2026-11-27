@@ -13,7 +13,8 @@ export interface AppConfigData {
   session_trial?: boolean;
   release: string;
   search_dir: string;
-  recursive_search: boolean;
+  /** Maximum scan depth the server resolved for this config (1 = selected directory only, #240). */
+  max_search_depth: number;
   theme: "light" | "dark" | "auto";
   directories: string[];
   extensions: string[];

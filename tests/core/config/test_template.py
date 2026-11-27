@@ -20,6 +20,10 @@ class TestStarterTemplate:
         body = STARTER_CONFIG_TEMPLATE.format(cwd="/my/dir")
         assert "/my/dir" in body
 
+    def test_template_has_no_recursive_search(self) -> None:
+        """``recursive_search`` is deprecated (#240): the starter no longer ships it."""
+        assert "recursive_search" not in STARTER_CONFIG_TEMPLATE
+
 
 class TestStarterTemplateWorkflowKeys:
     def test_hooks_examples_use_command_and_message(self) -> None:

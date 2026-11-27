@@ -47,7 +47,7 @@ filter=.py;ext=toml;recursive=0;dir=/Users/me/docs;scan=1
 |-----|-----------|-------------|
 | `filter` | `query`, `search`, `filter_text` | Texte de filtre appliqué à la liste des fichiers |
 | `ext` | `extension`, `filetype` | Filtre d'extension de fichier (ex. : `.py`, `.toml`) |
-| `recursive` | `recurse`, `recursive_search` | `1`/`true`/`on` → récursif ; `0`/`false`/`off` → non-récursif |
+| `recursive` | `recurse`, `recursive_search` | Ancien indicateur mappé sur la profondeur de scan : `0`/`false`/`off` → Depth 1 (répertoire sélectionné uniquement) ; `1`/`true`/`on` → profondeur maximale configurée |
 | `dir` | `directory`, `path`, `folder` | Chemin du répertoire à scanner. `~` se développe en le répertoire personnel du système d'exploitation |
 | `scan` | — | `1`/`true` → déclencher automatiquement un scan après application des valeurs ; `0`/`false` → appliquer uniquement |
 
@@ -67,7 +67,7 @@ Cela définit le champ de filtre sur `rapport-urgent-final` et ne déclenche **p
 
 Lorsqu'un code-barres est scanné :
 
-1. **Les valeurs analysées sont appliquées** aux contrôles (répertoire dans la barre d'en-tête ; filtre, extension, bouton de récursion dans la barre de recherche).
+1. **Les valeurs analysées sont appliquées** aux contrôles (répertoire dans la barre d'en-tête ; filtre, extension et menu déroulant Depth dans la barre de recherche).
 2. Si la clé `scan=1` est présente (ou si le payload est un jeu structuré `key=value`), ProFiles **déclenche automatiquement un scan** avec les nouveaux critères.
 3. Une **notification toast** confirme le lancement du scan.
 

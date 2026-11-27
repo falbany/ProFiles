@@ -17,6 +17,7 @@ from profiles.core.processing.scanner import (
     ScannedFile,
     ScannedFileDynamic,
     _scan_and_filter,
+    effective_search_boundary,
     is_simple_extension,
     scan_and_process,
     scan_and_process_dynamic,
@@ -1105,3 +1106,58 @@ class TestScannedFileDynamicPositional:
         attrs = FileAttrs(7, 1.0, 2.0)
         entry = ScannedFileDynamic(Path("a.mttl"), {}, "a.mttl", attrs)
         assert entry.attrs is attrs
+
+
+# ── #240: max_depth_override threading (depth in scanner units) ─────────────
+
+
+def _make_depth_tree(tmp_path: Path) -> None:
+    """Build the depth fixture tree.
+
+    Creates ``root/{f1.mttl, l1/{f2.mttl, l2/{f3.mttl, l3/{f4.mttl}}}}`` —
+    one ``.mttl`` file per level: level 0 (root), 1, 2 and 3 below the root.
+    """
+    l2 = tmp_path / "l1" / "l2"
+    l3 = l2 / "l3"
+    l3.mkdir(parents=True)
+    (tmp_path / "f1.mttl").write_text("1")
+    (tmp_path / "l1" / "f2.mttl").write_text("2")
+    (l2 / "f3.mttl").write_text("3")
+    (l3 / "f4.mttl").write_text("4")
+
+
+def test_depth_n_scans_n_levels_below_root(tmp_path: Path) -> None:
+    """Depth N = N levels below the root: 2 → levels 1+2, never level 3."""
+    _make_depth_tree(tmp_path)
+    cfg = AppConfig(search_dir=str(tmp_path), max_search_depth=10)
+    files = scan_and_process(str(tmp_path), recursive=True, config=cfg, max_depth_override=2)
+    assert {f.filename for f in files} == {"f1.mttl", "l1/f2.mttl", "l1/l2/f3.mttl"}
+
+
+def test_max_depth_override_beats_config(tmp_path: Path) -> None:
+    """An explicit override beats ``config.max_search_depth`` (depth 3 → 1)."""
+    _make_depth_tree(tmp_path)
+    cfg = AppConfig(search_dir=str(tmp_path), max_search_depth=3)
+    files = scan_and_process(str(tmp_path), recursive=True, config=cfg, max_depth_override=1)
+    assert {f.filename for f in files} == {"f1.mttl", "l1/f2.mttl"}
+
+
+def test_max_depth_override_none_uses_config_chain(tmp_path: Path) -> None:
+    """No override: depth defers to the config-entry → config → default chain."""
+    _make_depth_tree(tmp_path)
+    cfg = AppConfig(search_dir=str(tmp_path), max_search_depth=2)
+    files = scan_and_process(str(tmp_path), recursive=True, config=cfg)
+    assert {f.filename for f in files} == {"f1.mttl", "l1/f2.mttl", "l1/l2/f3.mttl"}
+
+
+def test_effective_search_boundary_honors_max_depth_override(tmp_path: Path) -> None:
+    """The watch-mode boundary passes the override through; non-recursive still forces 0."""
+    cfg = AppConfig(search_dir=str(tmp_path), max_search_depth=5)
+    depth, excludes = effective_search_boundary(
+        str(tmp_path), cfg, recursive=True, max_depth_override=2
+    )
+    assert depth == 2
+    nonrec_depth, _ = effective_search_boundary(
+        str(tmp_path), cfg, recursive=False, max_depth_override=2
+    )
+    assert nonrec_depth == 0  # non-recursive still forces root-only (existing contract)

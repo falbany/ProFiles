@@ -349,7 +349,7 @@ export async function executeScan(
     directory?: string;
     extension: string;
     filter_text: string;
-    recursive: boolean;
+    max_depth: number;
   },
   signal?: AbortSignal,
 ): Promise<{ count: number; directory: string; warning?: string }> {

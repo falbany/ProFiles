@@ -95,3 +95,29 @@ configs:
     issues = collect_config_issues(yaml_text)
     assert any("configs.prod.match.hostname" in i["message"] for i in issues)
     assert any("invalid regex pattern" in i["message"] for i in issues)
+
+
+def test_deprecation_warning_for_defaults() -> None:
+    """``defaults.recursive_search`` surfaces a warning, not an error (#240)."""
+    issues = collect_config_issues("defaults:\n  recursive_search: true\n")
+    assert {
+        "severity": "warning",
+        "message": "defaults: recursive_search is deprecated — use max_search_depth",
+    } in issues
+
+
+def test_deprecation_warning_for_config_entry() -> None:
+    """A per-config ``recursive_search`` surfaces a warning naming the config."""
+    issues = collect_config_issues(
+        "defaults: {}\nconfigs:\n  prod:\n    match: {hostname: ['*']}\n"
+        "    recursive_search: true\n"
+    )
+    assert any(
+        i["severity"] == "warning" and i["message"].startswith("configs.prod:") for i in issues
+    )
+
+
+def test_no_deprecation_warning_when_absent() -> None:
+    """No warning is appended when ``recursive_search`` is not used."""
+    issues = collect_config_issues("defaults: {}\n")
+    assert all(i["severity"] != "warning" for i in issues)

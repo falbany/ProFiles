@@ -303,7 +303,7 @@ export function useScanController(deps: ScanControllerDeps): ScanController {
 
   /**
    * Schedule the deferred server auto-rescan 800ms after the last filter
-   * keystroke / recursive toggle / extension change. The timer callback
+   * keystroke / depth change / extension change. The timer callback
    * reads the scan params at FIRE time through the latest-ref, so the
    * latest state wins (issue #34 semantics) — an explicit scan inside the
    * window cancels it via beginScan's collision rule.

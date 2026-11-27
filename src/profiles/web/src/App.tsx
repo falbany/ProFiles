@@ -17,7 +17,7 @@ import {
 } from "./api/client";
 import type { AppConfigData, ScannedFileItem, SystemInfo } from "./api/types";
 import { resolveSessionTheme } from "./utils/theme";
-import { mergeDirectoryPreference } from "./utils/scanDefaults";
+import { barcodeRecursiveToDepth, clampDepth, mergeDirectoryPreference } from "./utils/scanDefaults";
 import { useScanController } from "./hooks/useScanController";
 import { useScanProgress } from "./hooks/useScanProgress";
 import { useToast } from "./hooks/useToast";
@@ -69,7 +69,14 @@ export default function App() {
   const [activeDirectory, setActiveDirectory] = useState<string>("");
   const [activeExtension, setActiveExtension] = useState<string>("");
   const [filterText, setFilterText] = useState<string>("");
-  const [recursive, setRecursive] = useState<boolean>(true);
+  /**
+   * Scan depth (#240): 1 = selected directory only, N = up to N levels,
+   * ∞ = unlimited (`UNLIMITED_SCAN_DEPTH`). Session-only — nothing here
+   * writes depth back to any file. `configDepth` mirrors the configured
+   * depth (clamped) that sizes the SearchBar option list.
+   */
+  const [depth, setDepth] = useState<number>(10);
+  const [configDepth, setConfigDepth] = useState<number>(10);
 
   /** Reason the initial load failed, when it did — drives the retry panel. */
   const [initError, setInitError] = useState<string | null>(null);
@@ -167,7 +174,7 @@ export default function App() {
    * Current search-bar state as scan parameters — the single source shared
    * by the scan controller and the barcode hook (issue #148 PR 4).
    */
-  const getScanParams = () => ({ directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive });
+  const getScanParams = () => ({ directory: activeDirectory, extension: activeExtension, filter_text: filterText, max_depth: depth });
 
   /**
    * Scan orchestration (issue #148): list state, the generation protocol,
@@ -207,10 +214,11 @@ export default function App() {
     showToast,
     scanWith: scan.scanWith,
     getScanParams,
+    configDepth,
     onApplyValues: (values) => {
       if (values.filter !== undefined) setFilterText(values.filter);
       if (values.ext !== undefined) setActiveExtension(values.ext);
-      if (values.recursive !== undefined) setRecursive(values.recursive);
+      if (values.recursive !== undefined) setDepth(barcodeRecursiveToDepth(values.recursive, depth, configDepth));
       if (values.dir !== undefined) setActiveDirectory(values.dir);
     },
     onSingleMatch: setSingleMatchFile,
@@ -305,7 +313,9 @@ export default function App() {
       }
       setActiveExtension(nextExtension);
       setFilterText(nextFilter);
-      setRecursive(cfg.recursive_search);
+      const d = clampDepth(cfg.max_search_depth);
+      setConfigDepth(d);
+      setDepth(d);
 
       if (cfg.reloaded === false) {
         showToast(
@@ -322,7 +332,7 @@ export default function App() {
           directory: targetDirectory,
           extension: nextExtension,
           filter_text: nextFilter,
-          recursive: cfg.recursive_search,
+          max_depth: d,
         }, { errorPrefix: "Failed to reload configuration" });
       }
     } catch (err: any) {
@@ -354,7 +364,9 @@ export default function App() {
     }
     setActiveExtension(nextExtension);
     setFilterText(nextFilter);
-    setRecursive(cfg.recursive_search);
+    const d = clampDepth(cfg.max_search_depth);
+    setConfigDepth(d);
+    setDepth(d);
 
     if (!cfg.session_trial) {
       showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
@@ -364,7 +376,7 @@ export default function App() {
         directory: targetDirectory,
         extension: nextExtension,
         filter_text: nextFilter,
-        recursive: cfg.recursive_search,
+        max_depth: d,
       }, { errorPrefix: "Scan failed after config load" });
     } else {
       scan.finishScan(scanGeneration);
@@ -418,7 +430,7 @@ export default function App() {
       directory,
       extension: nextExtension,
       filter_text: nextFilter,
-      recursive,
+      max_depth: depth,
     }, { errorPrefix: "Scan failed" });
   };
 
@@ -437,7 +449,9 @@ export default function App() {
     const initialFilter = cfg.filters.length > 0 ? cfg.filters[0] : "";
     if (initialDir) setActiveDirectory(initialDir);
     if (initialExt) setActiveExtension(initialExt);
-    if (cfg.recursive_search !== undefined) setRecursive(cfg.recursive_search);
+    const d = clampDepth(cfg.max_search_depth);
+    setConfigDepth(d);
+    setDepth(d);
     if (initialFilter) setFilterText(initialFilter);
     if (!cfg.config_exists) {
       // First-run auto-prompt: the ONLY entry point that proposes create.
@@ -451,7 +465,7 @@ export default function App() {
           directory: initialDir,
           extension: initialExt,
           filter_text: initialFilter,
-          recursive: cfg.recursive_search,
+          max_depth: d,
         });
       } catch (scanErr: any) {
         if (scan.isCurrentScan(scanGeneration)) showToast(`Initial scan failed: ${scanErr.message}`, "error");
@@ -505,7 +519,7 @@ export default function App() {
         directory: newDir,
         extension: nextExtension,
         filter_text: nextFilter,
-        recursive,
+        max_depth: depth,
       }, { errorPrefix: "Directory change failed" })).ok;
     } catch (err: any) {
       if (scan.isCurrentScan(scanGeneration)) showToast(`Directory change failed: ${err.message}`, "error");
@@ -518,7 +532,7 @@ export default function App() {
   // Run scan
   const handleScan = async () => {
     await scan.scanWith(
-      { directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive },
+      { directory: activeDirectory, extension: activeExtension, filter_text: filterText, max_depth: depth },
       { errorPrefix: "Scan failed" },
     );
   };
@@ -574,20 +588,20 @@ export default function App() {
   };
 
   /**
-   * Recursive checkbox handler (SearchBar). Applies the new value to
+   * Depth select handler (SearchBar, #240). Applies the picked depth to
    * state, then schedules the same deferred server auto-rescan as the
-   * filter input — so toggling the checkbox rescans immediately instead
-   * of waiting for the next explicit scan.
+   * filter input — so picking a depth rescans immediately instead of
+   * waiting for the next explicit scan.
    */
-  const handleRecursiveToggle = (next: boolean) => {
-    setRecursive(next);
+  const handleDepthChange = (next: number) => {
+    setDepth(next);
     scan.scheduleDeferredRescan();
   };
 
   /**
    * Extension combobox handler (SearchBar). The server already scanned with
    * the previous extension, so a change must rescan — the same deferred
-   * auto-rescan as the filter input and recursive checkbox (issue #122).
+   * auto-rescan as the filter input and depth select (issue #122).
    */
   const handleExtensionChange = (ext: string) => {
     setActiveExtension(ext);
@@ -597,7 +611,7 @@ export default function App() {
   const handleClearFilter = async () => {
     setFilterText("");
     await scan.scanWith(
-      { directory: activeDirectory, extension: activeExtension, filter_text: "", recursive },
+      { directory: activeDirectory, extension: activeExtension, filter_text: "", max_depth: depth },
       { errorPrefix: "Scan failed" },
     );
   };
@@ -613,11 +627,12 @@ export default function App() {
     setFilterText(appendFilterTerm(filterText, term));
   };
 
-  /** Re-run the scan with recursive subdirectories turned off (empty-state action). */
+  /** Re-run the scan at depth 1 — selected directory only (empty-state action;
+   *  the FileListTable label keeps saying "Turn off recursive", #240). */
   const handleDisableRecursive = async () => {
-    setRecursive(false);
+    setDepth(1);
     await scan.scanWith(
-      { directory: activeDirectory, extension: activeExtension, filter_text: filterText, recursive: false },
+      { directory: activeDirectory, extension: activeExtension, filter_text: filterText, max_depth: 1 },
       { errorPrefix: "Scan failed" },
     );
   };
@@ -781,7 +796,7 @@ export default function App() {
   const handleFilterFolder = (folder: string) => {
     setFilterText(folder);
     void scan.scanWith(
-      { directory: activeDirectory, extension: activeExtension, filter_text: folder, recursive },
+      { directory: activeDirectory, extension: activeExtension, filter_text: folder, max_depth: depth },
       { errorPrefix: "Scan failed" },
     );
   };
@@ -789,7 +804,7 @@ export default function App() {
   const handleFilterExtension = (ext: string) => {
     setActiveExtension(ext);
     void scan.scanWith(
-      { directory: activeDirectory, extension: ext, filter_text: filterText, recursive },
+      { directory: activeDirectory, extension: ext, filter_text: filterText, max_depth: depth },
       { errorPrefix: "Scan failed" },
     );
   };
@@ -1019,7 +1034,7 @@ export default function App() {
     selectedIndex,
     activeDirectory,
     filterText,
-    recursive,
+    recursive: depth > 1,
     canExport: scan.files.length > 0 && !scan.scanning,
     moveSelection,
     onContextMenu: setContextMenuPos,
@@ -1075,7 +1090,7 @@ export default function App() {
     activeDirectory,
     activeExtension,
     filterText,
-    recursive,
+    recursive: depth > 1,
     barcodeMode,
     commands,
     onEscape,
@@ -1105,8 +1120,9 @@ export default function App() {
         filterOptions={config?.filters || []}
         filterText={filterText}
         onFilterTextChange={handleFilterTextChange}
-        recursive={recursive}
-        onRecursiveChange={handleRecursiveToggle}
+        depth={depth}
+        onDepthChange={handleDepthChange}
+        configDepth={configDepth}
         onScan={handleScan}
         scanning={scan.scanning}
         barcodeMode={barcodeMode}
@@ -1136,7 +1152,7 @@ export default function App() {
           scanning={scan.scanning}
           hasScanned={scan.hasScanned}
           activeDirectory={activeDirectory}
-          recursive={recursive}
+          recursive={depth > 1}
           onDisableRecursive={handleDisableRecursive}
           onOpenDirectory={handleOpenActiveDirectory}
           // FileList empty-state "Choose configuration" (issue #192): an

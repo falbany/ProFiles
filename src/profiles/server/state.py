@@ -75,6 +75,9 @@ class ServerState:
     watch_seq: int = 0
     watch_error: str | None = None
     watch_recursive: bool = True
+    # Depth picked by the last scan (#240); None = no pick (enable keeps
+    # the config-chain boundary until the next scan re-targets).
+    watch_max_depth: int | None = None
     _watch_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     # Operator lock for the start/stop/retarget lifecycle (final review,
     # #223): serializes the whole enable/disable/re-target body — including

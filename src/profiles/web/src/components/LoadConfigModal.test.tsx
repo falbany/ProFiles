@@ -44,7 +44,7 @@ function makeLoadedConfig(overrides: Partial<AppConfigData> = {}): AppConfigData
     title: "other",
     release: "1.0",
     search_dir: "/home/user/data",
-    recursive_search: false,
+    max_search_depth: 10,
     theme: "dark",
     directories: ["/home/user/data"],
     extensions: [".mttl"],
