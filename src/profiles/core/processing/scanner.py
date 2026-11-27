@@ -126,12 +126,18 @@ def _resolve_scan_config(
     config: AppConfig | None,
     *,
     recursive_override: bool | None = None,
+    max_depth_override: int | None = None,
 ) -> tuple[bool, int, tuple[str, ...], tuple[str, ...]]:
     """Resolve effective search configuration for a directory.
 
     Recursive precedence: ``recursive_override`` (explicit request-time
     intent, when not ``None``) → ``active.recursive_search`` (matching
     machine/directory config entry, when defined) → ``recursive`` param.
+
+    Depth precedence: ``max_depth_override`` (explicit request-time
+    intent, when not ``None``) → ``active.max_search_depth`` (matching
+    machine/directory config entry, when defined) →
+    ``config.max_search_depth`` → ``DEFAULT_MAX_SEARCH_DEPTH``.
     """
     active = config_service.find_active_config(config, directory) if config else None
     if recursive_override is not None:
@@ -141,9 +147,13 @@ def _resolve_scan_config(
     else:
         eff_recursive = recursive
     eff_depth = (
-        active.max_search_depth
-        if (active and active.max_search_depth is not None)
-        else (config.max_search_depth if config else DEFAULT_MAX_SEARCH_DEPTH)
+        max_depth_override
+        if max_depth_override is not None
+        else (
+            active.max_search_depth
+            if (active and active.max_search_depth is not None)
+            else (config.max_search_depth if config else DEFAULT_MAX_SEARCH_DEPTH)
+        )
     )
 
     eff_exclude_dirs = _merge_unique(
@@ -165,6 +175,7 @@ def effective_search_boundary(
     config: AppConfig | None,
     *,
     recursive: bool,
+    max_depth_override: int | None = None,
 ) -> tuple[int, tuple[str, ...]]:
     """Resolve the effective search boundary ``(max_depth, exclude_dirs)``.
 
@@ -180,6 +191,8 @@ def effective_search_boundary(
         recursive: Whether the search descends below the root. A
             non-recursive boundary forces depth ``0`` (root only) while
             keeping the merged excludes.
+        max_depth_override: Explicit depth override; \
+``None`` = defer to config-entry/config/default precedence.
 
     Returns:
         Tuple ``(max_depth, exclude_dirs)`` — depth levels below the
@@ -190,7 +203,14 @@ def effective_search_boundary(
         eff_depth,
         eff_exclude_dirs,
         _eff_exclude_files,
-    ) = _resolve_scan_config(directory, True, None, None, config)
+    ) = _resolve_scan_config(
+        directory,
+        True,
+        None,
+        None,
+        config,
+        max_depth_override=max_depth_override,
+    )
     return (eff_depth if recursive else 0, eff_exclude_dirs)
 
 
@@ -238,12 +258,16 @@ def _iter_directory_files(
     exclude_files: Sequence[str] | None,
     config: AppConfig | None,
     recursive_override: bool | None = None,
+    max_depth_override: int | None = None,
 ) -> list[Path]:
     """Scan one root directory and return file paths passing the scan config.
 
     The extension filter is pushed into the scan: names that cannot pass
     the extension never become Path objects (Task 7). Scan-level errors
     are reported via ``SCAN_SKIPPED`` by :func:`scan_directory` itself.
+    Both overrides thread straight into :func:`_resolve_scan_config`;
+    *max_depth_override* is an explicit depth override; ``None`` = defer
+    to config-entry/config/default precedence.
     """
     (
         effective_recursive,
@@ -257,6 +281,7 @@ def _iter_directory_files(
         exclude_files,
         config,
         recursive_override=recursive_override,
+        max_depth_override=max_depth_override,
     )
 
     return scan_directory(
@@ -271,6 +296,9 @@ def _iter_directory_files(
     )
 
 
+# pylint: disable=too-many-arguments,too-many-locals
+# Shared pipeline: mirrors the kwargs of the public scan_* functions
+# (facade kwargs also count as pylint locals).
 def _scan_and_filter(
     directories: Sequence[str] | str,
     *,
@@ -281,6 +309,7 @@ def _scan_and_filter(
     exclude_files: Sequence[str] | None = None,
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
+    max_depth_override: int | None = None,
 ) -> Iterator[tuple[Path, str, str, FileAttrs | None]]:
     """Shared scanning + filtering generator used by all ``scan_*`` functions.
 
@@ -303,6 +332,8 @@ def _scan_and_filter(
         config: Optional AppConfig for overrides and excludes.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
+        max_depth_override: Explicit depth override; \
+``None`` = defer to config-entry/config/default precedence.
 
     Yields:
         Tuples of (absolute Path, display path str, full suffix str, \
@@ -333,6 +364,7 @@ reached via different paths will only be yielded once).
                 exclude_files=exclude_files,
                 config=config,
                 recursive_override=recursive_override,
+                max_depth_override=max_depth_override,
             )
             for file_path in files:
                 full_suffix = "".join(file_path.suffixes)
@@ -441,8 +473,9 @@ def _metrics_enabled(log_metrics: bool, config: AppConfig | None) -> bool:
     return log_metrics or (config is not None and config.scan_metrics)
 
 
-# pylint: disable=too-many-arguments
-# Facade multiplier: mirrors the kwargs of the public scan_* functions.
+# pylint: disable=too-many-arguments,too-many-locals
+# Facade multiplier: mirrors the kwargs of the public scan_* functions
+# (facade kwargs also count as pylint locals).
 def _run_scan_pipeline(
     directories: Sequence[str] | str,
     *,
@@ -455,6 +488,7 @@ def _run_scan_pipeline(
     worker: Callable[[Path, str, str, FileAttrs | None], T],
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
+    max_depth_override: int | None = None,
     on_progress: Callable[[int], None] | None = None,
 ) -> list[T]:
     """Shared scan → filter → process orchestration for all ``scan_*`` functions.
@@ -478,6 +512,8 @@ def _run_scan_pipeline(
 ``(file_path, display_path, full_suffix, attrs) -> T``.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
+        max_depth_override: Explicit depth override; \
+``None`` = defer to config-entry/config/default precedence.
         on_progress: Called with the running count of filter-passing \
 candidates during collection. Must not raise.
 
@@ -515,6 +551,7 @@ candidates during collection. Must not raise.
                     exclude_files=exclude_files,
                     config=config,
                     recursive_override=recursive_override,
+                    max_depth_override=max_depth_override,
                 ),
                 start=1,
             ):
@@ -598,6 +635,7 @@ def scan_and_process(
     log_metrics: bool = False,
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
+    max_depth_override: int | None = None,
 ) -> list[ScannedFile]:
     """Scan directory(ies), process each file, apply filters, return matches.
 
@@ -616,6 +654,8 @@ def scan_and_process(
         config: Optional AppConfig to check scan_metrics setting.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
+        max_depth_override: Explicit depth override; \
+``None`` = defer to config-entry/config/default precedence.
 
     Returns:
         List of ``ScannedFile`` entries that pass both filters (files that
@@ -632,6 +672,7 @@ def scan_and_process(
         worker=_process_file,
         config=config,
         recursive_override=recursive_override,
+        max_depth_override=max_depth_override,
     )
 
 
@@ -650,6 +691,7 @@ def scan_and_process_dynamic(
     log_metrics: bool = False,
     config: AppConfig | None = None,
     recursive_override: bool | None = None,
+    max_depth_override: int | None = None,
     on_progress: Callable[[int], None] | None = None,
 ) -> list[ScannedFileDynamic]:
     """Scan directory(ies) with dynamic column extraction.
@@ -670,6 +712,8 @@ def scan_and_process_dynamic(
         config: Optional AppConfig to check scan_metrics setting.
         recursive_override: Explicit recursive-search override; \
 ``None`` = defer to config-entry/param precedence.
+        max_depth_override: Explicit depth override; \
+``None`` = defer to config-entry/config/default precedence.
         on_progress: Called with the running count of filter-passing \
 candidates during collection. Must not raise.
 
@@ -697,5 +741,6 @@ candidates during collection. Must not raise.
         worker=dynamic_worker,
         config=config,
         recursive_override=recursive_override,
+        max_depth_override=max_depth_override,
         on_progress=on_progress,
     )
