@@ -191,8 +191,10 @@ export function SearchBar({
             }}
             // w-14 fits the widest finite value ("25") plus the native arrow;
             // the ∞ option renders as just "∞" so the closed select stays
-            // 2-digit wide. py-1.5 matches the combobox/button height in this bar.
-            className="w-14 rounded-md border border-line bg-elevated px-2 py-1.5 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            // 2-digit wide. h-[30px] pins the height to the combobox/button
+            // height in this bar — WKWebView (pywebview) ignores the padding
+            // derived height on native selects and rendered it too small.
+            className="h-[30px] w-14 rounded-md border border-line bg-elevated px-2 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             {buildDepthOptions(configDepth).map((n) => (
               <option key={n} value={String(n)}>
