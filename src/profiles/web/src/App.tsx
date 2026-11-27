@@ -667,13 +667,17 @@ export default function App() {
    *
    * Best-effort: a failed lookup leaves the selection untouched (the next
    * visible-set change retries through the reconcile effect); every state
-   * write is dropped when another scan superseded this one mid-flight.
+   * write is dropped when another scan superseded this one mid-flight, or
+   * when the user re-anchored the selection during the lookup round-trip
+   * (ownership guard — a restore that no longer owns the selection must
+   * neither clear it nor re-anchor it, #218 final review).
    */
   const restoreSelection = async (path: string) => {
     const gen = scan.currentGeneration();
     // All rows are already loaded: absence from the visible set is decidable
     // locally — the row is either filtered away or gone; both clear. No
-    // server round-trip needed.
+    // server round-trip needed (and no await before the clear, so no user
+    // click can interleave).
     if (scan.files.length >= scan.totalCount) {
       if (!scan.isCurrentScan(gen)) return;
       selectedPathRef.current = null;
@@ -691,6 +695,10 @@ export default function App() {
         sort_dir: scan.sort?.direction,
       });
       if (!scan.isCurrentScan(gen)) return;
+      // Ownership guard (final review, #218): the lookup round-trip is not
+      // instant — if the user clicked another row while it was in flight,
+      // this restore no longer owns the selection.
+      if (selectedPathRef.current !== path) return;
       if (offset < 0 || offset < scan.files.length) {
         // Genuinely gone from the server set (`offset: -1`), or loaded but
         // hidden by the prefilter — the user filtered it away, and clearing
@@ -709,6 +717,7 @@ export default function App() {
         sort_dir: scan.sort?.direction,
       });
       if (!scan.isCurrentScan(gen)) return;
+      if (selectedPathRef.current !== path) return;
       scan.appendResults(gen, res);
     } catch {
       // Non-fatal: keep the current selection until the next reconcile.

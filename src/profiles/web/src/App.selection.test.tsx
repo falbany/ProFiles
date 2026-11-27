@@ -245,4 +245,64 @@ describe("App selection preservation (#218)", () => {
     await waitFor(() => expect(activeDescendant()).toBe("file-row-4"));
     expect(screen.getByText("c.txt").closest("[data-row-index]")?.getAttribute("data-row-index")).toBe("4");
   });
+
+  it("restore bails when the user re-anchors mid-lookup (ownership guard)", async () => {
+    const user = userEvent.setup();
+    // Init page: 3 of 3 rows — "c.txt" selected at index 2.
+    scanResultsSpy.mockImplementationOnce(() =>
+      Promise.resolve({
+        count: 3,
+        in_progress: false,
+        items: [makeFile("a.txt"), makeFile("b.txt"), makeFile("c.txt")],
+      }),
+    );
+    // From the refresh on: 6 rows total, loaded page (a, b, d) — "c.txt"
+    // left the loaded window, so the reconcile effect hands the path to
+    // restoreSelection and the lookup begins.
+    scanResultsSpy.mockImplementation((params) => {
+      if (params?.offset === 0) {
+        return Promise.resolve({
+          count: 6,
+          in_progress: false,
+          items: [makeFile("a.txt"), makeFile("b.txt"), makeFile("d.txt")],
+        });
+      }
+      return Promise.resolve({
+        count: 6,
+        in_progress: false,
+        items: [makeFile("x.txt"), makeFile("c.txt")],
+      });
+    });
+    render(<App />);
+    await screen.findByText("c.txt");
+    await user.click(screen.getByText("c.txt"));
+    expect(activeDescendant()).toBe("file-row-2");
+
+    // Deferred lookup: it resolves only after the user has re-clicked.
+    let releaseFind!: (value: { count: number; offset: number }) => void;
+    findPathSpy.mockImplementation(
+      () =>
+        new Promise<{ count: number; offset: number }>((resolve) => {
+          releaseFind = resolve;
+        }),
+    );
+    await user.click(screen.getByRole("button", { name: "Scan" }));
+    await waitFor(() => expect(findPathSpy).toHaveBeenCalledTimes(1));
+
+    // Mid-lookup the user selects "d.txt" (now at index 2 of the loaded
+    // page) — the in-flight restore no longer owns the selection.
+    await user.click(screen.getByText("d.txt"));
+    expect(activeDescendant()).toBe("file-row-2");
+
+    // The lookup answers "genuinely gone" (offset -1): the pre-fix code
+    // unconditionally cleared here, wiping the fresh "d.txt" selection.
+    releaseFind({ count: 6, offset: -1 });
+    await waitFor(() => expect(findPathSpy).toHaveBeenCalledTimes(1));
+    // The user's selection survives the resolution…
+    expect(activeDescendant()).toBe("file-row-2");
+    expect(screen.getByText("d.txt").closest("[data-row-index]")?.getAttribute("data-row-index")).toBe("2");
+    // …and the restore bailed before any window fetch.
+    const strayFetch = scanResultsSpy.mock.calls.find(([params]) => params?.offset !== 0);
+    expect(strayFetch).toBeUndefined();
+  });
 });
