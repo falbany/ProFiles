@@ -13,6 +13,7 @@ from profiles.core.config.models import AppConfig
 from profiles.core.config.reader import ConfigReader
 from profiles.core.config.template import STARTER_CONFIG_TEMPLATE
 from profiles.core.paths import default_search_directory
+from profiles.core.processing import scanner
 from profiles.launch.creation import propose_creation
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
@@ -122,11 +123,17 @@ def _config_response(state: ServerState) -> dict:
     active_config = config_service.find_active_config(cfg, str(state.active_directory))
     row_colors_to_return = active_config.row_colors if active_config is not None else cfg.row_colors
 
+    # Resolved scan boundary depth (#240): the same merge a scan of the
+    # active directory would apply (per-station entry → defaults).
+    eff_depth, _ = scanner.effective_search_boundary(
+        str(state.active_directory), cfg, recursive=True
+    )
+
     return {
         "title": cfg.title,
         "release": cfg.release,
         "search_dir": cfg.search_dir,
-        "recursive_search": bool(cfg.recursive_search),
+        "max_search_depth": eff_depth,
         "theme": cfg.theme,
         "directories": available_dirs,
         "extensions": extensions,

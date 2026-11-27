@@ -59,6 +59,51 @@ async def test_get_config_uses_presets_for_selected_scan_directory(test_state: S
 
 
 @pytest.mark.anyio
+async def test_config_payload_exposes_resolved_depth(test_state: ServerState) -> None:
+    """GET /api/config exposes the resolved scan depth (#240).
+
+    Given: a config whose defaults set ``max_search_depth = 7``
+    When: the config payload is built
+    Then: ``max_search_depth`` is 7 and the deprecated ``recursive_search``
+        key is gone from the payload
+    """
+    test_state.config.max_search_depth = 7
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/config")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["max_search_depth"] == 7
+    assert "recursive_search" not in body
+
+
+@pytest.mark.anyio
+async def test_config_payload_per_station_depth(test_state: ServerState) -> None:
+    """A matching machine entry's depth overrides the config defaults (#240).
+
+    Given: defaults ``max_search_depth = 7`` and a machine configuration
+        matching the active directory with ``max_search_depth = 4``
+    When: the config payload is built for that directory
+    Then: the per-station depth (4) wins
+    """
+    test_state.config.max_search_depth = 7
+    test_state.config.configurations = [
+        MachineConfiguration(
+            name="depth-station",
+            scan=(str(test_state.active_directory),),
+            max_search_depth=4,
+        )
+    ]
+    app = create_app(test_state)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/config")
+
+    assert response.status_code == 200
+    assert response.json()["max_search_depth"] == 4
+
+
+@pytest.mark.anyio
 async def test_select_directory(test_state: ServerState, tmp_path: Path) -> None:
     new_dir = tmp_path / "new_programs"
     new_dir.mkdir()
