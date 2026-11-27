@@ -94,8 +94,6 @@ version: 1
 #                       ("auto" follows the system theme).
 # language:             "en" | "fr" — interface language.
 # search_dir:           absolute path — default value of the Directory field.
-# recursive_search:     bool, default false — initial state of the Recursive
-#                       checkbox (search subdirectories too).
 # extensions:           Extension combobox presets (fallback for per-config keys).
 #                       "" or "All" = show all files; no leading dot required.
 # filters:              Filter combobox presets ("" = show all files). Each preset may
@@ -120,7 +118,6 @@ defaults:
   theme: auto            # "light" or "dark" or "auto"
   language: en            # "en" or "fr"
   search_dir: '{cwd}'
-  recursive_search: false
   max_search_depth: 10
   extensions: [All, .lnk]
   filters: ["", PROD, DEV]
@@ -350,7 +347,6 @@ hooks:
 #   search_exclude_files  per-config file excludes (APPENDED to defaults)
 #   search_exclude_dirs   per-config directory excludes override
 #   max_search_depth      per-config max search depth override
-#   recursive_search      per-config recursive search override
 #
 # match field (OR logic — any match in any field selects this config):
 #   hostname      glob/regex patterns for the machine's hostname
@@ -388,7 +384,6 @@ configs:
   #   search_exclude_files: ["*draft*", "*.bak"]
   #   search_exclude_dirs: [Archive*]
   #   max_search_depth: 5
-  #   recursive_search: true
 
 # ============================================================================
 # TIPS

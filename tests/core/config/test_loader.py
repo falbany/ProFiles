@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,17 @@ class TestLoadConfig:
         conf.write_text("defaults:\n  theme: light\n", encoding="utf-8")
         config = load_config()
         assert config.theme == "light"
+
+    def test_load_warns_but_parses_recursive_search(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """``recursive_search`` still parses (warn-but-honored) and logs (#240)."""
+        conf = tmp_path / ".profiles"
+        conf.write_text("defaults:\n  recursive_search: true\n", encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="profiles.core.config.reader"):
+            config = load_config(conf)
+        assert config.recursive_search is True  # parse tolerance: value still read
+        assert any("deprecated" in record.message for record in caplog.records)
 
     def test_not_found_uses_default_path(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_user_home

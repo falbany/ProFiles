@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,15 @@ class TestFromContent:
         config = ConfigReader.from_content("defaults:\n  title: Dropped Config\n  theme: dark\n")
         assert config.title == "Dropped Config"
         assert config.theme == "dark"
+
+    def test_from_content_warns_but_parses_recursive_search(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """``recursive_search`` in dropped content still parses, with a warning (#240)."""
+        with caplog.at_level(logging.WARNING, logger="profiles.core.config.reader"):
+            config = ConfigReader.from_content("defaults:\n  recursive_search: true\n")
+        assert config.recursive_search is True  # parse tolerance: value still read
+        assert any("deprecated" in record.message for record in caplog.records)
 
     def test_invalid_yaml_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="my dropped config"):
