@@ -24,6 +24,7 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { appendFilterTerm, useAppCommands } from "./hooks/useAppCommands";
 import { useRecentCommands } from "./hooks/useRecentCommands";
 import { useAutoRescanTimer } from "./hooks/useAutoRescanTimer";
+import { useWatchMode } from "./hooks/useWatchMode";
 import { useBarcodeMode } from "./hooks/useBarcodeMode";
 import { useTheme } from "./hooks/useTheme";
 import { useDragDropConfig } from "./hooks/useDragDropConfig";
@@ -515,6 +516,36 @@ export default function App() {
     showToast,
   });
 
+  // Watch mode (#223): the SSE feed is the truth — the hook rescans on a
+  // watch_seq bump (deferring exactly one trailing scan past a running
+  // scan) and reconciles the toggle with the server payload.
+  const watch = useWatchMode({
+    scan: () => {
+      void handleScan();
+    },
+    showToast,
+    isScanning: () => scan.scanning,
+  });
+
+  // Two modes of one control (#223): the timer and the watch are mutually
+  // exclusive. Enabling the watch turns a running timer off first; toggling
+  // an active watch off is the plain disable.
+  const handleWatchToggle = () => {
+    if (watch.watching) {
+      void watch.handleWatchSet(false);
+    } else {
+      if (autoRescanInterval > 0) handleTimerSet(0);
+      void watch.handleWatchSet(true);
+    }
+  };
+
+  /** Timer setter that first turns the watch off (#223) when arming a new
+   *  interval — the timer path of the mutual exclusion above. */
+  const handleTimerSetExclusive = (seconds: number) => {
+    if (seconds > 0 && watch.watching) void watch.handleWatchSet(false);
+    handleTimerSet(seconds);
+  };
+
   /**
    * Filter input handler (SearchBar onChange). Applies the text instantly
    * for the client-side prefilter, then schedules the deferred server
@@ -993,6 +1024,10 @@ export default function App() {
         onCameraBarcodeClick={() => setShowCameraScanner(true)}
         autoRescanActive={autoRescanInterval > 0}
         onTimerClick={() => setShowTimerModal(true)}
+        watchActive={watch.watching}
+        watchDisabled={scan.scanning || !activeDirectory}
+        watchLabel={watch.watchIntervalS ? `${Math.round(watch.watchIntervalS)}s` : null}
+        onWatchToggle={handleWatchToggle}
       />
 
       {initError ? (
@@ -1156,7 +1191,7 @@ export default function App() {
         isOpen={showTimerModal}
         currentInterval={autoRescanInterval}
         onClose={() => setShowTimerModal(false)}
-        onSetInterval={handleTimerSet}
+        onSetInterval={handleTimerSetExclusive}
       />
 
       {/* Log Viewer Modal */}

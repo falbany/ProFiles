@@ -7,6 +7,7 @@ import type {
   LogLevel,
   LogResponse,
   ScanResultsResponse,
+  ScanWatchResponse,
   SystemInfo,
   ValidationIssue,
   WorkflowSessionState,
@@ -362,6 +363,25 @@ export async function executeScan(
   // does not exist") that callers must surface instead of showing a bare
   // empty list (issue #130).
   if (!res.ok) throw await apiError(res, "Failed to execute scan");
+  return res.json();
+}
+
+/**
+ * Toggle the server's watch mode on the active directory (#223, Task 3
+ * route). A 400 (no active directory) surfaces the server's detail through
+ * the thrown ApiError. `recursive` records the recursion intent for
+ * watcher restarts; the server defaults to true when omitted.
+ */
+export async function setWatchMode(params: {
+  enabled: boolean;
+  recursive?: boolean;
+}): Promise<ScanWatchResponse> {
+  const res = await fetch("/api/scan/watch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await apiError(res, "Failed to toggle watch mode");
   return res.json();
 }
 

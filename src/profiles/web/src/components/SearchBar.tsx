@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
+import { Camera, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 import { FilterSyntaxHelper } from "./FilterSyntaxHelper";
@@ -78,6 +78,13 @@ interface SearchBarProps {
   onCameraBarcodeClick?: () => void;
   autoRescanActive: boolean;
   onTimerClick: () => void;
+  /** Watch mode (#223): whether the server watches the directory for changes. */
+  watchActive: boolean;
+  /** Watch toggle is unusable (scanning or no active directory). */
+  watchDisabled: boolean;
+  /** Reported watch cadence, e.g. "2s" — tooltip only; null when unknown. */
+  watchLabel: string | null;
+  onWatchToggle: () => void;
 }
 
 export function SearchBar({
@@ -96,6 +103,10 @@ export function SearchBar({
   onCameraBarcodeClick,
   autoRescanActive,
   onTimerClick,
+  watchActive,
+  watchDisabled,
+  watchLabel,
+  onWatchToggle,
 }: SearchBarProps) {
   // Whether the filter input itself has focus — drives the live syntax helper.
   const [filterFocused, setFilterFocused] = useState(false);
@@ -195,6 +206,25 @@ export function SearchBar({
           }`}
         >
           <Timer className={`h-3.5 w-3.5 ${autoRescanActive ? "animate-pulse" : ""}`} />
+        </button>
+      </Tooltip>
+
+      {/* Watch-mode toggle (#223): rescan when the directory changes — the
+          other mode of the same control as the timer, mutually exclusive. */}
+      <Tooltip
+        text={watchActive ? `Watching · every ${watchLabel ?? "?"}` : "Watch for changes — rescan when the directory changes"}
+        block={false}
+      >
+        <button
+          type="button"
+          onClick={onWatchToggle}
+          disabled={watchDisabled}
+          aria-label={watchActive ? "Disable watch mode" : "Enable watch mode"}
+          className={`flex shrink-0 items-center justify-center rounded-md border p-1.5 text-ink-secondary hover:border-indigo-500 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors ${
+            watchActive ? "border-chip-indigo-border bg-chip-indigo-bg text-chip-indigo-text" : "border-line bg-elevated"
+          }`}
+        >
+          <Eye className={`h-3.5 w-3.5 ${watchActive ? "animate-pulse" : ""}`} />
         </button>
       </Tooltip>
 
