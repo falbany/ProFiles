@@ -148,6 +148,14 @@ export interface ScanSort {
   direction: "asc" | "desc";
 }
 
+/** Response of `POST /api/scan/watch` (#223) — the resulting watch state. */
+export interface ScanWatchResponse {
+  /** Whether the server now watches the active directory for changes. */
+  watching: boolean;
+  /** The watcher's adaptive poll interval in seconds; null when not watching. */
+  interval_s: number | null;
+}
+
 /** Severity levels accepted by the log viewer, most verbose first. */
 export type LogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
 

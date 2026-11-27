@@ -4,12 +4,13 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 
 /**
  * Unit tests for the `useScanProgress` hook (issue #152) — the SSE client
- * for `/api/scan/events`. They pin the EventSource lifecycle (open while a
- * scan this window initiated is active, close on end/unmount), the status
- * payload parsing (`progress` + `in_progress`), the silent degraded mode
- * on stream errors (progress → null, no toasts, auto-reconnect resume),
- * malformed-event tolerance, the no-EventSource guard (jsdom/exotic
- * browsers), and remount safety.
+ * for `/api/scan/events`. They pin the EventSource lifecycle as of #223
+ * (the connection is the shared feed's and stays open for the app
+ * lifetime; it closes only when the last consumer unmounts), the display
+ * gating on `active`, the status payload parsing (`progress` +
+ * `in_progress`), the silent degraded mode on stream errors (progress →
+ * null, no toasts, auto-reconnect resume), malformed-event tolerance, the
+ * no-EventSource guard (jsdom/exotic browsers), and remount safety.
  */
 import { useScanProgress } from "./useScanProgress";
 
@@ -51,7 +52,7 @@ afterEach(() => {
 });
 
 describe("useScanProgress", () => {
-  it("opens one EventSource while active and closes it when inactive", () => {
+  it("shows live values while active, hides them when inactive, on the app-lifetime feed", () => {
     const { result, rerender, unmount } = renderHook(({ active }) => useScanProgress(active), {
       initialProps: { active: true },
     });
@@ -60,9 +61,18 @@ describe("useScanProgress", () => {
     expect(lastInstance().url).toBe("/api/scan/events");
     expect(result.current).toEqual({ progress: null, inProgress: false });
 
-    rerender({ active: false });
-    expect(lastInstance().closed).toBe(true);
+    act(() => lastInstance().emitStatus({ in_progress: true, count: 9, progress: 1234, directory: "/x" }));
+    expect(result.current).toEqual({ progress: 1234, inProgress: true });
 
+    // Inactive hides the values but the shared feed stays open (#223).
+    rerender({ active: false });
+    expect(result.current).toEqual({ progress: null, inProgress: false });
+    expect(lastInstance().closed).toBe(false);
+
+    rerender({ active: true });
+    expect(result.current).toEqual({ progress: 1234, inProgress: true });
+
+    // Last consumer gone → the feed closes.
     unmount();
     expect(lastInstance().closed).toBe(true);
   });

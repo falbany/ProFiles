@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useScanStatusFeed } from "./useScanStatusFeed";
 
 /** Latest scan-progress snapshot exposed by the hook. */
 export interface ScanProgress {
@@ -8,19 +8,23 @@ export interface ScanProgress {
   inProgress: boolean;
 }
 
-const INITIAL_PROGRESS: ScanProgress = { progress: null, inProgress: false };
+/** What the hook shows while the caller hides the strip (`!active`). */
+const HIDDEN: ScanProgress = { progress: null, inProgress: false };
 
 /**
- * Consume the server's `/api/scan/events` SSE stream while a scan this
- * window initiated is in flight (`active`), exposing live progress for the
- * scan status strip (issue #152).
+ * Consume the server's `/api/scan/events` SSE stream for the scan status
+ * strip (issue #152), exposing live progress while a scan this window
+ * initiated is in flight (`active`).
  *
- * Lifecycle: one `EventSource`, opened when `active` flips true and closed
- * when it flips false or on unmount. The browser reconnects on stream
- * errors on its own; on error we only blank `progress` so the strip falls
- * back silently to elapsed-only — no toasts, no retry logic — and the next
- * successful tick restores the counts. Environments without `EventSource`
- * (test jsdom, exotic browsers) stay inert at the initial state.
+ * The `EventSource` itself is the shared feed's (`useScanStatusFeed`,
+ * #223) and stays open for the app lifetime — this hook only gates the
+ * DISPLAYED values on `active`: while inactive it reports the hidden
+ * snapshot (progress null, inProgress false), and live values flow
+ * through as soon as `active` turns true. On stream errors the feed
+ * blanks `progress` only, so the strip falls back silently to
+ * elapsed-only — no toasts, no retry logic — and the next successful
+ * tick restores the counts. Environments without `EventSource` (test
+ * jsdom, exotic browsers) keep the feed inert at its initial tick.
  *
  * Visibility is NOT this hook's concern: the caller gates the strip on its
  * own client state (`scanning || initialScanActive`); the `inProgress`
@@ -29,49 +33,6 @@ const INITIAL_PROGRESS: ScanProgress = { progress: null, inProgress: false };
  * progress.
  */
 export function useScanProgress(active: boolean): ScanProgress {
-  const [state, setState] = useState<ScanProgress>(INITIAL_PROGRESS);
-  const sourceRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    if (!active || typeof EventSource === "undefined") {
-      if (sourceRef.current) {
-        sourceRef.current.close();
-        sourceRef.current = null;
-      }
-      setState(INITIAL_PROGRESS);
-      return;
-    }
-
-    if (!sourceRef.current) {
-      const source = new EventSource("/api/scan/events");
-      source.addEventListener("status", (event: MessageEvent<string>) => {
-        try {
-          const data = JSON.parse(event.data) as {
-            progress?: number;
-            in_progress?: boolean;
-          };
-          setState({
-            progress: typeof data.progress === "number" ? data.progress : null,
-            inProgress: Boolean(data.in_progress),
-          });
-        } catch {
-          // Malformed payload: ignore the tick, keep the last good state.
-        }
-      });
-      source.addEventListener("error", () => {
-        // Silent degraded mode; the browser auto-reconnects and the next
-        // successful status event restores the counts.
-        setState((prev) => ({ ...prev, progress: null }));
-      });
-      sourceRef.current = source;
-    }
-
-    return () => {
-      sourceRef.current?.close();
-      sourceRef.current = null;
-      setState(INITIAL_PROGRESS);
-    };
-  }, [active]);
-
-  return state;
+  const tick = useScanStatusFeed();
+  return active ? { progress: tick.progress, inProgress: tick.inProgress } : HIDDEN;
 }

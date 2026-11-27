@@ -55,6 +55,7 @@
 - **Google-Style Operators**: Implicit AND, `OR`, NOT (`-`), exact phrase (`"..."`).
 - **Dynamic Columns**: Extract metadata (version, device, revision) from filenames using regex rules.
 - **Parallel Recursion**: High-performance background thread scanning keeps the UI responsive.
+- **Watch Mode**: The list rescans itself when the directory changes (no fixed timer).
 - **Glob Exclusion**: Skip noisy directories (e.g., `node_modules`, `.venv`) and filter out files matching glob patterns (e.g., `*backup*`, `~$*`).
 
 ### 🚀 Execute & Automate
@@ -194,6 +195,7 @@ Launches the local FastAPI server and opens the React frontend in a native PyWeb
 - **Interface**: The web chrome is bilingual (English / French). Use the language switcher in the status bar to change on the fly, or set `language: en` / `language: fr` in the `defaults` section.
 - **Search**: Use `+` for inclusion, `-` for exclusion, `OR` for alternatives, and `"..."` for exact phrases.
 - **Keyboard shortcuts**: `Ctrl+F` (focus filter) · `Ctrl+D` (focus directory) · `Ctrl+E` (focus extension) · `F5` (rescan) · `Ctrl+R` (reload config + rescan) · `Ctrl+H` (home directory) · `Ctrl+Shift+L` (log viewer) · `Ctrl+,` (open config editor) · `Ctrl+Shift+T` (cycle theme) · `Ctrl+B` (barcode scanner mode) · `Ctrl+Shift+B` (camera barcode scanner) · `Ctrl+T` (auto-rescan timer) · `Ctrl+Shift+P` or `?` (command palette — search and run any command with its shortcut, or jump to a loaded file).
+- **Watch mode**: the eye toggle beside the auto-rescan timer makes the list rescan itself whenever the watched directory changes — the timer and the watch are two modes of one control, mutually exclusive (enabling one disables the other). On shared servers, the server runs a single watcher shared by all LAN clients. See the [Network Server Guide](./docs/network-server-guide.en.md) for the detection limits.
 - **PWA**: The frontend ships a service worker precache, so the page can be installed in the browser as an app.
 
 ### Browser / PWA Mode (shared servers)

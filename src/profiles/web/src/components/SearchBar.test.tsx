@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SearchBar } from "./SearchBar";
 
 afterEach(cleanup);
@@ -21,6 +21,10 @@ function baseProps() {
     onBarcodeToggle: vi.fn(),
     autoRescanActive: false,
     onTimerClick: vi.fn(),
+    watchActive: false,
+    watchDisabled: false,
+    watchLabel: null as string | null,
+    onWatchToggle: vi.fn(),
   };
 }
 
@@ -80,5 +84,38 @@ describe("SearchBar attribute operators", () => {
     expect(filterInput.getAttribute("placeholder")).toBe(
       "Filter files: keyword, size:>10mb, modified:<7d, a OR b, -tag...",
     );
+  });
+});
+
+describe("SearchBar watch toggle", () => {
+  it("test_watch_toggle_renders_and_calls_on_watch_toggle", () => {
+    const props = baseProps();
+    render(<SearchBar {...props} />);
+
+    const button = screen.getByRole("button", { name: "Enable watch mode" });
+    fireEvent.click(button);
+    expect(props.onWatchToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("test_watch_toggle_disabled_while_scanning", () => {
+    render(<SearchBar {...baseProps()} scanning watchDisabled />);
+
+    const button = screen.getByRole("button", { name: "Enable watch mode" });
+    expect(button).toBeDisabled();
+  });
+
+  it("test_watch_toggle_active_style_and_cadence_label", () => {
+    render(<SearchBar {...baseProps()} watchActive watchLabel="2s" />);
+
+    const button = screen.getByRole("button", { name: "Disable watch mode" });
+    expect(button).toBeEnabled();
+    // Active chip styling, exactly like the Timer button's active state.
+    expect(button.className).toContain("bg-chip-indigo-bg");
+    // The Eye icon pulses while watching.
+    expect(button.querySelector(".animate-pulse")).not.toBeNull();
+    // The tooltip advertises the cadence from the feed.
+    const bubbles = screen.getAllByText(/every 2s/);
+    expect(bubbles.length).toBeGreaterThan(0);
+    expect(bubbles[0].textContent).toContain("Watching · every 2s");
   });
 });

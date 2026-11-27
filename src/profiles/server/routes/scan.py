@@ -18,6 +18,7 @@ from profiles.core.environment.matcher import select_most_specific_pattern
 from profiles.core.processing import scanner
 from profiles.core.processing.column_extractor import ATTRIBUTE_KEYWORDS
 from profiles.core.processing.file_metadata import FileAttrs
+from profiles.core.processing.watcher import DirectoryWatcher
 from profiles.server.state import ServerState
 from profiles.utils.path_utils import normalize_user_path
 
@@ -43,7 +44,12 @@ class ScanRequest(BaseModel):
 
 @router.post("")
 async def execute_scan(payload: ScanRequest, request: Request) -> dict:
-    """Execute dynamic scan on the active directory and cache results."""
+    """Execute dynamic scan on the active directory and cache results.
+
+    Keeps the watch in step with the scan (#223): records the recursion
+    intent, re-targets a running watcher onto the scanned directory, and
+    stops the watch when the scanned directory is missing.
+    """
     state: ServerState = request.app.state.server_state
     state.scan_generation += 1
     scan_generation = state.scan_generation
@@ -52,6 +58,36 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     state.scan_progress_count = 0
     if payload.directory:
         state.active_directory = normalize_user_path(payload.directory)
+
+    # Watch re-target (issue #223; refined by the final review): a scan
+    # keeps a running watcher in step with the scanned directory — but a
+    # scan of the SAME directory with UNCHANGED recursion intent skips
+    # the stop/start cycle entirely: restarting on every rescan was
+    # needless churn, and every stop is a thread join (the costliest
+    # thing a route can do — hence the to_thread hops below keep that
+    # wait off the event loop). When the intent changed or the directory
+    # moved, the watcher restarts onto the new root (a full restart IS
+    # the re-target: it re-baselines the snapshot and re-resolves the
+    # per-directory boundary), or stops when the root is dead so no
+    # poller is left watching a missing directory. A vanished root with
+    # an unchanged directory and intent is the watcher's own error path,
+    # not this branch's. The helpers serialize on ``watch_ops_lock``;
+    # no outer lock here (double-acquire on a non-reentrant Lock
+    # deadlocks).
+    same_watch_target = (
+        state.watcher is not None
+        and state.watcher.directory == state.active_directory
+        and payload.recursive == state.watch_recursive
+    )
+    state.watch_recursive = payload.recursive
+    if state.watcher is not None and not same_watch_target:
+        target = state.active_directory
+        if target is None or not target.exists():
+            await asyncio.to_thread(
+                _stop_watcher, state, error="Watch stopped: directory does not exist"
+            )
+        else:
+            await asyncio.to_thread(_start_watcher, state, recursive=payload.recursive)
 
     scan_directory = state.active_directory
     if not scan_directory:
@@ -97,6 +133,147 @@ async def execute_scan(payload: ScanRequest, request: Request) -> dict:
     finally:
         if scan_generation == state.scan_generation:
             state.scan_in_progress = False
+
+
+class WatchRequest(BaseModel):
+    """Body of the watch-mode toggle."""
+
+    enabled: bool
+    recursive: bool = True
+
+
+def _detach_watcher(state: ServerState) -> DirectoryWatcher | None:
+    """Swap the active watcher out of state under the cheap state lock.
+
+    Returns the detached watcher (or ``None``). The caller owns stopping
+    it — outside ``_watch_lock``, per the join discipline documented on
+    :func:`_stop_watcher`.
+    """
+    with state._watch_lock:  # pylint: disable=protected-access
+        watcher = state.watcher
+        state.watcher = None
+        return watcher
+
+
+def _watcher_error_exit(state: ServerState, owner: DirectoryWatcher, message: str) -> None:
+    """Identity-checked, join-free error teardown (watcher-thread side).
+
+    ``on_error`` fires on the watcher's own thread as it exits — joining
+    there is pointless, and any lock held across a join here would
+    deadlock the stop path (final review, #223). Clear the watch state
+    only when the failing watcher is STILL the active one: a replacement
+    started in the meantime must not be cleared by a stale error.
+    """
+    with state._watch_lock:  # pylint: disable=protected-access
+        if state.watcher is owner:
+            state.watcher = None
+            state.watch_error = message
+
+
+def _stop_watcher(state: ServerState, *, error: str | None = None) -> None:
+    """Stop the active watch and record or clear its error state.
+
+    Join discipline (final review, #223): the lifecycle serializes under
+    ``state.watch_ops_lock``; ``_watch_lock`` guards only the brief state
+    swap and is NEVER held across ``watcher.stop()``'s thread join — a
+    watcher callback needing it mid-join would otherwise stall the stop
+    until the join timeout (and, called from the event loop, freeze every
+    route with it). Callers running on the event loop must hop to a
+    worker thread (``asyncio.to_thread``) before invoking this helper.
+    """
+    with state.watch_ops_lock:  # pylint: disable=protected-access
+        watcher = _detach_watcher(state)
+        with state._watch_lock:  # pylint: disable=protected-access
+            state.watch_error = error
+        if watcher is not None:
+            watcher.stop()
+
+
+def _start_watcher(state: ServerState, *, recursive: bool) -> None:
+    """Start (or replace) the directory watcher on the active directory.
+
+    The probe's depth and excludes come from
+    :func:`scanner.effective_search_boundary` — the same merge that
+    governs a scan of the same root. Same join discipline as
+    :func:`_stop_watcher` (:func:`_detach_watcher`, ops lock, join
+    outside ``_watch_lock``); the new watcher is stored BEFORE the
+    previous one is joined, so the watch never gaps to "off" during a
+    replacement, and a change noticed by the outgoing poller in that
+    overlap still bumps ``watch_seq`` (it was a real change). Callbacks
+    capture *state* only: ``on_change`` bumps ``watch_seq`` under the
+    cheap lock (the watcher-thread contract), ``on_error`` runs the
+    join-free identity-checked teardown (:func:`_watcher_error_exit`).
+    A fresh enable clears a stale ``watch_error``.
+    """
+    with state.watch_ops_lock:  # pylint: disable=protected-access
+        old = _detach_watcher(state)
+        with state._watch_lock:  # pylint: disable=protected-access
+            state.watch_error = None
+
+        directory = state.active_directory
+        if directory is None:  # The route 400s before this; fail safe.
+            if old is not None:
+                old.stop()
+            return
+
+        depth, exclude_dirs = scanner.effective_search_boundary(
+            str(directory), state.config, recursive=recursive
+        )
+
+        def _on_change() -> None:
+            with state._watch_lock:  # pylint: disable=protected-access
+                state.watch_seq += 1
+
+        # ``error_box`` bridges construction order: ``DirectoryWatcher``
+        # takes ``on_error`` at construction, but the identity check
+        # needs the instance — filled before ``start()``, so the first
+        # possible error always sees it.
+        error_box: list[DirectoryWatcher] = []
+
+        def _on_error(message: str) -> None:
+            _watcher_error_exit(state, error_box[0], message)
+
+        watcher = DirectoryWatcher(
+            directory,
+            exclude_dirs=exclude_dirs,
+            max_depth=depth,
+            on_change=_on_change,
+            on_error=_on_error,
+        )
+        error_box.append(watcher)
+        watcher.start()
+        with state._watch_lock:  # pylint: disable=protected-access
+            state.watcher = watcher
+        if old is not None:
+            old.stop()  # Join outside ``_watch_lock`` (ops lock only).
+
+
+@router.post("/watch")
+async def set_watch_mode(payload: WatchRequest, request: Request) -> dict:
+    """Enable or disable watch mode on the active directory.
+
+    Returns the resulting watching state and the watcher's current
+    adaptive interval (``None`` when not watching).
+    """
+    state: ServerState = request.app.state.server_state
+    if payload.enabled:
+        if not state.active_directory:
+            raise HTTPException(status_code=400, detail="Active directory is not set")
+        # Record the recursion intent on enable too (#223): enable-with-
+        # recursive-false must mirror the non-recursive boundary on a
+        # later re-enable, exactly like a scan does.
+        state.watch_recursive = payload.recursive
+        # to_thread hop (final review, #223): the start/stop lifecycle can
+        # join a poller thread — that wait must never block the event loop
+        # every route and the SSE tick share.
+        await asyncio.to_thread(_start_watcher, state, recursive=payload.recursive)
+    else:
+        await asyncio.to_thread(_stop_watcher, state)
+    watcher = state.watcher
+    return {
+        "watching": watcher is not None,
+        "interval_s": watcher.interval_s if watcher is not None else None,
+    }
 
 
 def _sort_key(column: str) -> Callable[[Any], Any]:
@@ -205,6 +382,7 @@ async def get_scan_results(
     limit: int | None = Query(default=None, ge=1, le=50_000),
     sort_by: str | None = Query(default=None),
     sort_dir: Literal["asc", "desc"] | None = Query(default=None),
+    find_path: str | None = Query(default=None),
 ) -> dict:
     """Return cached scan results formatted for table rendering.
 
@@ -219,12 +397,32 @@ async def get_scan_results(
     An attribute-backed column (``match`` resolves to a stat keyword) sorts
     on the raw :class:`FileAttrs` field instead of the rendered text; see
     :func:`_sorted_results` for the ordering contract.
+
+    When ``find_path`` is given, the response short-circuits to
+    ``{"count": int, "offset": int}`` — the row's position in the ordered
+    set (``-1`` when absent) with no ``items`` key (#218 selection
+    preservation).
     """
     state: ServerState = request.app.state.server_state
     total = len(state.cached_results)
 
-    descending = sort_dir == "desc"
-    cached, sort_applied = _sorted_results(state.cached_results, sort_by, descending, state.config)
+    # ``sort_dir == "desc"`` is inlined (single use) to keep the local count
+    # within the pylint budget — the find_path parameter is the 20th.
+    cached, sort_applied = _sorted_results(
+        state.cached_results, sort_by, sort_dir == "desc", state.config
+    )
+
+    # Selection lookup (#218): the client only wants a row's offset in the
+    # ordered set — skip item serialization so huge caches answer without
+    # building thousands of dicts.
+    if find_path is not None:
+        return {
+            "count": total,
+            "offset": next(
+                (i for i, row in enumerate(cached) if str(getattr(row, "path", "")) == find_path),
+                -1,
+            ),
+        }
 
     page = cached if limit is None else cached[offset : offset + limit]
 
@@ -265,11 +463,16 @@ async def get_scan_results(
 
 def scan_status_payload(state: ServerState) -> dict:
     """Build one `status` SSE event payload from the current scan state."""
+    watcher = state.watcher
     return {
         "in_progress": state.scan_in_progress,
         "count": len(state.cached_results),
         "progress": state.scan_progress_count,
         "directory": str(state.active_directory) if state.active_directory else "",
+        "watching": watcher is not None,
+        "watch_interval_s": watcher.interval_s if watcher is not None else None,
+        "watch_seq": state.watch_seq,
+        "watch_error": state.watch_error,
     }
 
 

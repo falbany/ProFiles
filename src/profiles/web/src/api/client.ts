@@ -7,6 +7,7 @@ import type {
   LogLevel,
   LogResponse,
   ScanResultsResponse,
+  ScanWatchResponse,
   SystemInfo,
   ValidationIssue,
   WorkflowSessionState,
@@ -365,6 +366,25 @@ export async function executeScan(
   return res.json();
 }
 
+/**
+ * Toggle the server's watch mode on the active directory (#223, Task 3
+ * route). A 400 (no active directory) surfaces the server's detail through
+ * the thrown ApiError. `recursive` records the recursion intent for
+ * watcher restarts; the server defaults to true when omitted.
+ */
+export async function setWatchMode(params: {
+  enabled: boolean;
+  recursive?: boolean;
+}): Promise<ScanWatchResponse> {
+  const res = await fetch("/api/scan/watch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await apiError(res, "Failed to toggle watch mode");
+  return res.json();
+}
+
 export type SortDirection = "asc" | "desc";
 
 export async function fetchScanResults(params?: {
@@ -386,6 +406,28 @@ export async function fetchScanResults(params?: {
   const url = `/api/scan/results${qs ? `?${qs}` : ""}`;
   const res = await fetch(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch scan results");
+  return res.json();
+}
+
+/**
+ * Locate a row by absolute path in the server's ordered result set (#218
+ * selection preservation): the endpoint short-circuits to
+ * `{count, offset}` — the row's position in the ordered set, `-1` when
+ * absent — without serialising any items. The sort params must mirror the
+ * list's current sort so the offset refers to the same ordering the table
+ * renders.
+ */
+export async function findScanResultsPath(params: {
+  path: string;
+  sort_by?: string;
+  sort_dir?: SortDirection;
+}): Promise<{ count: number; offset: number }> {
+  const search = new URLSearchParams();
+  search.set("find_path", params.path);
+  if (params.sort_by) search.set("sort_by", params.sort_by);
+  if (params.sort_dir) search.set("sort_dir", params.sort_dir);
+  const res = await fetch(`/api/scan/results?${search.toString()}`);
+  if (!res.ok) throw new Error("Failed to locate scan result path");
   return res.json();
 }
 

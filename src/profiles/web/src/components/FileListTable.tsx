@@ -465,7 +465,9 @@ export function FileListTable({
       aria-label="Discovered files"
       aria-rowcount={Math.max(grandTotal, renderedCount === 0 ? 1 : 0) + 1}
       aria-colcount={resolvedKeys.length + 1}
-      aria-activedescendant={renderedCount > 0 ? `file-row-${selectedIndex}` : undefined}
+      // A cleared selection is `-1` = "nothing selected" (#218): the id must
+      // never be announced for a row that does not exist.
+      aria-activedescendant={renderedCount > 0 && selectedIndex >= 0 ? `file-row-${selectedIndex}` : undefined}
       tabIndex={0}
     >
       <div className="sticky top-0 z-10" role="presentation">

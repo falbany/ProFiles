@@ -110,6 +110,49 @@ L'interface ProFiles s'affiche exactement comme sur le PC hôte :
 
 ---
 
+## 👁️ Mode Watch (re-scan automatique)
+
+L'**icône œil** à côté du timer de re-scan auto active le mode Watch : le
+serveur surveille le répertoire actif et relance le scan de la liste dès
+que le répertoire change — plus besoin de timer fixe. Le timer (`Ctrl+T`)
+et le watch sont deux modes d'un même contrôle : activer l'un désactive
+l'autre.
+
+### Un watcher par serveur, partagé par tous les clients LAN
+
+Le watcher est **global au serveur** : un seul polleur sert tous les
+clients connectés. N'importe quel client (ou l'hôte) qui active le mode
+Watch décide du répertoire surveillé, et chaque changement parvient à
+tous les navigateurs via le flux SSE existant — aucun polling par client.
+
+### La cadence s'adapte à la vitesse du partage
+
+La sonde démarre à environ **1–2 s** en local et adapte sa cadence de
+polling à la vitesse de réponse du partage surveillé : sur un partage
+réseau chargé, comptez quelques secondes entre le changement et le
+re-scan.
+
+### Ce qui est détecté (et ce qui ne l'est pas)
+
+La sonde surveille les **mtimes des répertoires** — création, suppression
+et renommage modifient tous l'horodatage du répertoire parent :
+
+- ✅ Fichiers créés, supprimés ou renommés dans l'arborescence surveillée —
+  y compris les postes qui écrivent via un **fichier temporaire suivi
+  d'un renommage**.
+- ❌ Les **modifications sur place** ne sont **pas** détectées : un fichier
+  dont seul le contenu change ne modifie pas le répertoire. Lancez un
+  re-scan manuel (`F5`) si vous travaillez par modifications sur place.
+
+### Si le partage surveillé disparaît
+
+Un partage qui disparaît (disque débranché, montage perdu, dossier
+renommé) **arrête le watch** et affiche un toast d'erreur dans
+l'interface — le bouton se désactive tout seul au lieu de boucler sur
+des erreurs. Réactivez le mode Watch une fois le chemin rétabli.
+
+---
+
 ## 📷 Lecture des codes-barres par caméra depuis les clients LAN (contexte sécurisé)
 
 Le **lecteur de codes-barres par caméra** (`Ctrl+Shift+B` dans l'interface web)

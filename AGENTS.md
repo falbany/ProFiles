@@ -65,7 +65,8 @@ src/profiles/
 │   │   ├── scanner.py        #   scan_and_process, ScannedFile
 │   │   ├── file_classifier.py#   get_file_info, classification d'extensions
 │   │   ├── file_metadata.py  #   Métadonnées fichiers
-│   │   └── column_extractor.py#  Extraction des colonnes (version, …)
+│   │   ├── column_extractor.py#  Extraction des colonnes (version, …)
+│   │   └── watcher.py        #   DirectoryWatcher (sonde mtime, débounce, cadence adaptative)
 │   ├── environment/          # Environnement OS & exécution
 │   │   ├── system.py         #   collect_system_info, SystemInfo, format_user_host
 │   │   ├── execution.py      #   Spawn de processus, hooks de lancement

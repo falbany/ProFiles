@@ -110,6 +110,46 @@ The ProFiles interface appears exactly as it does on the host PC:
 
 ---
 
+## 👁️ Watch Mode (Auto-Rescan)
+
+The **eye toggle** beside the auto-rescan timer enables watch mode: the
+server polls the watched directory and rescans the file list when the
+directory changes — no fixed timer needed. The timer (`Ctrl+T`) and the
+watch are two modes of the same control: enabling one disables the other.
+
+### One watcher per server, shared by all LAN clients
+
+The watcher is **global to the server**: a single poller serves every
+connected client. Any client (or the host) toggling watch mode decides
+the watched directory, and each change reaches all browsers through the
+existing SSE status stream — no per-client polling.
+
+### Cadence adapts to the share speed
+
+The probe starts at roughly **1–2 s** locally and adapts its polling
+cadence to how fast the watched share answers: on a busy network share,
+expect a few seconds between the change and the rescan.
+
+### What is (and is not) detected
+
+The probe watches **directory mtimes** — create, delete and rename all
+touch the parent directory's timestamp:
+
+- ✅ Files created, deleted or renamed in the watched tree — including
+  stations that write via **temp-then-rename**.
+- ❌ **In-place edits** are **not** detected: a file whose content changes
+  without moving does not modify the directory. Rescan manually (`F5`)
+  if you rely on in-place edits.
+
+### If the watched share disappears
+
+A vanished share (unplugged drive, dropped mount, renamed folder) **stops
+the watch** and shows an error toast in the UI — the toggle un-checks
+itself instead of looping on errors. Re-enable watch mode once the path
+is back.
+
+---
+
 ## 📷 Camera Barcode Scanning from LAN Clients (Secure Context)
 
 The **camera barcode scanner** (`Ctrl+Shift+B` in the web UI) uses the

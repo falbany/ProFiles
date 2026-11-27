@@ -70,8 +70,10 @@ tests/
 │   │   ├── test_file_classifier.py           # ← core/processing/file_classifier.py
 │   │   ├── test_file_metadata.py             # ← core/processing/file_metadata.py
 │   │   ├── test_public_api.py                # ← core/processing/__init__.py re-exports (exception)
-│   │   └── test_scanner.py                   # ← core/processing/scanner.py
-│   │       (+ _dedupe/_errors/_excludes/_parity/_pushdown supplements)
+│   │   ├── test_scanner.py                   # ← core/processing/scanner.py
+│   │   │                                     #   (+ _boundary/_dedupe/_errors/_excludes/_parity/
+│   │   │                                     #    _pushdown supplements)
+│   │   └── test_watcher.py                   # ← core/processing/watcher.py
 │   └── telemetry/
 │       ├── test_diagnostics.py               # ← core/telemetry/diagnostics.py
 │       ├── test_events.py                    # ← core/telemetry/events.py
@@ -106,6 +108,10 @@ tests/
 │       ├── test_fs.py                        # ← server/routes/fs.py
 │       ├── test_logs.py                      # ← server/routes/logs.py
 │       ├── test_scan.py                      # ← server/routes/scan.py
+│       │                                     #   (+test_scan_find_path.py, +test_scan_watch.py
+│       │                                     #    supplements)
+│       ├── test_scan_find_path.py            # ← server/routes/scan.py (supplement: find_path offset, #218)
+│       ├── test_scan_watch.py                # ← server/routes/scan.py (supplement: watch route + status, #223)
 │       ├── test_system.py                    # ← server/routes/system.py
 │       └── test_workflow.py                  # ← server/routes/workflow.py
 ├── utils/
