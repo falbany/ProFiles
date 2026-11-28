@@ -78,6 +78,19 @@ export default function App() {
   const [depth, setDepth] = useState<number>(10);
   const [configDepth, setConfigDepth] = useState<number>(10);
 
+  /** Sync the depth states from a config payload (issue #240): the
+      directory-scoped `max_search_depth` is the source of the starting
+      value, so EVERY flow that lands on a new directory re-resolves the
+      depth from it — the picked depth snaps to the config value. Returns
+      the synced depth for scans that must use it in the same tick (the
+      state commits land after the call). */
+  const applyConfigDepth = (payload: AppConfigData) => {
+    const d = clampDepth(payload.max_search_depth);
+    setConfigDepth(d);
+    setDepth(d);
+    return d;
+  };
+
   /** Reason the initial load failed, when it did — drives the retry panel. */
   const [initError, setInitError] = useState<string | null>(null);
   const [initRetrying, setInitRetrying] = useState(false);
@@ -313,9 +326,7 @@ export default function App() {
       }
       setActiveExtension(nextExtension);
       setFilterText(nextFilter);
-      const d = clampDepth(cfg.max_search_depth);
-      setConfigDepth(d);
-      setDepth(d);
+      const d = applyConfigDepth(cfg);
 
       if (cfg.reloaded === false) {
         showToast(
@@ -364,9 +375,7 @@ export default function App() {
     }
     setActiveExtension(nextExtension);
     setFilterText(nextFilter);
-    const d = clampDepth(cfg.max_search_depth);
-    setConfigDepth(d);
-    setDepth(d);
+    const d = applyConfigDepth(cfg);
 
     if (!cfg.session_trial) {
       showToast(cfg.config_exists ? `Loaded config: ${cfg.config_path}` : "Starter configuration created.");
@@ -425,12 +434,16 @@ export default function App() {
     const nextFilter = mergeDirectoryPreference(filterText, directoryConfig?.filters, filterText);
     setActiveExtension(nextExtension);
     setFilterText(nextFilter);
+    // Same depth re-resolution as the combobox path — a select-directory
+    // failure keeps the current depth (selectDirectory already surfaced
+    // the error) instead of scanning with a stale config value.
+    const nextDepth = directoryConfig ? applyConfigDepth(directoryConfig) : depth;
     // Scan with the freshly picked directory
     await scan.scanWithGeneration(scanGeneration, {
       directory,
       extension: nextExtension,
       filter_text: nextFilter,
-      max_depth: depth,
+      max_depth: nextDepth,
     }, { errorPrefix: "Scan failed" });
   };
 
@@ -449,9 +462,7 @@ export default function App() {
     const initialFilter = cfg.filters.length > 0 ? cfg.filters[0] : "";
     if (initialDir) setActiveDirectory(initialDir);
     if (initialExt) setActiveExtension(initialExt);
-    const d = clampDepth(cfg.max_search_depth);
-    setConfigDepth(d);
-    setDepth(d);
+    const d = applyConfigDepth(cfg);
     if (initialFilter) setFilterText(initialFilter);
     if (!cfg.config_exists) {
       // First-run auto-prompt: the ONLY entry point that proposes create.
@@ -515,11 +526,15 @@ export default function App() {
       const nextFilter = mergeDirectoryPreference(filterText, directoryConfig.filters, "");
       setActiveExtension(nextExtension);
       setFilterText(nextFilter);
+      // The new directory re-resolves the depth from its configuration
+      // (issue #240 ruling) — the scan uses the freshly synced value, not
+      // the stale state the dropdown was showing.
+      const nextDepth = applyConfigDepth(directoryConfig);
       return (await scan.scanWithGeneration(scanGeneration, {
         directory: newDir,
         extension: nextExtension,
         filter_text: nextFilter,
-        max_depth: depth,
+        max_depth: nextDepth,
       }, { errorPrefix: "Directory change failed" })).ok;
     } catch (err: any) {
       if (scan.isCurrentScan(scanGeneration)) showToast(`Directory change failed: ${err.message}`, "error");
