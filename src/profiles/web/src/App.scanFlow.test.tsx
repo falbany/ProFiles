@@ -350,6 +350,47 @@ describe("App scan flow (characterization)", () => {
     });
   });
 
+  it("directory change re-resolves the depth from the new directory's config (#240)", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Init settled: the config-derived scan already ran once.
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    executeScanSpy.mockClear();
+    scanResultsSpy.mockClear();
+
+    // The new directory's machine entry carries a different depth — the
+    // select-directory response resolves it for that directory.
+    selectDirectorySpy.mockResolvedValueOnce(
+      makeAppConfig({ active_directory: "C:/deep", max_search_depth: 4 }),
+    );
+    const directoryInput = screen.getByLabelText("Directory");
+    await user.clear(directoryInput);
+    await user.type(directoryInput, "C:/deep{Enter}");
+    await waitFor(() => expect(scanResultsSpy).toHaveBeenCalledTimes(1));
+
+    // The scan used the NEW directory's depth, not the stale one the
+    // dropdown was showing before the switch.
+    expect(executeScanSpy).toHaveBeenCalledTimes(1);
+    expect(executeScanSpy.mock.lastCall?.[0]).toEqual({
+      directory: "C:/deep",
+      extension: ".mttl",
+      filter_text: "",
+      max_depth: 4,
+    });
+
+    // The dropdown mirrors the synced state: value 4 and an option list
+    // sized by the new config (buildDepthOptions(4) + unlimited — index 3
+    // pins the list ENDING at 4; under the default 25-entry cap that slot
+    // would hold "4" at index 3 only if the list itself ends there).
+    await waitFor(() => expect(screen.getByLabelText("Scan depth")).toHaveValue("4"));
+    const values = Array.from(
+      (screen.getByLabelText("Scan depth") as HTMLSelectElement).options,
+    ).map((option) => option.value);
+    expect(values[3]).toBe("4");
+    expect(values).toContain("unlimited");
+  });
+
   it("sort change reloads page 1 with sort params", async () => {
     const user = userEvent.setup();
     fetchConfigSpy.mockResolvedValue(
