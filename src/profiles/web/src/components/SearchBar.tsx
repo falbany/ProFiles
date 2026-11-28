@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Camera, ChevronDown, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
@@ -116,17 +116,6 @@ export function SearchBar({
 }: SearchBarProps) {
   // Whether the filter input itself has focus — drives the live syntax helper.
   const [filterFocused, setFilterFocused] = useState(false);
-  // Depth select (issue #240): the chevron cell replicates the combobox
-  // affordance and re-opens the native picker via showPicker() (engine
-  // support permitting; focus fallback keeps it a no-op elsewhere).
-  const depthSelectRef = useRef<HTMLSelectElement>(null);
-  const openDepthPicker = () => {
-    try {
-      depthSelectRef.current?.showPicker();
-    } catch {
-      depthSelectRef.current?.focus();
-    }
-  };
   // Unfolded combobox lists — tooltips and the syntax helper yield to them (issue #53/#59).
   const [filterListOpen, setFilterListOpen] = useState(false);
   const [extListOpen, setExtListOpen] = useState(false);
@@ -193,21 +182,22 @@ export function SearchBar({
       >
         <label className="flex shrink-0 select-none items-center gap-1.5 text-ink-muted">
           <span>Depth:</span>
-          {/* Combobox replica (#240): appearance-none drops the native arrow
-              (engine-dependent — WKWebView/pywebview drew its own) so the
-              chevron cell below matches the EditableComboboxes. The select
-              cell stays 2-digit wide; h-[30px] pins the height in WKWebView
-              too, which ignores padding-derived select heights. */}
-          <div className="relative flex h-[30px] shrink-0">
+          {/* Combobox replica (#240): appearance-none drops the engine-native
+              arrow; the chevron overlay draws the combobox divider + icon.
+              pointer-events-none is load-bearing: the select spans the full
+              width beneath it, so a click on the chevron area opens the
+              native list in every engine — showPicker() is not reliably
+              available in WKWebView (pywebview). h-[30px] pins the height
+              in WKWebView too, which ignores padding-derived select heights. */}
+          <div className="relative h-[30px] w-[67px] shrink-0">
             <select
-              ref={depthSelectRef}
               aria-label="Scan depth"
               value={depth === UNLIMITED_SCAN_DEPTH ? "unlimited" : String(depth)}
               onChange={(e) => {
                 const raw = e.target.value;
                 onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
               }}
-              className="h-[30px] w-9 appearance-none rounded-l-md border border-line bg-elevated px-2 text-ink-secondary outline-none transition-colors hover:bg-surface-strong focus:border-indigo-500"
+              className="h-[30px] w-full appearance-none rounded-md border border-line bg-elevated pl-2 pr-7 text-ink-secondary outline-none transition-colors hover:bg-surface-strong focus:border-indigo-500"
             >
               {buildDepthOptions(configDepth).map((n) => (
                 <option key={n} value={String(n)}>
@@ -218,8 +208,7 @@ export function SearchBar({
             </select>
             <span
               aria-hidden="true"
-              onClick={openDepthPicker}
-              className="flex h-[30px] shrink-0 cursor-pointer items-center rounded-r-md border border-l-0 border-line bg-elevated px-2 text-ink-muted transition-colors hover:bg-surface-strong hover:text-ink"
+              className="pointer-events-none absolute inset-y-0 right-0 flex w-[30px] items-center justify-center border-l border-line text-ink-muted"
             >
               <ChevronDown className="h-3.5 w-3.5" />
             </span>
