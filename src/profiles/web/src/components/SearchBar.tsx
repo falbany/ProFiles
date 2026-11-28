@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
+import { Camera, ChevronDown, Eye, Play, QrCode, RefreshCw, Search, Timer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import { EditableCombobox } from "./EditableCombobox";
 import { FilterSyntaxHelper } from "./FilterSyntaxHelper";
@@ -182,25 +182,37 @@ export function SearchBar({
       >
         <label className="flex shrink-0 select-none items-center gap-1.5 text-ink-muted">
           <span>Depth:</span>
-          <select
-            aria-label="Scan depth"
-            value={depth === UNLIMITED_SCAN_DEPTH ? "unlimited" : String(depth)}
-            onChange={(e) => {
-              const raw = e.target.value;
-              onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
-            }}
-            // w-14 fits the widest finite value ("25") plus the native arrow;
-            // the ∞ option renders as just "∞" so the closed select stays
-            // 2-digit wide. py-1.5 matches the combobox/button height in this bar.
-            className="w-14 rounded-md border border-line bg-elevated px-2 py-1.5 text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            {buildDepthOptions(configDepth).map((n) => (
-              <option key={n} value={String(n)}>
-                {n}
-              </option>
-            ))}
-            <option value="unlimited">∞</option>
-          </select>
+          {/* Combobox replica (#240): appearance-none drops the engine-native
+              arrow; the chevron overlay draws the combobox divider + icon.
+              pointer-events-none is load-bearing: the select spans the full
+              width beneath it, so a click on the chevron area opens the
+              native list in every engine — showPicker() is not reliably
+              available in WKWebView (pywebview). h-[30px] pins the height
+              in WKWebView too, which ignores padding-derived select heights. */}
+          <div className="relative h-[30px] w-[67px] shrink-0">
+            <select
+              aria-label="Scan depth"
+              value={depth === UNLIMITED_SCAN_DEPTH ? "unlimited" : String(depth)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                onDepthChange(raw === "unlimited" ? UNLIMITED_SCAN_DEPTH : Number(raw));
+              }}
+              className="h-[30px] w-full appearance-none rounded-md border border-line bg-elevated pl-2 pr-7 text-ink-secondary outline-none transition-colors hover:bg-surface-strong focus:border-indigo-500"
+            >
+              {buildDepthOptions(configDepth).map((n) => (
+                <option key={n} value={String(n)}>
+                  {n}
+                </option>
+              ))}
+              <option value="unlimited">∞</option>
+            </select>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 flex w-[30px] items-center justify-center border-l border-line text-ink-muted"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </span>
+          </div>
         </label>
       </Tooltip>
 
