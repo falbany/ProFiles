@@ -224,7 +224,7 @@ describe("useAppCommands — action shortcuts", () => {
     press("h", { ctrlKey: true });
     expect(deps.onGoHome).toHaveBeenCalledTimes(1);
 
-    press("p");
+    press("p", { ctrlKey: true });
     expect(deps.onProperties).toHaveBeenCalledTimes(1);
     expect(deps.onProperties).toHaveBeenCalledWith(FILES[2]);
 
@@ -240,9 +240,35 @@ describe("useAppCommands — action shortcuts", () => {
     press("p", { ctrlKey: true, shiftKey: true });
     expect(deps.setShowCommandPalette).toHaveBeenCalledWith(true);
 
-    // Ctrl+P is NOT a binding of its own: the plain "P" rule forbids Ctrl.
-    expect(press("p", { ctrlKey: true })).toBeUndefined();
+    // The bare printable "p" claims nothing (issue #247): it used to open
+    // Properties while the user typed — e.g. in the config editor's
+    // CodeMirror — so only the Ctrl-qualified combo binds the command.
+    expect(press("p")).toBeUndefined();
     expect(deps.onProperties).toHaveBeenCalledTimes(1);
+  });
+
+  it("qualifies the printable-char bindings with Ctrl (issue #247)", () => {
+    const { byId } = mount();
+    expect(byId("file.properties").keys).toEqual([
+      { key: "p", ctrl: true, shift: false, alt: false },
+    ]);
+    expect(byId("view.commandPalette").keys).toContainEqual({ key: "?", ctrl: true });
+    // AZERTY aliases (Chrome on macOS reports the unshifted key under Ctrl —
+    // ProseMirror#997): "?" is Shift+, and "/" is Shift+: on that layout.
+    expect(byId("view.commandPalette").keys).toContainEqual({
+      key: ",",
+      ctrl: true,
+      shift: true,
+      alias: true,
+    });
+    expect(byId("view.commandPalette").keys).toContainEqual({
+      key: ":",
+      ctrl: true,
+      shift: true,
+      alias: true,
+    });
+    // Disambiguated from the palette's comma alias: unshifted comma only.
+    expect(byId("config.editor").keys).toEqual([{ key: ",", ctrl: true, shift: false }]);
   });
 
   it("toggles the surfaces that toggle", () => {
@@ -266,11 +292,11 @@ describe("useAppCommands — action shortcuts", () => {
     expect(toggled(deps.setShowLogViewer)).toEqual([false, true]);
   });
 
-  it("opens the palette from every one of its bindings — ?, Ctrl+/ and Ctrl+Shift+P", () => {
+  it("opens the palette from every one of its bindings — Ctrl+?, Ctrl+/ and Ctrl+Shift+P", () => {
     installFixture();
     const { deps, press } = mount();
 
-    press("?");
+    press("?", { ctrlKey: true });
     press("/", { ctrlKey: true });
     press("p", { ctrlKey: true, shiftKey: true });
 
@@ -278,6 +304,32 @@ describe("useAppCommands — action shortcuts", () => {
     for (const call of (deps.setShowCommandPalette as Mock).mock.calls) {
       expect(call[0]).toBe(true); // open, never toggle closed
     }
+
+    // The bare printable "?" claims nothing (issue #247): typing it — in a
+    // sentence, or in the config editor — must not open the palette.
+    press("?");
+    expect(deps.setShowCommandPalette).toHaveBeenCalledTimes(3);
+  });
+
+  it("routes the AZERTY Ctrl+? gesture (\",\" + Ctrl + Shift) to the palette, not the config editor", () => {
+    installFixture();
+    const { deps, press } = mount();
+    // Chrome on macOS reports the UNSHIFTED key once Ctrl is held
+    // (ProseMirror#997): on AZERTY "?" is Shift+,, so the user's Ctrl+?
+    // arrives as key "," with shiftKey true. The palette's alias must catch
+    // it BEFORE it falls through to Ctrl+, — the config editor, the exact
+    // misfire the user reported on PR #248's build.
+    const command = press(",", { ctrlKey: true, shiftKey: true });
+    expect(command?.id).toBe("view.commandPalette");
+    expect(deps.setShowCommandPalette).toHaveBeenCalledWith(true);
+    expect(deps.setShowConfigEditor).not.toHaveBeenCalled();
+
+    // The unshifted gesture still opens the configuration editor…
+    expect(press(",", { ctrlKey: true })?.id).toBe("config.editor");
+    expect(deps.setShowConfigEditor).toHaveBeenCalledWith(true);
+    // …and the AZERTY Ctrl+/ gesture (key ":") reaches the palette alias too.
+    expect(press(":", { ctrlKey: true, shiftKey: true })?.id).toBe("view.commandPalette");
+    expect(deps.setShowCommandPalette).toHaveBeenCalledTimes(2);
   });
 
   it("keeps Ctrl+Shift+K free — Shift disambiguates K, L, T and B", () => {

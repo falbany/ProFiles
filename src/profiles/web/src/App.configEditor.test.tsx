@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorView } from "codemirror";
 
@@ -24,6 +24,7 @@ import {
   fetchNotifications,
   fetchScanResults,
   fetchSystemInfo,
+  launchFile,
   loadConfigContent,
   loadConfigFile,
   openConfigFile,
@@ -42,6 +43,7 @@ vi.mock("./api/client", async (importOriginal) => ({
   openConfigFile: vi.fn(),
   browseForConfigFiles: vi.fn(),
   loadConfigFile: vi.fn(),
+  launchFile: vi.fn(),
 }));
 
 // `__APP_VERSION__` is injected by vite.config's `define` at build time;
@@ -59,6 +61,7 @@ const loadContentSpy = vi.mocked(loadConfigContent);
 const openInOSSpy = vi.mocked(openConfigFile);
 const browseSpy = vi.mocked(browseForConfigFiles);
 const loadFileSpy = vi.mocked(loadConfigFile);
+const launchFileSpy = vi.mocked(launchFile);
 
 /** Listing served by /api/fs/browse (include_hidden) inside the config picker. */
 function makeBrowseResult(overrides: Partial<BrowseResult> = {}): BrowseResult {
@@ -145,6 +148,8 @@ beforeEach(() => {
   // Clean default so a stray OS-launch keeps the output quiet; the tests
   // below assert it is NOT called.
   openInOSSpy.mockResolvedValue({ status: "SUCCESS", message: "Opened" });
+  // Same for a stray launch: asserted NOT called by the #247 inert test.
+  launchFileSpy.mockResolvedValue({ status: "SUCCESS", message: "Launched" });
   // POST /api/config/load-content applies content as a session trial:
   // not anchored to disk, and carrying the freshly derived values the
   // app must pick up (new directory/extension/depth).
@@ -236,6 +241,40 @@ describe("App config editor integration", () => {
       expect(editor.querySelector(".cm-editor")).toBeTruthy();
     });
     expect(openInOSSpy).not.toHaveBeenCalled();
+  });
+
+  it("test_typing_p_while_the_editor_is_open_stays_inert (#247)", async () => {
+    const user = userEvent.setup();
+    // The properties command only fires with a selection, so the #247 leak
+    // needs a real one: a listed file, its row clicked.
+    scanResultsSpy.mockResolvedValue({
+      count: 1,
+      in_progress: false,
+      items: [
+        { column_values: {}, filename: "a.mttl", rel_path: "a.mttl", path: "C:/data/a.mttl" },
+      ],
+    });
+    render(<App />);
+    await screen.findByText("a.mttl");
+    await waitFor(() => expect(executeScanSpy).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByText("a.mttl"));
+
+    // Open the config editor, then type while it is up — the global
+    // dispatcher must stay inert while the editor is open (issue #55 via
+    // #247: the editor is part of anyModalOpen):
+    // - a bare "p" opens nothing (it is Ctrl+P now, and the modal gate holds);
+    // - Enter must NOT launch the selected file behind the dialog — this is
+    //   the assertion that pins the editor's presence in anyModalOpen, since
+    //   Enter on window still binds file.launch.
+    await user.click(screen.getByRole("button", { name: /^config$/i }));
+    const editor = await screen.findByRole("dialog", { name: /configuration editor/i });
+    await waitFor(() => expect(editor.querySelector(".cm-editor")).toBeTruthy());
+
+    fireEvent.keyDown(window, { key: "p" });
+    expect(screen.queryByRole("dialog", { name: /properties/i })).toBeNull();
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(launchFileSpy).not.toHaveBeenCalled();
+    expect(editor).toBeInTheDocument();
   });
 
   it("test_editor_load_config_opens_picker_above_editor_and_pick_reloads_content", async () => {

@@ -34,7 +34,9 @@ export interface GlobalShortcutsDeps {
  * 3. Commands flagged `beforeTargetGuard` run wherever the caret is.
  * 4. Keys landing on a control that handles them itself are left alone
  *    (#55); inside a text input or select only Enter is acted on, by the
- *    command flagged `fromInputEnter`.
+ *    command flagged `fromInputEnter`; textarea and contenteditable hosts
+ *    (the config editor's CodeMirror) are fully inert — typing owns those
+ *    keys, including Enter (#247).
  * 5. Otherwise the first enabled command bound to the key runs.
  *
  * Which key does what lives in the registry (`useAppCommands`).
@@ -82,6 +84,17 @@ export function useGlobalShortcuts(deps: GlobalShortcutsDeps): void {
       if (
         target instanceof HTMLElement &&
         target.closest("button, a, [role='menuitem'], [role='option'], [role='columnheader'], [role='separator']")
+      ) {
+        return;
+      }
+
+      // Multi-line / rich typing surfaces (textarea, and contenteditable
+      // hosts such as the config editor's CodeMirror) belong to the caret:
+      // no global command runs from there, and Enter is NOT the scan rule —
+      // it must keep inserting a newline (issue #247).
+      if (
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
       ) {
         return;
       }

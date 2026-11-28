@@ -28,6 +28,14 @@ export interface ShortcutSpec {
   ctrl?: boolean;
   shift?: boolean;
   alt?: boolean;
+  /**
+   * Layout-quirk alias (issue #247 follow-up): matched by the dispatcher but
+   * hidden from the shortcuts display. Exists for engines that report the
+   * UNSHIFTED `key` once Ctrl is held (Chrome on macOS, ProseMirror#997) —
+   * e.g. the AZERTY "Ctrl+?" gesture physically is Ctrl+Shift+, and arrives
+   * as `key: ","` with `shiftKey: true`.
+   */
+  alias?: boolean;
 }
 
 export type CommandGroup =
@@ -114,9 +122,12 @@ export function formatShortcut(spec: ShortcutSpec): string {
   return parts.join(" + ");
 }
 
-/** Render a command's bindings, alternatives joined with "or". */
+/** Render a command's bindings, alternatives joined with "or". Layout-quirk aliases stay off the display. */
 export function formatKeys(keys: ShortcutSpec[] | undefined): string {
-  return (keys ?? []).map(formatShortcut).join(" or ");
+  return (keys ?? [])
+    .filter((spec) => !spec.alias)
+    .map(formatShortcut)
+    .join(" or ");
 }
 
 /** True when *event* satisfies *spec* under the tri-state modifier rules. */

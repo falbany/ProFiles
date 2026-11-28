@@ -9,7 +9,8 @@ import { cleanup, createEvent, fireEvent, renderHook } from "@testing-library/re
  * (`useAppCommands.test.tsx`). These tests mount a hand-built command list
  * and pin: Escape-before-modal-guard, the issue-#55 inert-while-modal guard,
  * the before-target-guard phase, the target routing guards (incl. the
- * Enter-in-input rule and its unpreserved default), first-match-wins with
+ * Enter-in-input rule and its unpreserved default, and the fully inert
+ * textarea/contenteditable typing surfaces of #247), first-match-wins with
  * enabled gating, the subscription-time capture (the staleness profile of
  * the original inline effect — the double-Ctrl+R quirk's survival proof),
  * and the unmount teardown.
@@ -245,6 +246,42 @@ describe("useGlobalShortcuts", () => {
     fireEvent.keyDown(filterInput, { key: "p" });
     expect(launch.run).not.toHaveBeenCalled();
     expect(scan.run).not.toHaveBeenCalled();
+  });
+
+  it("textarea and contenteditable typing surfaces are fully inert (issue #247)", () => {
+    installFixture();
+    const textarea = document.createElement("textarea");
+    document.body.appendChild(textarea);
+    // CodeMirror 6's content host: a contenteditable div the caret lives in.
+    const editorHost = document.createElement("div");
+    editorHost.setAttribute("contenteditable", "true");
+    document.body.appendChild(editorHost);
+    // jsdom never implements isContentEditable (stays undefined), so pin the
+    // one bit the guard reads — in a real browser this is native.
+    Object.defineProperty(editorHost, "isContentEditable", { value: true, configurable: true });
+
+    const scan = keyed([{ key: "F5" }], { id: "scan", fromInputEnter: true });
+    const launch = keyed([{ key: "Enter" }], { id: "launch" });
+    // The two bindings the #247 bug report is about, at their post-fix specs.
+    const properties = keyed([{ key: "p", ctrl: true, shift: false, alt: false }]);
+    const palette = keyed([{ key: "?", ctrl: true }]);
+    deps = makeDeps({ commands: [scan, launch, properties, palette] });
+    renderHook(() => useGlobalShortcuts(deps));
+
+    // Typing in the editor host: bare "p", plain "?", Enter (must keep
+    // inserting a newline — the input-Enter scan rule does NOT apply here)…
+    fireEvent.keyDown(editorHost, { key: "p" });
+    fireEvent.keyDown(editorHost, { key: "?" });
+    fireEvent.keyDown(editorHost, { key: "Enter" });
+    // …and the same in a plain textarea, including a Ctrl-qualified combo —
+    // even Ctrl-qualified keys stay with the caret once typing started there.
+    fireEvent.keyDown(textarea, { key: "p", ctrlKey: true });
+    fireEvent.keyDown(textarea, { key: "?" });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    for (const command of [scan, launch, properties, palette]) {
+      expect(command.run).not.toHaveBeenCalled();
+    }
   });
 
   it("captures commands at subscription time (staleness profile preserved)", () => {

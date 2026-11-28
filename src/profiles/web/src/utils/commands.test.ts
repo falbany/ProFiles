@@ -55,6 +55,16 @@ describe("formatShortcut", () => {
     expect(formatKeys([{ key: "?" }, { key: "/", ctrl: true }])).toBe("? or Ctrl + /");
     expect(formatKeys(undefined)).toBe("");
   });
+
+  it("hides layout-quirk alias bindings from the display", () => {
+    // Issue #247 follow-up: aliases exist for engines that report the
+    // unshifted `key` once Ctrl is held (Chrome on macOS, ProseMirror#997);
+    // they match but must never promise keys the sheet doesn't mean.
+    expect(formatKeys([{ key: "?", ctrl: true }, { key: ",", ctrl: true, shift: true, alias: true }])).toBe(
+      "Ctrl + ?",
+    );
+    expect(formatKeys([{ key: ",", ctrl: true, shift: true, alias: true }])).toBe("");
+  });
 });
 
 describe("matchesShortcut", () => {

@@ -1013,7 +1013,9 @@ export default function App() {
   // Keyboard navigation & global shortcuts
   // Any open surface that captures interaction: while one is up the global
   // shortcuts must stay inert (issue #55) — otherwise Enter/keys double-fire
-  // into the hidden UI behind the dialog.
+  // into the hidden UI behind the dialog. The config editor and the LAN
+  // modal belong here too (issue #247): they were missed, so typing "p" in
+  // the editor's CodeMirror opened File Properties behind the guard's back.
   const anyModalOpen = Boolean(
     contextMenuPos ||
       showDirPicker ||
@@ -1027,6 +1029,8 @@ export default function App() {
       workflowLaunchParams ||
       Boolean(pendingDeleteFile) ||
       showCommandPalette ||
+      showConfigEditor ||
+      lanModalOpen ||
       Boolean(argsFile),
   );
   // Plain function (builder call): the file uses no useCallback precedent, and
