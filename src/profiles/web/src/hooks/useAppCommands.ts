@@ -261,7 +261,9 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       id: "file.properties",
       title: "Open file properties",
       group: "file-list",
-      keys: [{ key: "p", ctrl: false, shift: false, alt: false }],
+      // Ctrl-qualified (issue #247): the bare "p" fired while the user typed
+      // — e.g. inside the config editor's CodeMirror — and opened this modal.
+      keys: [{ key: "p", ctrl: true, shift: false, alt: false }],
       enabled: hasSelection,
       ...(hasSelection ? {} : { disabledReason: NO_SELECTION }),
       run: () => {
@@ -516,15 +518,17 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       run: deps.onToggleTheme,
     },
     {
-      // "?" is the classic cheatsheet key — it lands here, on the palette,
-      // which lists every command WITH its binding: the shortcuts sheet and
-      // the runner are one surface.
+      // "?" is the classic cheatsheet key — Ctrl-qualified (issue #247): the
+      // bare printable "?" fired while the user typed. It lands here, on the
+      // palette, which lists every command WITH its binding: the shortcuts
+      // sheet and the runner are one surface. Shift stays unchecked on
+      // purpose — producing "?" already takes Shift on most layouts.
       id: "view.commandPalette",
       title: "Open the command palette",
       group: "view",
       keys: [
         { key: "p", ctrl: true, shift: true },
-        { key: "?" },
+        { key: "?", ctrl: true },
         { key: "/", ctrl: true },
       ],
       enabled: true,

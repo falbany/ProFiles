@@ -158,10 +158,10 @@ describe("App command palette", () => {
     await openPalette();
     // A query with no result: Enter has nothing to run in the palette. If
     // the global dispatcher were still live, the same keys would open the
-    // properties modal ("p"), the shortcuts sheet ("?") and trigger a rescan
+    // properties modal (Ctrl+P), the palette (Ctrl+?) and trigger a rescan
     // (Enter inside an input).
     await user.type(searchField(), "zzzz");
-    fireEvent.keyDown(searchField(), { key: "?" });
+    fireEvent.keyDown(searchField(), { key: "?", ctrlKey: true });
     await user.keyboard("{Enter}");
 
     expect(screen.queryByRole("dialog", { name: "Keyboard Shortcuts" })).toBeNull();
@@ -256,10 +256,12 @@ describe("App command palette", () => {
     );
   });
 
-  it("also opens from the classic '?' and Ctrl+/ bindings", async () => {
+  it("also opens from the Ctrl+? and Ctrl+/ bindings", async () => {
     await launchWith([]);
 
-    fireEvent.keyDown(window, { key: "?" });
+    // Ctrl-qualified (issue #247): the bare printable "?" fired while the
+    // user typed and must not open anything any more.
+    fireEvent.keyDown(window, { key: "?", ctrlKey: true });
     expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
 
     await userEvent.keyboard("{Escape}");
