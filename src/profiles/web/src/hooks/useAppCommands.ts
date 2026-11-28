@@ -523,13 +523,24 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       // palette, which lists every command WITH its binding: the shortcuts
       // sheet and the runner are one surface. Shift stays unchecked on
       // purpose — producing "?" already takes Shift on most layouts.
+      //
+      // The `alias: true` entries cover the engine quirk where the SHIFTED
+      // character never reaches `key` once Ctrl is held (Chrome on macOS —
+      // ProseMirror#997): on AZERTY, "?" is Shift+, and "/" is Shift+:, so
+      // Ctrl+? / Ctrl+/ arrive as `key: ","` / `key: ":"` with shiftKey true
+      // and would otherwise miss the bindings above (and on AZERTY, the
+      // comma gesture would fall through to Ctrl+, — the config editor, the
+      // exact misfire the user reported). Aliases are matched but never
+      // displayed.
       id: "view.commandPalette",
       title: "Open the command palette",
       group: "view",
       keys: [
         { key: "p", ctrl: true, shift: true },
         { key: "?", ctrl: true },
+        { key: ",", ctrl: true, shift: true, alias: true },
         { key: "/", ctrl: true },
+        { key: ":", ctrl: true, shift: true, alias: true },
       ],
       enabled: true,
       run: () => deps.setShowCommandPalette(true),
@@ -549,7 +560,10 @@ export function useAppCommands(deps: AppCommandsDeps): Command[] {
       title: "Open the configuration editor",
       group: "configuration",
       keywords: ["yaml", "settings"],
-      keys: [{ key: ",", ctrl: true }],
+      // shift:false disambiguates the palette's AZERTY "Ctrl+?" alias (key ","
+      // WITH shift) from this binding: Ctrl+, keeps the editor, Ctrl+Shift+,
+      // reaches the palette (issue #247 follow-up).
+      keys: [{ key: ",", ctrl: true, shift: false }],
       enabled: true,
       run: () => deps.setShowConfigEditor(true),
     },

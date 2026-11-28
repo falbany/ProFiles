@@ -253,6 +253,22 @@ describe("useAppCommands — action shortcuts", () => {
       { key: "p", ctrl: true, shift: false, alt: false },
     ]);
     expect(byId("view.commandPalette").keys).toContainEqual({ key: "?", ctrl: true });
+    // AZERTY aliases (Chrome on macOS reports the unshifted key under Ctrl —
+    // ProseMirror#997): "?" is Shift+, and "/" is Shift+: on that layout.
+    expect(byId("view.commandPalette").keys).toContainEqual({
+      key: ",",
+      ctrl: true,
+      shift: true,
+      alias: true,
+    });
+    expect(byId("view.commandPalette").keys).toContainEqual({
+      key: ":",
+      ctrl: true,
+      shift: true,
+      alias: true,
+    });
+    // Disambiguated from the palette's comma alias: unshifted comma only.
+    expect(byId("config.editor").keys).toEqual([{ key: ",", ctrl: true, shift: false }]);
   });
 
   it("toggles the surfaces that toggle", () => {
@@ -293,6 +309,27 @@ describe("useAppCommands — action shortcuts", () => {
     // sentence, or in the config editor — must not open the palette.
     press("?");
     expect(deps.setShowCommandPalette).toHaveBeenCalledTimes(3);
+  });
+
+  it("routes the AZERTY Ctrl+? gesture (\",\" + Ctrl + Shift) to the palette, not the config editor", () => {
+    installFixture();
+    const { deps, press } = mount();
+    // Chrome on macOS reports the UNSHIFTED key once Ctrl is held
+    // (ProseMirror#997): on AZERTY "?" is Shift+,, so the user's Ctrl+?
+    // arrives as key "," with shiftKey true. The palette's alias must catch
+    // it BEFORE it falls through to Ctrl+, — the config editor, the exact
+    // misfire the user reported on PR #248's build.
+    const command = press(",", { ctrlKey: true, shiftKey: true });
+    expect(command?.id).toBe("view.commandPalette");
+    expect(deps.setShowCommandPalette).toHaveBeenCalledWith(true);
+    expect(deps.setShowConfigEditor).not.toHaveBeenCalled();
+
+    // The unshifted gesture still opens the configuration editor…
+    expect(press(",", { ctrlKey: true })?.id).toBe("config.editor");
+    expect(deps.setShowConfigEditor).toHaveBeenCalledWith(true);
+    // …and the AZERTY Ctrl+/ gesture (key ":") reaches the palette alias too.
+    expect(press(":", { ctrlKey: true, shiftKey: true })?.id).toBe("view.commandPalette");
+    expect(deps.setShowCommandPalette).toHaveBeenCalledTimes(2);
   });
 
   it("keeps Ctrl+Shift+K free — Shift disambiguates K, L, T and B", () => {
